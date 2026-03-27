@@ -1,0 +1,62 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Helper Functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    function isAdmin() {
+      return isAuthenticated() && 
+        (request.auth.token.email == "tasmeaykhatun565@gmail.com" || 
+         request.auth.token.email == "hamproosapport@gmail.com" ||
+         (request.auth.token.email == "emon@gmail.com" && request.auth.token.email_verified == true));
+    }
+
+    function isSupportAgent() {
+      return isAuthenticated() && 
+        (request.auth.token.email == "emon@gmail.com" || isAdmin());
+    }
+
+    function isChatOwner(chatId) {
+      return isAuthenticated() && (request.auth.uid == chatId || request.auth.token.email == chatId);
+    }
+
+    // User Profile Rules
+    match /users/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow create: if isAuthenticated() && request.auth.uid == userId;
+      
+      // Allow updates by owner or admin
+      // Also allow incrementing balance/receivedTransferTotal by others for transfers
+      allow update: if isOwner(userId) || isAdmin() || 
+        (isAuthenticated() && 
+         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['balance', 'receivedTransferTotal']) &&
+         request.resource.data.balance > resource.data.balance &&
+         request.resource.data.receivedTransferTotal > resource.data.receivedTransferTotal);
+      
+      // Referrals Subcollection
+      match /referrals/{referralId} {
+        allow read: if isOwner(userId) || isAdmin();
+        allow create: if isAdmin(); 
+        allow update: if isAdmin();
+      }
+    }
+
+    // Chat Rules
+    match /chats/{chatId} {
+      allow read: if isChatOwner(chatId) || isAdmin() || isSupportAgent();
+      allow create: if isChatOwner(chatId) || isAdmin() || isSupportAgent();
+      allow update: if isChatOwner(chatId) || isAdmin() || isSupportAgent();
+
+      match /messages/{messageId} {
+        allow read: if isChatOwner(chatId) || isAdmin() || isSupportAgent();
+        allow create: if isChatOwner(chatId) || isAdmin() || isSupportAgent();
+      }
+    }
+  }
+}

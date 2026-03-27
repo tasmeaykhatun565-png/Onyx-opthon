@@ -1,0 +1,2561 @@
+import express from 'express';
+import { createServer } from 'http';
+import { Server } from 'socket.io';
+import cors from 'cors';
+import { createServer as createViteServer } from 'vite';
+import Database from 'better-sqlite3';
+import path from 'path';
+import { initializeApp, getApps, applicationDefault } from 'firebase-admin/app';
+import { getFirestore, FieldValue } from 'firebase-admin/firestore';
+import fs from 'fs';
+import bcrypt from 'bcryptjs';
+import jwt from 'jsonwebtoken';
+
+const JWT_SECRET = process.env.JWT_SECRET || 'trading-platform-secret-key';
+
+let firestore: any = null;
+let db: any = null;
+
+const EXCHANGE_RATES: Record<string, number> = {
+  USD: 1,
+  BDT: 110,
+  EUR: 0.92,
+  INR: 83,
+  PKR: 278,
+  GBP: 0.79,
+  CAD: 1.35,
+  AUD: 1.53,
+  BRL: 4.95,
+  NGN: 1150,
+  IDR: 15600,
+  MYR: 4.75,
+  PHP: 56,
+  THB: 35.8,
+  VND: 24600
+};
+
+import { generateSecret, generateURI, verify } from 'otplib';
+import QRCode from 'qrcode';
+
+async function startServer() {
+  // Initialize Firebase Admin
+  try {
+    if (fs.existsSync('./firebase-applet-config.json')) {
+      const configContent = fs.readFileSync('./firebase-applet-config.json', 'utf-8');
+      const firebaseConfig = JSON.parse(configContent);
+      if (getApps().length === 0) {
+        const app = initializeApp({
+          credential: applicationDefault(),
+          // Don't explicitly set projectId if it matches the environment's default
+          // This allows applicationDefault() to work correctly in managed environments
+        });
+        // Use the databaseId from config if provided, otherwise default
+        firestore = getFirestore(app, firebaseConfig.firestoreDatabaseId || '(default)');
+      } else {
+        const app = getApps()[0];
+        firestore = getFirestore(app, firebaseConfig.firestoreDatabaseId || '(default)');
+      }
+    }
+  } catch (error) {
+    console.error('Firebase Admin init error:', error);
+  }
+
+  // Initialize Database
+  try {
+    db = new Database(path.join(process.cwd(), 'trading_v2.db'));
+  } catch (dbError) {
+    console.error('Database connection error (using in-memory):', String(dbError));
+    db = new Database(':memory:');
+  }
+  
+  if (db) {
+    try {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS market_history (
+          symbol TEXT,
+          time INTEGER,
+          open REAL,
+          high REAL,
+          low REAL,
+          close REAL,
+          PRIMARY KEY (symbol, time)
+        );
+        
+        CREATE TABLE IF NOT EXISTS trade_stats (
+          date TEXT PRIMARY KEY,
+          total_trades INTEGER DEFAULT 0,
+          total_volume REAL DEFAULT 0,
+          total_user_profit REAL DEFAULT 0,
+          total_user_loss REAL DEFAULT 0,
+          house_net REAL DEFAULT 0
+        );
+        
+        CREATE TABLE IF NOT EXISTS settings (
+          key TEXT PRIMARY KEY,
+          value TEXT
+        );
+
+        CREATE TABLE IF NOT EXISTS kyc_submissions (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          email TEXT,
+          documentType TEXT,
+          documentNumber TEXT,
+          fullName TEXT,
+          dateOfBirth TEXT,
+          frontImage TEXT,
+          backImage TEXT,
+          status TEXT DEFAULT 'PENDING',
+          submittedAt INTEGER,
+          updatedAt INTEGER,
+          rejectionReason TEXT
+        );
+
+        CREATE TABLE IF NOT EXISTS notifications (
+          id TEXT PRIMARY KEY,
+          email TEXT,
+          title TEXT,
+          message TEXT,
+          type TEXT,
+          timestamp INTEGER,
+          isRead INTEGER DEFAULT 0
+        );
+
+        CREATE TABLE IF NOT EXISTS deposits (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          email TEXT,
+          amount REAL,
+          currency TEXT,
+          method TEXT,
+          transactionId TEXT,
+          status TEXT DEFAULT 'PENDING',
+          submittedAt INTEGER,
+          updatedAt INTEGER,
+          promoCode TEXT,
+          bonusAmount REAL DEFAULT 0
+        );
+
+        CREATE TABLE IF NOT EXISTS withdrawals (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          email TEXT,
+          amount REAL,
+          currency TEXT,
+          method TEXT,
+          accountDetails TEXT,
+          status TEXT DEFAULT 'PENDING',
+          submittedAt INTEGER,
+          updatedAt INTEGER,
+          rejectionReason TEXT
+        );
+
+        CREATE TABLE IF NOT EXISTS users (
+          email TEXT PRIMARY KEY,
+          password TEXT,
+          name TEXT,
+          photoURL TEXT,
+          uid TEXT,
+          balance REAL DEFAULT 0,
+          demoBalance REAL DEFAULT 10000,
+          status TEXT DEFAULT 'ACTIVE',
+          kycStatus TEXT DEFAULT 'NONE',
+          isBoosted INTEGER DEFAULT 0,
+          createdAt INTEGER,
+          lastLogin INTEGER,
+          turnover_required REAL DEFAULT 0,
+          turnover_achieved REAL DEFAULT 0,
+          referredBy TEXT,
+          referralCode TEXT,
+          referralCount INTEGER DEFAULT 0,
+          referralBalance REAL DEFAULT 0,
+          totalReferralEarnings REAL DEFAULT 0,
+          allowed_withdrawal_methods TEXT DEFAULT ''
+        );
+
+        CREATE TABLE IF NOT EXISTS promo_codes (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          code TEXT UNIQUE,
+          description TEXT,
+          bonusPercentage REAL,
+          minDeposit REAL,
+          turnoverMultiplier REAL,
+          expiresAt INTEGER,
+          title TEXT,
+          icon TEXT
+        );
+
+        CREATE TABLE IF NOT EXISTS activity_logs (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          email TEXT,
+          action TEXT,
+          details TEXT,
+          timestamp INTEGER,
+          ip TEXT
+        );
+
+        CREATE TABLE IF NOT EXISTS referrals (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          referrerUid TEXT,
+          referredUid TEXT,
+          referredEmail TEXT,
+          amount REAL,
+          type TEXT,
+          timestamp INTEGER
+        );
+
+        CREATE TABLE IF NOT EXISTS pending_orders (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          email TEXT,
+          uid TEXT,
+          assetId TEXT,
+          assetName TEXT,
+          type TEXT,
+          triggerValue REAL,
+          profitability REAL,
+          amount REAL,
+          duration INTEGER,
+          direction TEXT,
+          accountType TEXT,
+          status TEXT DEFAULT 'PENDING',
+          createdAt INTEGER
+        );
+
+        CREATE TABLE IF NOT EXISTS social_chat (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          email TEXT,
+          name TEXT,
+          text TEXT,
+          photoURL TEXT,
+          timestamp INTEGER
+        );
+
+        CREATE TABLE IF NOT EXISTS support_chat (
+          id TEXT PRIMARY KEY,
+          email TEXT,
+          text TEXT,
+          sender TEXT,
+          timestamp INTEGER
+        );
+
+        CREATE TABLE IF NOT EXISTS transfers (
+          id TEXT PRIMARY KEY,
+          fromEmail TEXT,
+          toEmail TEXT,
+          amount REAL,
+          timestamp INTEGER,
+          status TEXT DEFAULT 'COMPLETED'
+        );
+      `);
+
+      // Add columns if they don't exist (for existing databases)
+      try { db.prepare('ALTER TABLE users ADD COLUMN password TEXT').run(); } catch(e) {}
+      try { db.prepare('ALTER TABLE users ADD COLUMN twoFactorSecret TEXT').run(); } catch(e) {}
+      try { db.prepare('ALTER TABLE users ADD COLUMN twoFactorEnabled INTEGER DEFAULT 0').run(); } catch(e) {}
+      try { db.prepare('ALTER TABLE users ADD COLUMN name TEXT').run(); } catch(e) {}
+      try { db.prepare('ALTER TABLE users ADD COLUMN photoURL TEXT').run(); } catch(e) {}
+      try { db.prepare('ALTER TABLE users ADD COLUMN uid TEXT').run(); } catch(e) {}
+      try { db.prepare('ALTER TABLE users ADD COLUMN turnover_required REAL DEFAULT 0').run(); } catch(e) {}
+      try { db.prepare('ALTER TABLE users ADD COLUMN turnover_achieved REAL DEFAULT 0').run(); } catch(e) {}
+      try { db.prepare('ALTER TABLE users ADD COLUMN referredBy TEXT').run(); } catch(e) {}
+      try { db.prepare('ALTER TABLE users ADD COLUMN referralCode TEXT').run(); } catch(e) {}
+      try { db.prepare('ALTER TABLE users ADD COLUMN referralCount INTEGER DEFAULT 0').run(); } catch(e) {}
+      try { db.prepare('ALTER TABLE users ADD COLUMN referralBalance REAL DEFAULT 0').run(); } catch(e) {}
+      try { db.prepare('ALTER TABLE users ADD COLUMN totalReferralEarnings REAL DEFAULT 0').run(); } catch(e) {}
+      try { db.prepare('ALTER TABLE users ADD COLUMN allowed_withdrawal_methods TEXT DEFAULT \'\'').run(); } catch(e) {}
+      try { db.prepare('ALTER TABLE deposits ADD COLUMN promoCode TEXT').run(); } catch(e) {}
+      try { db.prepare('ALTER TABLE deposits ADD COLUMN bonusAmount REAL DEFAULT 0').run(); } catch(e) {}
+      try { db.prepare('ALTER TABLE deposits ADD COLUMN turnoverRequired REAL DEFAULT 0').run(); } catch(e) {}
+    } catch (execError) {
+      console.error('Database execution error:', execError);
+    }
+  }
+
+  const app = express();
+  const PORT = 3000;
+
+  app.use(cors());
+  app.use(express.json());
+
+  // Auth Routes
+  app.post('/api/auth/signup', async (req, res) => {
+    const { email, password, name, referralCode } = req.body;
+    try {
+      const existingUser = db.prepare('SELECT * FROM users WHERE email = ?').get(email);
+      if (existingUser) {
+        return res.status(400).json({ error: 'User already exists' });
+      }
+
+      const hashedPassword = await bcrypt.hash(password, 10);
+      const uid = Math.random().toString(36).substring(2, 15);
+      const createdAt = Date.now();
+
+      db.prepare(`
+        INSERT INTO users (email, password, name, uid, createdAt, balance, demoBalance, referralCode)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(email, hashedPassword, name, uid, createdAt, 0, 10000, Math.random().toString(36).substring(2, 8).toUpperCase());
+
+      // Handle referral if provided
+      if (referralCode) {
+        const referrer = db.prepare('SELECT * FROM users WHERE referralCode = ?').get(referralCode) as any;
+        if (referrer) {
+          db.prepare('UPDATE users SET referredBy = ? WHERE email = ?').run(referrer.email, email);
+          db.prepare('UPDATE users SET referralCount = referralCount + 1 WHERE email = ?').run(referrer.email);
+        }
+      }
+
+      const user = db.prepare('SELECT * FROM users WHERE email = ?').get(email) as any;
+      const token = jwt.sign({ email: user.email, uid: user.uid }, JWT_SECRET, { expiresIn: '7d' });
+
+      res.json({ user, token });
+    } catch (error) {
+      console.error('Signup error:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
+  app.post('/api/auth/login', async (req, res) => {
+    const { email, password } = req.body;
+    try {
+      const user = db.prepare('SELECT * FROM users WHERE email = ?').get(email) as any;
+      if (!user) {
+        return res.status(400).json({ error: 'User not found' });
+      }
+
+      const isPasswordValid = await bcrypt.compare(password, user.password);
+      if (!isPasswordValid) {
+        return res.status(400).json({ error: 'Invalid password' });
+      }
+
+      db.prepare('UPDATE users SET lastLogin = ? WHERE email = ?').run(Date.now(), email);
+
+      const token = jwt.sign({ email: user.email, uid: user.uid }, JWT_SECRET, { expiresIn: '7d' });
+      res.json({ user, token });
+    } catch (error) {
+      console.error('Login error:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
+  app.get('/api/auth/me', async (req, res) => {
+    const authHeader = req.headers.authorization;
+    if (!authHeader) return res.status(401).json({ error: 'No token provided' });
+
+    const token = authHeader.split(' ')[1];
+    try {
+      const decoded = jwt.verify(token, JWT_SECRET) as any;
+      const user = db.prepare('SELECT * FROM users WHERE email = ?').get(decoded.email) as any;
+      if (!user) return res.status(404).json({ error: 'User not found' });
+      res.json({ user });
+    } catch (error) {
+      res.status(401).json({ error: 'Invalid token' });
+    }
+  });
+
+  const httpServer = createServer(app);
+
+  // Setup Socket.IO
+  const io = new Server(httpServer, {
+    cors: {
+      origin: '*',
+      methods: ['GET', 'POST']
+    }
+  });
+
+  // Sync users from Firestore to SQLite in real-time - DISABLED for performance
+  /*
+  if (firestore && db) {
+    console.log('Initializing Firestore users sync...');
+    // ... (logic removed for speed)
+  }
+  */
+
+  // Helper to emit user data updates
+  const emitUserUpdate = (email: string) => {
+    const user = db.prepare('SELECT * FROM users WHERE email = ?').get(email) as any;
+    if (user) {
+      // Find socket for this user
+      const socketId = Object.keys(connectedUsers).find(id => connectedUsers[id].email === email);
+      if (socketId) {
+        // Parse trades if it's a string
+        let trades = [];
+        try {
+          trades = typeof user.trades === 'string' ? JSON.parse(user.trades) : (user.trades || []);
+        } catch (e) {
+          trades = [];
+        }
+
+        // Parse extraAccounts if it's a string
+        let extraAccounts = [];
+        try {
+          extraAccounts = typeof user.extraAccounts === 'string' ? JSON.parse(user.extraAccounts) : (user.extraAccounts || []);
+        } catch (e) {
+          extraAccounts = [];
+        }
+
+        io.to(socketId).emit('user-data-updated', {
+          ...user,
+          trades,
+          extraAccounts
+        });
+      }
+      
+      // Also update admin panel
+      const allUsers = db.prepare('SELECT * FROM users').all();
+      io.to('admin-room').emit('admin-all-users', allUsers);
+    }
+  };
+
+  // API Routes
+  app.get('/api/health', (req, res) => {
+    res.json({ status: 'ok', time: Date.now() });
+  });
+
+  // --- Market Simulation Engine (Server-Side) ---
+  const assets: Record<string, { price: number, volatility: number, trend: number, isFrozen?: boolean, targetPrice?: number | null, winPercentage?: number, payout?: number }> = {
+    'AUD/CHF': { price: 0.5720, volatility: 0.0002, trend: 0, winPercentage: 50, payout: 90 },
+    'AUD/JPY': { price: 97.50, volatility: 0.02, trend: 0, winPercentage: 50, payout: 90 },
+    'AUD/USD': { price: 0.6550, volatility: 0.0002, trend: 0, winPercentage: 50, payout: 90 },
+    'EUR/AUD': { price: 1.6550, volatility: 0.0002, trend: 0, winPercentage: 50, payout: 90 },
+    'EUR/CAD': { price: 1.4650, volatility: 0.0002, trend: 0, winPercentage: 50, payout: 90 },
+    'EUR/GBP': { price: 0.8550, volatility: 0.0002, trend: 0, winPercentage: 50, payout: 90 },
+    'EUR/JPY': { price: 163.50, volatility: 0.02, trend: 0, winPercentage: 50, payout: 90 },
+    'EUR/USD': { price: 1.0845, volatility: 0.0002, trend: 0, winPercentage: 50, payout: 90 },
+    'GBP/AUD': { price: 1.9350, volatility: 0.0003, trend: 0, winPercentage: 50, payout: 90 },
+    'GBP/CAD': { price: 1.7150, volatility: 0.0003, trend: 0, winPercentage: 50, payout: 90 },
+    'GBP/CHF': { price: 1.1350, volatility: 0.0003, trend: 0, winPercentage: 50, payout: 90 },
+    'GBP/USD': { price: 1.2670, volatility: 0.0003, trend: 0, winPercentage: 50, payout: 90 },
+    'NZD/USD': { price: 0.6150, volatility: 0.0002, trend: 0, winPercentage: 50, payout: 90 },
+    'USD/AED': { price: 3.67, volatility: 0.001, trend: 0, winPercentage: 50, payout: 90 },
+    'USD/ARS': { price: 830.50, volatility: 1.5, trend: 0, winPercentage: 50, payout: 90 },
+    'USD/BDT': { price: 109.50, volatility: 0.5, trend: 0, winPercentage: 50, payout: 90 },
+    'USD/BRL': { price: 4.95, volatility: 0.01, trend: 0, winPercentage: 50, payout: 90 },
+    'USD/CAD': { price: 1.3550, volatility: 0.0002, trend: 0, winPercentage: 50, payout: 90 },
+    'USD/CHF': { price: 0.8850, volatility: 0.0002, trend: 0, winPercentage: 50, payout: 90 },
+    'USD/COP': { price: 3950.50, volatility: 5.0, trend: 0, winPercentage: 50, payout: 90 },
+    'USD/DZD': { price: 134.50, volatility: 0.5, trend: 0, winPercentage: 50, payout: 90 },
+    'USD/EGP': { price: 30.90, volatility: 0.1, trend: 0, winPercentage: 50, payout: 90 },
+    'USD/IDR': { price: 15600.0, volatility: 20.0, trend: 0, winPercentage: 50, payout: 90 },
+    'USD/INR': { price: 83.00, volatility: 0.1, trend: 0, winPercentage: 50, payout: 90 },
+    'USD/JPY': { price: 150.20, volatility: 0.01500, trend: 0, winPercentage: 50, payout: 90 },
+    'USD/MXN': { price: 17.05, volatility: 0.05, trend: 0, winPercentage: 50, payout: 90 },
+    'USD/PKR': { price: 279.50, volatility: 1.0, trend: 0, winPercentage: 50, payout: 90 },
+    'USD/SAR': { price: 3.75, volatility: 0.001, trend: 0, winPercentage: 50, payout: 90 },
+    'USD/TRY': { price: 31.20, volatility: 0.05, trend: 0, winPercentage: 50, payout: 90 },
+    'USD/ZAR': { price: 19.10, volatility: 0.02, trend: 0, winPercentage: 50, payout: 90 },
+    'BTC/USD': { price: 51241.67, volatility: 15.5, trend: 0, winPercentage: 50, payout: 90 },
+    'ETH/USD': { price: 2950.12, volatility: 2.5, trend: 0, winPercentage: 50, payout: 90 },
+    'SOL/USD': { price: 105.45, volatility: 0.8, trend: 0, winPercentage: 50, payout: 90 },
+    'XRP/USD': { price: 0.54, volatility: 0.005, trend: 0, winPercentage: 50, payout: 90 },
+    'GOLD': { price: 2035.50, volatility: 0.5, trend: 0, winPercentage: 50, payout: 90 },
+    'SILVER': { price: 22.80, volatility: 0.05, trend: 0, winPercentage: 50, payout: 90 },
+    'OIL': { price: 78.40, volatility: 0.2, trend: 0, winPercentage: 50, payout: 90 },
+    'AAPL': { price: 182.30, volatility: 0.5, trend: 0, winPercentage: 50, payout: 90 },
+    'GOOGL': { price: 145.60, volatility: 0.4, trend: 0, winPercentage: 50, payout: 90 },
+    'TSLA': { price: 195.20, volatility: 1.2, trend: 0, winPercentage: 50, payout: 90 },
+    'AMZN': { price: 175.40, volatility: 0.6, trend: 0, winPercentage: 50, payout: 90 },
+    'MSFT': { price: 410.50, volatility: 0.8, trend: 0, winPercentage: 50, payout: 90 },
+    'META': { price: 485.20, volatility: 1.5, trend: 0, winPercentage: 50, payout: 90 },
+    'NFLX': { price: 590.40, volatility: 1.0, trend: 0, winPercentage: 50, payout: 90 },
+    'NVDA': { price: 785.30, volatility: 2.5, trend: 0, winPercentage: 50, payout: 90 },
+    'BABA': { price: 75.20, volatility: 0.8, trend: 0, winPercentage: 50, payout: 90 },
+    'DOGE/USD': { price: 0.085, volatility: 0.002, trend: 0, winPercentage: 50, payout: 90 },
+    'ADA/USD': { price: 0.58, volatility: 0.01, trend: 0, winPercentage: 50, payout: 90 },
+    'DOT/USD': { price: 7.45, volatility: 0.15, trend: 0, winPercentage: 50, payout: 90 },
+    'COPPER': { price: 3.85, volatility: 0.02, trend: 0, winPercentage: 50, payout: 90 },
+    'NATGAS': { price: 1.85, volatility: 0.05, trend: 0, winPercentage: 50, payout: 90 },
+    'CORN': { price: 4.50, volatility: 0.02, trend: 0, winPercentage: 50, payout: 90 },
+    'WHEAT': { price: 5.80, volatility: 0.03, trend: 0, winPercentage: 50, payout: 90 },
+    'LINK/USD': { price: 18.50, volatility: 0.2, trend: 0, winPercentage: 50, payout: 90 },
+    'MATIC/USD': { price: 0.95, volatility: 0.01, trend: 0, winPercentage: 50, payout: 90 },
+    'UNI/USD': { price: 7.20, volatility: 0.1, trend: 0, winPercentage: 50, payout: 90 },
+    'DIS': { price: 110.50, volatility: 0.4, trend: 0, winPercentage: 50, payout: 90 },
+    'PYPL': { price: 60.20, volatility: 0.5, trend: 0, winPercentage: 50, payout: 90 },
+    'NKE': { price: 105.40, volatility: 0.3, trend: 0, winPercentage: 50, payout: 90 },
+  };
+
+  // Store historical ticks (last 1 hour = 3600 ticks)
+  const history: Record<string, any[]> = {};
+  Object.keys(assets).forEach(symbol => {
+    history[symbol] = [];
+  });
+
+  // Track active trades for admin panel
+  const activeTrades: Record<string, any> = {};
+  
+  // Track connected users for admin panel
+  const connectedUsers: Record<string, any> = {};
+
+  // Global Trade Automation Settings
+  let globalTradeSettings = {
+    mode: 'FAIR', // 'FAIR', 'FORCE_LOSS', 'FORCE_WIN', 'PERCENTAGE'
+    winPercentage: 50,
+    payoutPercentage: 90
+  };
+
+  let globalDepositSettings = {
+    bkashNumbers: ['01712-345678'],
+    nagadNumbers: ['01712-345678'],
+    rocketNumbers: ['01712-345678'],
+    upayNumbers: ['01712-345678'],
+    binancePayId: '123456789',
+    paypalEmail: 'payments@onyxtrade.com',
+    netellerEmail: 'payments@onyxtrade.com',
+    skrillEmail: 'payments@onyxtrade.com',
+    usdtTrc20Address: 'Txxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',
+    usdtBep20Address: '0xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',
+    ethErc20Address: '0xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',
+    usdcErc20Address: '0xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',
+    usdcBep20Address: '0xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',
+    btcAddress: '1xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',
+    enabledMethods: [
+      'bkash_p2c', 'nagad_p2c', 'rocket_p2c', 'upay_p2c', 
+      'binance_pay', 'usdt_trc20', 'usdt_bep20', 'bitcoin',
+      'bank_card', 'skrill', 'xrp', 'usdt_ton', 'usdc_erc20', 'usdc_bep20', 'ethereum', 'litecoin',
+      'paypal', 'neteller'
+    ],
+    exchangeRate: 120,
+    depositNote: 'Ensure you include your account ID in the reference if required. Deposits usually reflect within 5-15 minutes.',
+    minDepositForBonus: 50,
+    bonusPercentage: 10,
+    turnoverMultiplier: 3
+  };
+
+  let globalPlatformSettings = {
+    isTradingEnabled: true,
+    isDepositsEnabled: true,
+    isWithdrawalsEnabled: true,
+    isChatEnabled: true,
+    maintenanceMode: false
+  };
+
+  // Load trade settings from DB
+  const savedSettings = db.prepare('SELECT value FROM settings WHERE key = ?').get('trade_settings') as any;
+  if (savedSettings) {
+    globalTradeSettings = JSON.parse(savedSettings.value);
+  }
+
+  const savedAssetSettings = db.prepare('SELECT value FROM settings WHERE key = ?').get('asset_settings') as any;
+  if (savedAssetSettings) {
+    const parsed = JSON.parse(savedAssetSettings.value);
+    Object.keys(parsed).forEach(symbol => {
+      if (assets[symbol]) {
+        assets[symbol] = { ...assets[symbol], ...parsed[symbol] };
+      }
+    });
+  }
+
+  const savedDepositSettings = db.prepare('SELECT value FROM settings WHERE key = ?').get('deposit_settings') as any;
+  if (savedDepositSettings) {
+    globalDepositSettings = { ...globalDepositSettings, ...JSON.parse(savedDepositSettings.value) };
+  }
+
+  const savedPlatformSettings = db.prepare('SELECT value FROM settings WHERE key = ?').get('platform_settings') as any;
+  if (savedPlatformSettings) {
+    globalPlatformSettings = { ...globalPlatformSettings, ...JSON.parse(savedPlatformSettings.value) };
+  }
+
+  const saveTradeSettings = (settings: any) => {
+    db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run('trade_settings', JSON.stringify(settings));
+  };
+
+  const saveAssetSettings = () => {
+    const toSave: Record<string, any> = {};
+    Object.keys(assets).forEach(symbol => {
+      toSave[symbol] = { winPercentage: assets[symbol].winPercentage, payout: assets[symbol].payout, volatility: assets[symbol].volatility };
+    });
+    db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run('asset_settings', JSON.stringify(toSave));
+  };
+
+  const saveDepositSettings = (settings: any) => {
+    db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run('deposit_settings', JSON.stringify(settings));
+  };
+
+  const savePlatformSettings = (settings: any) => {
+    db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run('platform_settings', JSON.stringify(settings));
+  };
+
+  const logActivity = (email: string, action: string, details: string = '', ip: string = '') => {
+    try {
+      db.prepare('INSERT INTO activity_logs (email, action, details, timestamp, ip) VALUES (?, ?, ?, ?, ?)')
+        .run(email, action, details, Date.now(), ip);
+    } catch (error) {
+      console.error('Activity Logging Error:', error);
+    }
+  };
+
+  // Platform Financial Statistics
+  const today = new Date().toISOString().split('T')[0];
+  let platformStats = {
+    totalTrades: 0,
+    totalVolume: 0,
+    totalProfit: 0, // Profit for users
+    totalLoss: 0,   // Loss for users (Profit for platform)
+    netPlatformProfit: 0,
+    dailyStats: {
+      trades: 0,
+      volume: 0,
+      profit: 0,
+      loss: 0
+    }
+  };
+
+  // Load stats from DB
+  const loadStats = () => {
+    const allTime = db.prepare('SELECT SUM(total_trades) as trades, SUM(total_volume) as volume, SUM(total_user_profit) as profit, SUM(total_user_loss) as loss FROM trade_stats').get() as any;
+    const daily = db.prepare('SELECT * FROM trade_stats WHERE date = ?').get(today) as any;
+
+    if (allTime && allTime.trades !== null) {
+      platformStats.totalTrades = allTime.trades;
+      platformStats.totalVolume = allTime.volume;
+      platformStats.totalProfit = allTime.profit;
+      platformStats.totalLoss = allTime.loss;
+      platformStats.netPlatformProfit = allTime.loss - allTime.profit;
+    }
+
+    if (daily) {
+      platformStats.dailyStats = {
+        trades: daily.total_trades,
+        volume: daily.total_volume,
+        profit: daily.total_user_profit,
+        loss: daily.total_user_loss
+      };
+    } else {
+      // Initialize today's stats in DB
+      db.prepare('INSERT OR IGNORE INTO trade_stats (date) VALUES (?)').run(today);
+    }
+  };
+  loadStats();
+
+  const saveTradeToStats = (amount: number, userProfit: number, isWin: boolean, accountType: string, email: string) => {
+    if (accountType !== 'REAL') return; // Only track real balance trades as requested
+    
+    const userLoss = isWin ? 0 : amount;
+    const net = userLoss - userProfit;
+
+    db.prepare(`
+      UPDATE trade_stats 
+      SET total_trades = total_trades + 1,
+          total_volume = total_volume + ?,
+          total_user_profit = total_user_profit + ?,
+          total_user_loss = total_user_loss + ?,
+          house_net = house_net + ?
+      WHERE date = ?
+    `).run(amount, userProfit, userLoss, net, today);
+
+    // Update user turnover
+    db.prepare('UPDATE users SET turnover_achieved = turnover_achieved + ? WHERE email = ?').run(amount, email);
+    
+    loadStats(); // Reload into memory
+  };
+
+  // Global Support & Tutorial Settings
+  let globalSupportSettings = {
+    telegram: 'https://t.me/onyxtrade_support',
+    whatsapp: 'https://wa.me/1234567890',
+    email: 'support@onyxtrade.com'
+  };
+
+  // Referral Settings
+  let globalReferralSettings = {
+    bonusAmount: 10, // Fixed bonus for referrer
+    referralPercentage: 5, // Percentage of first deposit
+    minDepositForBonus: 20
+  };
+
+  // Deposit & Withdrawal Requests
+  let pendingRequests: any[] = [];
+  
+  // Global Notifications
+  let globalNotifications: any[] = [];
+
+  // Global Rewards
+  let globalRewards: any[] = [
+    {
+      id: '1',
+      title: '110% Deposit Bonus',
+      description: 'Use LUNAR2026 when depositing $10.00+',
+      category: 'Promo Code',
+      value: 'LUNAR2026',
+      badge: '110%',
+      icon: 'Gift'
+    },
+    {
+      id: '2',
+      title: 'Advanced Status',
+      description: 'Use UE5QMQZ0E8 depositing $250.00+',
+      category: 'Promo Code',
+      value: 'UE5QMQZ0E8',
+      badge: 'UP TO 100%',
+      icon: 'Zap'
+    }
+  ];
+
+  let globalTutorials = [
+    {
+      id: '1',
+      title: 'Binary Options Basics',
+      description: 'Learn the fundamentals of digital options trading in 5 minutes.',
+      link: 'https://youtube.com/watch?v=example1',
+      category: 'Beginner',
+      duration: '5:20'
+    },
+    {
+      id: '2',
+      title: 'Advanced Chart Analysis',
+      description: 'Master technical indicators and price action strategies.',
+      link: 'https://youtube.com/watch?v=example2',
+      category: 'Advanced',
+      duration: '12:45'
+    }
+  ];
+
+  // Generate initial history (24 hours)
+  const now = Date.now();
+  const historyDurationMs = 24 * 3600 * 1000;
+  const historyTicksCount = 24 * 3600;
+  
+  Object.keys(assets).forEach(symbol => {
+    const asset = assets[symbol as keyof typeof assets];
+    
+    // Check if we already have history in DB
+    const existingHistory = db.prepare('SELECT * FROM market_history WHERE symbol = ? ORDER BY time DESC LIMIT 1').get(symbol) as any;
+    
+    if (existingHistory && (now - existingHistory.time) < historyDurationMs) {
+      // Load existing history
+      const rows = db.prepare('SELECT * FROM market_history WHERE symbol = ? AND time > ? ORDER BY time ASC').all(symbol, now - historyDurationMs) as any[];
+      history[symbol] = rows.map(r => ({
+        time: r.time,
+        price: r.close,
+        open: r.open,
+        high: r.high,
+        low: r.low,
+        close: r.close
+      }));
+      
+      if (rows.length > 0) {
+        asset.price = rows[rows.length - 1].close;
+      }
+      
+      // If there's a gap between last history and now, fill it
+      let lastTime = existingHistory.time;
+      let currentPrice = existingHistory.close;
+      let currentTrend = 0;
+      
+      const gapSeconds = Math.floor((now - lastTime) / 1000);
+      if (gapSeconds > 1) {
+        const insert = db.prepare('INSERT OR REPLACE INTO market_history (symbol, time, open, high, low, close) VALUES (?, ?, ?, ?, ?, ?)');
+        const transaction = db.transaction((symbol, startTime, startPrice, count) => {
+          let price = startPrice;
+          for (let i = 1; i <= count; i++) {
+            const time = startTime + i * 1000;
+            currentTrend += (Math.random() - 0.5) * asset.volatility * 0.1;
+            currentTrend *= 0.95;
+            const move = (currentTrend + (Math.random() - 0.5) * asset.volatility * 1.2);
+            const open = price;
+            price += move;
+            const close = price;
+            const high = Math.max(open, close) + Math.random() * asset.volatility;
+            const low = Math.min(open, close) - Math.random() * asset.volatility;
+            
+            insert.run(symbol, time, open, high, low, close);
+            history[symbol].push({ time, price: close, open, high, low, close });
+          }
+          return price;
+        });
+        asset.price = transaction(symbol, lastTime, currentPrice, gapSeconds);
+      }
+    } else {
+      // Generate new history
+      let currentPrice = asset.price;
+      let currentTrend = 0;
+      const insert = db.prepare('INSERT OR REPLACE INTO market_history (symbol, time, open, high, low, close) VALUES (?, ?, ?, ?, ?, ?)');
+      
+      const transaction = db.transaction((symbol, startTime, startPrice) => {
+        let price = startPrice;
+        for (let i = historyTicksCount; i >= 0; i--) {
+          const time = startTime - i * 1000;
+          currentTrend += (Math.random() - 0.5) * asset.volatility * 0.1;
+          currentTrend *= 0.95;
+          
+          const candleTypeRand = Math.random();
+          let moveMultiplier = 1.0;
+          if (candleTypeRand < 0.15) moveMultiplier = 0.1;
+          else if (candleTypeRand < 0.35) moveMultiplier = 1.6;
+          
+          const move = (currentTrend + (Math.random() - 0.5) * asset.volatility * 1.2) * moveMultiplier;
+          const open = price;
+          price += move;
+          const close = price;
+          
+          const wickRand = Math.random();
+          let upperWickBase = Math.random() * asset.volatility * 1.2;
+          let lowerWickBase = Math.random() * asset.volatility * 1.2;
+          
+          if (wickRand < 0.1) { upperWickBase *= 3.5; lowerWickBase *= 3.5; }
+          else if (wickRand < 0.2) { lowerWickBase *= 4.5; upperWickBase *= 0.4; }
+          else if (wickRand < 0.3) { upperWickBase *= 4.5; lowerWickBase *= 0.4; }
+
+          const high = Math.max(open, close) + upperWickBase;
+          const low = Math.min(open, close) - lowerWickBase;
+
+          insert.run(symbol, time, open, high, low, close);
+          history[symbol].push({ time, price: close, open, high, low, close });
+        }
+        return price;
+      });
+      asset.price = transaction(symbol, now, currentPrice);
+    }
+  });
+
+  // Generate ticks every 200ms for smooth movement
+  let tickCounter = 0;
+  const insertTick = db.prepare('INSERT OR REPLACE INTO market_history (symbol, time, open, high, low, close) VALUES (?, ?, ?, ?, ?, ?)');
+  
+  setInterval(() => {
+    const now = Date.now();
+    const ticks: Record<string, any> = {};
+    const isFullSecond = tickCounter % 5 === 0;
+
+    Object.keys(assets).forEach(symbol => {
+      const asset = assets[symbol];
+      
+      let newPrice = asset.price;
+      
+      if (!asset.isFrozen) {
+        if (asset.targetPrice) {
+          // Move towards target price (scaled for 200ms)
+          const diff = asset.targetPrice - asset.price;
+          const step = diff * 0.01; // Move 1% towards target each tick (smooth)
+          newPrice += step;
+          
+          // If close enough, clear target
+          if (Math.abs(diff) < asset.volatility * 0.02) {
+            asset.targetPrice = null;
+          }
+        } else {
+          // Natural movement logic (scaled for 200ms)
+          asset.trend += (Math.random() - 0.5) * asset.volatility * 0.02;
+          asset.trend *= 0.99;
+          
+          const candleTypeRand = Math.random();
+          let moveMultiplier = 1.0;
+          if (candleTypeRand < 0.15) moveMultiplier = 0.15; // Doji / Small body
+          else if (candleTypeRand < 0.35) moveMultiplier = 1.5; // Healthy / Strong body
+          
+          const move = (asset.trend + (Math.random() - 0.5) * asset.volatility * 0.24) * moveMultiplier;
+          newPrice += move;
+        }
+      }
+      
+      const wickRand = Math.random();
+      let upperWickBase = (asset.isFrozen ? 0 : Math.random() * asset.volatility * 1.3);
+      let lowerWickBase = (asset.isFrozen ? 0 : Math.random() * asset.volatility * 1.3);
+      
+      if (!asset.isFrozen) {
+        if (wickRand < 0.08) { // Long shadows on both sides
+          upperWickBase *= 3.8;
+          lowerWickBase *= 3.8;
+        } else if (wickRand < 0.18) { // Long lower shadow (Hammer)
+          lowerWickBase *= 4.8;
+          upperWickBase *= 0.3;
+        } else if (wickRand < 0.28) { // Long upper shadow (Shooting Star)
+          upperWickBase *= 4.8;
+          lowerWickBase *= 0.3;
+        }
+      }
+
+      const tick = {
+        time: now,
+        price: newPrice,
+        open: asset.price,
+        high: Math.max(asset.price, newPrice) + upperWickBase,
+        low: Math.min(asset.price, newPrice) - lowerWickBase,
+        close: newPrice,
+        isFrozen: asset.isFrozen
+      };
+      
+      ticks[symbol] = tick;
+      
+      // Only push to history every 1 second to keep it consistent
+      if (isFullSecond) {
+        history[symbol].push(tick);
+        insertTick.run(symbol, Math.floor(now / 1000) * 1000, tick.open, tick.high, tick.low, tick.close);
+        
+        // Keep up to 24 hours of history (86400 seconds)
+        if (history[symbol].length > 86400) {
+          history[symbol].shift(); 
+        }
+      }
+      
+      asset.price = newPrice;
+    });
+
+    // Broadcast to all connected clients
+    io.emit('market-tick', ticks);
+    
+    // Broadcast active trades to admin every second
+    if (isFullSecond) {
+      io.to('admin-room').emit('admin-active-trades', Object.values(activeTrades));
+      io.to('admin-room').emit('admin-users', Object.values(connectedUsers));
+    }
+    
+    tickCounter++;
+  }, 100);
+
+  // Handle Trade Execution
+  const handleTradePlacement = (socket: any, trade: any) => {
+    const user = connectedUsers[socket.id];
+    if (!user) return;
+
+    if (user.status === 'BLOCKED') {
+      socket.emit('trade-error', 'Your account has been blocked. Please contact support.');
+      return;
+    }
+
+    if (!globalPlatformSettings.isTradingEnabled) {
+      socket.emit('trade-error', 'Trading is currently disabled for maintenance.');
+      return;
+    }
+    console.log('Trade received:', trade);
+    
+    // Apply Global Automation Rules
+    let forcedResult = undefined;
+    
+    if (globalTradeSettings.mode === 'FORCE_LOSS') {
+      forcedResult = 'LOSS';
+    } else if (globalTradeSettings.mode === 'FORCE_WIN') {
+      forcedResult = 'WIN';
+    } else if (globalTradeSettings.mode === 'PERCENTAGE') {
+      const assetKey = trade.assetShortName || trade.asset;
+      const asset = assets[assetKey as keyof typeof assets];
+      const winPercentage = asset?.winPercentage || globalTradeSettings.winPercentage;
+      const isWin = Math.random() * 100 < winPercentage;
+      forcedResult = isWin ? 'WIN' : 'LOSS';
+    }
+
+    // Store active trade
+    activeTrades[trade.id] = { ...trade, socketId: socket.id, forcedResult };
+    
+    logActivity(trade.email, 'TRADE_PLACE', `${trade.type} on ${trade.assetShortName} - Amount: ${trade.amount} (${trade.accountType})`);
+
+    // In a real app, we would validate balance and store in DB here
+    // For now, we just acknowledge receipt
+    socket.emit('trade-accepted', { id: trade.id, status: 'ACTIVE' });
+
+    // Set a timer to resolve the trade
+    const durationMs = trade.endTime - Date.now();
+    
+    // If there's a forced result, manipulate the price slightly before the trade ends
+    if (forcedResult) {
+      // Start manipulation earlier (e.g., halfway through the trade or at least 5 seconds before end)
+      const manipulationTime = Math.max(0, Math.min(durationMs / 2, durationMs - 5000));
+      setTimeout(() => {
+        const activeTrade = activeTrades[trade.id];
+        if (!activeTrade) return;
+        const assetKey = activeTrade.assetShortName || activeTrade.asset;
+        const asset = assets[assetKey as keyof typeof assets];
+        if (!asset) return;
+
+        const isUp = activeTrade.type === 'UP';
+        const shouldWin = forcedResult === 'WIN';
+        
+        // Determine if we need to move price UP or DOWN
+        const needsUp = (isUp && shouldWin) || (!isUp && !shouldWin);
+        
+        // Calculate a safe target price
+        const offset = asset.volatility * 2; // Smaller offset for natural look
+        
+        // If the current price is already on the wrong side, we need a bigger target to pull it across
+        const currentPrice = asset.price;
+        let target = activeTrade.entryPrice + (needsUp ? offset : -offset);
+        
+        if (needsUp && currentPrice < activeTrade.entryPrice) {
+           target = activeTrade.entryPrice + Math.abs(activeTrade.entryPrice - currentPrice) + offset;
+        } else if (!needsUp && currentPrice > activeTrade.entryPrice) {
+           target = activeTrade.entryPrice - Math.abs(activeTrade.entryPrice - currentPrice) - offset;
+        }
+        
+        asset.targetPrice = target;
+      }, manipulationTime);
+    }
+
+    setTimeout(() => {
+      const activeTrade = activeTrades[trade.id];
+      if (!activeTrade) return; // Trade might have been forced by admin
+
+      const assetKey = activeTrade.assetShortName || activeTrade.asset;
+      const currentPrice = assets[assetKey as keyof typeof assets]?.price || activeTrade.entryPrice;
+      
+      // Check if admin forced a result
+      let isWin = false;
+      let finalClosePrice = currentPrice;
+      
+      if (activeTrade.forcedResult) {
+        isWin = activeTrade.forcedResult === 'WIN';
+        const isUp = activeTrade.type === 'UP';
+        const needsUp = (isUp && isWin) || (!isUp && !isWin);
+        
+        // Ensure final close price is on the correct side
+        const volatility = assets[assetKey as keyof typeof assets]?.volatility || 0.001;
+        if (needsUp && finalClosePrice <= activeTrade.entryPrice) {
+          finalClosePrice = activeTrade.entryPrice + volatility;
+        } else if (!needsUp && finalClosePrice >= activeTrade.entryPrice) {
+          finalClosePrice = activeTrade.entryPrice - volatility;
+        }
+        
+        // Update the asset price to match the forced close price so the chart doesn't jump back
+        if (assets[assetKey as keyof typeof assets]) {
+           assets[assetKey as keyof typeof assets].price = finalClosePrice;
+        }
+      } else {
+        isWin = activeTrade.type === 'UP' 
+          ? currentPrice > activeTrade.entryPrice 
+          : currentPrice < activeTrade.entryPrice;
+      }
+      
+      const profit = isWin ? activeTrade.amount * (activeTrade.payout / 100) : 0;
+      
+      // Update Platform Stats in DB (Live Balance only)
+      saveTradeToStats(activeTrade.amount, profit, isWin, activeTrade.accountType, activeTrade.email);
+
+      // Broadcast stats to admin
+      io.to('admin-room').emit('admin-stats', platformStats);
+
+      io.to(activeTrade.socketId).emit('trade-result', {
+        id: activeTrade.id,
+        status: isWin ? 'WIN' : 'LOSS',
+        closePrice: finalClosePrice,
+        profit: profit
+      });
+      
+      logActivity(activeTrade.email, 'TRADE_RESULT', `${isWin ? 'WIN' : 'LOSS'} on ${activeTrade.assetShortName} - Profit: ${profit.toFixed(2)}`);
+
+      delete activeTrades[activeTrade.id];
+    }, durationMs);
+  };
+
+  // --- Pending Orders Logic ---
+  const checkPendingOrders = () => {
+    try {
+      const pending = db.prepare("SELECT * FROM pending_orders WHERE status = 'PENDING'").all();
+      pending.forEach((order: any) => {
+        const asset = assets[order.assetId];
+        if (!asset) return;
+
+        let shouldTrigger = false;
+        if (order.type === 'PRICE') {
+          if (Math.abs(asset.price - order.triggerValue) < asset.volatility) {
+            shouldTrigger = true;
+          }
+        } else if (order.type === 'TIME') {
+          if (Date.now() >= order.triggerValue) {
+            shouldTrigger = true;
+          }
+        }
+
+        if (shouldTrigger) {
+          const currentProfitability = asset.winPercentage || globalTradeSettings.winPercentage;
+          if (currentProfitability >= order.profitability) {
+            db.prepare("UPDATE pending_orders SET status = 'EXECUTED' WHERE id = ?").run(order.id);
+            
+            const socketId = Object.keys(connectedUsers).find(sid => connectedUsers[sid].email === order.email);
+            if (socketId) {
+              const socket = io.sockets.sockets.get(socketId);
+              if (socket) {
+                const tradeId = `trade_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+                const trade = {
+                  id: tradeId,
+                  email: order.email,
+                  asset: order.assetId,
+                  assetShortName: order.assetId,
+                  amount: order.amount,
+                  type: order.direction,
+                  duration: order.duration,
+                  entryPrice: asset.price,
+                  startTime: Date.now(),
+                  endTime: Date.now() + order.duration * 1000,
+                  payout: currentProfitability,
+                  accountType: order.accountType
+                };
+                
+                socket.emit('pending-order-executed', { orderId: order.id, tradeId: tradeId });
+                handleTradePlacement(socket, trade);
+              }
+            }
+          }
+        }
+      });
+    } catch (error) {
+      console.error('Error checking pending orders:', error);
+    }
+  };
+
+  setInterval(checkPendingOrders, 1000);
+
+  // Handle Client Connections
+  io.on('connection', (socket) => {
+    console.log('Client connected:', socket.id);
+    
+    // Default user state
+    connectedUsers[socket.id] = {
+      id: socket.id,
+      email: 'Anonymous',
+      name: 'Guest',
+      balance: 0,
+      trades: []
+    };
+
+    // Handle user authentication/sync from client
+    socket.on('user-sync', (userData) => {
+      if (userData && userData.email) {
+        // Fetch latest KYC status
+        const kyc = db.prepare('SELECT status, rejectionReason FROM kyc_submissions WHERE email = ? ORDER BY submittedAt DESC LIMIT 1').get(userData.email) as any;
+        
+        // Upsert user into users table
+        const existingUser = db.prepare('SELECT * FROM users WHERE email = ?').get(userData.email);
+        const now = Date.now();
+        
+        if (!existingUser) {
+          db.prepare('INSERT INTO users (email, name, photoURL, uid, balance, demoBalance, createdAt, lastLogin, kycStatus, referredBy, referralCode) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+            .run(userData.email, userData.name || userData.displayName || '', userData.photoURL || '', userData.uid || '', userData.balance || 0, userData.demoBalance || 10000, now, now, kyc ? kyc.status : 'NONE', userData.referredBy || null, userData.referralCode || null);
+          
+          // Increment referralCount for referrer
+          if (userData.referredBy) {
+            const referrer = db.prepare('SELECT * FROM users WHERE referralCode = ?').get(userData.referredBy) as any;
+            if (referrer) {
+              db.prepare('UPDATE users SET referralCount = referralCount + 1 WHERE email = ?').run(referrer.email);
+            }
+          }
+        } else {
+          db.prepare('UPDATE users SET name = ?, photoURL = ?, uid = ?, lastLogin = ?, balance = ?, demoBalance = ?, kycStatus = ?, referredBy = ?, referralCode = ? WHERE email = ?')
+            .run(userData.name || userData.displayName || existingUser.name || '', userData.photoURL || existingUser.photoURL || '', userData.uid || existingUser.uid || '', now, userData.balance || existingUser.balance, userData.demoBalance || existingUser.demoBalance, kyc ? kyc.status : existingUser.kycStatus, userData.referredBy || existingUser.referredBy, userData.referralCode || existingUser.referralCode, userData.email);
+        }
+
+        const userFromDb = db.prepare('SELECT * FROM users WHERE email = ?').get(userData.email) as any;
+        
+        connectedUsers[socket.id] = {
+          ...connectedUsers[socket.id],
+          ...userData,
+          ...userFromDb,
+          kycStatus: kyc ? kyc.status : 'NOT_SUBMITTED',
+          kycRejectionReason: kyc ? kyc.rejectionReason : null,
+          id: socket.id,
+          socketId: socket.id
+        };
+        
+        // Send full user data to client immediately via socket
+        emitUserUpdate(userData.email);
+        
+        // Send initial KYC status back
+        socket.emit('kyc-status-updated', { 
+          status: kyc ? kyc.status : 'NOT_SUBMITTED',
+          reason: kyc ? kyc.rejectionReason : null
+        });
+
+        socket.emit('allowed-withdraw-methods', userFromDb.allowed_withdrawal_methods || '');
+
+        // If user is blocked, force logout
+        if (userFromDb.status === 'BLOCKED') {
+          socket.emit('force-logout');
+        }
+
+        logActivity(userData.email, 'LOGIN', `User logged in from ${socket.handshake.address}`, socket.handshake.address);
+      }
+    });
+
+    // Send initial prices
+    const initialPrices: Record<string, number> = {};
+    Object.keys(assets).forEach(symbol => {
+      initialPrices[symbol] = assets[symbol as keyof typeof assets].price;
+    });
+    socket.emit('initial-prices', initialPrices);
+
+    // Handle history request
+    socket.on('request-history', (assetShortName) => {
+      socket.emit('asset-history', {
+        asset: assetShortName,
+        data: history[assetShortName] || []
+      });
+    });
+
+    // Handle Trade Execution
+    socket.on('place-trade', (trade) => {
+      handleTradePlacement(socket, trade);
+    });
+
+    // --- Pending Orders ---
+    socket.on('create-pending-order', (order) => {
+      try {
+        const stmt = db.prepare(`
+          INSERT INTO pending_orders (
+            email, uid, assetId, assetName, type, triggerValue, 
+            profitability, amount, duration, direction, accountType, createdAt
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `);
+        const result = stmt.run(
+          order.email, order.uid, order.assetId, order.assetName, order.type, 
+          order.triggerValue, order.profitability, order.amount, order.duration, 
+          order.direction, order.accountType, Date.now()
+        );
+        
+        const newOrder = { ...order, id: result.lastInsertRowid, status: 'PENDING', createdAt: Date.now() };
+        socket.emit('pending-order-created', newOrder);
+        
+        // Refresh orders for user
+        const userOrders = db.prepare('SELECT * FROM pending_orders WHERE email = ? ORDER BY createdAt DESC').all(order.email);
+        socket.emit('user-pending-orders', userOrders);
+        
+        // Refresh for admin
+        const allPending = db.prepare("SELECT * FROM pending_orders WHERE status = 'PENDING'").all();
+        io.to('admin-room').emit('admin-pending-orders', allPending);
+      } catch (error) {
+        console.error('Error creating pending order:', error);
+        socket.emit('trade-error', 'Failed to create pending order.');
+      }
+    });
+
+    socket.on('cancel-pending-order', (orderId) => {
+      try {
+        db.prepare("UPDATE pending_orders SET status = 'CANCELLED' WHERE id = ?").run(orderId);
+        const order = db.prepare('SELECT * FROM pending_orders WHERE id = ?').get(orderId);
+        if (order) {
+          const userOrders = db.prepare('SELECT * FROM pending_orders WHERE email = ? ORDER BY createdAt DESC').all(order.email);
+          socket.emit('user-pending-orders', userOrders);
+        }
+        
+        const allPending = db.prepare("SELECT * FROM pending_orders WHERE status = 'PENDING'").all();
+        io.to('admin-room').emit('admin-pending-orders', allPending);
+      } catch (error) {
+        console.error('Error cancelling pending order:', error);
+      }
+    });
+
+    socket.on('get-user-pending-orders', (email) => {
+      try {
+        const userOrders = db.prepare('SELECT * FROM pending_orders WHERE email = ? ORDER BY createdAt DESC').all(email);
+        socket.emit('user-pending-orders', userOrders);
+      } catch (error) {
+        console.error('Error fetching user pending orders:', error);
+      }
+    });
+
+    // --- Admin Events ---
+    socket.on('get-deposit-settings', () => {
+      socket.emit('deposit-settings', globalDepositSettings);
+    });
+
+    socket.on('admin-join', (email) => {
+      const adminEmails = ['hasan@gmail.com', 'tasmeaykhatun565@gmail.com'];
+      if (email && adminEmails.includes(email.toLowerCase())) {
+        socket.join('admin-room');
+        socket.emit('admin-assets', assets);
+        socket.emit('admin-trade-settings', globalTradeSettings);
+        socket.emit('admin-support-settings', globalSupportSettings);
+        socket.emit('admin-tutorials', globalTutorials);
+        socket.emit('admin-referral-settings', globalReferralSettings);
+        socket.emit('admin-requests', pendingRequests);
+        
+        try {
+          const allNotifications = db.prepare('SELECT * FROM notifications ORDER BY timestamp DESC LIMIT 100').all();
+          socket.emit('admin-notifications', allNotifications);
+        } catch (error) {
+          console.error('Error fetching admin notifications:', error);
+        }
+        socket.emit('admin-rewards', globalRewards);
+        socket.emit('admin-deposit-settings', globalDepositSettings);
+        socket.emit('admin-users', Object.values(connectedUsers));
+        socket.emit('admin-stats', platformStats);
+        socket.emit('admin-platform-settings', globalPlatformSettings);
+        
+        const allDeposits = db.prepare('SELECT * FROM deposits ORDER BY submittedAt DESC').all();
+        socket.emit('admin-deposits', allDeposits);
+        
+        const allUsers = db.prepare('SELECT * FROM users').all();
+        socket.emit('admin-all-users', allUsers);
+        
+        const allWithdrawals = db.prepare('SELECT * FROM withdrawals ORDER BY submittedAt DESC').all();
+        socket.emit('admin-withdrawals', allWithdrawals);
+
+        const allPromoCodes = db.prepare('SELECT * FROM promo_codes').all();
+        socket.emit('admin-promo-codes', allPromoCodes);
+      }
+    });
+
+    socket.on('get-promo-codes', () => {
+      const allPromoCodes = db.prepare('SELECT * FROM promo_codes').all();
+      socket.emit('promo-codes', allPromoCodes);
+    });
+
+    socket.on('admin-add-promo-code', (promoData) => {
+      try {
+        const { code, description, bonusPercentage, minDeposit, turnoverMultiplier, expiresAt, title, icon } = promoData;
+        const expiryTimestamp = expiresAt ? new Date(expiresAt).getTime() : null;
+        db.prepare(`
+          INSERT INTO promo_codes (code, description, bonusPercentage, minDeposit, turnoverMultiplier, expiresAt, title, icon)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        `).run(code, description, bonusPercentage, minDeposit, turnoverMultiplier, expiryTimestamp, title, icon);
+        
+        const allPromoCodes = db.prepare('SELECT * FROM promo_codes').all();
+        io.to('admin-room').emit('admin-promo-codes', allPromoCodes);
+      } catch (error) {
+        console.error('Error adding promo code:', error);
+      }
+    });
+
+    socket.on('admin-update-promo-code', (promoData) => {
+      try {
+        const { id, code, description, bonusPercentage, minDeposit, turnoverMultiplier, expiresAt, title, icon } = promoData;
+        const expiryTimestamp = expiresAt ? new Date(expiresAt).getTime() : null;
+        db.prepare(`
+          UPDATE promo_codes 
+          SET code = ?, description = ?, bonusPercentage = ?, minDeposit = ?, turnoverMultiplier = ?, expiresAt = ?, title = ?, icon = ?
+          WHERE id = ?
+        `).run(code, description, bonusPercentage, minDeposit, turnoverMultiplier, expiryTimestamp, title, icon, id);
+        
+        const allPromoCodes = db.prepare('SELECT * FROM promo_codes').all();
+        io.to('admin-room').emit('admin-promo-codes', allPromoCodes);
+      } catch (error) {
+        console.error('Error updating promo code:', error);
+      }
+    });
+
+    socket.on('admin-delete-promo-code', (id) => {
+      try {
+        db.prepare('DELETE FROM promo_codes WHERE id = ?').run(id);
+        const allPromoCodes = db.prepare('SELECT * FROM promo_codes').all();
+        io.to('admin-room').emit('admin-promo-codes', allPromoCodes);
+      } catch (error) {
+        console.error('Error deleting promo code:', error);
+      }
+    });
+
+    socket.on('admin-update-payout', ({ assetId, payout }) => {
+      if (assets[assetId]) {
+        assets[assetId].payout = payout;
+        saveAssetSettings();
+      }
+      io.emit('asset-payout-updated', { assetId, payout });
+    });
+
+    socket.on('admin-reset-daily-stats', () => {
+      platformStats.dailyStats = { trades: 0, volume: 0, profit: 0, loss: 0 };
+      io.to('admin-room').emit('admin-stats', platformStats);
+    });
+
+    // Send initial support settings to all users
+    socket.emit('support-settings', globalSupportSettings);
+    socket.emit('tutorials', globalTutorials);
+    socket.emit('referral-settings', globalReferralSettings);
+    socket.emit('rewards', globalRewards);
+    socket.emit('platform-settings', globalPlatformSettings);
+
+    socket.on('user-update', (userData) => {
+      if (userData && userData.email) {
+        connectedUsers[socket.id] = {
+          ...userData,
+          socketId: socket.id,
+          lastSeen: Date.now()
+        };
+        io.to('admin-room').emit('admin-users', Object.values(connectedUsers));
+      }
+    });
+
+    socket.on('submit-request', (request) => {
+      const newRequest = {
+        ...request,
+        id: Math.random().toString(36).substr(2, 9),
+        timestamp: Date.now(),
+        status: 'PENDING'
+      };
+      pendingRequests.push(newRequest);
+      io.to('admin-room').emit('admin-requests', pendingRequests);
+      // Notify admin
+      io.to('admin-room').emit('new-request-notification', newRequest);
+    });
+
+    socket.on('admin-update-request-status', ({ requestId, status, message }) => {
+      const requestIndex = pendingRequests.findIndex(r => r.id === requestId);
+      if (requestIndex !== -1) {
+        pendingRequests[requestIndex].status = status;
+        pendingRequests[requestIndex].adminMessage = message;
+        
+        // Notify the specific user if they are connected
+        const userEmail = pendingRequests[requestIndex].userEmail;
+        const userSocket = Object.values(connectedUsers).find(u => u.email === userEmail);
+        if (userSocket) {
+          io.to(userSocket.socketId).emit('request-status-updated', {
+            requestId,
+            status,
+            message
+          });
+        }
+        
+        io.to('admin-room').emit('admin-requests', pendingRequests);
+      }
+    });
+
+    socket.on('admin-send-notification', (notification) => {
+      try {
+        const { email, title, message, type } = notification;
+        const id = Math.random().toString(36).substr(2, 9);
+        const timestamp = Date.now();
+        
+        db.prepare('INSERT INTO notifications (id, email, title, message, type, timestamp) VALUES (?, ?, ?, ?, ?, ?)')
+          .run(id, email, title, message, type, timestamp);
+        
+        const newNotification = { id, email, title, message, type, timestamp, isRead: 0 };
+        
+        // Find user socket and emit
+        const userSocket = Object.values(connectedUsers).find(u => u.email === email);
+        if (userSocket) {
+          io.to(userSocket.socketId).emit('new-notification', newNotification);
+        }
+        
+        // Update admin list
+        const allNotifications = db.prepare('SELECT * FROM notifications ORDER BY timestamp DESC LIMIT 100').all();
+        io.to('admin-room').emit('admin-notifications', allNotifications);
+      } catch (error) {
+        console.error('Error sending notification:', error);
+      }
+    });
+
+    socket.on('get-notifications', (email) => {
+      try {
+        const notifications = db.prepare("SELECT * FROM notifications WHERE email = ? OR email = 'ALL' ORDER BY timestamp DESC LIMIT 50").all(email);
+        socket.emit('user-notifications', notifications);
+      } catch (error) {
+        console.error('Error fetching user notifications:', error);
+      }
+    });
+
+    socket.on('mark-notification-read', (id) => {
+      try {
+        db.prepare('UPDATE notifications SET isRead = 1 WHERE id = ?').run(id);
+      } catch (error) {
+        console.error('Error marking notification read:', error);
+      }
+    });
+
+    socket.on('admin-update-referral-settings', (settings) => {
+      globalReferralSettings = { ...globalReferralSettings, ...settings };
+      io.emit('referral-settings', globalReferralSettings);
+      io.to('admin-room').emit('admin-referral-settings', globalReferralSettings);
+    });
+
+    // --- Live Agent Chat ---
+    socket.on('join-chat', (email) => {
+      socket.join(`chat-${email}`);
+      console.log(`User ${email} joined chat room`);
+      
+      // Fetch existing messages for this user
+      try {
+        const messages = db.prepare('SELECT * FROM support_chat WHERE email = ? ORDER BY timestamp ASC').all(email);
+        socket.emit('chat-history', messages);
+      } catch (error) {
+        console.error('Error fetching chat history:', error);
+      }
+    });
+
+    socket.on('admin-join-chat', (email) => {
+      socket.join(`chat-${email}`);
+      console.log(`Admin joined chat room for ${email}`);
+      
+      // Fetch existing messages for this user
+      try {
+        const messages = db.prepare('SELECT * FROM support_chat WHERE email = ? ORDER BY timestamp ASC').all(email);
+        socket.emit('chat-history', messages);
+      } catch (error) {
+        console.error('Error fetching chat history for admin:', error);
+      }
+    });
+
+    socket.on('chat-message', ({ email, text, sender }) => {
+      const id = Math.random().toString(36).substr(2, 9);
+      const timestamp = Date.now();
+      const message = { id, email, text, sender, timestamp };
+      
+      try {
+        db.prepare('INSERT INTO support_chat (id, email, text, sender, timestamp) VALUES (?, ?, ?, ?, ?)')
+          .run(id, email, text, sender, timestamp);
+        
+        io.to(`chat-${email}`).emit('new-chat-message', message);
+        
+        // Notify admin room about new message to update chat list
+        const allChats = db.prepare('SELECT email, MAX(timestamp) as lastUpdated, text as lastMessage FROM support_chat GROUP BY email ORDER BY lastUpdated DESC').all();
+        io.to('admin-room').emit('admin-chats', allChats);
+      } catch (error) {
+        console.error('Error saving chat message:', error);
+      }
+    });
+
+    socket.on('admin-get-chats', () => {
+      try {
+        const allChats = db.prepare('SELECT email, MAX(timestamp) as lastUpdated, text as lastMessage FROM support_chat GROUP BY email ORDER BY lastUpdated DESC').all();
+        socket.emit('admin-chats', allChats);
+      } catch (error) {
+        console.error('Error fetching all chats:', error);
+      }
+    });
+
+    socket.on('admin-close-chat', (email) => {
+      io.to(`chat-${email}`).emit('chat-closed');
+      console.log(`Admin closed chat for ${email}`);
+    });
+
+    socket.on('admin-chat-message', ({ email, text, sender }) => {
+      const message = {
+        id: Math.random().toString(36).substr(2, 9),
+        text,
+        sender,
+        timestamp: Date.now()
+      };
+      io.to(`chat-${email}`).emit('new-chat-message', message);
+    });
+
+    socket.on('admin-get-all-users', () => {
+      const allUsers = db.prepare('SELECT * FROM users').all();
+      socket.emit('admin-all-users', allUsers);
+    });
+
+    socket.on('admin-get-all-logs', () => {
+      try {
+        const logs = db.prepare('SELECT * FROM activity_logs ORDER BY timestamp DESC LIMIT 200').all();
+        socket.emit('admin-all-logs', logs);
+      } catch (error) {
+        console.error('Error fetching all logs:', error);
+      }
+    });
+
+    socket.on('admin-update-user-balance', ({ email, balance, type }) => {
+      try {
+        if (type === 'REAL') {
+          db.prepare('UPDATE users SET balance = ? WHERE email = ?').run(balance, email);
+        } else {
+          db.prepare('UPDATE users SET demoBalance = ? WHERE email = ?').run(balance, email);
+        }
+        
+        logActivity(email, 'ADMIN_BALANCE_UPDATE', `Admin updated ${type} balance to ${balance}`);
+
+        // Notify user if connected
+        const user = Object.values(connectedUsers).find(u => u.email === email);
+        if (user) {
+          if (type === 'REAL') user.balance = balance;
+          else user.demoBalance = balance;
+          io.to(user.socketId).emit('balance-updated', { balance, type });
+        }
+        
+        // Refresh admin user list
+        const allUsers = db.prepare('SELECT * FROM users').all();
+        io.to('admin-room').emit('admin-all-users', allUsers);
+        io.to('admin-room').emit('admin-users', Object.values(connectedUsers));
+      } catch (error) {
+        console.error('Update Balance Error:', error);
+      }
+    });
+
+    socket.on('admin-update-user-details', ({ email, name, isBoosted, allowed_withdrawal_methods }) => {
+      try {
+        db.prepare('UPDATE users SET name = ?, isBoosted = ?, allowed_withdrawal_methods = ? WHERE email = ?').run(name, isBoosted ? 1 : 0, allowed_withdrawal_methods, email);
+        logActivity(email, 'ADMIN_UPDATE_DETAILS', `Admin updated user details`);
+        
+        const allUsers = db.prepare('SELECT * FROM users').all();
+        io.to('admin-room').emit('admin-all-users', allUsers);
+        io.to('admin-room').emit('admin-users', Object.values(connectedUsers));
+      } catch (error) {
+        console.error('Error updating user details:', error);
+      }
+    });
+
+    socket.on('admin-update-user-turnover', ({ email, required, achieved }) => {
+      try {
+        db.prepare('UPDATE users SET turnover_required = ?, turnover_achieved = ? WHERE email = ?').run(required, achieved, email);
+        logActivity(email, 'ADMIN_UPDATE_TURNOVER', `Admin updated turnover requirements`);
+        
+        const allUsers = db.prepare('SELECT * FROM users').all();
+        io.to('admin-room').emit('admin-all-users', allUsers);
+        io.to('admin-room').emit('admin-users', Object.values(connectedUsers));
+      } catch (error) {
+        console.error('Error updating user turnover:', error);
+      }
+    });
+
+    socket.on('admin-update-user-kyc', ({ email, status }) => {
+      try {
+        db.prepare('UPDATE users SET kycStatus = ? WHERE email = ?').run(status, email);
+        logActivity(email, 'ADMIN_UPDATE_KYC', `Admin updated KYC status to ${status}`);
+        
+        const allUsers = db.prepare('SELECT * FROM users').all();
+        io.to('admin-room').emit('admin-all-users', allUsers);
+        io.to('admin-room').emit('admin-users', Object.values(connectedUsers));
+      } catch (error) {
+        console.error('Error updating user KYC:', error);
+      }
+    });
+
+    socket.on('admin-add-deduct-balance', ({ email, amount, type, reason }) => {
+      try {
+        const user = db.prepare('SELECT balance, demoBalance, uid FROM users WHERE email = ?').get(email) as any;
+        if (!user) return;
+
+        let newBalance = 0;
+        if (type === 'REAL') {
+          newBalance = user.balance + amount;
+          db.prepare('UPDATE users SET balance = ? WHERE email = ?').run(newBalance, email);
+        } else {
+          newBalance = user.demoBalance + amount;
+          db.prepare('UPDATE users SET demoBalance = ? WHERE email = ?').run(newBalance, email);
+        }
+        
+        logActivity(email, 'ADMIN_BALANCE_ADJUST', `Admin ${amount >= 0 ? 'added' : 'deducted'} ${Math.abs(amount)} ${type} balance. Reason: ${reason}`);
+        
+        const allUsers = db.prepare('SELECT * FROM users').all();
+        io.to('admin-room').emit('admin-all-users', allUsers);
+        io.to('admin-room').emit('admin-users', Object.values(connectedUsers));
+        
+        // Notify user
+        const targetSocketId = Object.keys(connectedUsers).find(id => connectedUsers[id].email === email);
+        if (targetSocketId) {
+          io.to(targetSocketId).emit('balance-updated', { balance: newBalance, type });
+          io.to(targetSocketId).emit('new-notification', {
+            id: Date.now().toString(),
+            title: 'Balance Adjusted',
+            message: `Your ${type} balance has been ${amount >= 0 ? 'credited' : 'debited'} by ${Math.abs(amount)}. Reason: ${reason}`,
+            type: 'SYSTEM',
+            read: false,
+            createdAt: Date.now()
+          });
+        }
+      } catch (error) {
+        console.error('Error adjusting user balance:', error);
+      }
+    });
+
+    socket.on('admin-update-user-status', ({ email, status }) => {
+      try {
+        db.prepare('UPDATE users SET status = ? WHERE email = ?').run(status, email);
+        
+        logActivity(email, 'ADMIN_STATUS_UPDATE', `Admin updated status to ${status}`);
+
+        // Notify user if connected
+        const user = Object.values(connectedUsers).find(u => u.email === email);
+        if (user) {
+          user.status = status;
+          io.to(user.socketId).emit('status-updated', status);
+          if (status === 'BLOCKED') {
+            io.to(user.socketId).emit('force-logout');
+          }
+        }
+        
+        // Refresh admin user list
+        const allUsers = db.prepare('SELECT * FROM users').all();
+        io.to('admin-room').emit('admin-all-users', allUsers);
+        io.to('admin-room').emit('admin-users', Object.values(connectedUsers));
+      } catch (error) {
+        console.error('Update Status Error:', error);
+      }
+    });
+
+    socket.on('admin-send-notification-all', (notification) => {
+      try {
+        const { title, message, type } = notification;
+        const id = Math.random().toString(36).substr(2, 9);
+        const timestamp = Date.now();
+        
+        db.prepare('INSERT INTO notifications (id, email, title, message, type, timestamp) VALUES (?, ?, ?, ?, ?, ?)')
+          .run(id, 'ALL', title, message, type, timestamp);
+        
+        const newNotification = { id, email: 'ALL', title, message, type, timestamp, isRead: 0 };
+        io.emit('new-notification', newNotification);
+        
+        // Update admin list
+        const allNotifications = db.prepare('SELECT * FROM notifications ORDER BY timestamp DESC LIMIT 100').all();
+        io.to('admin-room').emit('admin-notifications', allNotifications);
+        
+        console.log('Broadcasted notification to all users:', title);
+      } catch (error) {
+        console.error('Error sending notification all:', error);
+      }
+    });
+
+    socket.on('get-social-messages', () => {
+      try {
+        const messages = db.prepare('SELECT * FROM social_chat ORDER BY timestamp DESC LIMIT 50').all();
+        socket.emit('social-messages', messages.reverse());
+      } catch (error) {
+        console.error('Error fetching social messages:', error);
+      }
+    });
+
+    socket.on('send-social-message', (msg) => {
+      try {
+        const { email, name, text, photoURL } = msg;
+        const timestamp = Date.now();
+        db.prepare('INSERT INTO social_chat (email, name, text, photoURL, timestamp) VALUES (?, ?, ?, ?, ?)')
+          .run(email, name, text, photoURL, timestamp);
+        io.emit('new-social-message', { email, name, text, photoURL, timestamp });
+      } catch (error) {
+        console.error('Error sending social message:', error);
+      }
+    });
+
+    socket.on('submit-transfer', async (transferData) => {
+      try {
+        const { senderEmail, recipientEmail, amount } = transferData;
+        
+        const sender = db.prepare('SELECT * FROM users WHERE email = ?').get(senderEmail) as any;
+        const recipient = db.prepare('SELECT * FROM users WHERE email = ?').get(recipientEmail) as any;
+        
+        if (!sender) {
+          socket.emit('transfer-error', 'Sender not found');
+          return;
+        }
+        if (!recipient) {
+          socket.emit('transfer-error', 'Recipient not found');
+          return;
+        }
+        if (sender.balance < amount) {
+          socket.emit('transfer-error', 'Insufficient balance');
+          return;
+        }
+
+        const id = Math.random().toString(36).substr(2, 9);
+        const timestamp = Date.now();
+
+        db.transaction(() => {
+          db.prepare('UPDATE users SET balance = balance - ? WHERE email = ?').run(amount, senderEmail);
+          db.prepare('UPDATE users SET balance = balance + ? WHERE email = ?').run(amount, recipientEmail);
+          
+          db.prepare('INSERT INTO transfers (id, fromEmail, toEmail, amount, timestamp) VALUES (?, ?, ?, ?, ?)')
+            .run(id, senderEmail, recipientEmail, amount, timestamp);
+          
+          logActivity(senderEmail, 'TRANSFER_SENT', `Sent ${amount} to ${recipientEmail}`);
+          logActivity(recipientEmail, 'TRANSFER_RECEIVED', `Received ${amount} from ${senderEmail}`);
+        })();
+
+        socket.emit('transfer-success', { newBalance: sender.balance - amount });
+        
+        const recipientSocket = Object.values(connectedUsers).find(u => u.email === recipientEmail);
+        if (recipientSocket) {
+          io.to(recipientSocket.socketId).emit('balance-updated', { balance: recipient.balance + amount, type: 'REAL' });
+          io.to(recipientSocket.socketId).emit('new-notification', {
+            id: Date.now().toString(),
+            title: 'Transfer Received',
+            message: `You received ${amount} from ${senderEmail}`,
+            type: 'SYSTEM',
+            read: false,
+            createdAt: Date.now()
+          });
+        }
+        
+        // Notify admin
+        io.to('admin-room').emit('admin-new-transfer', { id, fromEmail: senderEmail, toEmail: recipientEmail, amount, timestamp });
+      } catch (error) {
+        console.error('Transfer Error:', error);
+        socket.emit('transfer-error', 'Transfer failed. Please try again.');
+      }
+    });
+
+    socket.on('admin-get-transfers', () => {
+      try {
+        const transfers = db.prepare('SELECT * FROM transfers ORDER BY timestamp DESC LIMIT 100').all();
+        socket.emit('admin-transfers', transfers);
+      } catch (error) {
+        console.error('Error fetching transfers:', error);
+      }
+    });
+
+    socket.on('admin-delete-user', (email) => {
+      try {
+        const userFromDb = db.prepare('SELECT uid FROM users WHERE email = ?').get(email) as any;
+        
+        db.prepare('DELETE FROM users WHERE email = ?').run(email);
+        db.prepare('DELETE FROM deposits WHERE email = ?').run(email);
+        db.prepare('DELETE FROM withdrawals WHERE email = ?').run(email);
+        db.prepare('DELETE FROM kyc_submissions WHERE email = ?').run(email);
+        
+        // Force logout if connected
+        const user = Object.values(connectedUsers).find(u => u.email === email);
+        if (user) {
+          io.to(user.socketId).emit('force-logout');
+        }
+        
+        // Refresh admin user list
+        const allUsers = db.prepare('SELECT * FROM users').all();
+        io.to('admin-room').emit('admin-all-users', allUsers);
+        io.to('admin-room').emit('admin-users', Object.values(connectedUsers));
+      } catch (error) {
+        console.error('Delete User Error:', error);
+      }
+    });
+
+    socket.on('admin-update-deposit-settings', (settings) => {
+      globalDepositSettings = settings;
+      saveDepositSettings(settings);
+      io.emit('deposit-settings', globalDepositSettings);
+      io.to('admin-room').emit('admin-deposit-settings', globalDepositSettings);
+    });
+
+    socket.on('admin-update-trade-settings', (settings) => {
+      globalTradeSettings = { ...globalTradeSettings, ...settings };
+      saveTradeSettings(globalTradeSettings);
+      io.to('admin-room').emit('admin-trade-settings', globalTradeSettings);
+      
+      if (settings.payoutPercentage !== undefined) {
+        io.emit('global-payout-updated', settings.payoutPercentage);
+      }
+    });
+
+    socket.on('admin-update-support-settings', (settings) => {
+      globalSupportSettings = { ...globalSupportSettings, ...settings };
+      io.emit('support-settings', globalSupportSettings);
+      io.to('admin-room').emit('admin-support-settings', globalSupportSettings);
+    });
+
+    socket.on('admin-update-platform-settings', (settings) => {
+      globalPlatformSettings = { ...globalPlatformSettings, ...settings };
+      savePlatformSettings(globalPlatformSettings);
+      io.emit('platform-settings', globalPlatformSettings);
+      io.to('admin-room').emit('admin-platform-settings', globalPlatformSettings);
+    });
+
+    socket.on('admin-update-tutorials', (tutorials) => {
+      globalTutorials = tutorials;
+      io.emit('tutorials', globalTutorials);
+      io.to('admin-room').emit('admin-tutorials', globalTutorials);
+    });
+
+    socket.on('admin-add-reward', (reward) => {
+      const newReward = {
+        ...reward,
+        id: Math.random().toString(36).substr(2, 9)
+      };
+      globalRewards.push(newReward);
+      io.emit('rewards', globalRewards);
+      io.to('admin-room').emit('admin-rewards', globalRewards);
+    });
+
+    socket.on('admin-delete-reward', (id) => {
+      globalRewards = globalRewards.filter(r => r.id !== id);
+      io.emit('rewards', globalRewards);
+      io.to('admin-room').emit('admin-rewards', globalRewards);
+    });
+
+    socket.on('admin-set-trend', ({ asset, trend }) => {
+      if (assets[asset]) {
+        assets[asset].trend = trend;
+      }
+    });
+
+    socket.on('admin-set-volatility', ({ asset, volatility }) => {
+      if (assets[asset]) {
+        assets[asset].volatility = volatility;
+        saveAssetSettings();
+      }
+    });
+
+    socket.on('admin-set-win-percentage', ({ asset, winPercentage }) => {
+      if (assets[asset]) {
+        assets[asset].winPercentage = winPercentage;
+        saveAssetSettings();
+      }
+    });
+
+    socket.on('admin-set-price', ({ asset, price }) => {
+      if (assets[asset]) {
+        assets[asset].price = price;
+      }
+    });
+
+    socket.on('admin-set-target', ({ asset, targetPrice }) => {
+      if (assets[asset]) {
+        assets[asset].targetPrice = targetPrice;
+      }
+    });
+
+    socket.on('admin-toggle-freeze', ({ asset, isFrozen }) => {
+      if (assets[asset]) {
+        assets[asset].isFrozen = isFrozen;
+      }
+    });
+
+    // --- Deposit Events ---
+    socket.on('get-user-transactions', (email) => {
+      try {
+        const userDeposits = db.prepare('SELECT * FROM deposits WHERE email = ? ORDER BY submittedAt DESC').all(email);
+        const userWithdrawals = db.prepare('SELECT * FROM withdrawals WHERE email = ? ORDER BY submittedAt DESC').all(email);
+        socket.emit('user-transactions', { deposits: userDeposits, withdrawals: userWithdrawals });
+      } catch (error) {
+        console.error('Error fetching user transactions:', error);
+      }
+    });
+
+    socket.on('get-user-bonuses', (email) => {
+      const bonuses = db.prepare(`
+        SELECT * FROM deposits 
+        WHERE email = ? AND status = 'APPROVED' AND bonusAmount > 0 
+        ORDER BY submittedAt DESC
+      `).all(email);
+      socket.emit('user-bonuses', bonuses);
+    });
+
+    socket.on('submit-deposit', (depositData) => {
+      if (!globalPlatformSettings.isDepositsEnabled) {
+        socket.emit('deposit-error', 'Deposits are currently disabled.');
+        return;
+      }
+      try {
+        const { email, amount, currency, method, transactionId, promoCode } = depositData;
+        
+        const rate = EXCHANGE_RATES[currency] || 1;
+        const amountUSD = amount / rate;
+        
+        let bonusAmount = 0;
+        let turnoverRequired = 0;
+        
+        if (promoCode) {
+          const now = Date.now();
+          const promo = db.prepare('SELECT * FROM promo_codes WHERE code = ?').get(promoCode) as any;
+          if (promo && amountUSD >= promo.minDeposit && (!promo.expiresAt || now <= promo.expiresAt)) {
+            bonusAmount = amount * (promo.bonusPercentage / 100);
+            turnoverRequired = (amount + bonusAmount) * promo.turnoverMultiplier;
+          }
+        } else if (amountUSD >= globalDepositSettings.minDepositForBonus) {
+          // Default bonus if no promo code
+          bonusAmount = amount * (globalDepositSettings.bonusPercentage / 100);
+          turnoverRequired = (amount + bonusAmount) * globalDepositSettings.turnoverMultiplier;
+        }
+
+        const stmt = db.prepare(`
+          INSERT INTO deposits (email, amount, currency, method, transactionId, submittedAt, updatedAt, promoCode, bonusAmount, turnoverRequired)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `);
+        
+        const now = Date.now();
+        stmt.run(email, amount, currency, method, transactionId, now, now, promoCode || null, bonusAmount, turnoverRequired);
+        
+        socket.emit('deposit-submitted', { status: 'PENDING', bonusAmount });
+        
+        logActivity(email, 'DEPOSIT_SUBMIT', `Method: ${method}, Amount: ${amount} ${currency}, ID: ${transactionId}`);
+
+        // Notify admins
+        io.to('admin-room').emit('new-deposit-notification', { email, amount, method, transactionId, bonusAmount, submittedAt: now });
+        
+        const allDeposits = db.prepare('SELECT * FROM deposits ORDER BY submittedAt DESC').all();
+        io.to('admin-room').emit('admin-deposits', allDeposits);
+        
+      } catch (error) {
+        console.error('Deposit Submission Error:', error);
+        socket.emit('deposit-error', 'Failed to submit deposit. Please try again.');
+      }
+    });
+
+    socket.on('admin-update-deposit-status', ({ id, status }) => {
+      try {
+        const deposit = db.prepare('SELECT * FROM deposits WHERE id = ?').get(id) as any;
+        if (!deposit) return;
+
+        const oldStatus = deposit.status;
+        if (oldStatus === status) return;
+
+        db.prepare('UPDATE deposits SET status = ?, updatedAt = ? WHERE id = ?').run(status, Date.now(), id);
+
+        // If approved, add funds to user balance
+        if (status === 'APPROVED' && oldStatus === 'PENDING') {
+          const user = db.prepare('SELECT * FROM users WHERE email = ?').get(deposit.email) as any;
+          if (user) {
+            console.log('User found:', user.email, 'Current Balance:', user.balance);
+            const rate = EXCHANGE_RATES[deposit.currency] || 1;
+            const depositAmountUSD = deposit.amount / rate;
+            const bonusAmountUSD = (deposit.bonusAmount || 0) / rate;
+            
+            console.log('Deposit Amount USD:', depositAmountUSD, 'Bonus Amount USD:', bonusAmountUSD);
+
+            const newBalance = user.balance + depositAmountUSD + bonusAmountUSD;
+            console.log('New Balance:', newBalance);
+            
+            const newTurnoverRequired = (user.turnover_required || 0) + (deposit.turnoverRequired || 0);
+            
+            db.prepare('UPDATE users SET balance = ?, turnover_required = ? WHERE email = ?')
+              .run(newBalance, newTurnoverRequired, deposit.email);
+            
+            // --- Referral Commission Logic ---
+            if (user.referredBy) {
+              const referrer = db.prepare('SELECT * FROM users WHERE referralCode = ? OR uid = ?').get(user.referredBy, user.referredBy) as any;
+              if (referrer) {
+                const commissionRate = globalReferralSettings.referralPercentage / 100;
+                const commissionAmount = depositAmountUSD * commissionRate;
+                
+                let newReferralBalance = (referrer.referralBalance || 0) + commissionAmount;
+                let newTotalReferralEarnings = (referrer.totalReferralEarnings || 0) + commissionAmount;
+                let finalMainBalance = referrer.balance;
+                
+                // If referral balance reaches $10, transfer to main balance
+                if (newReferralBalance >= 10) {
+                  finalMainBalance += newReferralBalance;
+                  logActivity(referrer.email, 'REFERRAL_TRANSFER', `Transferred ${newReferralBalance.toFixed(2)} to main balance`);
+                  newReferralBalance = 0;
+                }
+                
+                db.prepare('UPDATE users SET balance = ?, referralBalance = ?, totalReferralEarnings = ? WHERE email = ?')
+                  .run(finalMainBalance, newReferralBalance, newTotalReferralEarnings, referrer.email);
+                
+                // Record referral event in SQLite
+                db.prepare(`
+                  INSERT INTO referrals (referrerUid, referredUid, referredEmail, amount, type, timestamp)
+                  VALUES (?, ?, ?, ?, ?, ?)
+                `).run(referrer.uid, user.uid, user.email, commissionAmount, 'DEPOSIT', Date.now());
+                
+                // Notify referrer if connected
+                const connectedReferrer = Object.values(connectedUsers).find(u => u.email === referrer.email);
+                if (connectedReferrer) {
+                  connectedReferrer.balance = finalMainBalance;
+                  connectedReferrer.referralBalance = newReferralBalance;
+                  connectedReferrer.totalReferralEarnings = newTotalReferralEarnings;
+                  
+                  io.to(connectedReferrer.socketId).emit('balance-updated', { balance: finalMainBalance, type: 'REAL' });
+                  io.to(connectedReferrer.socketId).emit('referral-commission-received', {
+                    amount: commissionAmount,
+                    from: user.email,
+                    newReferralBalance,
+                    newMainBalance: finalMainBalance
+                  });
+                  io.to(connectedReferrer.socketId).emit('new-notification', {
+                    id: Date.now().toString(),
+                    title: 'Referral Commission!',
+                    message: `You earned USD ${commissionAmount.toFixed(2)} from a referral deposit.`,
+                    type: 'success',
+                    timestamp: Date.now()
+                  });
+                }
+              }
+            }
+            // --- End Referral Logic ---
+
+            // Add method to allowed withdrawal methods
+            const currentAllowed = user.allowed_withdrawal_methods || '';
+            const methods = currentAllowed ? currentAllowed.split(',') : [];
+            // Map deposit method to withdrawal method ID
+            let withdrawMethodId = '';
+            if (deposit.method.includes('bkash')) withdrawMethodId = 'bkash';
+            else if (deposit.method.includes('nagad')) withdrawMethodId = 'nagad';
+            else if (deposit.method.includes('rocket')) withdrawMethodId = 'rocket';
+            else if (deposit.method.includes('upay')) withdrawMethodId = 'upay';
+            else if (deposit.method.includes('usdt') || deposit.method.includes('bitcoin') || deposit.method.includes('crypto')) withdrawMethodId = 'usdt';
+            else if (deposit.method.includes('card')) withdrawMethodId = 'card';
+            
+            if (withdrawMethodId && !methods.includes(withdrawMethodId)) {
+              methods.push(withdrawMethodId);
+              const updatedAllowed = methods.join(',');
+              db.prepare('UPDATE users SET allowed_withdrawal_methods = ? WHERE email = ?').run(updatedAllowed, deposit.email);
+              
+              // Notify user if connected
+              const connectedUser = Object.values(connectedUsers).find(u => u.email === deposit.email);
+              if (connectedUser) {
+                connectedUser.allowed_withdrawal_methods = updatedAllowed;
+                io.to(connectedUser.socketId).emit('allowed-withdraw-methods-updated', updatedAllowed);
+              }
+            }
+
+            const connectedUser = Object.values(connectedUsers).find(u => u.email === deposit.email);
+            if (connectedUser) {
+              connectedUser.balance = newBalance;
+              connectedUser.turnover_required = newTurnoverRequired;
+              io.to(connectedUser.socketId).emit('balance-updated', { balance: newBalance, type: 'REAL' });
+              io.to(connectedUser.socketId).emit('turnover-updated', { required: newTurnoverRequired, achieved: connectedUser.turnover_achieved });
+            }
+          }
+        }
+
+        const allDeposits = db.prepare('SELECT * FROM deposits ORDER BY submittedAt DESC').all();
+        io.to('admin-room').emit('admin-deposits', allDeposits);
+
+        // Refresh user list for admin
+        const allUsers = db.prepare('SELECT * FROM users').all();
+        io.to('admin-room').emit('admin-all-users', allUsers);
+        io.to('admin-room').emit('admin-users', Object.values(connectedUsers));
+
+        const connectedUser = Object.values(connectedUsers).find(u => u.email === deposit.email);
+        if (connectedUser) {
+          const userDeposits = db.prepare('SELECT * FROM deposits WHERE email = ? ORDER BY submittedAt DESC').all(deposit.email);
+          const userWithdrawals = db.prepare('SELECT * FROM withdrawals WHERE email = ? ORDER BY submittedAt DESC').all(deposit.email);
+          io.to(connectedUser.socketId).emit('user-transactions', { deposits: userDeposits, withdrawals: userWithdrawals });
+          
+          io.to(connectedUser.socketId).emit('request-status-updated', {
+            requestId: deposit.id,
+            status,
+            message: `Your deposit of ${deposit.currency} ${deposit.amount} has been ${status.toLowerCase()}.`
+          });
+        }
+      } catch (error) {
+        console.error('Error updating deposit status:', error);
+      }
+    });
+
+    // --- Withdraw Events ---
+    socket.on('submit-withdraw', (withdrawData) => {
+      if (!globalPlatformSettings.isWithdrawalsEnabled) {
+        socket.emit('withdraw-error', 'Withdrawals are currently disabled.');
+        return;
+      }
+      try {
+        const { email, amount, currency, method, accountDetails } = withdrawData;
+        
+        const user = db.prepare('SELECT * FROM users WHERE email = ?').get(email) as any;
+        if (!user) {
+          socket.emit('withdraw-error', 'User not found.');
+          return;
+        }
+
+        // Validate method
+        const allowed = user.allowed_withdrawal_methods || '';
+        const allowedList = allowed.split(',');
+        const methodId = method.toLowerCase();
+        let isAllowed = false;
+        if (methodId.includes('bkash') && allowedList.includes('bkash')) isAllowed = true;
+        else if (methodId.includes('nagad') && allowedList.includes('nagad')) isAllowed = true;
+        else if (methodId.includes('rocket') && allowedList.includes('rocket')) isAllowed = true;
+        else if (methodId.includes('upay') && allowedList.includes('upay')) isAllowed = true;
+        else if (methodId.includes('usdt') && allowedList.includes('usdt')) isAllowed = true;
+        else if (methodId.includes('card') && allowedList.includes('card')) isAllowed = true;
+
+        if (!isAllowed) {
+          socket.emit('withdraw-error', 'You can only withdraw via payment methods previously used for deposits.');
+          return;
+        }
+
+        const rate = EXCHANGE_RATES[currency] || 1;
+        const amountUSD = amount / rate;
+
+        // Check user balance
+        if (user.balance < amountUSD) {
+          socket.emit('withdraw-error', 'Insufficient balance.');
+          return;
+        }
+
+        // Check turnover requirement
+        const turnoverRequired = user.turnover_required || 0;
+        const turnoverAchieved = user.turnover_achieved || 0;
+        if (turnoverAchieved < turnoverRequired) {
+          const remaining = (turnoverRequired - turnoverAchieved).toFixed(2);
+          socket.emit('withdraw-error', `You must complete your turnover requirement first. Remaining: $${remaining}`);
+          return;
+        }
+
+        // Deduct balance immediately
+        const newBalance = user.balance - amountUSD;
+        db.prepare('UPDATE users SET balance = ? WHERE email = ?').run(newBalance, email);
+
+        const stmt = db.prepare(`
+          INSERT INTO withdrawals (email, amount, currency, method, accountDetails, status, submittedAt, updatedAt)
+          VALUES (?, ?, ?, ?, ?, 'PENDING', ?, ?)
+        `);
+        
+        const now = Date.now();
+        const info = stmt.run(email, amount, currency, method, accountDetails, now, now);
+        const withdrawalId = info.lastInsertRowid;
+        
+        // Update connected user balance
+        const connectedUser = Object.values(connectedUsers).find(u => u.email === email);
+        if (connectedUser) {
+          connectedUser.balance = newBalance;
+          io.to(connectedUser.socketId).emit('balance-updated', { balance: newBalance, type: 'REAL' });
+        }
+
+        socket.emit('withdraw-submitted', { id: withdrawalId, status: 'PENDING', newBalance });
+        
+        logActivity(email, 'WITHDRAW_SUBMIT', `Method: ${method}, Amount: ${amount} ${currency}`);
+
+        // Notify admins
+        io.to('admin-room').emit('new-withdraw-notification', { id: withdrawalId, email, amount, method, accountDetails, submittedAt: now });
+        
+        const allWithdrawals = db.prepare('SELECT * FROM withdrawals ORDER BY submittedAt DESC').all();
+        io.to('admin-room').emit('admin-withdrawals', allWithdrawals);
+        
+      } catch (error) {
+        console.error('Withdraw Submission Error:', error);
+        socket.emit('withdraw-error', 'Failed to submit withdrawal. Please try again.');
+      }
+    });
+
+    socket.on('cancel-withdrawal', ({ id, email }) => {
+      try {
+        const withdrawal = db.prepare('SELECT * FROM withdrawals WHERE id = ? AND email = ? AND status = \'PENDING\'').get(id, email) as any;
+        if (!withdrawal) {
+          socket.emit('withdraw-error', 'Withdrawal not found or already processed.');
+          return;
+        }
+
+        // Update status to CANCELLED
+        db.prepare('UPDATE withdrawals SET status = \'CANCELLED\', updatedAt = ? WHERE id = ?').run(Date.now(), id);
+
+        // Return balance to user
+        const user = db.prepare('SELECT balance FROM users WHERE email = ?').get(email) as any;
+        if (user) {
+          const newBalance = user.balance + withdrawal.amount;
+          db.prepare('UPDATE users SET balance = ? WHERE email = ?').run(newBalance, email);
+          
+          const connectedUser = Object.values(connectedUsers).find(u => u.email === email);
+          if (connectedUser) {
+            connectedUser.balance = newBalance;
+            io.to(connectedUser.socketId).emit('balance-updated', { balance: newBalance, type: 'REAL' });
+          }
+          socket.emit('withdrawal-cancelled', { id, newBalance });
+        }
+
+        // Refresh admin list
+        const allWithdrawals = db.prepare('SELECT * FROM withdrawals ORDER BY submittedAt DESC').all();
+        io.to('admin-room').emit('admin-withdrawals', allWithdrawals);
+      } catch (error) {
+        console.error('Cancel Withdrawal Error:', error);
+        socket.emit('withdraw-error', 'Failed to cancel withdrawal.');
+      }
+    });
+
+    socket.on('admin-update-withdraw-status', ({ id, status, reason }) => {
+      try {
+        const withdrawal = db.prepare('SELECT * FROM withdrawals WHERE id = ?').get(id) as any;
+        if (!withdrawal) return;
+
+        const oldStatus = withdrawal.status;
+        if (oldStatus === status) return;
+
+        db.prepare('UPDATE withdrawals SET status = ?, updatedAt = ?, rejectionReason = ? WHERE id = ?').run(status, Date.now(), reason || null, id);
+
+        // If rejected or cancelled, return funds to user balance
+        if ((status === 'REJECTED' || status === 'CANCELLED') && oldStatus === 'PENDING') {
+          const user = db.prepare('SELECT balance FROM users WHERE email = ?').get(withdrawal.email) as any;
+          if (user) {
+            const newBalance = user.balance + withdrawal.amount;
+            db.prepare('UPDATE users SET balance = ? WHERE email = ?').run(newBalance, withdrawal.email);
+            
+            // Update Firestore for User
+            if (firestore) {
+              const userFromDb = db.prepare('SELECT uid FROM users WHERE email = ?').get(withdrawal.email) as any;
+              if (userFromDb && userFromDb.uid) {
+                firestore.collection('users').doc(userFromDb.uid).set({
+                  balance: newBalance
+                }, { merge: true }).catch((e: any) => console.error('Firestore user balance update error (withdrawal rejection):', e));
+              }
+            }
+            
+            const connectedUser = Object.values(connectedUsers).find(u => u.email === withdrawal.email);
+            if (connectedUser) {
+              connectedUser.balance = newBalance;
+              io.to(connectedUser.socketId).emit('balance-updated', { balance: newBalance, type: 'REAL' });
+            }
+          }
+        }
+
+        const allWithdrawals = db.prepare('SELECT * FROM withdrawals ORDER BY submittedAt DESC').all();
+        io.to('admin-room').emit('admin-withdrawals', allWithdrawals);
+
+        // Refresh user list for admin
+        const allUsers = db.prepare('SELECT * FROM users').all();
+        io.to('admin-room').emit('admin-all-users', allUsers);
+        io.to('admin-room').emit('admin-users', Object.values(connectedUsers));
+
+        const connectedUser = Object.values(connectedUsers).find(u => u.email === withdrawal.email);
+        if (connectedUser) {
+          const userDeposits = db.prepare('SELECT * FROM deposits WHERE email = ? ORDER BY submittedAt DESC').all(withdrawal.email);
+          const userWithdrawals = db.prepare('SELECT * FROM withdrawals WHERE email = ? ORDER BY submittedAt DESC').all(withdrawal.email);
+          io.to(connectedUser.socketId).emit('user-transactions', { deposits: userDeposits, withdrawals: userWithdrawals });
+          
+          io.to(connectedUser.socketId).emit('request-status-updated', {
+            requestId: withdrawal.id,
+            status,
+            message: `Your withdrawal of ${withdrawal.currency} ${withdrawal.amount} has been ${status.toLowerCase()}.`
+          });
+        }
+      } catch (error) {
+        console.error('Error updating withdraw status:', error);
+      }
+    });
+
+    // --- KYC Events ---
+    socket.on('submit-kyc', (kycData) => {
+      console.log('KYC Submission Data:', kycData);
+      try {
+        const { email, documentType, documentNumber, fullName, dateOfBirth, frontImage, backImage } = kycData;
+        
+        if (!email || !documentType || !documentNumber || !fullName || !dateOfBirth || !frontImage) {
+          socket.emit('kyc-error', 'Missing required fields.');
+          return;
+        }
+        
+        // Check if user already has a pending or verified KYC
+        const existing = db.prepare('SELECT status FROM kyc_submissions WHERE email = ? AND (status = \'PENDING\' OR status = \'VERIFIED\')').get(email);
+        
+        if (existing) {
+          socket.emit('kyc-error', 'You already have a pending or verified KYC submission.');
+          return;
+        }
+
+        const stmt = db.prepare(`
+          INSERT INTO kyc_submissions (email, documentType, documentNumber, fullName, dateOfBirth, frontImage, backImage, submittedAt, updatedAt)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `);
+        
+        const now = Date.now();
+        stmt.run(email, documentType, documentNumber, fullName, dateOfBirth, frontImage, backImage, now, now);
+        
+        // Update user status in memory
+        const user = Object.values(connectedUsers).find(u => u.email === email);
+        if (user) {
+          user.kycStatus = 'PENDING';
+          io.to(user.socketId).emit('kyc-status-updated', { status: 'PENDING' });
+        }
+
+        socket.emit('kyc-submitted', { status: 'PENDING' });
+        
+        logActivity(email, 'KYC_SUBMIT', `Type: ${documentType}, Name: ${fullName}`);
+
+        // Notify admins
+        io.to('admin-room').emit('new-kyc-notification', { email, fullName, submittedAt: now });
+        
+        // Refresh admin KYC list
+        const allKyc = db.prepare('SELECT * FROM kyc_submissions ORDER BY submittedAt DESC').all();
+        io.to('admin-room').emit('admin-kyc-list', allKyc);
+      } catch (error) {
+        console.error('KYC Submission Error:', error);
+        socket.emit('kyc-error', 'Failed to submit KYC. Please try again.');
+      }
+    });
+
+    socket.on('get-kyc-status', (email) => {
+      const kyc = db.prepare('SELECT status, rejectionReason FROM kyc_submissions WHERE email = ? ORDER BY submittedAt DESC LIMIT 1').get(email);
+      socket.emit('kyc-status', kyc || { status: 'NOT_SUBMITTED' });
+    });
+
+    socket.on('get-allowed-withdraw-methods', (email) => {
+      const user = db.prepare('SELECT allowed_withdrawal_methods FROM users WHERE email = ?').get(email) as any;
+      socket.emit('allowed-withdraw-methods', user ? user.allowed_withdrawal_methods : '');
+    });
+
+    socket.on('admin-get-kyc-list', () => {
+      const allKyc = db.prepare('SELECT * FROM kyc_submissions ORDER BY submittedAt DESC').all();
+      socket.emit('admin-kyc-list', allKyc);
+    });
+
+    socket.on('admin-update-kyc-status', ({ id, status, reason }) => {
+      try {
+        const now = Date.now();
+        db.prepare('UPDATE kyc_submissions SET status = ?, rejectionReason = ?, updatedAt = ? WHERE id = ?')
+          .run(status, reason || null, now, id);
+        
+        const kyc = db.prepare('SELECT email FROM kyc_submissions WHERE id = ?').get(id) as any;
+        
+        if (kyc) {
+          // Notify the user if connected
+          const userSocket = Object.values(connectedUsers).find(u => u.email === kyc.email);
+          if (userSocket) {
+            io.to(userSocket.socketId).emit('kyc-status-updated', { status, reason });
+          }
+        }
+        
+        // Refresh admin KYC list
+        const allKyc = db.prepare('SELECT * FROM kyc_submissions ORDER BY submittedAt DESC').all();
+        io.to('admin-room').emit('admin-kyc-list', allKyc);
+      } catch (error) {
+        console.error('Admin KYC Update Error:', error);
+      }
+    });
+
+    socket.on('admin-pump-dump', ({ asset, amount }) => {
+      if (assets[asset]) {
+        assets[asset].price += amount;
+      }
+    });
+
+    socket.on('admin-force-trade', ({ tradeId, result }) => {
+      if (activeTrades[tradeId]) {
+        activeTrades[tradeId].forcedResult = result; // 'WIN' or 'LOSS'
+        
+        // Immediately manipulate price if forced manually
+        const activeTrade = activeTrades[tradeId];
+        const assetKey = activeTrade.assetShortName || activeTrade.asset;
+        const asset = assets[assetKey as keyof typeof assets];
+        if (asset) {
+          const isUp = activeTrade.type === 'UP';
+          const shouldWin = result === 'WIN';
+          const needsUp = (isUp && shouldWin) || (!isUp && !shouldWin);
+          const offset = asset.volatility * 2;
+          
+          const currentPrice = asset.price;
+          let target = activeTrade.entryPrice + (needsUp ? offset : -offset);
+          
+          if (needsUp && currentPrice < activeTrade.entryPrice) {
+             target = activeTrade.entryPrice + Math.abs(activeTrade.entryPrice - currentPrice) + offset;
+          } else if (!needsUp && currentPrice > activeTrade.entryPrice) {
+             target = activeTrade.entryPrice - Math.abs(activeTrade.entryPrice - currentPrice) - offset;
+          }
+          
+          asset.targetPrice = target;
+        }
+      }
+    });
+
+    socket.on('generate-2fa-secret', async (email: string) => {
+      try {
+        const secret = generateSecret();
+        const otpauth = generateURI({
+          issuer: 'Trading Platform',
+          label: email,
+          secret
+        });
+        const qrCodeUrl = await QRCode.toDataURL(otpauth);
+        
+        socket.emit('2fa-secret-generated', { secret, qrCodeUrl });
+      } catch (error) {
+        console.error('Error generating 2FA secret:', error);
+        socket.emit('2fa-error', 'Failed to generate 2FA secret');
+      }
+    });
+
+    socket.on('enable-2fa', async ({ email, secret, code }: { email: string, secret: string, code: string }) => {
+      try {
+        const result = await verify({ token: code, secret });
+        if (result.valid) {
+          db.prepare('UPDATE users SET twoFactorSecret = ?, twoFactorEnabled = 1 WHERE email = ?').run(secret, email);
+          socket.emit('2fa-enabled-success');
+          
+          // Log activity
+          db.prepare('INSERT INTO activity_logs (email, action, details, timestamp) VALUES (?, ?, ?, ?)')
+            .run(email, '2FA_ENABLED', 'Two-factor authentication enabled', Date.now());
+        } else {
+          socket.emit('2fa-error', 'Invalid verification code');
+        }
+      } catch (error) {
+        console.error('Error enabling 2FA:', error);
+        socket.emit('2fa-error', 'Failed to enable 2FA');
+      }
+    });
+
+    socket.on('disable-2fa', async ({ email, code }: { email: string, code: string }) => {
+      try {
+        const user = db.prepare('SELECT twoFactorSecret FROM users WHERE email = ?').get(email);
+        if (!user || !user.twoFactorSecret) {
+          socket.emit('2fa-error', '2FA is not enabled');
+          return;
+        }
+
+        const result = await verify({ token: code, secret: user.twoFactorSecret });
+        if (result.valid) {
+          db.prepare('UPDATE users SET twoFactorSecret = NULL, twoFactorEnabled = 0 WHERE email = ?').run(email);
+          socket.emit('2fa-disabled-success');
+          
+          // Log activity
+          db.prepare('INSERT INTO activity_logs (email, action, details, timestamp) VALUES (?, ?, ?, ?)')
+            .run(email, '2FA_DISABLED', 'Two-factor authentication disabled', Date.now());
+        } else {
+          socket.emit('2fa-error', 'Invalid verification code');
+        }
+      } catch (error) {
+        console.error('Error disabling 2FA:', error);
+        socket.emit('2fa-error', 'Failed to disable 2FA');
+      }
+    });
+
+    socket.on('check-2fa-status', (email: string) => {
+      const user = db.prepare('SELECT twoFactorEnabled FROM users WHERE email = ?').get(email);
+      socket.emit('2fa-status', !!user?.twoFactorEnabled);
+    });
+
+    socket.on('admin-get-user-logs', async (email) => {
+      try {
+        const activityLogs = db.prepare('SELECT * FROM activity_logs WHERE email = ? ORDER BY timestamp DESC').all(email);
+        const deposits = db.prepare('SELECT * FROM deposits WHERE email = ? ORDER BY submittedAt DESC').all(email);
+        const withdrawals = db.prepare('SELECT * FROM withdrawals WHERE email = ? ORDER BY submittedAt DESC').all(email);
+        const kyc = db.prepare('SELECT * FROM kyc_submissions WHERE email = ? ORDER BY submittedAt DESC').all(email);
+        
+        // Fetch trades from Local DB (Super Fast)
+        let trades: any[] = [];
+        const userFromDb = db.prepare('SELECT trades FROM users WHERE email = ?').get(email) as any;
+        if (userFromDb && userFromDb.trades) {
+            try {
+                trades = JSON.parse(userFromDb.trades);
+            } catch (e) {
+                trades = [];
+            }
+        }
+        
+        socket.emit('admin-user-logs', { 
+            email, 
+            activityLogs, 
+            trades, 
+            deposits, 
+            withdrawals, 
+            kyc 
+        });
+      } catch (error) {
+        console.error('Get Logs Error:', error);
+      }
+    });
+  });
+
+  // Vite middleware for development
+  if (process.env.NODE_ENV !== 'production') {
+    console.log('Initializing Vite in middleware mode...');
+    try {
+      const vite = await createViteServer({
+        server: { middlewareMode: true },
+        appType: 'spa',
+      });
+      app.use(vite.middlewares);
+      console.log('Vite middleware applied');
+    } catch (viteError) {
+      console.error('Vite initialization error:', viteError);
+    }
+  } else {
+    const distPath = path.join(process.cwd(), 'dist');
+    app.use(express.static(distPath));
+    app.get('*', (req, res) => {
+      res.sendFile(path.join(distPath, 'index.html'));
+    });
+  }
+
+  httpServer.on('error', (e: any) => {
+    if (e.code === 'EADDRINUSE') {
+      console.error(`Port ${PORT} is already in use.`);
+      process.exit(1);
+    } else {
+      console.error('Server error:', e);
+    }
+  });
+
+  httpServer.listen(PORT, '0.0.0.0', () => {
+    console.log(`Server running on http://localhost:${PORT}`);
+  });
+}
+
+function updateDailyStats(amount: number, profit: number, isWin: boolean) {
+  const date = new Date().toISOString().split('T')[0];
+  const stats = db.prepare('SELECT * FROM trade_stats WHERE date = ?').get(date) as any;
+  
+  const userProfit = isWin ? profit : 0;
+  const userLoss = isWin ? 0 : amount;
+  const houseNet = userLoss - userProfit;
+
+  if (stats) {
+    db.prepare(`
+      UPDATE trade_stats 
+      SET total_trades = total_trades + 1,
+          total_volume = total_volume + ?,
+          total_user_profit = total_user_profit + ?,
+          total_user_loss = total_user_loss + ?,
+          house_net = house_net + ?
+      WHERE date = ?
+    `).run(amount, userProfit, userLoss, houseNet, date);
+  } else {
+    db.prepare(`
+      INSERT INTO trade_stats (date, total_trades, total_volume, total_user_profit, total_user_loss, house_net)
+      VALUES (?, 1, ?, ?, ?, ?)
+    `).run(date, amount, userProfit, userLoss, houseNet);
+  }
+}
+
+function saveTradeSettings(settings: any) {
+  db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run('trade_settings', JSON.stringify(settings));
+}
+
+startServer().catch(err => {
+  console.error('Failed to start server:', err);
+  process.exit(1);
+});

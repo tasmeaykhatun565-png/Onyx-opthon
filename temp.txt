@@ -1,0 +1,324 @@
+36:import { doc, onSnapshot, arrayUnion, setDoc, getDoc, collection, query, orderBy, limit, getDocs } from 'firebase/firestore';
+79:  assetShortName: string;
+80:  assetFlag: string;
+81:  assetCategory: 'Crypto' | 'Forex' | 'Stocks' | 'Commodities';
+192:const AssetIcon = ({ 
+255:function AssetSelector({ 
+259:  currentAssetId,
+265:  currentAssetId: string;
+268:  const [activeTab, setActiveTab] = useState('Fixed Time');
+269:  const [searchQuery, setSearchQuery] = useState('');
+270:  const [openSections, setOpenSections] = useState<Record<string, boolean>>({
+278:    setOpenSections(prev => ({ ...prev, [category]: !prev[category] }));
+330:                onChange={(e) => setSearchQuery(e.target.value)}
+340:                onClick={() => setActiveTab(tab)}
+389:                                          asset.id === currentAssetId && "bg-[var(--bg-tertiary)]",
+395:                                              <AssetIcon 
+494:  setTimezoneOffset,
+496:  setCurrency,
+500:  setChatBackground
+505:  setTimezoneOffset: (v: number) => void,
+507:  setCurrency: (c: typeof CURRENCIES[0]) => void,
+511:  setChatBackground: (b: string | null) => void
+514:  const [activeSubPage, setActiveSubPage] = useState<string | null>(null);
+534:              onClick={() => setActiveSubPage('PERSONAL')}
+539:              onClick={() => setActiveSubPage('CONTACTS')}
+545:              onClick={() => setActiveSubPage('VERIFICATION')}
+557:              onClick={() => setActiveSubPage('PASSWORD')}
+562:              onClick={() => setActiveSubPage('2FA')}
+568:              onClick={() => setActiveSubPage('PIN')}
+580:              onClick={() => setActiveSubPage('TRADING')}
+585:              onClick={() => setActiveSubPage('APPEARANCE')}
+590:              onClick={() => setActiveSubPage('NOTIFICATIONS')}
+611:          <TradingPlatformSettings onBack={() => setActiveSubPage(null)} />
+615:            onBack={() => setActiveSubPage(null)} 
+617:            setTimezoneOffset={setTimezoneOffset}
+619:            setCurrency={setCurrency}
+621:            setChatBackground={setChatBackground}
+625:          <NotificationSettings onBack={() => setActiveSubPage(null)} />
+629:            onBack={() => setActiveSubPage(null)} 
+631:            setTimezoneOffset={setTimezoneOffset}
+634:            setCurrency={setCurrency}
+638:          <ContactSettings onBack={() => setActiveSubPage(null)} />
+642:            onBack={() => setActiveSubPage(null)} 
+648:          <PasswordSettings onBack={() => setActiveSubPage(null)} />
+652:            onBack={() => setActiveSubPage(null)} 
+658:          <AppPinSettings onBack={() => setActiveSubPage(null)} />
+720:    document.documentElement.setAttribute('data-theme', savedTheme);
+724:  const [socket, setSocket] = useState<Socket | null>(null);
+725:  const [user, setUser] = useState<FirebaseUser | null>(null);
+726:  const [authLoading, setAuthLoading] = useState(true);
+727:  const [view, setView] = useState<'HOME' | 'TRADING' | 'PROFILE' | 'MARKET' | 'REWARDS' | 'REFERRAL' | 'HELP' | 'TRADES' | 'SETTINGS' | 'ADMIN' | 'INFO_PAGE'>('HOME');
+728:  const [infoPageTitle, setInfoPageTitle] = useState<string>('');
+729:  const [data, setData] = useState<OHLCData[]>([]);
+730:  const [tickHistory, setTickHistory] = useState<Record<string, TickData[]>>({});
+731:  const [currentPrice, setCurrentPrice] = useState<number>(51.677);
+732:  const [activeAccount, setActiveAccount] = useState<string>('DEMO');
+733:  const [currency, setCurrency] = useState(() => {
+744:  const [balance, setBalance] = useState<number>(0);
+745:  const [demoBalance, setDemoBalance] = useState<number>(1000);
+746:  const [turnoverRequired, setTurnoverRequired] = useState(0);
+747:  const [turnoverAchieved, setTurnoverAchieved] = useState(0);
+748:  const [userBonuses, setUserBonuses] = useState<any[]>([]);
+749:  const [extraAccounts, setExtraAccounts] = useState<Account[]>(() => {
+762:    localStorage.setItem('app-extra-accounts', JSON.stringify(extraAccounts));
+765:  const [kycStatus, setKycStatus] = useState<'NOT_SUBMITTED' | 'PENDING' | 'APPROVED' | 'REJECTED'>('NOT_SUBMITTED');
+766:  const [kycRejectionReason, setKycRejectionReason] = useState<string | null>(null);
+767:  const [selectedAsset, setSelectedAsset] = useState<Asset>(() => {
+781:    localStorage.setItem('selectedAsset', JSON.stringify(selectedAsset));
+783:  const [marketAssets, setMarketAssets] = useState<Record<string, any>>({});
+784:  const [isAssetSelectorOpen, setIsAssetSelectorOpen] = useState(false);
+785:  const [isLoading, setIsLoading] = useState(false);
+786:  const [supportSettings, setSupportSettings] = useState({ telegram: 'https://t.me/onyxtrade_support', whatsapp: 'https://wa.me/1234567890', email: 'support@onyxtrade.com' });
+787:  const [referralSettings, setReferralSettings] = useState({ bonusAmount: 10, referralPercentage: 5, minDepositForBonus: 20 });
+788:  const [notifications, setNotifications] = useState<any[]>([]);
+789:  const [tutorials, setTutorials] = useState<any[]>([]);
+790:  const [investment, setInvestment] = useState<number>(1);
+791:  const [tradeMode, setTradeMode] = useState<'TIMER' | 'CLOCK'>('CLOCK');
+792:  const [clockOffset, setClockOffset] = useState<number>(1);
+793:  const [timerDuration, setTimerDuration] = useState<number>(60); // 1 min
+795:  const [trades, setTrades] = useState<Trade[]>(() => {
+809:  const [timezoneOffset, setTimezoneOffset] = useState<number>(() => {
+812:  const [currentTime, setCurrentTime] = useState(Date.now());
+813:  const [tradeResults, setTradeResults] = useState<TradeResult[]>([]);
+814:  const [isChatOpen, setIsChatOpen] = useState(false);
+815:  const [isSocialChatOpen, setIsSocialChatOpen] = useState(false);
+816:  const [isSwitchingAccount, setIsSwitchingAccount] = useState(false);
+817:  const [isLocked, setIsLocked] = useState(() => localStorage.getItem('pin-enabled') === 'true');
+818:  const [isIndicatorSheetOpen, setIsIndicatorSheetOpen] = useState(false);
+819:  const [chatBackground, setChatBackground] = useState<string | null>(() => localStorage.getItem('chat-background'));
+820:  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+824:      localStorage.setItem('chat-background', chatBackground);
+832:const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() => {
+843:      localStorage.setItem('activeIndicators', JSON.stringify(activeIndicators));
+848:  const [rewards, setRewards] = useState<any[]>([]);
+849:  const [selectedRewardCode, setSelectedRewardCode] = useState<string | null>(null);
+850:  const [referralStats, setReferralStats] = useState({
+867:      localStorage.setItem('onyx_referral_code', refCode);
+879:  const selectedAssetRef = useRef(selectedAsset);
+882:    localStorage.setItem('onyx_trades', JSON.stringify(trades));
+886:    localStorage.setItem('app-timezone-offset', timezoneOffset.toString());
+895:    selectedAssetRef.current = selectedAsset;
+901:      setUser(u);
+902:      setAuthLoading(false);
+907:  const [isUserDataLoaded, setIsUserDataLoaded] = useState(false);
+912:      setIsUserDataLoaded(false);
+920:        setBalance(prev => {
+926:        setDemoBalance(prev => {
+932:        setKycStatus(prev => prev === userData.kycStatus ? prev : userData.kycStatus);
+935:        setTurnoverRequired(prev => prev === userData.turnover_required ? prev : userData.turnover_required);
+938:        setTurnoverAchieved(prev => prev === userData.turnover_achieved ? prev : userData.turnover_achieved);
+941:        setTrades(prev => {
+947:        setExtraAccounts(prev => {
+953:        setCurrency(prev => {
+960:      setReferralStats(prev => {
+974:      setIsUserDataLoaded(true);
+1007:  const [isPaymentsOpen, setIsPaymentsOpen] = useState(false);
+1008:  const [isChartSettingsOpen, setIsChartSettingsOpen] = useState(false);
+1009:  const [isAccountsSheetOpen, setIsAccountsSheetOpen] = useState(false);
+1010:  const [isTradeInputSheetOpen, setIsTradeInputSheetOpen] = useState(false);
+1011:  const [isRiskManagementOpen, setIsRiskManagementOpen] = useState(false);
+1012:  const [isOnboardingOpen, setIsOnboardingOpen] = useState(false);
+1017:      setIsOnboardingOpen(true);
+1018:      localStorage.setItem('hasSeenOnboarding', 'true');
+1058:    setInvestment(prev => {
+1066:    localStorage.setItem('app-currency', JSON.stringify(currency));
+1069:  const [chartTimeFrame, setChartTimeFrame] = useState(() => {
+1072:  const [chartType, setChartType] = useState(() => {
+1077:    localStorage.setItem('chartTimeFrame', chartTimeFrame);
+1081:    localStorage.setItem('chartType', chartType);
+1084:  const [sentiment, setSentiment] = useState(57); // Percentage of green (up) sentiment
+1095:    setSocket(newSocket);
+1103:        setCurrentPrice(prices[selectedAsset.shortName]);
+1109:      setSupportSettings(settings);
+1113:      setTutorials(data);
+1117:      setReferralSettings(settings);
+1121:      setRewards(data);
+1125:      setTurnoverRequired(prev => Math.abs(prev - data.required) < 0.000001 ? prev : data.required);
+1126:      setTurnoverAchieved(prev => Math.abs(prev - data.achieved) < 0.000001 ? prev : data.achieved);
+1130:      setUserBonuses(bonuses);
+1134:      setNotifications(prev => [...prev, {
+1152:    const assetShortName = selectedAsset.shortName;
+1155:    setIsLoading(true);
+1156:    setData(prev => prev.length === 0 ? prev : []); // Clear old data to prevent flickering
+1160:    setCurrentPrice(basePrice);
+1167:      if (response.asset !== assetShortName) return;
+1173:        setIsLoading(false);
+1205:      setTickHistory(prev => ({ ...prev, [response.asset]: historyTicks }));
+1206:      setData(candles);
+1210:        setCurrentPrice(last.close);
+1214:      setTimeout(() => {
+1215:        setIsLoading(false);
+1224:    const requestTimeout = setTimeout(() => {
+1226:        socket.emit('request-history', assetShortName);
+1229:          socket.emit('request-history', assetShortName);
+1235:    const timeout = setTimeout(() => {
+1236:      setIsLoading(false);
+1254:      setMarketAssets(prev => {
+1261:      const currentAsset = selectedAssetRef.current;
+1271:      setCurrentTime(timestamp);
+1272:      setCurrentPrice(newPrice);
+1276:      setSelectedAsset(prev => {
+1284:      setSentiment(prev => {
+1293:      setTickHistory(prev => {
+1294:        const assetHistory = prev[currentAsset.shortName] || [];
+1295:        const newHistory = [...assetHistory, { time: timestamp, price: newPrice }];
+1300:      setData(prev => {
+1339:    const handlePayoutUpdate = (data: { assetId: string, payout: number }) => {
+1340:      setMarketAssets(prev => ({
+1342:        [data.assetId]: {
+1343:          ...(prev[data.assetId] || {}),
+1350:      setMarketAssets(prev => {
+1365:        setBalance(prev => Math.abs(prev - newBalance) < 0.000001 ? prev : newBalance);
+1367:        setDemoBalance(prev => Math.abs(prev - newBalance) < 0.000001 ? prev : newBalance);
+1372:      setBalance(prev => Math.abs(prev - newBalance) < 0.000001 ? prev : newBalance);
+1376:      setKycStatus(data.status);
+1377:      if (data.reason) setKycRejectionReason(data.reason);
+1381:      setNotifications(prev => [notification, ...prev]);
+1385:      setNotifications(notifs);
+1448:      setTrades(updatedTrades);
+1455:          setDemoBalance(prev => Math.abs(prev - newDemoBalance) < 0.000001 ? prev : newDemoBalance);
+1458:          setBalance(prev => Math.abs(prev - newRealBalance) < 0.000001 ? prev : newRealBalance);
+1460:          setExtraAccounts(prev => prev.map(a => {
+1471:      setTradeResults(r => [...r, { id: result.id, profit: result.profit, isWin: result.status === 'WIN' }]);
+1484:      const timer = setTimeout(() => setTradeResults(prev => prev.slice(1)), 3000);
+1545:      const offsetMs = timezoneOffset * 3600000;
+1546:      const todayInTimezone = new Date(now + offsetMs);
+1547:      todayInTimezone.setUTCHours(0, 0, 0, 0);
+1548:      const todayStartUtc = todayInTimezone.getTime() - offsetMs;
+1579:      setDemoBalance(newBalance);
+1581:      setBalance(newBalance);
+1583:      setExtraAccounts(prev => prev.map(a => a.id === activeAccount ? { ...a, balance: newBalance } : a));
+1601:      assetShortName: selectedAsset.shortName,
+1602:      assetFlag: selectedAsset.flag,
+1603:      assetCategory: selectedAsset.category,
+1608:    setTrades(newTrades);
+1618:    return trades.filter(t => t.status === 'ACTIVE' && t.assetShortName === selectedAsset.shortName && t.accountType === activeAccount);
+1628:        setIsLoading(true);
+1646:    return <LockScreen onUnlock={() => setIsLocked(false)} />;
+1653:        onBack={() => setView('HOME')} 
+1664:            setView('TRADING');
+1667:            setView('TRADING');
+1671:          setView('TRADING');
+1675:            setView('TRADING');
+1677:            setIsChatOpen(true);
+1679:            setInfoPageTitle(pageTitle);
+1680:            setView('INFO_PAGE');
+1688:    return <Auth onSuccess={() => setView('TRADING')} />;
+1698:        onBack={() => setView('TRADING')} 
+1699:        onSettings={() => setView('SETTINGS')} 
+1701:        onAdmin={() => setView('ADMIN')} 
+1702:        setView={setView}
+1706:        onNotificationsClick={() => setIsNotificationsOpen(true)}
+1713:      onBack={() => setView('PROFILE')} 
+1716:        setView('TRADING');
+1719:      setTimezoneOffset={setTimezoneOffset}
+1721:      setCurrency={setCurrency}
+1725:      setChatBackground={setChatBackground}
+1734:        setView('TRADING');
+1748:            onClick={() => setView('PROFILE')}
+1757:            onClick={() => setIsAccountsSheetOpen(true)}
+1775:              onClick={() => setIsNotificationsOpen(true)}
+1788:                onClick={() => setView('ADMIN')}
+1796:              onClick={() => setIsPaymentsOpen(true)}
+1809:            onClick={() => setIsAssetSelectorOpen(true)}
+1813:              <AssetIcon 
+1837:            <Shield size={20} strokeWidth={1.5} className="hover:text-[var(--text-primary)] transition cursor-pointer" onClick={() => setIsRiskManagementOpen(true)} />
+1838:            <Compass size={20} strokeWidth={1.5} className="hover:text-[var(--text-primary)] transition cursor-pointer" onClick={() => setIsIndicatorSheetOpen(true)} />
+1840:              onClick={() => setIsChartSettingsOpen(true)}
+1854:        onClose={() => setIsIndicatorSheetOpen(false)}
+1857:          setActiveIndicators(prev => prev.some(i => i.id === indicator.id) ? prev.filter(i => i.id !== indicator.id) : [...prev, indicator]);
+1863:        onClose={() => setIsOnboardingOpen(false)}
+1866:        {isAssetSelectorOpen && (
+1874:             <AssetSelector 
+1875:                isOpen={isAssetSelectorOpen} 
+1876:                onClose={() => setIsAssetSelectorOpen(false)} 
+1877:                onSelect={setSelectedAsset}
+1878:                currentAssetId={selectedAsset.id}
+1888:        onClose={() => setIsAccountsSheetOpen(false)}
+1891:          setIsSwitchingAccount(true);
+1892:          setTimeout(() => {
+1893:            setActiveAccount(id);
+1894:            setIsSwitchingAccount(false);
+1903:        onAddAccount={(account) => setExtraAccounts(prev => [...prev, account])}
+1905:          setExtraAccounts(prev => prev.filter(a => a.id !== id));
+1907:            setActiveAccount('DEMO');
+1952:              assetName={selectedAsset.name}
+1971:            currentAssetShortName={selectedAsset.shortName}
+1973:            onViewAsset={() => { setView('TRADING'); setIsAssetSelectorOpen(true); }} 
+1987:              setSelectedRewardCode(code);
+1988:              setIsPaymentsOpen(true);
+1992:        {view === 'REFERRAL' && <ReferralPage user={user} referralSettings={referralSettings} currencySymbol={displayCurrencySymbol} onBack={() => setView('PROFILE')} referralStats={referralStats} />}
+1995:            onBack={() => setView('TRADING')} 
+1996:            onSettings={() => setView('SETTINGS')}
+1997:            onAdmin={() => setView('ADMIN')}
+1999:            setView={setView}
+2003:            onNotificationsClick={() => setIsNotificationsOpen(true)}
+2008:            onSupportClick={() => setIsChatOpen(true)} 
+2020:            onClose={() => setIsChatOpen(false)} 
+2034:            onClose={() => setIsSocialChatOpen(false)} 
+2061:                onClick={() => setIsAssetSelectorOpen(true)}
+2077:                        setClockOffset(Math.max(1, clockOffset - 1));
+2079:                        setTimerDuration(Math.max(60, timerDuration - 60));
+2087:                    onClick={() => setIsTradeInputSheetOpen(true)}
+2098:                        setClockOffset(clockOffset + 1);
+2100:                        setTimerDuration(timerDuration + 60);
+2112:                    onClick={(e) => { e.stopPropagation(); setInvestment(Math.max(currency.code === 'BDT' ? 20 : Math.round(1 * (EXCHANGE_RATES[currency.code] || 1)), Math.floor(investment / 2))); }}
+2125:                        setInvestment(val);
+2129:                        if (Number(e.target.value) < min) setInvestment(min);
+2138:                    onClick={(e) => { e.stopPropagation(); setInvestment(investment * 2); }}
+2180:          onClick={() => setView('TRADING')}
+2187:          onClick={() => setView('TRADES')}
+2193:          onClick={() => setView('MARKET')}
+2199:          onClick={() => setView('REWARDS')}
+2206:          onClick={() => setView('HELP')}
+2214:          setIsPaymentsOpen(false);
+2215:          setSelectedRewardCode(null);
+2232:        onClose={() => setIsChartSettingsOpen(false)}
+2235:          setIsLoading(true);
+2236:          setChartTimeFrame(tf);
+2237:          setTimeout(() => setIsLoading(false), 800);
+2238:          setIsChartSettingsOpen(false);
+2242:          setIsLoading(true);
+2243:          setChartType(type);
+2244:          setTimeout(() => setIsLoading(false), 800);
+2245:          setIsChartSettingsOpen(false);
+2251:        onClose={() => setIsTradeInputSheetOpen(false)}
+2253:        setTradeMode={setTradeMode}
+2255:        setClockOffset={setClockOffset}
+2257:        setTimerDuration={setTimerDuration}
+2260:        onInvestmentChange={setInvestment}
+2267:        onClose={() => setIsRiskManagementOpen(false)}
+2274:        onClose={() => setIsNotificationsOpen(false)}
+2514:              <AssetIcon 
+2515:                shortName={trade.assetShortName} 
+2516:                category={trade.assetCategory} 
+2517:                flag={trade.assetFlag} 
+2522:                  <span className="text-white/60 font-bold text-sm tracking-tight">{trade.assetShortName} · {trade.payout}%</span>
+2635:function TradesPage({ trades, onViewAsset, tickHistory, currentPrice, currentTime, currentAssetShortName, marketAssets, currencySymbol, exchangeRate }: { trades: Trade[], onViewAsset: () => void, tickHistory: Record<string, TickData[]>, currentPrice: number, currentTime: number, currentAssetShortName: string, marketAssets: Record<string, any>, currencySymbol: string, exchangeRate: number }) {
+2636:  const [selectedTrade, setSelectedTrade] = useState<Trade | null>(null);
+2637:  const [showHistory, setShowHistory] = useState(false);
+2673:                  currentPrice={marketAssets[trade.assetShortName]?.price || currentPrice}
+2675:                  onClick={() => setSelectedTrade(trade)} 
+2687:            onClick={() => setShowHistory(true)}
+2699:              <TradeItem key={trade.id} trade={trade} onClick={() => setSelectedTrade(trade)} currencySymbol={currencySymbol} exchangeRate={exchangeRate} />
+2710:            tickHistory={tickHistory[selectedTrade.assetShortName] || []} 
+2711:            onClose={() => setSelectedTrade(null)} 
+2719:            onClose={() => setShowHistory(false)} 
+2723:              setSelectedTrade(t);
+2724:              setShowHistory(false);
+2788:          <AssetIcon 
+2789:            shortName={trade.assetShortName} 
+2790:            category={trade.assetCategory} 
+2791:            flag={trade.assetFlag} 
+2802:            <span className="text-[var(--text-primary)] font-bold text-sm">{trade.assetShortName}</span>
+2824:function ProfilePage({ onBack, onSettings, user, onAdmin, setView, balance, currency, notifications, onNotificationsClick }: { 
+2829:  setView: (v: any) => void,
+2936:          onClick={() => setView('REWARDS')}
+2945:          onClick={() => setView('REFERRAL')}
+3237:  const [searchQuery, setSearchQuery] = useState('');
+3238:  const [activeTab, setActiveTab] = useState<'faq' | 'tutorials' | 'glossary'>('faq');
+3306:            onChange={(e) => setSearchQuery(e.target.value)}
+3338:            onClick={() => setActiveTab('faq')}
+3347:            onClick={() => setActiveTab('tutorials')}
+3356:            onClick={() => setActiveTab('glossary')}
