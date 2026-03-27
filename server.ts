@@ -1513,8 +1513,14 @@ async function startServer() {
       
       // Fetch existing messages for this user
       try {
-        const messages = db.prepare('SELECT * FROM support_chat WHERE email = ? ORDER BY timestamp ASC').all(email);
-        socket.emit('chat-history', messages);
+        const tableExists = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='support_chat'").get();
+        if (tableExists) {
+          const messages = db.prepare('SELECT * FROM support_chat WHERE email = ? ORDER BY timestamp ASC').all(email);
+          socket.emit('chat-history', messages);
+        } else {
+          console.warn('Table support_chat does not exist, skipping chat history fetch.');
+          socket.emit('chat-history', []);
+        }
       } catch (error) {
         console.error('Error fetching chat history:', error);
       }
@@ -1526,8 +1532,14 @@ async function startServer() {
       
       // Fetch existing messages for this user
       try {
-        const messages = db.prepare('SELECT * FROM support_chat WHERE email = ? ORDER BY timestamp ASC').all(email);
-        socket.emit('chat-history', messages);
+        const tableExists = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='support_chat'").get();
+        if (tableExists) {
+          const messages = db.prepare('SELECT * FROM support_chat WHERE email = ? ORDER BY timestamp ASC').all(email);
+          socket.emit('chat-history', messages);
+        } else {
+          console.warn('Table support_chat does not exist, skipping chat history fetch for admin.');
+          socket.emit('chat-history', []);
+        }
       } catch (error) {
         console.error('Error fetching chat history for admin:', error);
       }
@@ -1539,14 +1551,21 @@ async function startServer() {
       const message = { id, email, text, sender, timestamp };
       
       try {
-        db.prepare('INSERT INTO support_chat (id, email, text, sender, timestamp) VALUES (?, ?, ?, ?, ?)')
-          .run(id, email, text, sender, timestamp);
+        const tableExists = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='support_chat'").get();
+        if (tableExists) {
+          db.prepare('INSERT INTO support_chat (id, email, text, sender, timestamp) VALUES (?, ?, ?, ?, ?)')
+            .run(id, email, text, sender, timestamp);
+        } else {
+          console.warn('Table support_chat does not exist, skipping message insertion.');
+        }
         
         io.to(`chat-${email}`).emit('new-chat-message', message);
         
         // Notify admin room about new message to update chat list
-        const allChats = db.prepare('SELECT email, MAX(timestamp) as lastUpdated, text as lastMessage FROM support_chat GROUP BY email ORDER BY lastUpdated DESC').all();
-        io.to('admin-room').emit('admin-chats', allChats);
+        if (tableExists) {
+          const allChats = db.prepare('SELECT email, MAX(timestamp) as lastUpdated, text as lastMessage FROM support_chat GROUP BY email ORDER BY lastUpdated DESC').all();
+          io.to('admin-room').emit('admin-chats', allChats);
+        }
       } catch (error) {
         console.error('Error saving chat message:', error);
       }
