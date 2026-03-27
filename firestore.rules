@@ -1,7 +1,9 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    // ===============================================================
     // Helper Functions
+    // ===============================================================
     function isAuthenticated() {
       return request.auth != null;
     }
@@ -12,34 +14,50 @@ service cloud.firestore {
     
     function isAdmin() {
       return isAuthenticated() && 
-        (request.auth.token.email == "tasmeaykhatun565@gmail.com" || 
-         request.auth.token.email == "hamproosapport@gmail.com" ||
-         (request.auth.token.email == "emon@gmail.com" && request.auth.token.email_verified == true));
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+         (request.auth.token.email == "tasmeaykhatun565@gmail.com" && request.auth.token.email_verified == true));
     }
 
     function isSupportAgent() {
       return isAuthenticated() && 
-        (request.auth.token.email == "emon@gmail.com" || isAdmin());
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'support' || isAdmin());
     }
 
     function isChatOwner(chatId) {
       return isAuthenticated() && (request.auth.uid == chatId || request.auth.token.email == chatId);
     }
 
+    function isValidUser(data) {
+      return data.keys().hasAll(['uid', 'email']) &&
+             data.uid is string && data.uid.size() > 0 &&
+             data.email is string && data.email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$") &&
+             (!('name' in data) || (data.name is string && data.name.size() < 100)) &&
+             (!('balance' in data) || data.balance is number) &&
+             (!('demoBalance' in data) || data.demoBalance is number) &&
+             (!('role' in data) || data.role in ['user', 'admin', 'support']);
+    }
+
+    function isValidMessage(data) {
+      return data.keys().hasAll(['text', 'sender', 'timestamp']) &&
+             data.text is string && data.text.size() > 0 && data.text.size() < 5000 &&
+             data.sender in ['user', 'support', 'admin', 'system'];
+    }
+
+    // ===============================================================
     // User Profile Rules
+    // ===============================================================
     match /users/{userId} {
       allow read: if isOwner(userId) || isAdmin();
-      allow create: if isAuthenticated() && request.auth.uid == userId;
+      allow create: if isOwner(userId) && isValidUser(request.resource.data) && 
+                      (!('role' in request.resource.data) || request.resource.data.role == 'user');
       
-      // Allow updates by owner or admin
-      // Also allow incrementing balance/receivedTransferTotal by others for transfers
-      allow update: if isOwner(userId) || isAdmin() || 
-        (isAuthenticated() && 
-         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['balance', 'receivedTransferTotal']) &&
-         request.resource.data.balance > resource.data.balance &&
-         request.resource.data.receivedTransferTotal > resource.data.receivedTransferTotal);
+      allow update: if (isOwner(userId) && isValidUser(request.resource.data) && 
+                        (!('role' in request.resource.data) || request.resource.data.role == resource.data.role)) || 
+                      isAdmin() || 
+                      (isAuthenticated() && 
+                       request.resource.data.diff(resource.data).affectedKeys().hasOnly(['balance', 'receivedTransferTotal']) &&
+                       request.resource.data.balance > resource.data.balance);
       
-      // Referrals Subcollection
       match /referrals/{referralId} {
         allow read: if isOwner(userId) || isAdmin();
         allow create: if isAdmin(); 
@@ -55,7 +73,7 @@ service cloud.firestore {
 
       match /messages/{messageId} {
         allow read: if isChatOwner(chatId) || isAdmin() || isSupportAgent();
-        allow create: if isChatOwner(chatId) || isAdmin() || isSupportAgent();
+        allow create: if (isChatOwner(chatId) || isAdmin() || isSupportAgent()) && isValidMessage(request.resource.data);
       }
     }
   }

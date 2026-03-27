@@ -1,13 +1,13 @@
 import React, { useState, useEffect } from 'react';
-// import { 
-//   signInWithEmailAndPassword, 
-//   createUserWithEmailAndPassword, 
-//   signInWithPopup, 
-//   GoogleAuthProvider,
-//   sendPasswordResetEmail
-// } from 'firebase/auth';
-// import { auth, db } from './firebase';
-// import { doc, setDoc, getDoc } from 'firebase/firestore';
+import { 
+  signInWithEmailAndPassword, 
+  createUserWithEmailAndPassword, 
+  signInWithPopup, 
+  GoogleAuthProvider,
+  sendPasswordResetEmail
+} from 'firebase/auth';
+import { auth, db, handleFirestoreError, OperationType } from './firebase';
+import { doc, setDoc, getDoc } from 'firebase/firestore';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Mail, Lock, User, LogIn, UserPlus, Chrome, AlertCircle, 
@@ -135,43 +135,88 @@ export default function Auth({ onSuccess }: AuthProps) {
 
     try {
       if (view === 'login') {
-        const response = await fetch('/api/auth/login', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email, password })
-        });
-        const data = await response.json();
-        if (!response.ok) throw new Error(data.error || 'Login failed');
-        
-        localStorage.setItem('auth_token', data.token);
-        localStorage.setItem('user_data', JSON.stringify(data.user));
+        await signInWithEmailAndPassword(auth, email, password);
         onSuccess();
       } else if (view === 'signup') {
-        const response = await fetch('/api/auth/signup', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email, password, name, referralCode })
-        });
-        const data = await response.json();
-        if (!response.ok) throw new Error(data.error || 'Signup failed');
-
-        localStorage.setItem('auth_token', data.token);
-        localStorage.setItem('user_data', JSON.stringify(data.user));
+        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+        const user = userCredential.user;
+        
+        // Create user profile in Firestore
+        try {
+          await setDoc(doc(db, 'users', user.uid), {
+            uid: user.uid,
+            email: user.email,
+            name: name || user.displayName || 'Operative',
+            balance: 0,
+            demoBalance: 10000,
+            referralCode: referralCode || '',
+            createdAt: Date.now(),
+            country: country,
+            currency: selectedCountryData.currency,
+            currencySymbol: selectedCountryData.symbol
+          });
+        } catch (error) {
+          handleFirestoreError(error, OperationType.WRITE, `users/${user.uid}`);
+        }
+        
         onSuccess();
       } else if (view === 'forgot-password') {
-        // Mock forgot password for now as we don't have an email service set up
+        await sendPasswordResetEmail(auth, email);
         setSuccess('If an account exists for this email, you will receive reset instructions.');
       }
     } catch (err: any) {
       console.error('Auth error:', err);
-      setError(err.message || 'An unexpected error occurred.');
+      let message = err.message;
+      if (err.code === 'auth/user-not-found') message = 'No account found with this email.';
+      if (err.code === 'auth/wrong-password') message = 'Incorrect password.';
+      if (err.code === 'auth/email-already-in-use') message = 'An account already exists with this email.';
+      setError(message || 'An unexpected error occurred.');
     } finally {
       setLoading(false);
     }
   };
 
   const handleGoogleSignIn = async () => {
-    setError('Google Sign-In is currently unavailable in local auth mode.');
+    setLoading(true);
+    setError('');
+    try {
+      const provider = new GoogleAuthProvider();
+      const result = await signInWithPopup(auth, provider);
+      const user = result.user;
+      
+      // Check if user exists in Firestore
+      let userDoc;
+      try {
+        userDoc = await getDoc(doc(db, 'users', user.uid));
+      } catch (error) {
+        handleFirestoreError(error, OperationType.GET, `users/${user.uid}`);
+      }
+
+      if (userDoc && !userDoc.exists()) {
+        // Create user profile if it doesn't exist
+        try {
+          await setDoc(doc(db, 'users', user.uid), {
+            uid: user.uid,
+            email: user.email,
+            name: user.displayName || 'Operative',
+            balance: 0,
+            demoBalance: 10000,
+            createdAt: Date.now(),
+            country: 'US', // Default
+            currency: 'USD',
+            currencySymbol: '$'
+          });
+        } catch (error) {
+          handleFirestoreError(error, OperationType.WRITE, `users/${user.uid}`);
+        }
+      }
+      onSuccess();
+    } catch (err: any) {
+      console.error('Google Auth error:', err);
+      setError(err.message || 'Google Sign-In failed.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (

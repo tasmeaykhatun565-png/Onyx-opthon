@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { X, Send, Loader2, MessageCircle, Users, Globe } from 'lucide-react';
 import { cn } from './utils';
 import { motion } from 'motion/react';
+import { auth } from './firebase';
 
 type Message = {
   id: string;
@@ -143,7 +144,7 @@ export default function SocialChat({ onClose, userEmail, chatBackground, socket 
         
         <div className="p-4 space-y-4 min-h-full flex flex-col justify-end">
           {messages.map((msg) => {
-            const isMe = msg.senderId === auth.currentUser?.uid;
+            const isMe = msg.senderEmail === auth.currentUser?.email;
             return (
               <div 
                 key={msg.id} 
@@ -154,7 +155,7 @@ export default function SocialChat({ onClose, userEmail, chatBackground, socket 
               >
                 {!isMe && (
                   <span className="text-[10px] font-bold text-[var(--text-secondary)] mb-1 ml-1">
-                    {msg.displayName || msg.senderEmail.split('@')[0]}
+                    {msg.name || msg.senderEmail.split('@')[0]}
                   </span>
                 )}
                 <div 

@@ -31,10 +31,9 @@ import {
   PasswordSettings, TwoFactorSettings, AppPinSettings
 } from './SettingsSubPages';
 
-// import { auth, db } from './firebase';
-// import { onAuthStateChanged, signOut, User as FirebaseUser } from 'firebase/auth';
-// import { doc, onSnapshot, arrayUnion, setDoc, getDoc, collection, query, orderBy, limit, getDocs } from 'firebase/firestore';
-type FirebaseUser = any; // Temporary type to avoid errors
+import { auth, db, handleFirestoreError, OperationType } from './firebase';
+import { onAuthStateChanged, signOut, User as FirebaseUser } from 'firebase/auth';
+import { doc, onSnapshot, arrayUnion, setDoc, getDoc, collection, query, orderBy, limit, getDocs, getDocFromServer } from 'firebase/firestore';
 import InfoPage from './InfoPage';
 import HomePage from './HomePage';
 
@@ -899,134 +898,82 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
 
   // Auth Listener
   useEffect(() => {
-    const checkAuth = async () => {
-      const token = localStorage.getItem('auth_token');
-      const savedUser = localStorage.getItem('user_data');
-      
-      if (token && savedUser) {
-        try {
-          const parsedUser = JSON.parse(savedUser);
-          setUser(parsedUser);
-          
-          // Verify token with server
-          const response = await fetch('/api/auth/me', {
-            headers: { 'Authorization': `Bearer ${token}` }
-          });
-          
-          if (response.ok) {
-            const data = await response.json();
-            setUser(data.user);
-            localStorage.setItem('user_data', JSON.stringify(data.user));
-          } else {
-            // Token expired or invalid
-            localStorage.removeItem('auth_token');
-            localStorage.removeItem('user_data');
-            setUser(null);
-          }
-        } catch (e) {
-          console.error('Auth check error:', e);
-          setUser(null);
+    const testConnection = async () => {
+      try {
+        await getDocFromServer(doc(db, 'test', 'connection'));
+      } catch (error) {
+        if(error instanceof Error && error.message.includes('the client is offline')) {
+          console.error("Please check your Firebase configuration. ");
         }
-      } else {
-        setUser(null);
       }
-      setAuthLoading(false);
     };
+    testConnection();
 
-    checkAuth();
+    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+      setUser(firebaseUser);
+      setAuthLoading(false);
+    });
+
+    return () => unsubscribe();
   }, []);
 
-  const logout = () => {
-    localStorage.removeItem('auth_token');
-    localStorage.removeItem('user_data');
-    setUser(null);
+  const logout = async () => {
+    try {
+      await signOut(auth);
+      setUser(null);
+    } catch (error) {
+      console.error('Logout error:', error);
+    }
   };
 
   const [isUserDataLoaded, setIsUserDataLoaded] = useState(false);
 
-  // Sync User Data from Socket (Super Fast)
+  // Sync User Data from Firestore
   useEffect(() => {
-    if (!socket || !user) {
+    if (!user) {
       setIsUserDataLoaded(false);
       return;
     }
 
-    const handleUserDataUpdate = (userData: any) => {
-      console.log("Socket user data updated:", userData);
-      
-      if (userData.balance !== undefined) {
-        setBalance(prev => {
-          if (Math.abs(prev - userData.balance) < 0.000001) return prev;
-          return userData.balance;
-        });
-      }
-      if (userData.demoBalance !== undefined) {
-        setDemoBalance(prev => {
-          if (Math.abs(prev - userData.demoBalance) < 0.000001) return prev;
-          return userData.demoBalance;
-        });
-      }
-      if (userData.kycStatus !== undefined) {
-        setKycStatus(prev => prev === userData.kycStatus ? prev : userData.kycStatus);
-      }
-      if (userData.turnover_required !== undefined) {
-        setTurnoverRequired(prev => prev === userData.turnover_required ? prev : userData.turnover_required);
-      }
-      if (userData.turnover_achieved !== undefined) {
-        setTurnoverAchieved(prev => prev === userData.turnover_achieved ? prev : userData.turnover_achieved);
-      }
-      if (userData.trades !== undefined) {
-        setTrades(prev => {
-          if (JSON.stringify(prev) === JSON.stringify(userData.trades)) return prev;
-          return userData.trades;
-        });
-      }
-      if (userData.extraAccounts !== undefined) {
-        setExtraAccounts(prev => {
-          if (JSON.stringify(prev) === JSON.stringify(userData.extraAccounts)) return prev;
-          return userData.extraAccounts;
-        });
-      }
-      if (userData.currency && userData.currencySymbol) {
-        setCurrency(prev => {
-          if (prev.code === userData.currency && prev.symbol === userData.currencySymbol) return prev;
-          return { ...prev, code: userData.currency, symbol: userData.currencySymbol };
-        });
-      }
-      
-      // Sync Referral Stats
-      setReferralStats(prev => {
-        if (prev.totalEarnings === (userData.totalReferralEarnings || 0) && 
-            prev.referralBalance === (userData.referralBalance || 0) &&
-            prev.referralCount === (userData.referralCount || 0)) {
-          return prev;
+    const unsubscribe = onSnapshot(doc(db, 'users', user.uid), (doc) => {
+      if (doc.exists()) {
+        const userData = doc.data();
+        console.log("Firestore user data updated:", userData);
+        
+        if (userData.balance !== undefined) setBalance(userData.balance);
+        if (userData.demoBalance !== undefined) setDemoBalance(userData.demoBalance);
+        if (userData.kycStatus !== undefined) setKycStatus(userData.kycStatus);
+        if (userData.turnover_required !== undefined) setTurnoverRequired(userData.turnover_required);
+        if (userData.turnover_achieved !== undefined) setTurnoverAchieved(userData.turnover_achieved);
+        if (userData.trades !== undefined) setTrades(userData.trades);
+        if (userData.extraAccounts !== undefined) setExtraAccounts(userData.extraAccounts);
+        
+        if (userData.currency && userData.currencySymbol) {
+          setCurrency({
+            code: userData.currency,
+            symbol: userData.currencySymbol,
+            name: userData.currencyName || userData.currency,
+            flag: userData.currencyFlag || ''
+          });
         }
-        return {
+        
+        // Sync Referral Stats
+        setReferralStats(prev => ({
           ...prev,
           totalEarnings: userData.totalReferralEarnings || 0,
           referralBalance: userData.referralBalance || 0,
-          referralCount: userData.referralCount || 0
-        };
-      });
+          referralCount: userData.referralCount || 0,
+          recentReferrals: userData.recentReferrals || []
+        }));
 
-      setIsUserDataLoaded(true);
-    };
-
-    socket.on('user-data-updated', handleUserDataUpdate);
-    
-    // Initial sync request
-    socket.emit('user-sync', {
-      uid: user.uid,
-      email: user.email,
-      name: user.displayName || user.email?.split('@')[0],
-      photoURL: user.photoURL,
-      referredBy: localStorage.getItem('onyx_referral_code')
+        setIsUserDataLoaded(true);
+      }
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, `users/${user.uid}`);
     });
 
-    return () => {
-      socket.off('user-data-updated', handleUserDataUpdate);
-    };
-  }, [socket, user]);
+    return () => unsubscribe();
+  }, [user]);
 
   const refillDemoBalance = () => {
     if (socket && user) {
