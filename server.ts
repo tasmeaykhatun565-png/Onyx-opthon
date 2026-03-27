@@ -715,10 +715,10 @@ async function startServer() {
     }
   ];
 
-  // Generate initial history (24 hours)
+  // Generate initial history (1 hour)
   const now = Date.now();
-  const historyDurationMs = 24 * 3600 * 1000;
-  const historyTicksCount = 24 * 3600;
+  const historyDurationMs = 3600 * 1000;
+  const historyTicksCount = 3600;
   
   Object.keys(assets).forEach(symbol => {
     const asset = assets[symbol as keyof typeof assets];
@@ -747,7 +747,12 @@ async function startServer() {
       let currentPrice = existingHistory.close;
       let currentTrend = 0;
       
-      const gapSeconds = Math.floor((now - lastTime) / 1000);
+      let gapSeconds = Math.floor((now - lastTime) / 1000);
+      if (gapSeconds > historyTicksCount) {
+        gapSeconds = historyTicksCount;
+        lastTime = now - (gapSeconds * 1000);
+      }
+      
       if (gapSeconds > 1) {
         const insert = db.prepare('INSERT OR REPLACE INTO market_history (symbol, time, open, high, low, close) VALUES (?, ?, ?, ?, ?, ?)');
         const transaction = db.transaction((symbol, startTime, startPrice, count) => {

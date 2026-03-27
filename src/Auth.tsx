@@ -289,8 +289,8 @@ export default function Auth({ onSuccess }: AuthProps) {
               animate={{ opacity: 1, y: 0 }}
               className="flex items-center gap-6 mb-24"
             >
-              <div className="w-16 h-16 bg-white rounded-[24px] flex items-center justify-center shadow-[0_0_60px_rgba(255,255,255,0.15)] ring-1 ring-white/20 transform -rotate-6">
-                <TrendingUp className="text-black" size={36} />
+              <div className="w-16 h-16 bg-white rounded-[24px] flex items-center justify-center shadow-[0_0_60px_rgba(255,255,255,0.15)] ring-1 ring-white/20 transform -rotate-6 overflow-hidden">
+                <img src="https://i.imghippo.com/files/Gtw3911Dmk.jpg" alt="Onyx Logo" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
               </div>
               <div className="flex flex-col">
                 <span className="text-4xl font-display tracking-tight text-white uppercase leading-none">Onyx</span>
@@ -441,8 +441,8 @@ export default function Auth({ onSuccess }: AuthProps) {
                 )}
                 
                 <div className="lg:hidden flex items-center gap-3 mb-10">
-                  <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center">
-                    <TrendingUp className="text-black" size={20} />
+                  <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center overflow-hidden">
+                    <img src="https://i.imghippo.com/files/Gtw3911Dmk.jpg" alt="Onyx Logo" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                   </div>
                   <span className="text-xl font-display tracking-tighter text-white uppercase">Onyx</span>
                 </div>

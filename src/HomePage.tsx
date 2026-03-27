@@ -66,7 +66,7 @@ export default function HomePage({ onStartTrading, onLogin, onNavigate, tutorial
           <div className="flex justify-between items-center h-20">
             <div className="flex items-center gap-2">
               <div className="w-10 h-10 rounded-xl flex items-center justify-center shadow-lg shadow-blue-600/20 overflow-hidden bg-white">
-                <img src="https://i.imghippo.com/files/GeAo7562DEY.jpg" alt="Logo" className="w-full h-full object-contain" referrerPolicy="no-referrer" />
+                <img src="https://i.imghippo.com/files/Gtw3911Dmk.jpg" alt="Logo" className="w-full h-full object-contain" referrerPolicy="no-referrer" />
               </div>
               <span className="text-2xl font-black tracking-tighter">ONYX OPTION<span className="text-blue-500">.</span></span>
             </div>
