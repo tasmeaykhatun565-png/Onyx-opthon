@@ -1,10 +1,9 @@
 {
-  "projectId": "gen-lang-client-0086981611",
-  "appId": "1:135200859445:web:a2413823bc490c9662987c",
-  "apiKey": "AIzaSyDs4176fhd3oEIiofEFWHX2PHQXXKRlWv8",
-  "authDomain": "gen-lang-client-0086981611.firebaseapp.com",
-  "firestoreDatabaseId": "ai-studio-5110c819-b51f-4432-a84c-95337e0752bd",
-  "storageBucket": "gen-lang-client-0086981611.firebasestorage.app",
-  "messagingSenderId": "135200859445",
-  "measurementId": ""
+  "apiKey": "AIzaSyDGp13Lks3IqKr8qzAF1GbDamw2VqUWzfQ",
+  "authDomain": "onyxopthon.firebaseapp.com",
+  "projectId": "onyxopthon",
+  "storageBucket": "onyxopthon.firebasestorage.app",
+  "messagingSenderId": "465126244679",
+  "appId": "1:465126244679:web:45789af1cf92b2ddb88c62",
+  "measurementId": "G-JYFJPYBJXX"
 }
