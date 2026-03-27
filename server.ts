@@ -582,6 +582,9 @@ async function startServer() {
 
   const logActivity = (email: string, action: string, details: string = '', ip: string = '') => {
     try {
+      const tableExists = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='activity_logs'").get();
+      if (!tableExists) return;
+
       db.prepare('INSERT INTO activity_logs (email, action, details, timestamp, ip) VALUES (?, ?, ?, ?, ?)')
         .run(email, action, details, Date.now(), ip);
     } catch (error) {
@@ -954,7 +957,7 @@ async function startServer() {
     socket.emit('trade-accepted', { id: trade.id, status: 'ACTIVE' });
 
     // Set a timer to resolve the trade
-    const durationMs = trade.endTime - Date.now();
+    const durationMs = Math.max(0, trade.endTime - Date.now());
     
     // If there's a forced result, manipulate the price slightly before the trade ends
     if (forcedResult) {
@@ -1045,9 +1048,59 @@ async function startServer() {
     }, durationMs);
   };
 
+  // --- Fallback: Periodically check for expired trades ---
+  setInterval(() => {
+    const now = Date.now();
+    Object.keys(activeTrades).forEach(tradeId => {
+      const trade = activeTrades[tradeId];
+      // If a trade is past its end time by more than 2 seconds, force close it
+      if (now > trade.endTime + 2000) {
+        console.log(`Fallback closing expired trade: ${tradeId}`);
+        const assetKey = trade.assetShortName || trade.asset;
+        const currentPrice = assets[assetKey as keyof typeof assets]?.price || trade.entryPrice;
+        
+        let isWin = false;
+        let finalClosePrice = currentPrice;
+        
+        if (trade.forcedResult) {
+          isWin = trade.forcedResult === 'WIN';
+          const isUp = trade.type === 'UP';
+          const needsUp = (isUp && isWin) || (!isUp && !isWin);
+          const volatility = assets[assetKey as keyof typeof assets]?.volatility || 0.001;
+          if (needsUp && finalClosePrice <= trade.entryPrice) {
+            finalClosePrice = trade.entryPrice + volatility;
+          } else if (!needsUp && finalClosePrice >= trade.entryPrice) {
+            finalClosePrice = trade.entryPrice - volatility;
+          }
+        } else {
+          isWin = trade.type === 'UP' 
+            ? currentPrice > trade.entryPrice 
+            : currentPrice < trade.entryPrice;
+        }
+        
+        const profit = isWin ? trade.amount * (trade.payout / 100) : 0;
+        
+        saveTradeToStats(trade.amount, profit, isWin, trade.accountType, trade.email);
+        io.to('admin-room').emit('admin-stats', platformStats);
+        io.to(trade.socketId).emit('trade-result', {
+          id: trade.id,
+          status: isWin ? 'WIN' : 'LOSS',
+          closePrice: finalClosePrice,
+          profit: profit
+        });
+        
+        logActivity(trade.email, 'TRADE_RESULT', `${isWin ? 'WIN' : 'LOSS'} on ${trade.assetShortName} - Profit: ${profit.toFixed(2)} (Fallback)`);
+        delete activeTrades[tradeId];
+      }
+    });
+  }, 1000);
+
   // --- Pending Orders Logic ---
   const checkPendingOrders = () => {
     try {
+      const tableExists = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='pending_orders'").get();
+      if (!tableExists) return;
+
       const pending = db.prepare("SELECT * FROM pending_orders WHERE status = 'PENDING'").all();
       pending.forEach((order: any) => {
         const asset = assets[order.assetId];

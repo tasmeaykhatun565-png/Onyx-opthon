@@ -557,7 +557,10 @@ export const TradingChart: React.FC<TradingChartProps> = ({
     const SUPPORTED_INDICATORS = [
       'SMA', 'EMA', 'WMA', 'BollingerBands', 'ParabolicSAR', 'Volumes', 
       'RSI', 'MACD', 'CCI', 'ATR', 'WilliamsR', 'AverageDirectionalIndex', 
-      'AwesomeOscillator', 'RateOfChange', 'Stochastic'
+      'AwesomeOscillator', 'RateOfChange', 'Stochastic',
+      'JapanesePearl', 'JapaneseTrend', 'Reflection', 'RelativeStrengthLaw',
+      'SlidingOnAverages', 'AverageIntersection', 'ChasingTheTrend',
+      'SmartRSI15', 'SmartRSI30', 'SmartRSI60'
     ];
 
     const expectedKeys = activeIndicators
@@ -568,6 +571,16 @@ export const TradingChart: React.FC<TradingChartProps> = ({
         if (ind.id === 'AverageDirectionalIndex') return ['ADX', 'PDI', 'MDI'];
         if (ind.id === 'Stochastic') return ['StochK', 'StochD'];
         if (ind.id === 'Volumes') return ['Volumes'];
+        if (ind.id === 'JapanesePearl') return ['JP_SMA1', 'JP_SMA2', 'JP_RSI'];
+        if (ind.id === 'JapaneseTrend') return ['JT_SMA1', 'JT_SMA2'];
+        if (ind.id === 'Reflection') return ['Ref_SMA1', 'Ref_SMA2', 'Ref_MACDLine', 'Ref_MACDSignal', 'Ref_MACDHist'];
+        if (ind.id === 'RelativeStrengthLaw') return ['RSL_RSI1', 'RSL_RSI2'];
+        if (ind.id === 'SlidingOnAverages') return ['SoA_SMA1', 'SoA_SMA2'];
+        if (ind.id === 'AverageIntersection') return ['AI_SMA1', 'AI_SMA2'];
+        if (ind.id === 'ChasingTheTrend') return ['CtT_EMA1', 'CtT_EMA2', 'CtT_MACDLine', 'CtT_MACDSignal', 'CtT_MACDHist'];
+        if (ind.id === 'SmartRSI15') return ['SRSI15_RSI'];
+        if (ind.id === 'SmartRSI30') return ['SRSI30_RSI'];
+        if (ind.id === 'SmartRSI60') return ['SRSI60_RSI'];
         return [ind.id];
       });
 
@@ -578,7 +591,7 @@ export const TradingChart: React.FC<TradingChartProps> = ({
       clearIndicators();
       
       const hasOscillators = activeIndicators.some(ind => 
-        ['RSI', 'MACD', 'CCI', 'ATR', 'WilliamsR', 'AverageDirectionalIndex', 'AwesomeOscillator', 'RateOfChange', 'Stochastic'].includes(ind.id)
+        ['RSI', 'MACD', 'CCI', 'ATR', 'WilliamsR', 'AverageDirectionalIndex', 'AwesomeOscillator', 'RateOfChange', 'Stochastic', 'JapanesePearl', 'Reflection', 'RelativeStrengthLaw', 'ChasingTheTrend', 'SmartRSI15', 'SmartRSI30', 'SmartRSI60'].includes(ind.id)
       );
 
       activeIndicators.forEach(indicator => {
@@ -670,6 +683,50 @@ export const TradingChart: React.FC<TradingChartProps> = ({
           case 'Stochastic':
             indicatorsRef.current['StochK'] = chart.addSeries(LineSeries, { ...oscillatorOptions, color: indicator.color || '#2196F3' });
             indicatorsRef.current['StochD'] = chart.addSeries(LineSeries, { ...oscillatorOptions, color: '#FF9800' });
+            break;
+          case 'JapanesePearl':
+            indicatorsRef.current['JP_SMA1'] = chart.addSeries(LineSeries, { ...commonLineOptions, color: '#2962FF' });
+            indicatorsRef.current['JP_SMA2'] = chart.addSeries(LineSeries, { ...commonLineOptions, color: '#FF6D00' });
+            indicatorsRef.current['JP_RSI'] = chart.addSeries(LineSeries, { ...oscillatorOptions, color: '#9C27B0' });
+            break;
+          case 'JapaneseTrend':
+            indicatorsRef.current['JT_SMA1'] = chart.addSeries(LineSeries, { ...commonLineOptions, color: '#2962FF' });
+            indicatorsRef.current['JT_SMA2'] = chart.addSeries(LineSeries, { ...commonLineOptions, color: '#FF6D00' });
+            break;
+          case 'Reflection':
+            indicatorsRef.current['Ref_SMA1'] = chart.addSeries(LineSeries, { ...commonLineOptions, color: '#2962FF' });
+            indicatorsRef.current['Ref_SMA2'] = chart.addSeries(LineSeries, { ...commonLineOptions, color: '#FF6D00' });
+            indicatorsRef.current['Ref_MACDLine'] = chart.addSeries(LineSeries, { ...oscillatorOptions, color: '#2196F3' });
+            indicatorsRef.current['Ref_MACDSignal'] = chart.addSeries(LineSeries, { ...oscillatorOptions, color: '#FF5252' });
+            indicatorsRef.current['Ref_MACDHist'] = chart.addSeries(HistogramSeries, { priceScaleId: 'oscillators', priceLineVisible: false, lastValueVisible: false });
+            break;
+          case 'RelativeStrengthLaw':
+            indicatorsRef.current['RSL_RSI1'] = chart.addSeries(LineSeries, { ...oscillatorOptions, color: '#9C27B0' });
+            indicatorsRef.current['RSL_RSI2'] = chart.addSeries(LineSeries, { ...oscillatorOptions, color: '#FF9800' });
+            break;
+          case 'SlidingOnAverages':
+            indicatorsRef.current['SoA_SMA1'] = chart.addSeries(LineSeries, { ...commonLineOptions, color: '#2962FF' });
+            indicatorsRef.current['SoA_SMA2'] = chart.addSeries(LineSeries, { ...commonLineOptions, color: '#FF6D00' });
+            break;
+          case 'AverageIntersection':
+            indicatorsRef.current['AI_SMA1'] = chart.addSeries(LineSeries, { ...commonLineOptions, color: '#2962FF' });
+            indicatorsRef.current['AI_SMA2'] = chart.addSeries(LineSeries, { ...commonLineOptions, color: '#FF6D00' });
+            break;
+          case 'ChasingTheTrend':
+            indicatorsRef.current['CtT_EMA1'] = chart.addSeries(LineSeries, { ...commonLineOptions, color: '#2962FF' });
+            indicatorsRef.current['CtT_EMA2'] = chart.addSeries(LineSeries, { ...commonLineOptions, color: '#FF6D00' });
+            indicatorsRef.current['CtT_MACDLine'] = chart.addSeries(LineSeries, { ...oscillatorOptions, color: '#2196F3' });
+            indicatorsRef.current['CtT_MACDSignal'] = chart.addSeries(LineSeries, { ...oscillatorOptions, color: '#FF5252' });
+            indicatorsRef.current['CtT_MACDHist'] = chart.addSeries(HistogramSeries, { priceScaleId: 'oscillators', priceLineVisible: false, lastValueVisible: false });
+            break;
+          case 'SmartRSI15':
+            indicatorsRef.current['SRSI15_RSI'] = chart.addSeries(LineSeries, { ...oscillatorOptions, color: '#9C27B0' });
+            break;
+          case 'SmartRSI30':
+            indicatorsRef.current['SRSI30_RSI'] = chart.addSeries(LineSeries, { ...oscillatorOptions, color: '#9C27B0' });
+            break;
+          case 'SmartRSI60':
+            indicatorsRef.current['SRSI60_RSI'] = chart.addSeries(LineSeries, { ...oscillatorOptions, color: '#9C27B0' });
             break;
         }
       });
@@ -852,6 +909,87 @@ export const TradingChart: React.FC<TradingChartProps> = ({
           
           indicatorsRef.current['StochK'].setData(stochKData);
           indicatorsRef.current['StochD'].setData(stochDData);
+        }
+
+        if (indicator.id === 'JapanesePearl' && indicatorsRef.current['JP_SMA1']) {
+          const sma1 = SMA.calculate({ period: 10, values: closePrices });
+          const sma2 = SMA.calculate({ period: 20, values: closePrices });
+          const rsi = RSI.calculate({ period: 14, values: closePrices });
+          
+          indicatorsRef.current['JP_SMA1'].setData(sma1.map((val, idx) => ({ time: times[idx + closePrices.length - sma1.length], value: val })));
+          indicatorsRef.current['JP_SMA2'].setData(sma2.map((val, idx) => ({ time: times[idx + closePrices.length - sma2.length], value: val })));
+          indicatorsRef.current['JP_RSI'].setData(rsi.map((val, idx) => ({ time: times[idx + closePrices.length - rsi.length], value: val })));
+        }
+
+        if (indicator.id === 'JapaneseTrend' && indicatorsRef.current['JT_SMA1']) {
+          const sma1 = SMA.calculate({ period: 5, values: closePrices });
+          const sma2 = SMA.calculate({ period: 20, values: closePrices });
+          
+          indicatorsRef.current['JT_SMA1'].setData(sma1.map((val, idx) => ({ time: times[idx + closePrices.length - sma1.length], value: val })));
+          indicatorsRef.current['JT_SMA2'].setData(sma2.map((val, idx) => ({ time: times[idx + closePrices.length - sma2.length], value: val })));
+        }
+
+        if (indicator.id === 'Reflection' && indicatorsRef.current['Ref_SMA1']) {
+          const sma1 = SMA.calculate({ period: 10, values: closePrices });
+          const sma2 = SMA.calculate({ period: 20, values: closePrices });
+          const macd = MACD.calculate({ fastPeriod: 12, slowPeriod: 26, signalPeriod: 9, SimpleMAOscillator: false, SimpleMASignal: false, values: closePrices });
+          
+          indicatorsRef.current['Ref_SMA1'].setData(sma1.map((val, idx) => ({ time: times[idx + closePrices.length - sma1.length], value: val })));
+          indicatorsRef.current['Ref_SMA2'].setData(sma2.map((val, idx) => ({ time: times[idx + closePrices.length - sma2.length], value: val })));
+          indicatorsRef.current['Ref_MACDLine'].setData(macd.map((val, idx) => ({ time: times[idx + closePrices.length - macd.length], value: val.MACD || 0 })));
+          indicatorsRef.current['Ref_MACDSignal'].setData(macd.map((val, idx) => ({ time: times[idx + closePrices.length - macd.length], value: val.signal || 0 })));
+          indicatorsRef.current['Ref_MACDHist'].setData(macd.map((val, idx) => ({ time: times[idx + closePrices.length - macd.length], value: val.histogram || 0, color: (val.histogram || 0) >= 0 ? '#0ecb81' : '#f6465d' })));
+        }
+
+        if (indicator.id === 'RelativeStrengthLaw' && indicatorsRef.current['RSL_RSI1']) {
+          const rsi1 = RSI.calculate({ period: 5, values: closePrices });
+          const rsi2 = RSI.calculate({ period: 14, values: closePrices });
+          
+          indicatorsRef.current['RSL_RSI1'].setData(rsi1.map((val, idx) => ({ time: times[idx + closePrices.length - rsi1.length], value: val })));
+          indicatorsRef.current['RSL_RSI2'].setData(rsi2.map((val, idx) => ({ time: times[idx + closePrices.length - rsi2.length], value: val })));
+        }
+
+        if (indicator.id === 'SlidingOnAverages' && indicatorsRef.current['SoA_SMA1']) {
+          const sma1 = SMA.calculate({ period: 4, values: closePrices });
+          const sma2 = SMA.calculate({ period: 60, values: closePrices });
+          
+          indicatorsRef.current['SoA_SMA1'].setData(sma1.map((val, idx) => ({ time: times[idx + closePrices.length - sma1.length], value: val })));
+          indicatorsRef.current['SoA_SMA2'].setData(sma2.map((val, idx) => ({ time: times[idx + closePrices.length - sma2.length], value: val })));
+        }
+
+        if (indicator.id === 'AverageIntersection' && indicatorsRef.current['AI_SMA1']) {
+          const sma1 = SMA.calculate({ period: 5, values: closePrices });
+          const sma2 = SMA.calculate({ period: 20, values: closePrices });
+          
+          indicatorsRef.current['AI_SMA1'].setData(sma1.map((val, idx) => ({ time: times[idx + closePrices.length - sma1.length], value: val })));
+          indicatorsRef.current['AI_SMA2'].setData(sma2.map((val, idx) => ({ time: times[idx + closePrices.length - sma2.length], value: val })));
+        }
+
+        if (indicator.id === 'ChasingTheTrend' && indicatorsRef.current['CtT_EMA1']) {
+          const ema1 = EMA.calculate({ period: 10, values: closePrices });
+          const ema2 = EMA.calculate({ period: 20, values: closePrices });
+          const macd = MACD.calculate({ fastPeriod: 12, slowPeriod: 26, signalPeriod: 9, SimpleMAOscillator: false, SimpleMASignal: false, values: closePrices });
+          
+          indicatorsRef.current['CtT_EMA1'].setData(ema1.map((val, idx) => ({ time: times[idx + closePrices.length - ema1.length], value: val })));
+          indicatorsRef.current['CtT_EMA2'].setData(ema2.map((val, idx) => ({ time: times[idx + closePrices.length - ema2.length], value: val })));
+          indicatorsRef.current['CtT_MACDLine'].setData(macd.map((val, idx) => ({ time: times[idx + closePrices.length - macd.length], value: val.MACD || 0 })));
+          indicatorsRef.current['CtT_MACDSignal'].setData(macd.map((val, idx) => ({ time: times[idx + closePrices.length - macd.length], value: val.signal || 0 })));
+          indicatorsRef.current['CtT_MACDHist'].setData(macd.map((val, idx) => ({ time: times[idx + closePrices.length - macd.length], value: val.histogram || 0, color: (val.histogram || 0) >= 0 ? '#0ecb81' : '#f6465d' })));
+        }
+
+        if (indicator.id === 'SmartRSI15' && indicatorsRef.current['SRSI15_RSI']) {
+          const rsi = RSI.calculate({ period: 15, values: closePrices });
+          indicatorsRef.current['SRSI15_RSI'].setData(rsi.map((val, idx) => ({ time: times[idx + closePrices.length - rsi.length], value: val })));
+        }
+
+        if (indicator.id === 'SmartRSI30' && indicatorsRef.current['SRSI30_RSI']) {
+          const rsi = RSI.calculate({ period: 30, values: closePrices });
+          indicatorsRef.current['SRSI30_RSI'].setData(rsi.map((val, idx) => ({ time: times[idx + closePrices.length - rsi.length], value: val })));
+        }
+
+        if (indicator.id === 'SmartRSI60' && indicatorsRef.current['SRSI60_RSI']) {
+          const rsi = RSI.calculate({ period: 60, values: closePrices });
+          indicatorsRef.current['SRSI60_RSI'].setData(rsi.map((val, idx) => ({ time: times[idx + closePrices.length - rsi.length], value: val })));
         }
       } catch (e) {
         console.error(`Error updating indicator ${indicator}:`, e);

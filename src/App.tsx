@@ -40,10 +40,8 @@ import HomePage from './HomePage';
 import { ReferralPage } from './ReferralPage';
 import IndicatorSheet from './IndicatorSheet';
 import OnboardingModal from './OnboardingModal';
-import NewsFeed from './NewsFeed';
 
 import { io, Socket } from 'socket.io-client';
-
 import { ToastProvider } from './Toast';
 import { useTranslation } from './i18n';
 
@@ -2003,11 +2001,7 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
             currencySymbol={activeAccount === 'DEMO' ? '$' : currency.symbol}
           />
         )}
-        {view === 'NEWS' && (
-          <div className="p-4 h-full overflow-y-auto scrollbar-hide">
-            <NewsFeed />
-          </div>
-        )}
+
       </div>
 
       {/* --- Support Chat Overlay --- */}
@@ -2203,12 +2197,6 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
           label={t('nav.market')} 
           active={view === 'MARKET'}
           onClick={() => setView('MARKET')}
-        />
-        <NavButton 
-          icon={<Newspaper size={18} />} 
-          label={t('nav.news')} 
-          active={view === 'NEWS'}
-          onClick={() => setView('NEWS')}
         />
         <NavButton 
           icon={<Trophy size={18} />} 
