@@ -2150,26 +2150,26 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
               </div>
 
               {/* Row 2: Trade Buttons */}
-              <div className="flex items-center gap-2 h-9 mb-0.5">
+              <div className="flex items-center gap-2 h-12 mb-0.5">
                 <button 
                   onClick={() => handleTrade('UP')}
-                  className="flex-1 h-full bg-green-500 hover:bg-green-600 active:scale-[0.98] transition rounded-lg flex items-center justify-between px-3 shadow-sm"
+                  className="flex-1 h-full bg-green-500 hover:bg-green-600 active:scale-[0.98] transition rounded-lg flex items-center justify-between px-3 shadow-lg min-h-[44px] z-10"
                 >
-                  <span className="font-bold text-white text-xs">Up</span>
-                  <ArrowUp size={16} strokeWidth={3} className="text-white" />
+                  <span className="font-bold text-white text-sm">Up</span>
+                  <ArrowUp size={20} strokeWidth={3} className="text-white" />
                 </button>
 
                 {/* Middle Clock/Pending Button */}
-                <button className="w-9 h-full bg-[var(--bg-secondary)] hover:bg-[var(--bg-tertiary)] active:scale-[0.95] transition rounded-lg flex items-center justify-center text-[var(--text-primary)] border border-[var(--border-color)]">
-                  <Clock size={16} />
+                <button className="w-12 h-full bg-[var(--bg-secondary)] hover:bg-[var(--bg-tertiary)] active:scale-[0.95] transition rounded-lg flex items-center justify-center text-[var(--text-primary)] border border-[var(--border-color)] min-h-[44px] z-10">
+                  <Clock size={20} />
                 </button>
 
                 <button 
                   onClick={() => handleTrade('DOWN')}
-                  className="flex-1 h-full bg-red-500 hover:bg-red-600 active:scale-[0.98] transition rounded-lg flex items-center justify-between px-3 shadow-sm"
+                  className="flex-1 h-full bg-red-500 hover:bg-red-600 active:scale-[0.98] transition rounded-lg flex items-center justify-between px-3 shadow-lg min-h-[44px] z-10"
                 >
-                  <span className="font-bold text-white text-xs">Down</span>
-                  <ArrowDown size={16} strokeWidth={3} className="text-white" />
+                  <span className="font-bold text-white text-sm">Down</span>
+                  <ArrowDown size={20} strokeWidth={3} className="text-white" />
                 </button>
               </div>
             </>
