@@ -940,31 +940,38 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
         const userData = doc.data();
         console.log("Firestore user data updated:", userData);
         
-        if (userData.balance !== undefined) setBalance(userData.balance);
-        if (userData.demoBalance !== undefined) setDemoBalance(userData.demoBalance);
-        if (userData.kycStatus !== undefined) setKycStatus(userData.kycStatus);
-        if (userData.turnover_required !== undefined) setTurnoverRequired(userData.turnover_required);
-        if (userData.turnover_achieved !== undefined) setTurnoverAchieved(userData.turnover_achieved);
-        if (userData.trades !== undefined) setTrades(userData.trades);
-        if (userData.extraAccounts !== undefined) setExtraAccounts(userData.extraAccounts);
+        if (userData.balance !== undefined) setBalance(prev => prev === userData.balance ? prev : userData.balance);
+        if (userData.demoBalance !== undefined) setDemoBalance(prev => prev === userData.demoBalance ? prev : userData.demoBalance);
+        if (userData.kycStatus !== undefined) setKycStatus(prev => prev === userData.kycStatus ? prev : userData.kycStatus);
+        if (userData.turnover_required !== undefined) setTurnoverRequired(prev => prev === userData.turnover_required ? prev : userData.turnover_required);
+        if (userData.turnover_achieved !== undefined) setTurnoverAchieved(prev => prev === userData.turnover_achieved ? prev : userData.turnover_achieved);
+        if (userData.trades !== undefined) setTrades(prev => JSON.stringify(prev) === JSON.stringify(userData.trades) ? prev : userData.trades);
+        if (userData.extraAccounts !== undefined) setExtraAccounts(prev => JSON.stringify(prev) === JSON.stringify(userData.extraAccounts) ? prev : userData.extraAccounts);
         
         if (userData.currency && userData.currencySymbol) {
-          setCurrency({
-            code: userData.currency,
-            symbol: userData.currencySymbol,
-            name: userData.currencyName || userData.currency,
-            flag: userData.currencyFlag || ''
+          setCurrency(prev => {
+            if (prev.code === userData.currency && prev.symbol === userData.currencySymbol) return prev;
+            return {
+              code: userData.currency,
+              symbol: userData.currencySymbol,
+              name: userData.currencyName || userData.currency,
+              flag: userData.currencyFlag || ''
+            };
           });
         }
         
         // Sync Referral Stats
-        setReferralStats(prev => ({
-          ...prev,
-          totalEarnings: userData.totalReferralEarnings || 0,
-          referralBalance: userData.referralBalance || 0,
-          referralCount: userData.referralCount || 0,
-          recentReferrals: userData.recentReferrals || []
-        }));
+        setReferralStats(prev => {
+          const newStats = {
+            ...prev,
+            totalEarnings: userData.totalReferralEarnings || 0,
+            referralBalance: userData.referralBalance || 0,
+            referralCount: userData.referralCount || 0,
+            recentReferrals: userData.recentReferrals || []
+          };
+          if (JSON.stringify(prev) === JSON.stringify(newStats)) return prev;
+          return newStats;
+        });
 
         setIsUserDataLoaded(true);
       }

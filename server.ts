@@ -147,6 +147,13 @@ async function startServer() {
           rejectionReason TEXT
         );
 
+        // Ensure trades column exists in users table
+        try {
+          db.prepare('ALTER TABLE users ADD COLUMN trades TEXT DEFAULT "[]"').run();
+        } catch (e) {
+          // Column already exists or table doesn't exist yet
+        }
+
         CREATE TABLE IF NOT EXISTS users (
           email TEXT PRIMARY KEY,
           password TEXT,
@@ -167,7 +174,8 @@ async function startServer() {
           referralCount INTEGER DEFAULT 0,
           referralBalance REAL DEFAULT 0,
           totalReferralEarnings REAL DEFAULT 0,
-          allowed_withdrawal_methods TEXT DEFAULT ''
+          allowed_withdrawal_methods TEXT DEFAULT '',
+          trades TEXT DEFAULT '[]'
         );
 
         CREATE TABLE IF NOT EXISTS promo_codes (
