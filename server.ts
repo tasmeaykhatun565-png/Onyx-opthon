@@ -61,212 +61,230 @@ async function startServer() {
   }
 
   // Initialize Database
+  const dbPath = path.join(process.cwd(), 'trading_v2.db');
+  const initDb = (pathStr: string) => {
+    const database = new Database(pathStr);
+    database.exec(`
+      CREATE TABLE IF NOT EXISTS market_history (
+        symbol TEXT,
+        time INTEGER,
+        open REAL,
+        high REAL,
+        low REAL,
+        close REAL,
+        PRIMARY KEY (symbol, time)
+      );
+      
+      CREATE TABLE IF NOT EXISTS trade_stats (
+        date TEXT PRIMARY KEY,
+        total_trades INTEGER DEFAULT 0,
+        total_volume REAL DEFAULT 0,
+        total_user_profit REAL DEFAULT 0,
+        total_user_loss REAL DEFAULT 0,
+        house_net REAL DEFAULT 0
+      );
+      
+      CREATE TABLE IF NOT EXISTS settings (
+        key TEXT PRIMARY KEY,
+        value TEXT
+      );
+
+      CREATE TABLE IF NOT EXISTS kyc_submissions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        email TEXT,
+        documentType TEXT,
+        documentNumber TEXT,
+        fullName TEXT,
+        dateOfBirth TEXT,
+        frontImage TEXT,
+        backImage TEXT,
+        status TEXT DEFAULT 'PENDING',
+        submittedAt INTEGER,
+        updatedAt INTEGER,
+        rejectionReason TEXT
+      );
+
+      CREATE TABLE IF NOT EXISTS notifications (
+        id TEXT PRIMARY KEY,
+        email TEXT,
+        title TEXT,
+        message TEXT,
+        type TEXT,
+        timestamp INTEGER,
+        isRead INTEGER DEFAULT 0
+      );
+
+      CREATE TABLE IF NOT EXISTS deposits (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        email TEXT,
+        amount REAL,
+        currency TEXT,
+        method TEXT,
+        transactionId TEXT,
+        status TEXT DEFAULT 'PENDING',
+        submittedAt INTEGER,
+        updatedAt INTEGER,
+        promoCode TEXT,
+        bonusAmount REAL DEFAULT 0
+      );
+
+      CREATE TABLE IF NOT EXISTS withdrawals (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        email TEXT,
+        amount REAL,
+        currency TEXT,
+        method TEXT,
+        accountDetails TEXT,
+        status TEXT DEFAULT 'PENDING',
+        submittedAt INTEGER,
+        updatedAt INTEGER,
+        rejectionReason TEXT
+      );
+
+      CREATE TABLE IF NOT EXISTS users (
+        email TEXT PRIMARY KEY,
+        password TEXT,
+        name TEXT,
+        photoURL TEXT,
+        uid TEXT,
+        balance REAL DEFAULT 0,
+        demoBalance REAL DEFAULT 10000,
+        status TEXT DEFAULT 'ACTIVE',
+        kycStatus TEXT DEFAULT 'NONE',
+        isBoosted INTEGER DEFAULT 0,
+        createdAt INTEGER,
+        lastLogin INTEGER,
+        turnover_required REAL DEFAULT 0,
+        turnover_achieved REAL DEFAULT 0,
+        referredBy TEXT,
+        referralCode TEXT,
+        referralCount INTEGER DEFAULT 0,
+        referralBalance REAL DEFAULT 0,
+        totalReferralEarnings REAL DEFAULT 0,
+        allowed_withdrawal_methods TEXT DEFAULT '',
+        trades TEXT DEFAULT '[]'
+      );
+
+      CREATE TABLE IF NOT EXISTS promo_codes (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        code TEXT UNIQUE,
+        description TEXT,
+        bonusPercentage REAL,
+        minDeposit REAL,
+        turnoverMultiplier REAL,
+        expiresAt INTEGER,
+        title TEXT,
+        icon TEXT
+      );
+
+      CREATE TABLE IF NOT EXISTS activity_logs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        email TEXT,
+        action TEXT,
+        details TEXT,
+        timestamp INTEGER,
+        ip TEXT
+      );
+
+      CREATE TABLE IF NOT EXISTS referrals (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        referrerUid TEXT,
+        referredUid TEXT,
+        referredEmail TEXT,
+        amount REAL,
+        type TEXT,
+        timestamp INTEGER
+      );
+
+      CREATE TABLE IF NOT EXISTS pending_orders (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        email TEXT,
+        uid TEXT,
+        assetId TEXT,
+        assetName TEXT,
+        type TEXT,
+        triggerValue REAL,
+        profitability REAL,
+        amount REAL,
+        duration INTEGER,
+        direction TEXT,
+        accountType TEXT,
+        status TEXT DEFAULT 'PENDING',
+        createdAt INTEGER
+      );
+
+      CREATE TABLE IF NOT EXISTS social_chat (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        email TEXT,
+        name TEXT,
+        text TEXT,
+        photoURL TEXT,
+        timestamp INTEGER
+      );
+
+      CREATE TABLE IF NOT EXISTS support_chat (
+        id TEXT PRIMARY KEY,
+        email TEXT,
+        text TEXT,
+        sender TEXT,
+        timestamp INTEGER
+      );
+
+      CREATE TABLE IF NOT EXISTS transfers (
+        id TEXT PRIMARY KEY,
+        fromEmail TEXT,
+        toEmail TEXT,
+        amount REAL,
+        timestamp INTEGER,
+        status TEXT DEFAULT 'COMPLETED'
+      );
+    `);
+    
+    // Add columns if they don't exist (for existing databases)
+    const migrationQueries = [
+      'ALTER TABLE users ADD COLUMN trades TEXT DEFAULT "[]"',
+      'ALTER TABLE users ADD COLUMN password TEXT',
+      'ALTER TABLE users ADD COLUMN twoFactorSecret TEXT',
+      'ALTER TABLE users ADD COLUMN twoFactorEnabled INTEGER DEFAULT 0',
+      'ALTER TABLE users ADD COLUMN name TEXT',
+      'ALTER TABLE users ADD COLUMN photoURL TEXT',
+      'ALTER TABLE users ADD COLUMN uid TEXT',
+      'ALTER TABLE users ADD COLUMN turnover_required REAL DEFAULT 0',
+      'ALTER TABLE users ADD COLUMN turnover_achieved REAL DEFAULT 0',
+      'ALTER TABLE users ADD COLUMN referredBy TEXT',
+      'ALTER TABLE users ADD COLUMN referralCode TEXT',
+      'ALTER TABLE users ADD COLUMN referralCount INTEGER DEFAULT 0',
+      'ALTER TABLE users ADD COLUMN referralBalance REAL DEFAULT 0',
+      'ALTER TABLE users ADD COLUMN totalReferralEarnings REAL DEFAULT 0',
+      'ALTER TABLE users ADD COLUMN allowed_withdrawal_methods TEXT DEFAULT ""',
+      'ALTER TABLE deposits ADD COLUMN promoCode TEXT',
+      'ALTER TABLE deposits ADD COLUMN bonusAmount REAL DEFAULT 0',
+      'ALTER TABLE deposits ADD COLUMN turnoverRequired REAL DEFAULT 0'
+    ];
+
+    for (const query of migrationQueries) {
+      try { database.prepare(query).run(); } catch (e) {}
+    }
+    
+    return database;
+  };
+
   try {
-    db = new Database(path.join(process.cwd(), 'trading_v2.db'));
-  } catch (dbError) {
-    console.error('Database connection error (using in-memory):', String(dbError));
-    db = new Database(':memory:');
-  }
-  
-  if (db) {
-    try {
-      db.exec(`
-        CREATE TABLE IF NOT EXISTS market_history (
-          symbol TEXT,
-          time INTEGER,
-          open REAL,
-          high REAL,
-          low REAL,
-          close REAL,
-          PRIMARY KEY (symbol, time)
-        );
-        
-        CREATE TABLE IF NOT EXISTS trade_stats (
-          date TEXT PRIMARY KEY,
-          total_trades INTEGER DEFAULT 0,
-          total_volume REAL DEFAULT 0,
-          total_user_profit REAL DEFAULT 0,
-          total_user_loss REAL DEFAULT 0,
-          house_net REAL DEFAULT 0
-        );
-        
-        CREATE TABLE IF NOT EXISTS settings (
-          key TEXT PRIMARY KEY,
-          value TEXT
-        );
-
-        CREATE TABLE IF NOT EXISTS kyc_submissions (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          email TEXT,
-          documentType TEXT,
-          documentNumber TEXT,
-          fullName TEXT,
-          dateOfBirth TEXT,
-          frontImage TEXT,
-          backImage TEXT,
-          status TEXT DEFAULT 'PENDING',
-          submittedAt INTEGER,
-          updatedAt INTEGER,
-          rejectionReason TEXT
-        );
-
-        CREATE TABLE IF NOT EXISTS notifications (
-          id TEXT PRIMARY KEY,
-          email TEXT,
-          title TEXT,
-          message TEXT,
-          type TEXT,
-          timestamp INTEGER,
-          isRead INTEGER DEFAULT 0
-        );
-
-        CREATE TABLE IF NOT EXISTS deposits (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          email TEXT,
-          amount REAL,
-          currency TEXT,
-          method TEXT,
-          transactionId TEXT,
-          status TEXT DEFAULT 'PENDING',
-          submittedAt INTEGER,
-          updatedAt INTEGER,
-          promoCode TEXT,
-          bonusAmount REAL DEFAULT 0
-        );
-
-        CREATE TABLE IF NOT EXISTS withdrawals (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          email TEXT,
-          amount REAL,
-          currency TEXT,
-          method TEXT,
-          accountDetails TEXT,
-          status TEXT DEFAULT 'PENDING',
-          submittedAt INTEGER,
-          updatedAt INTEGER,
-          rejectionReason TEXT
-        );
-
-        CREATE TABLE IF NOT EXISTS users (
-          email TEXT PRIMARY KEY,
-          password TEXT,
-          name TEXT,
-          photoURL TEXT,
-          uid TEXT,
-          balance REAL DEFAULT 0,
-          demoBalance REAL DEFAULT 10000,
-          status TEXT DEFAULT 'ACTIVE',
-          kycStatus TEXT DEFAULT 'NONE',
-          isBoosted INTEGER DEFAULT 0,
-          createdAt INTEGER,
-          lastLogin INTEGER,
-          turnover_required REAL DEFAULT 0,
-          turnover_achieved REAL DEFAULT 0,
-          referredBy TEXT,
-          referralCode TEXT,
-          referralCount INTEGER DEFAULT 0,
-          referralBalance REAL DEFAULT 0,
-          totalReferralEarnings REAL DEFAULT 0,
-          allowed_withdrawal_methods TEXT DEFAULT '',
-          trades TEXT DEFAULT '[]'
-        );
-
-        CREATE TABLE IF NOT EXISTS promo_codes (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          code TEXT UNIQUE,
-          description TEXT,
-          bonusPercentage REAL,
-          minDeposit REAL,
-          turnoverMultiplier REAL,
-          expiresAt INTEGER,
-          title TEXT,
-          icon TEXT
-        );
-
-        CREATE TABLE IF NOT EXISTS activity_logs (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          email TEXT,
-          action TEXT,
-          details TEXT,
-          timestamp INTEGER,
-          ip TEXT
-        );
-
-        CREATE TABLE IF NOT EXISTS referrals (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          referrerUid TEXT,
-          referredUid TEXT,
-          referredEmail TEXT,
-          amount REAL,
-          type TEXT,
-          timestamp INTEGER
-        );
-
-        CREATE TABLE IF NOT EXISTS pending_orders (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          email TEXT,
-          uid TEXT,
-          assetId TEXT,
-          assetName TEXT,
-          type TEXT,
-          triggerValue REAL,
-          profitability REAL,
-          amount REAL,
-          duration INTEGER,
-          direction TEXT,
-          accountType TEXT,
-          status TEXT DEFAULT 'PENDING',
-          createdAt INTEGER
-        );
-
-        CREATE TABLE IF NOT EXISTS social_chat (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          email TEXT,
-          name TEXT,
-          text TEXT,
-          photoURL TEXT,
-          timestamp INTEGER
-        );
-
-        CREATE TABLE IF NOT EXISTS support_chat (
-          id TEXT PRIMARY KEY,
-          email TEXT,
-          text TEXT,
-          sender TEXT,
-          timestamp INTEGER
-        );
-
-        CREATE TABLE IF NOT EXISTS transfers (
-          id TEXT PRIMARY KEY,
-          fromEmail TEXT,
-          toEmail TEXT,
-          amount REAL,
-          timestamp INTEGER,
-          status TEXT DEFAULT 'COMPLETED'
-        );
-      `);
-
-      // Add columns if they don't exist (for existing databases)
-      try { db.prepare('ALTER TABLE users ADD COLUMN trades TEXT DEFAULT "[]"').run(); } catch (e) {}
-      try { db.prepare('ALTER TABLE users ADD COLUMN password TEXT').run(); } catch(e) {}
-      try { db.prepare('ALTER TABLE users ADD COLUMN twoFactorSecret TEXT').run(); } catch(e) {}
-      try { db.prepare('ALTER TABLE users ADD COLUMN twoFactorEnabled INTEGER DEFAULT 0').run(); } catch(e) {}
-      try { db.prepare('ALTER TABLE users ADD COLUMN name TEXT').run(); } catch(e) {}
-      try { db.prepare('ALTER TABLE users ADD COLUMN photoURL TEXT').run(); } catch(e) {}
-      try { db.prepare('ALTER TABLE users ADD COLUMN uid TEXT').run(); } catch(e) {}
-      try { db.prepare('ALTER TABLE users ADD COLUMN turnover_required REAL DEFAULT 0').run(); } catch(e) {}
-      try { db.prepare('ALTER TABLE users ADD COLUMN turnover_achieved REAL DEFAULT 0').run(); } catch(e) {}
-      try { db.prepare('ALTER TABLE users ADD COLUMN referredBy TEXT').run(); } catch(e) {}
-      try { db.prepare('ALTER TABLE users ADD COLUMN referralCode TEXT').run(); } catch(e) {}
-      try { db.prepare('ALTER TABLE users ADD COLUMN referralCount INTEGER DEFAULT 0').run(); } catch(e) {}
-      try { db.prepare('ALTER TABLE users ADD COLUMN referralBalance REAL DEFAULT 0').run(); } catch(e) {}
-      try { db.prepare('ALTER TABLE users ADD COLUMN totalReferralEarnings REAL DEFAULT 0').run(); } catch(e) {}
-      try { db.prepare('ALTER TABLE users ADD COLUMN allowed_withdrawal_methods TEXT DEFAULT \'\'').run(); } catch(e) {}
-      try { db.prepare('ALTER TABLE deposits ADD COLUMN promoCode TEXT').run(); } catch(e) {}
-      try { db.prepare('ALTER TABLE deposits ADD COLUMN bonusAmount REAL DEFAULT 0').run(); } catch(e) {}
-      try { db.prepare('ALTER TABLE deposits ADD COLUMN turnoverRequired REAL DEFAULT 0').run(); } catch(e) {}
-    } catch (execError) {
-      console.error('Database execution error:', execError);
+    db = initDb(dbPath);
+  } catch (dbError: any) {
+    console.error('Database initialization error:', String(dbError));
+    if (dbError.code === 'SQLITE_CORRUPT' || String(dbError).includes('malformed')) {
+      console.error('Database file is corrupt. Deleting and recreating...');
+      try {
+        if (fs.existsSync(dbPath)) fs.unlinkSync(dbPath);
+        db = initDb(dbPath);
+      } catch (retryError) {
+        console.error('Failed to recreate database file, using in-memory:', retryError);
+        db = initDb(':memory:');
+      }
+    } else {
+      console.error('Falling back to in-memory database');
+      db = initDb(':memory:');
     }
   }
 
