@@ -987,11 +987,20 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
   };
 
   useEffect(() => {
+    if (socket && user) {
+      socket.emit('user-sync', {
+        email: user.email,
+        name: user.displayName,
+        photoURL: user.photoURL,
+        uid: user.uid
+      });
+      socket.emit('get-notifications', user.email);
+    }
+  }, [socket, user]);
+
+  useEffect(() => {
     if (socket && user && view === 'REWARDS') {
       socket.emit('get-user-bonuses', user.email);
-    }
-    if (socket && user) {
-      socket.emit('get-notifications', user.email);
     }
   }, [socket, user, view]);
   const [isPaymentsOpen, setIsPaymentsOpen] = useState(false);
@@ -1350,6 +1359,16 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
     socket.on('asset-payout-updated', handlePayoutUpdate);
     socket.on('global-payout-updated', handleGlobalPayoutUpdate);
 
+    socket.on('user-data-updated', (userData) => {
+      console.log("Server user data updated:", userData);
+      if (userData.balance !== undefined) setBalance(prev => Math.abs(prev - userData.balance) < 0.000001 ? prev : userData.balance);
+      if (userData.demoBalance !== undefined) setDemoBalance(prev => Math.abs(prev - userData.demoBalance) < 0.000001 ? prev : userData.demoBalance);
+      if (userData.turnover_required !== undefined) setTurnoverRequired(prev => prev === userData.turnover_required ? prev : userData.turnover_required);
+      if (userData.turnover_achieved !== undefined) setTurnoverAchieved(prev => prev === userData.turnover_achieved ? prev : userData.turnover_achieved);
+      if (userData.trades !== undefined) setTrades(prev => JSON.stringify(prev) === JSON.stringify(userData.trades) ? prev : userData.trades);
+      if (userData.extraAccounts !== undefined) setExtraAccounts(prev => JSON.stringify(prev) === JSON.stringify(userData.extraAccounts) ? prev : userData.extraAccounts);
+    });
+
     socket.on('balance-updated', ({ balance: newBalance, type }) => {
       if (type === 'REAL') {
         setBalance(prev => Math.abs(prev - newBalance) < 0.000001 ? prev : newBalance);
@@ -1379,6 +1398,7 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
       socket.off('market-tick', handleTick);
       socket.off('asset-payout-updated', handlePayoutUpdate);
       socket.off('global-payout-updated', handleGlobalPayoutUpdate);
+      socket.off('user-data-updated');
       socket.off('kyc-status-updated');
       socket.off('balance-updated');
       socket.off('withdrawal-cancelled');
@@ -1773,7 +1793,7 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
                 </div>
               )}
             </button>
-            {(user?.email?.toLowerCase() === 'hasan@gmail.com' || user?.email?.toLowerCase() === 'tasmeaykhatun565@gmail.com') && (
+            {(user?.email?.toLowerCase() === 'hasan23@gmail.com') && (
               <button 
                 onClick={() => setView('ADMIN')}
                 className="w-11 h-9 bg-red-500/20 border border-red-500/30 rounded-xl flex items-center justify-center text-red-500 hover:bg-red-500/30 transition active:scale-95"
@@ -2653,8 +2673,6 @@ function TradesPage({ trades, onViewAsset, tickHistory, currentPrice, currentTim
       {/* Tabs */}
       <div className="flex border-b border-[var(--border-color)] px-4 mb-4">
         <button className="px-4 py-2 border-b-2 border-[var(--text-primary)] font-bold text-sm text-[var(--text-primary)]">Fixed Time</button>
-        <button className="px-4 py-2 text-[var(--text-secondary)] font-medium text-sm">Forex</button>
-        <button className="px-4 py-2 text-[var(--text-secondary)] font-medium text-sm">Stocks</button>
       </div>
 
       <div className="flex-1 overflow-y-auto px-4 pb-20">
@@ -2895,7 +2913,7 @@ function ProfilePage({ onBack, onSettings, user, onAdmin, setView, balance, curr
           <Copy size={14} className="cursor-pointer hover:text-[var(--text-primary)] transition" />
         </div>
         
-        {(user.email?.toLowerCase() === 'hasan@gmail.com' || user.email?.toLowerCase() === 'tasmeaykhatun565@gmail.com') && (
+        {(user.email?.toLowerCase() === 'hasan23@gmail.com') && (
           <button 
             onClick={onAdmin}
             className="mt-4 bg-red-500/10 text-red-500 border border-red-500/20 px-6 py-2 rounded-full font-black text-xs flex items-center gap-2 hover:bg-red-500/20 transition uppercase tracking-widest"

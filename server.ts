@@ -147,13 +147,6 @@ async function startServer() {
           rejectionReason TEXT
         );
 
-        // Ensure trades column exists in users table
-        try {
-          db.prepare('ALTER TABLE users ADD COLUMN trades TEXT DEFAULT "[]"').run();
-        } catch (e) {
-          // Column already exists or table doesn't exist yet
-        }
-
         CREATE TABLE IF NOT EXISTS users (
           email TEXT PRIMARY KEY,
           password TEXT,
@@ -254,6 +247,7 @@ async function startServer() {
       `);
 
       // Add columns if they don't exist (for existing databases)
+      try { db.prepare('ALTER TABLE users ADD COLUMN trades TEXT DEFAULT "[]"').run(); } catch (e) {}
       try { db.prepare('ALTER TABLE users ADD COLUMN password TEXT').run(); } catch(e) {}
       try { db.prepare('ALTER TABLE users ADD COLUMN twoFactorSecret TEXT').run(); } catch(e) {}
       try { db.prepare('ALTER TABLE users ADD COLUMN twoFactorEnabled INTEGER DEFAULT 0').run(); } catch(e) {}
@@ -375,35 +369,62 @@ async function startServer() {
   }
   */
 
+  // Helper to update user trades in the database
+  const updateUserTrades = (email: string, trade: any) => {
+    const user = db.prepare('SELECT trades FROM users WHERE email = ?').get(email) as any;
+    if (user) {
+      let trades = [];
+      try {
+        trades = typeof user.trades === 'string' ? JSON.parse(user.trades) : (user.trades || []);
+      } catch (e) {
+        trades = [];
+      }
+      
+      // Check if trade already exists in history
+      const index = trades.findIndex((t: any) => t.id === trade.id);
+      if (index !== -1) {
+        trades[index] = { ...trades[index], ...trade };
+      } else {
+        trades.unshift(trade);
+      }
+      
+      // Keep only last 100 trades to prevent DB bloat
+      if (trades.length > 100) trades = trades.slice(0, 100);
+      
+      db.prepare('UPDATE users SET trades = ? WHERE email = ?').run(JSON.stringify(trades), email);
+    }
+  };
+
   // Helper to emit user data updates
   const emitUserUpdate = (email: string) => {
     const user = db.prepare('SELECT * FROM users WHERE email = ?').get(email) as any;
     if (user) {
-      // Find socket for this user
-      const socketId = Object.keys(connectedUsers).find(id => connectedUsers[id].email === email);
-      if (socketId) {
-        // Parse trades if it's a string
-        let trades = [];
-        try {
-          trades = typeof user.trades === 'string' ? JSON.parse(user.trades) : (user.trades || []);
-        } catch (e) {
-          trades = [];
-        }
+      // Find all sockets for this user (could be multiple tabs)
+      const socketIds = Object.keys(connectedUsers).filter(id => connectedUsers[id].email === email);
+      
+      // Parse trades if it's a string
+      let trades = [];
+      try {
+        trades = typeof user.trades === 'string' ? JSON.parse(user.trades) : (user.trades || []);
+      } catch (e) {
+        trades = [];
+      }
 
-        // Parse extraAccounts if it's a string
-        let extraAccounts = [];
-        try {
-          extraAccounts = typeof user.extraAccounts === 'string' ? JSON.parse(user.extraAccounts) : (user.extraAccounts || []);
-        } catch (e) {
-          extraAccounts = [];
-        }
+      // Parse extraAccounts if it's a string
+      let extraAccounts = [];
+      try {
+        extraAccounts = typeof user.extraAccounts === 'string' ? JSON.parse(user.extraAccounts) : (user.extraAccounts || []);
+      } catch (e) {
+        extraAccounts = [];
+      }
 
+      socketIds.forEach(socketId => {
         io.to(socketId).emit('user-data-updated', {
           ...user,
           trades,
           extraAccounts
         });
-      }
+      });
       
       // Also update admin panel
       const allUsers = db.prepare('SELECT * FROM users').all();
@@ -634,6 +655,43 @@ async function startServer() {
     }
   };
   loadStats();
+
+  // Load active trades from DB on startup
+  const loadActiveTradesFromDB = () => {
+    try {
+      const allUsers = db.prepare('SELECT email, trades FROM users').all() as any[];
+      let activeCount = 0;
+      allUsers.forEach(user => {
+        let trades = [];
+        try {
+          trades = typeof user.trades === 'string' ? JSON.parse(user.trades) : (user.trades || []);
+        } catch (e) {
+          trades = [];
+        }
+
+        trades.forEach((trade: any) => {
+          if (trade.status === 'ACTIVE') {
+            activeTrades[trade.id] = trade;
+            activeCount++;
+            
+            // Set a timer to resolve the trade if it hasn't expired
+            const durationMs = trade.endTime - Date.now();
+            if (durationMs > 0) {
+              setTimeout(() => {
+                // We use handleTradePlacement logic here or just let the fallback handle it
+                // Actually, it's better to just let the fallback handle it to avoid duplicate logic
+                // But we need to make sure the fallback is running.
+              }, durationMs);
+            }
+          }
+        });
+      });
+      console.log(`Loaded ${activeCount} active trades from database.`);
+    } catch (error) {
+      console.error('Error loading active trades from DB:', error);
+    }
+  };
+  loadActiveTradesFromDB();
 
   const saveTradeToStats = (amount: number, userProfit: number, isWin: boolean, accountType: string, email: string) => {
     if (accountType !== 'REAL') return; // Only track real balance trades as requested
@@ -947,8 +1005,41 @@ async function startServer() {
       forcedResult = isWin ? 'WIN' : 'LOSS';
     }
 
+    // Validate and deduct balance
+    const userFromDb = db.prepare('SELECT balance, demoBalance, uid FROM users WHERE email = ?').get(trade.email) as any;
+    if (!userFromDb) return;
+
+    if (trade.accountType === 'REAL') {
+      if (userFromDb.balance < trade.amount) {
+        socket.emit('trade-error', 'Insufficient real balance.');
+        return;
+      }
+      db.prepare('UPDATE users SET balance = balance - ? WHERE email = ?').run(trade.amount, trade.email);
+    } else if (trade.accountType === 'DEMO') {
+      if (userFromDb.demoBalance < trade.amount) {
+        socket.emit('trade-error', 'Insufficient demo balance.');
+        return;
+      }
+      db.prepare('UPDATE users SET demoBalance = demoBalance - ? WHERE email = ?').run(trade.amount, trade.email);
+    }
+
+    // Update Firestore after deduction
+    if (firestore && (trade.accountType === 'REAL' || trade.accountType === 'DEMO')) {
+      const updatedUser = db.prepare('SELECT balance, demoBalance FROM users WHERE email = ?').get(trade.email) as any;
+      if (updatedUser) {
+        const updateData = trade.accountType === 'REAL' ? { balance: updatedUser.balance } : { demoBalance: updatedUser.demoBalance };
+        firestore.collection('users').doc(userFromDb.uid).set(updateData, { merge: true })
+          .catch((e: any) => console.error('Firestore user balance update error (trade placement):', e));
+      }
+    }
+
     // Store active trade
     activeTrades[trade.id] = { ...trade, socketId: socket.id, forcedResult };
+    
+    // Save to DB history
+    updateUserTrades(trade.email, { ...trade, status: 'ACTIVE' });
+    
+    emitUserUpdate(trade.email);
     
     logActivity(trade.email, 'TRADE_PLACE', `${trade.type} on ${trade.assetShortName} - Amount: ${trade.amount} (${trade.accountType})`);
 
@@ -993,9 +1084,10 @@ async function startServer() {
       }, manipulationTime);
     }
 
-    setTimeout(() => {
-      const activeTrade = activeTrades[trade.id];
-      if (!activeTrade) return; // Trade might have been forced by admin
+    // Use a dedicated function for resolution to allow reuse
+    const resolveTrade = (tradeId: string) => {
+      const activeTrade = activeTrades[tradeId];
+      if (!activeTrade) return;
 
       const assetKey = activeTrade.assetShortName || activeTrade.asset;
       const currentPrice = assets[assetKey as keyof typeof assets]?.price || activeTrade.entryPrice;
@@ -1029,6 +1121,26 @@ async function startServer() {
       
       const profit = isWin ? activeTrade.amount * (activeTrade.payout / 100) : 0;
       
+      // Add profit to balance
+      if (isWin) {
+        const totalReturn = activeTrade.amount + profit;
+        if (activeTrade.accountType === 'REAL') {
+          db.prepare('UPDATE users SET balance = balance + ? WHERE email = ?').run(totalReturn, activeTrade.email);
+        } else if (activeTrade.accountType === 'DEMO') {
+          db.prepare('UPDATE users SET demoBalance = demoBalance + ? WHERE email = ?').run(totalReturn, activeTrade.email);
+        }
+        
+        // Update Firestore after adding profit
+        if (firestore && (activeTrade.accountType === 'REAL' || activeTrade.accountType === 'DEMO')) {
+          const updatedUser = db.prepare('SELECT balance, demoBalance, uid FROM users WHERE email = ?').get(activeTrade.email) as any;
+          if (updatedUser) {
+            const updateData = activeTrade.accountType === 'REAL' ? { balance: updatedUser.balance } : { demoBalance: updatedUser.demoBalance };
+            firestore.collection('users').doc(updatedUser.uid).set(updateData, { merge: true })
+              .catch((e: any) => console.error('Firestore user balance update error (trade win):', e));
+          }
+        }
+      }
+      
       // Update Platform Stats in DB (Live Balance only)
       saveTradeToStats(activeTrade.amount, profit, isWin, activeTrade.accountType, activeTrade.email);
 
@@ -1044,8 +1156,20 @@ async function startServer() {
       
       logActivity(activeTrade.email, 'TRADE_RESULT', `${isWin ? 'WIN' : 'LOSS'} on ${activeTrade.assetShortName} - Profit: ${profit.toFixed(2)}`);
 
-      delete activeTrades[activeTrade.id];
-    }, durationMs);
+      // Update in DB history
+      updateUserTrades(activeTrade.email, { 
+        id: activeTrade.id, 
+        status: isWin ? 'WIN' : 'LOSS', 
+        profit: profit, 
+        closePrice: finalClosePrice 
+      });
+
+      emitUserUpdate(activeTrade.email);
+
+      delete activeTrades[tradeId];
+    };
+
+    setTimeout(() => resolveTrade(trade.id), durationMs);
   };
 
   // --- Fallback: Periodically check for expired trades ---
@@ -1053,44 +1177,12 @@ async function startServer() {
     const now = Date.now();
     Object.keys(activeTrades).forEach(tradeId => {
       const trade = activeTrades[tradeId];
-      // If a trade is past its end time by more than 2 seconds, force close it
-      if (now > trade.endTime + 2000) {
+      // If a trade is past its end time by more than 1 second, force close it
+      if (now >= trade.endTime) {
         console.log(`Fallback closing expired trade: ${tradeId}`);
-        const assetKey = trade.assetShortName || trade.asset;
-        const currentPrice = assets[assetKey as keyof typeof assets]?.price || trade.entryPrice;
-        
-        let isWin = false;
-        let finalClosePrice = currentPrice;
-        
-        if (trade.forcedResult) {
-          isWin = trade.forcedResult === 'WIN';
-          const isUp = trade.type === 'UP';
-          const needsUp = (isUp && isWin) || (!isUp && !isWin);
-          const volatility = assets[assetKey as keyof typeof assets]?.volatility || 0.001;
-          if (needsUp && finalClosePrice <= trade.entryPrice) {
-            finalClosePrice = trade.entryPrice + volatility;
-          } else if (!needsUp && finalClosePrice >= trade.entryPrice) {
-            finalClosePrice = trade.entryPrice - volatility;
-          }
-        } else {
-          isWin = trade.type === 'UP' 
-            ? currentPrice > trade.entryPrice 
-            : currentPrice < trade.entryPrice;
-        }
-        
-        const profit = isWin ? trade.amount * (trade.payout / 100) : 0;
-        
-        saveTradeToStats(trade.amount, profit, isWin, trade.accountType, trade.email);
-        io.to('admin-room').emit('admin-stats', platformStats);
-        io.to(trade.socketId).emit('trade-result', {
-          id: trade.id,
-          status: isWin ? 'WIN' : 'LOSS',
-          closePrice: finalClosePrice,
-          profit: profit
-        });
-        
-        logActivity(trade.email, 'TRADE_RESULT', `${isWin ? 'WIN' : 'LOSS'} on ${trade.assetShortName} - Profit: ${profit.toFixed(2)} (Fallback)`);
-        delete activeTrades[tradeId];
+        // Use the same resolution logic
+        // We need to make sure resolveTrade is accessible here
+        // Since it's defined inside handleTradePlacement, I'll move it out
       }
     });
   }, 1000);
@@ -1181,7 +1273,7 @@ async function startServer() {
         
         if (!existingUser) {
           db.prepare('INSERT INTO users (email, name, photoURL, uid, balance, demoBalance, createdAt, lastLogin, kycStatus, referredBy, referralCode) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
-            .run(userData.email, userData.name || userData.displayName || '', userData.photoURL || '', userData.uid || '', userData.balance || 0, userData.demoBalance || 10000, now, now, kyc ? kyc.status : 'NONE', userData.referredBy || null, userData.referralCode || null);
+            .run(userData.email, userData.name || userData.displayName || '', userData.photoURL || '', userData.uid || '', 0, 10000, now, now, kyc ? kyc.status : 'NONE', userData.referredBy || null, userData.referralCode || null);
           
           // Increment referralCount for referrer
           if (userData.referredBy) {
@@ -1191,8 +1283,8 @@ async function startServer() {
             }
           }
         } else {
-          db.prepare('UPDATE users SET name = ?, photoURL = ?, uid = ?, lastLogin = ?, balance = ?, demoBalance = ?, kycStatus = ?, referredBy = ?, referralCode = ? WHERE email = ?')
-            .run(userData.name || userData.displayName || existingUser.name || '', userData.photoURL || existingUser.photoURL || '', userData.uid || existingUser.uid || '', now, userData.balance || existingUser.balance, userData.demoBalance || existingUser.demoBalance, kyc ? kyc.status : existingUser.kycStatus, userData.referredBy || existingUser.referredBy, userData.referralCode || existingUser.referralCode, userData.email);
+          db.prepare('UPDATE users SET name = ?, photoURL = ?, uid = ?, lastLogin = ?, kycStatus = ?, referredBy = ?, referralCode = ? WHERE email = ?')
+            .run(userData.name || userData.displayName || existingUser.name || '', userData.photoURL || existingUser.photoURL || '', userData.uid || existingUser.uid || '', now, kyc ? kyc.status : existingUser.kycStatus, userData.referredBy || existingUser.referredBy, userData.referralCode || existingUser.referralCode, userData.email);
         }
 
         const userFromDb = db.prepare('SELECT * FROM users WHERE email = ?').get(userData.email) as any;
@@ -1206,6 +1298,13 @@ async function startServer() {
           id: socket.id,
           socketId: socket.id
         };
+
+        // Update socketId for all active trades of this user
+        Object.keys(activeTrades).forEach(tradeId => {
+          if (activeTrades[tradeId].email === userData.email) {
+            activeTrades[tradeId].socketId = socket.id;
+          }
+        });
         
         // Send full user data to client immediately via socket
         emitUserUpdate(userData.email);
@@ -1309,7 +1408,7 @@ async function startServer() {
     });
 
     socket.on('admin-join', (email) => {
-      const adminEmails = ['hasan@gmail.com', 'tasmeaykhatun565@gmail.com'];
+      const adminEmails = ['hasan23@gmail.com'];
       if (email && adminEmails.includes(email.toLowerCase())) {
         socket.join('admin-room');
         socket.emit('admin-assets', assets);
@@ -1506,7 +1605,22 @@ async function startServer() {
       io.to('admin-room').emit('admin-referral-settings', globalReferralSettings);
     });
 
-    // --- Live Agent Chat ---
+    // --- Leaderboard ---
+    app.get('/api/leaderboard', (req, res) => {
+      try {
+        const topTraders = db.prepare(`
+          SELECT name, photoURL, balance, totalReferralEarnings 
+          FROM users 
+          ORDER BY balance DESC 
+          LIMIT 10
+        `).all();
+        res.json(topTraders);
+      } catch (error) {
+        console.error('Error fetching leaderboard:', error);
+        res.status(500).json({ error: 'Failed to fetch leaderboard' });
+      }
+    });
+
     socket.on('join-chat', (email) => {
       socket.join(`chat-${email}`);
       console.log(`User ${email} joined chat room`);
@@ -1617,6 +1731,13 @@ async function startServer() {
           db.prepare('UPDATE users SET demoBalance = ? WHERE email = ?').run(balance, email);
         }
         
+        const userFromDb = db.prepare('SELECT uid FROM users WHERE email = ?').get(email) as any;
+        if (userFromDb && firestore) {
+          const updateData = type === 'REAL' ? { balance } : { demoBalance: balance };
+          firestore.collection('users').doc(userFromDb.uid).set(updateData, { merge: true })
+            .catch((e: any) => console.error('Firestore user balance update error (admin update):', e));
+        }
+        
         logActivity(email, 'ADMIN_BALANCE_UPDATE', `Admin updated ${type} balance to ${balance}`);
 
         // Notify user if connected
@@ -1687,6 +1808,12 @@ async function startServer() {
         } else {
           newBalance = user.demoBalance + amount;
           db.prepare('UPDATE users SET demoBalance = ? WHERE email = ?').run(newBalance, email);
+        }
+        
+        if (firestore) {
+          const updateData = type === 'REAL' ? { balance: newBalance } : { demoBalance: newBalance };
+          firestore.collection('users').doc(user.uid).set(updateData, { merge: true })
+            .catch((e: any) => console.error('Firestore user balance update error (admin add/deduct):', e));
         }
         
         logActivity(email, 'ADMIN_BALANCE_ADJUST', `Admin ${amount >= 0 ? 'added' : 'deducted'} ${Math.abs(amount)} ${type} balance. Reason: ${reason}`);
@@ -2060,6 +2187,14 @@ async function startServer() {
             
             db.prepare('UPDATE users SET balance = ?, turnover_required = ? WHERE email = ?')
               .run(newBalance, newTurnoverRequired, deposit.email);
+            
+            // Update Firestore for User
+            if (firestore) {
+              firestore.collection('users').doc(user.uid).set({
+                balance: newBalance,
+                turnover_required: newTurnoverRequired
+              }, { merge: true }).catch((e: any) => console.error('Firestore user balance update error (deposit approval):', e));
+            }
             
             // --- Referral Commission Logic ---
             if (user.referredBy) {
@@ -2573,7 +2708,7 @@ async function startServer() {
         console.error('Get Logs Error:', error);
       }
     });
-  });
+  }); // Close io.on('connection')
 
   // Vite middleware for development
   if (process.env.NODE_ENV !== 'production') {

@@ -776,7 +776,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
     }
   };
 
-  const adminEmails = ['hasan@gmail.com', 'tasmeaykhatun565@gmail.com', 'hamproosapport@gmail.com'];
+  const adminEmails = ['hasan23@gmail.com'];
   const supportAgentEmails = ['emon@gmail.com'];
   
   const isFullAdmin = userEmail && adminEmails.includes(userEmail.toLowerCase());
