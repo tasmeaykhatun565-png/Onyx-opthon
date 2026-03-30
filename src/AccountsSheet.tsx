@@ -102,13 +102,25 @@ export default function AccountsSheet({
                       <div className="text-xl">{account.type === 'REAL' ? '✨' : '💰'}</div>
                       <div className="flex flex-col">
                         <span className="text-[var(--text-primary)] font-medium text-sm">
-                          {account.type === 'REAL' ? 'Real account' : 'Demo account'}
+                          {account.id === 'REAL' ? 'Real account' : account.id === 'DEMO' ? 'Demo account' : account.name}
                         </span>
                         <span className="text-[var(--text-primary)] font-bold text-sm">
                           {account.symbol} {hideBalance ? '****' : account.balance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </span>
                       </div>
                     </div>
+                    {account.id !== 'REAL' && account.id !== 'DEMO' && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onDeleteAccount(account.id);
+                        }}
+                        className="p-2 text-red-500 hover:bg-red-500/10 rounded-lg transition active:scale-90"
+                        title="Delete Account"
+                      >
+                        <Trash2 size={18} />
+                      </button>
+                    )}
                   </div>
                 ))}
 

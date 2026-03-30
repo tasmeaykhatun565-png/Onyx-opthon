@@ -40,6 +40,7 @@ import HomePage from './HomePage';
 import { ReferralPage } from './ReferralPage';
 import IndicatorSheet from './IndicatorSheet';
 import OnboardingModal from './OnboardingModal';
+import PendingOrderSheet from './PendingOrderSheet';
 
 import { io, Socket } from 'socket.io-client';
 import { ToastProvider } from './Toast';
@@ -445,7 +446,25 @@ function AssetSelector({
   );
 }
 
-function TradeHistoryLog({ trades, onClose, currencySymbol, exchangeRate, onSelectTrade }: { trades: Trade[], onClose: () => void, currencySymbol: string, exchangeRate: number, onSelectTrade: (t: Trade) => void }) {
+function TradeHistoryLog({ 
+  trades, 
+  pendingOrders,
+  onClose, 
+  currencySymbol, 
+  exchangeRate, 
+  onSelectTrade,
+  onCancelPendingOrder
+}: { 
+  trades: Trade[], 
+  pendingOrders: any[],
+  onClose: () => void, 
+  currencySymbol: string, 
+  exchangeRate: number, 
+  onSelectTrade: (t: Trade) => void,
+  onCancelPendingOrder: (id: number) => void
+}) {
+  const [activeTab, setActiveTab] = useState<'CLOSED' | 'PENDING'>('CLOSED');
+
   return (
     <motion.div 
       initial={{ opacity: 0, x: "100%" }}
@@ -462,23 +481,86 @@ function TradeHistoryLog({ trades, onClose, currencySymbol, exchangeRate, onSele
           <h2 className="text-xl font-bold text-white">Trade History</h2>
         </div>
       </div>
+
+      {/* Tabs */}
+      <div className="flex px-4 border-b border-white/10">
+        <button 
+          onClick={() => setActiveTab('CLOSED')}
+          className={cn(
+            "flex-1 py-3 text-sm font-bold transition relative",
+            activeTab === 'CLOSED' ? "text-[#22c55e]" : "text-white/40"
+          )}
+        >
+          Closed
+          {activeTab === 'CLOSED' && <motion.div layoutId="history-tab-underline" className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#22c55e]" />}
+        </button>
+        <button 
+          onClick={() => setActiveTab('PENDING')}
+          className={cn(
+            "flex-1 py-3 text-sm font-bold transition relative",
+            activeTab === 'PENDING' ? "text-[#22c55e]" : "text-white/40"
+          )}
+        >
+          Pending
+          {activeTab === 'PENDING' && <motion.div layoutId="history-tab-underline" className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#22c55e]" />}
+        </button>
+      </div>
       
       <div className="flex-1 overflow-y-auto p-4 space-y-3 scrollbar-hide">
-        {trades.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-20 text-center">
-            <History size={48} className="text-white/10 mb-4" />
-            <p className="text-white/40 text-sm">No trade history yet</p>
-          </div>
+        {activeTab === 'CLOSED' ? (
+          trades.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-20 text-center">
+              <History size={48} className="text-white/10 mb-4" />
+              <p className="text-white/40 text-sm">No trade history yet</p>
+            </div>
+          ) : (
+            trades.map(trade => (
+              <TradeItem 
+                key={trade.id} 
+                trade={trade} 
+                onClick={() => onSelectTrade(trade)} 
+                currencySymbol={currencySymbol} 
+                exchangeRate={exchangeRate}
+              />
+            ))
+          )
         ) : (
-          trades.map(trade => (
-            <TradeItem 
-              key={trade.id} 
-              trade={trade} 
-              onClick={() => onSelectTrade(trade)} 
-              currencySymbol={currencySymbol} 
-              exchangeRate={exchangeRate}
-            />
-          ))
+          pendingOrders.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-20 text-center">
+              <Clock size={48} className="text-white/10 mb-4" />
+              <p className="text-white/40 text-sm">No pending orders</p>
+            </div>
+          ) : (
+            pendingOrders.map(order => (
+              <div key={order.id} className="bg-white/5 rounded-xl p-4 border border-white/10">
+                <div className="flex justify-between items-start mb-2">
+                  <div>
+                    <div className="text-white font-bold text-sm">{order.assetName}</div>
+                    <div className="text-[10px] text-white/40 uppercase font-bold tracking-wider">
+                      {order.type === 'PRICE' ? `Price: ${order.triggerValue}` : `Time: ${format(order.triggerValue, 'HH:mm:ss')}`}
+                    </div>
+                  </div>
+                  <div className={cn(
+                    "px-2 py-0.5 rounded text-[10px] font-bold",
+                    order.direction === 'UP' ? "bg-green-500/20 text-green-500" : "bg-red-500/20 text-red-500"
+                  )}>
+                    {order.direction}
+                  </div>
+                </div>
+                <div className="flex justify-between items-center">
+                  <div className="text-xs text-white/60">
+                    {currencySymbol}{(order.amount * exchangeRate).toFixed(2)}
+                  </div>
+                  <button 
+                    onClick={() => onCancelPendingOrder(order.id)}
+                    className="text-[10px] text-red-500 font-bold hover:underline"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ))
+          )
         )}
       </div>
     </motion.div>
@@ -759,7 +841,13 @@ export default function TradingPlatform() {
 
   useEffect(() => {
     localStorage.setItem('app-extra-accounts', JSON.stringify(extraAccounts));
-  }, [extraAccounts]);
+    if (socket && user) {
+      socket.emit('sync-extra-accounts', {
+        email: user.email,
+        extraAccounts
+      });
+    }
+  }, [extraAccounts, socket, user]);
 
   const [kycStatus, setKycStatus] = useState<'NOT_SUBMITTED' | 'PENDING' | 'APPROVED' | 'REJECTED'>('NOT_SUBMITTED');
   const [kycRejectionReason, setKycRejectionReason] = useState<string | null>(null);
@@ -1007,7 +1095,9 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
   const [isChartSettingsOpen, setIsChartSettingsOpen] = useState(false);
   const [isAccountsSheetOpen, setIsAccountsSheetOpen] = useState(false);
   const [isTradeInputSheetOpen, setIsTradeInputSheetOpen] = useState(false);
+  const [isPendingOrderSheetOpen, setIsPendingOrderSheetOpen] = useState(false);
   const [isRiskManagementOpen, setIsRiskManagementOpen] = useState(false);
+  const [pendingOrders, setPendingOrders] = useState<any[]>([]);
   const [isOnboardingOpen, setIsOnboardingOpen] = useState(false);
 
   useEffect(() => {
@@ -1329,7 +1419,7 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
                 formattedTime: format(currentTFStart, 'HH:mm:ss'),
             };
             const newData = [...prev, newCandle];
-            if (newData.length > 10000) newData.shift();
+            if (newData.length > 20000) newData.shift();
             return newData;
         }
       });
@@ -1483,8 +1573,23 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
 
     socket.on('trade-result', handleTradeResult);
 
+    socket.on('user-pending-orders', (orders: any[]) => {
+      setPendingOrders(orders);
+    });
+
+    socket.on('pending-order-created', (order: any) => {
+      // Toast or notification
+    });
+
+    socket.on('pending-order-executed', (data: { orderId: number, tradeId: string }) => {
+      // Toast or notification
+    });
+
     return () => {
       socket.off('trade-result', handleTradeResult);
+      socket.off('user-pending-orders');
+      socket.off('pending-order-created');
+      socket.off('pending-order-executed');
     };
   }, [socket]);
 
@@ -1621,6 +1726,31 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
       sentTradesRef.current.add(newTrade.id);
       socket.emit('place-trade', newTrade);
       playSound('trade');
+    }
+  };
+
+  const handlePlacePendingOrder = (order: { type: 'PRICE' | 'TIME', value: string, minProfitability: number, direction: 'UP' | 'DOWN' }) => {
+    if (socket && user) {
+      const pendingOrder = {
+        email: user.email,
+        uid: user.uid,
+        assetId: selectedAsset.id,
+        assetName: selectedAsset.name,
+        type: order.type,
+        triggerValue: order.type === 'PRICE' ? parseFloat(order.value) : parseInt(order.value),
+        profitability: order.minProfitability,
+        amount: investment,
+        duration: timerDuration,
+        direction: order.direction,
+        accountType: activeAccount
+      };
+      socket.emit('create-pending-order', pendingOrder);
+    }
+  };
+
+  const handleCancelPendingOrder = (orderId: number) => {
+    if (socket) {
+      socket.emit('cancel-pending-order', orderId);
     }
   };
 
@@ -1975,6 +2105,7 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
         {view === 'TRADES' && (
           <TradesPage 
             trades={trades.filter(t => t.accountType === activeAccount)} 
+            pendingOrders={pendingOrders.filter(o => o.accountType === activeAccount)}
             tickHistory={tickHistory} 
             currentPrice={currentPrice} 
             currentTime={currentTime} 
@@ -1983,6 +2114,7 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
             onViewAsset={() => { setView('TRADING'); setIsAssetSelectorOpen(true); }} 
             currencySymbol={displayCurrencySymbol}
             exchangeRate={currentExchangeRate}
+            onCancelPendingOrder={handleCancelPendingOrder}
           />
         )}
         {view === 'MARKET' && <MarketPage />}
@@ -2170,26 +2302,29 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
               </div>
 
               {/* Row 2: Trade Buttons */}
-              <div className="flex items-center gap-2 h-12 mb-0.5">
+              <div className="flex items-center gap-2 h-10 mb-1">
                 <button 
                   onClick={() => handleTrade('UP')}
-                  className="flex-1 h-full bg-green-500 hover:bg-green-600 active:scale-[0.98] transition rounded-lg flex items-center justify-between px-3 shadow-lg min-h-[44px] z-10"
+                  className="flex-1 h-full bg-[#22c55e] hover:bg-[#16a34a] active:scale-[0.98] transition rounded-lg flex items-center justify-between px-4 shadow-md z-10"
                 >
-                  <span className="font-bold text-white text-sm">Up</span>
-                  <ArrowUp size={20} strokeWidth={3} className="text-white" />
+                  <span className="font-bold text-white text-xs uppercase tracking-wider">Up</span>
+                  <ArrowUp size={18} strokeWidth={3} className="text-white" />
                 </button>
 
                 {/* Middle Clock/Pending Button */}
-                <button className="w-12 h-full bg-[var(--bg-secondary)] hover:bg-[var(--bg-tertiary)] active:scale-[0.95] transition rounded-lg flex items-center justify-center text-[var(--text-primary)] border border-[var(--border-color)] min-h-[44px] z-10">
-                  <Clock size={20} />
+                <button 
+                  onClick={() => setIsPendingOrderSheetOpen(true)}
+                  className="w-10 h-full bg-[var(--bg-secondary)] hover:bg-[var(--bg-tertiary)] active:scale-[0.95] transition rounded-lg flex items-center justify-center text-[var(--text-primary)] border border-[var(--border-color)] z-10"
+                >
+                  <Clock size={18} />
                 </button>
 
                 <button 
                   onClick={() => handleTrade('DOWN')}
-                  className="flex-1 h-full bg-red-500 hover:bg-red-600 active:scale-[0.98] transition rounded-lg flex items-center justify-between px-3 shadow-lg min-h-[44px] z-10"
+                  className="flex-1 h-full bg-[#ff4757] hover:bg-[#ff1f33] active:scale-[0.98] transition rounded-lg flex items-center justify-between px-4 shadow-md z-10"
                 >
-                  <span className="font-bold text-white text-sm">Down</span>
-                  <ArrowDown size={20} strokeWidth={3} className="text-white" />
+                  <span className="font-bold text-white text-xs uppercase tracking-wider">Down</span>
+                  <ArrowDown size={18} strokeWidth={3} className="text-white" />
                 </button>
               </div>
             </>
@@ -2286,6 +2421,14 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
         onInvestmentChange={setInvestment}
         currentPrice={currentPrice}
         currencySymbol={displayCurrencySymbol}
+      />
+
+      <PendingOrderSheet
+        isOpen={isPendingOrderSheetOpen}
+        onClose={() => setIsPendingOrderSheetOpen(false)}
+        assetName={selectedAsset.name}
+        currentPrice={currentPrice}
+        onPlaceOrder={handlePlacePendingOrder}
       />
 
       <RiskManagementSheet
@@ -2658,7 +2801,31 @@ const DetailRow = ({ label, value, valueClassName, showCopy, onCopy }: { label: 
   </div>
 );
 
-function TradesPage({ trades, onViewAsset, tickHistory, currentPrice, currentTime, currentAssetShortName, marketAssets, currencySymbol, exchangeRate }: { trades: Trade[], onViewAsset: () => void, tickHistory: Record<string, TickData[]>, currentPrice: number, currentTime: number, currentAssetShortName: string, marketAssets: Record<string, any>, currencySymbol: string, exchangeRate: number }) {
+function TradesPage({ 
+  trades, 
+  pendingOrders,
+  onViewAsset, 
+  tickHistory, 
+  currentPrice, 
+  currentTime, 
+  currentAssetShortName, 
+  marketAssets, 
+  currencySymbol, 
+  exchangeRate,
+  onCancelPendingOrder
+}: { 
+  trades: Trade[], 
+  pendingOrders: any[],
+  onViewAsset: () => void, 
+  tickHistory: Record<string, TickData[]>, 
+  currentPrice: number, 
+  currentTime: number, 
+  currentAssetShortName: string, 
+  marketAssets: Record<string, any>, 
+  currencySymbol: string, 
+  exchangeRate: number,
+  onCancelPendingOrder: (id: number) => void
+}) {
   const [selectedTrade, setSelectedTrade] = useState<Trade | null>(null);
   const [showHistory, setShowHistory] = useState(false);
   const activeTrades = trades.filter(t => t.status === 'ACTIVE');
@@ -2740,6 +2907,7 @@ function TradesPage({ trades, onViewAsset, tickHistory, currentPrice, currentTim
         {showHistory && (
           <TradeHistoryLog 
             trades={closedTrades} 
+            pendingOrders={pendingOrders}
             onClose={() => setShowHistory(false)} 
             currencySymbol={currencySymbol}
             exchangeRate={exchangeRate}
@@ -2747,6 +2915,7 @@ function TradesPage({ trades, onViewAsset, tickHistory, currentPrice, currentTim
               setSelectedTrade(t);
               setShowHistory(false);
             }}
+            onCancelPendingOrder={onCancelPendingOrder}
           />
         )}
       </AnimatePresence>

@@ -123,20 +123,26 @@ export default function SupportChat({ onClose, supportSettings, socket, userEmai
         setIsTyping(false);
       };
 
-      socket.on('new-chat-message', handleNewMessage);
+      const handleChatHistory = (history: any[]) => {
+        if (history && history.length > 0) {
+          setMessages(history);
+        } else if (selectedCountry) {
+          // Add initial greeting if no messages
+          setMessages([{
+            id: 'welcome',
+            text: selectedCountry.greeting,
+            sender: 'support',
+            timestamp: Date.now()
+          }]);
+        }
+      };
 
-      // Add initial greeting if no messages
-      if (messages.length === 0 && selectedCountry) {
-        setMessages([{
-          id: 'welcome',
-          text: selectedCountry.greeting,
-          sender: 'support',
-          timestamp: Date.now()
-        }]);
-      }
+      socket.on('new-chat-message', handleNewMessage);
+      socket.on('chat-history', handleChatHistory);
 
       return () => {
         socket.off('new-chat-message', handleNewMessage);
+        socket.off('chat-history', handleChatHistory);
       };
     }
   }, [userEmail, chatStep, selectedCountry, socket]);

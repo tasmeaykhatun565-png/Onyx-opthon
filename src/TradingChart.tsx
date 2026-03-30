@@ -345,8 +345,8 @@ export const TradingChart: React.FC<TradingChartProps> = ({
         borderColor: colors.border,
         fixLeftEdge: true,
         fixRightEdge: false, // Allow pulling the candle to the middle
-        minBarSpacing: 5,
-        maxBarSpacing: 50,
+        minBarSpacing: 0.5,
+        maxBarSpacing: 100,
         shiftVisibleRangeOnNewBar: true,
         rightOffset: 45,
         tickMarkFormatter: (time: number) => {
