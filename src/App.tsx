@@ -1616,7 +1616,7 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
       const timer = setTimeout(() => setTradeResults(prev => prev.slice(1)), 3000);
       return () => clearTimeout(timer);
     }
-  }, [tradeResults]);
+  }, [tradeResults.length]);
 
   const getExpirationTime = () => {
     if (tradeMode === 'CLOCK') {
