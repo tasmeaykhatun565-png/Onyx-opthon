@@ -1522,7 +1522,7 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
         socket.emit('place-trade', trade);
       }
     });
-  }, [socket, user, trades]);
+  }, [socket, user, trades.filter(t => t.status === 'ACTIVE').length]);
 
   // Handle Trade Results from Server
   useEffect(() => {

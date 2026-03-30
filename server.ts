@@ -1404,6 +1404,12 @@ async function startServer() {
       trades: []
     };
 
+    socket.on('disconnect', () => {
+      console.log('Client disconnected:', socket.id);
+      delete connectedUsers[socket.id];
+      io.to('admin-room').emit('admin-users', Object.values(connectedUsers));
+    });
+
     // Handle user authentication/sync from client
     socket.on('user-sync', (userData) => {
       if (userData && userData.email) {
