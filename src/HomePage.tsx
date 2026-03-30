@@ -9,28 +9,24 @@ import {
   Globe, 
   Smartphone, 
   Users, 
-  Trophy,
   CheckCircle2,
   TrendingUp,
   Clock,
-  Wallet,
-  ChevronDown,
-  ChevronUp,
-  Star,
   Play,
   Download,
   Lock,
-  CreditCard,
   HeadphonesIcon,
   ChevronRight,
   Activity,
   AlertTriangle,
   FileText,
   Building,
-  BookOpen,
-  Target,
-  Youtube,
-  Upload
+  Upload,
+  CreditCard,
+  Star,
+  ChevronDown,
+  ChevronUp,
+  Target
 } from 'lucide-react';
 import { cn } from './utils';
 
@@ -531,62 +527,6 @@ export default function HomePage({ onStartTrading, onLogin, onNavigate, tutorial
           </div>
         </div>
       </motion.section>
-      <motion.section 
-        initial={{ opacity: 0, y: 30 }}
-        whileInView={{ opacity: 1, y: 0 }}
-        viewport={{ once: true }}
-        transition={{ duration: 0.8 }}
-        className="py-32"
-      >
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex flex-col md:flex-row justify-between items-end gap-8 mb-20">
-            <div className="max-w-2xl">
-              <h2 className="text-3xl md:text-5xl font-bold mb-6">Trading Education Hub</h2>
-              <p className="text-[var(--text-secondary)]">Master the markets with our comprehensive learning materials. From basics to advanced strategies, we have you covered.</p>
-            </div>
-            <button onClick={() => onNavigate('Education Hub')} className="px-8 py-4 bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-2xl font-bold hover:bg-[var(--bg-tertiary)] transition-all">
-              Browse All Tutorials
-            </button>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            {tutorials.length > 0 ? (
-              tutorials.slice(0, 3).map((video, idx) => (
-                <a key={video.id || idx} href={video.link} target="_blank" rel="noopener noreferrer">
-                  <EducationCard 
-                    icon={<Youtube size={64} />}
-                    category={video.category}
-                    title={video.title}
-                    duration={video.duration}
-                  />
-                </a>
-              ))
-            ) : (
-              <>
-                <EducationCard 
-                  icon={<BookOpen size={64} />}
-                  category="Basics"
-                  title="Introduction to Binary Options"
-                  duration="15 min read"
-                />
-                <EducationCard 
-                  icon={<Target size={64} />}
-                  category="Strategy"
-                  title="Mastering Support & Resistance"
-                  duration="25 min read"
-                />
-                <EducationCard 
-                  icon={<Activity size={64} />}
-                  category="Advanced"
-                  title="Psychology of Professional Trading"
-                  duration="20 min read"
-                />
-              </>
-            )}
-          </div>
-        </div>
-      </motion.section>
-
       {/* News Feed Section */}
       <motion.section 
         initial={{ opacity: 0, y: 30 }}
@@ -956,43 +896,6 @@ export default function HomePage({ onStartTrading, onLogin, onNavigate, tutorial
         </div>
       </motion.section>
 
-      {/* Testimonials */}
-      <motion.section 
-        initial={{ opacity: 0, y: 50 }}
-        whileInView={{ opacity: 1, y: 0 }}
-        viewport={{ once: true, margin: "-100px" }}
-        transition={{ duration: 0.8 }}
-        className="py-32 bg-[var(--bg-primary)]"
-      >
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-20">
-            <h2 className="text-3xl md:text-5xl font-bold mb-6">Trusted by Millions</h2>
-            <p className="text-[var(--text-secondary)] max-w-2xl mx-auto">Hear from our community of professional traders from around the globe.</p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            <TestimonialCard 
-              name="Alex Rivera"
-              role="Professional Trader"
-              content="ONYX OPTION has the fastest execution I've ever experienced. The interface is clean and the indicators are top-notch."
-              rating={5}
-            />
-            <TestimonialCard 
-              name="Sarah Chen"
-              role="Crypto Analyst"
-              content="The payout rates are consistently higher than other platforms. I've been using it for 2 years and the withdrawals are always fast."
-              rating={5}
-            />
-            <TestimonialCard 
-              name="Marcus Thorne"
-              role="Full-time Scalper"
-              content="The mobile app is a game changer. I can manage my positions on the go with the same precision as the desktop version."
-              rating={5}
-            />
-          </div>
-        </div>
-      </motion.section>
-
       {/* FAQ Section */}
       <motion.section 
         id="faq" 
@@ -1231,90 +1134,11 @@ function LiveTradeRow({ asset, time, amount, profit, isWin }: { asset: string; t
   );
 }
 
-function TestimonialCard({ name, role, content, rating }: { name: string; role: string; content: string; rating: number }) {
-  return (
-    <motion.div 
-      initial={{ opacity: 0, y: 20 }}
-      whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true }}
-      whileHover={{ y: -5 }}
-      className="p-8 rounded-3xl bg-[var(--bg-secondary)] border border-[var(--border-color)] flex flex-col"
-    >
-      <div className="flex gap-1 mb-6">
-        {[...Array(rating)].map((_, i) => (
-          <Star key={i} size={16} className="text-yellow-500 fill-yellow-500" />
-        ))}
-      </div>
-      <p className="text-[var(--text-secondary)] italic mb-8 leading-relaxed">"{content}"</p>
-      <div className="mt-auto flex items-center gap-4">
-        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-indigo-500" />
-        <div>
-          <h4 className="font-bold text-sm text-[var(--text-primary)]">{name}</h4>
-          <p className="text-xs text-[var(--text-secondary)]">{role}</p>
-        </div>
-      </div>
-    </motion.div>
-  );
-}
-
-function FAQItem({ question, answer }: { question: string; answer: string }) {
-  const [isOpen, setIsOpen] = useState(false);
-  return (
-    <div className="rounded-2xl border border-[var(--border-color)] bg-[var(--bg-secondary)] overflow-hidden">
-      <button 
-        onClick={() => setIsOpen(!isOpen)}
-        className="w-full p-6 flex items-center justify-between text-left hover:bg-[var(--bg-tertiary)] transition-colors"
-      >
-        <span className="font-bold text-[var(--text-primary)]">{question}</span>
-        {isOpen ? <ChevronUp size={20} className="text-[var(--text-secondary)]" /> : <ChevronDown size={20} className="text-[var(--text-secondary)]" />}
-      </button>
-      <AnimatePresence>
-        {isOpen && (
-          <motion.div 
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: "auto", opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            className="px-6 pb-6 text-[var(--text-secondary)] text-sm leading-relaxed"
-          >
-            {answer}
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </div>
-  );
-}
-
 function SocialLink({ icon }: { icon: React.ReactNode }) {
   return (
     <a href="#" className="w-10 h-10 rounded-xl bg-[var(--bg-secondary)] border border-[var(--border-color)] flex items-center justify-center text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)] transition-all">
       {icon}
     </a>
-  );
-}
-
-function EducationCard({ icon, category, title, duration }: { icon: React.ReactNode; category: string; title: string; duration: string }) {
-  return (
-    <motion.div 
-      initial={{ opacity: 0, y: 20 }}
-      whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true }}
-      className="group cursor-pointer"
-    >
-      <div className="relative aspect-video rounded-3xl overflow-hidden mb-6 bg-gradient-to-br from-[var(--bg-secondary)] to-[var(--bg-secondary)]/[0.5] border border-[var(--border-color)] flex items-center justify-center">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(59,130,246,0.1)_0%,transparent_70%)] opacity-0 group-hover:opacity-100 transition-opacity duration-700" />
-        <div className="text-[var(--text-secondary)] group-hover:text-blue-500/50 transition-colors duration-700 group-hover:scale-110 transform">
-          {icon}
-        </div>
-        <div className="absolute top-4 left-4 px-4 py-2 bg-[var(--bg-primary)]/60 backdrop-blur-md rounded-xl text-[10px] font-bold uppercase tracking-widest text-blue-400 border border-[var(--border-color)]">
-          {category}
-        </div>
-      </div>
-      <h3 className="text-xl font-bold mb-3 text-[var(--text-primary)] group-hover:text-blue-500 transition-colors">{title}</h3>
-      <div className="flex items-center gap-4 text-[var(--text-secondary)] text-xs">
-        <span className="flex items-center gap-1"><Clock size={14} /> {duration}</span>
-        <span className="flex items-center gap-1 text-blue-500 font-bold">Read More <ChevronRight size={14} /></span>
-      </div>
-    </motion.div>
   );
 }
 
@@ -1346,6 +1170,33 @@ function DocumentCard({ icon, title, description, size, date }: { icon: React.Re
         </div>
       </div>
     </motion.div>
+  );
+}
+
+function FAQItem({ question, answer }: { question: string; answer: string }) {
+  const [isOpen, setIsOpen] = useState(false);
+  return (
+    <div className="rounded-2xl border border-[var(--border-color)] bg-[var(--bg-secondary)] overflow-hidden">
+      <button 
+        onClick={() => setIsOpen(!isOpen)}
+        className="w-full p-6 flex items-center justify-between text-left hover:bg-[var(--bg-tertiary)] transition-colors"
+      >
+        <span className="font-bold text-[var(--text-primary)]">{question}</span>
+        {isOpen ? <ChevronUp size={20} className="text-[var(--text-secondary)]" /> : <ChevronDown size={20} className="text-[var(--text-secondary)]" />}
+      </button>
+      <AnimatePresence>
+        {isOpen && (
+          <motion.div 
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            className="px-6 pb-6 text-[var(--text-secondary)] text-sm leading-relaxed"
+          >
+            {answer}
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
   );
 }
 

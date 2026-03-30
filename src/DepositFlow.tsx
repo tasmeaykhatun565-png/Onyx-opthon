@@ -109,46 +109,46 @@ const SummaryView = ({ onClose, selectedMethod, amount, currencyCode, currencySy
   return (
     <div className="flex flex-col flex-1 min-h-0 bg-[#0a0a0a] text-white">
       {/* Header */}
-      <div className="p-4 flex items-center justify-between shrink-0">
-        <h2 className="text-xl font-bold text-white">Deposit</h2>
+      <div className="p-3 flex items-center justify-between shrink-0 border-b border-white/5">
+        <h2 className="text-lg font-bold text-white">Deposit</h2>
         <button 
           onClick={(e) => {
             e.stopPropagation();
             onClose();
           }} 
-          className="p-2 hover:bg-white/10 rounded-full transition cursor-pointer"
+          className="p-1.5 hover:bg-white/10 rounded-full transition cursor-pointer"
         >
-          <X size={24} className="text-white" />
+          <X size={20} className="text-white" />
         </button>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-4 space-y-4 pb-16">
+      <div className="flex-1 overflow-y-auto px-3 space-y-3 pb-12 scrollbar-hide">
         {/* Account Info */}
-        <div className="px-1">
-          <p className="text-[14px] text-[#7E7E7E] font-medium">
+        <div className="px-1 pt-2">
+          <p className="text-[12px] text-[#7E7E7E] font-medium">
             {currencyCode} Account #{userId?.slice(-10).toUpperCase() || '2914496110'}
           </p>
         </div>
 
-        <div className="space-y-4">
+        <div className="space-y-2">
           {/* Payment Method Selector */}
           <button 
             onClick={(e) => {
               e.stopPropagation();
               setStep('PAYMENT_METHOD');
             }}
-            className="w-full bg-[#1a1b1e] rounded-xl p-4 flex items-center justify-between hover:bg-[#25262b] transition-all cursor-pointer group"
+            className="w-full bg-[#1a1b1e] rounded-lg p-3 flex items-center justify-between hover:bg-[#25262b] transition-all cursor-pointer group border border-white/5"
           >
-            <div className="flex items-center gap-4">
-              <div className="w-10 h-10 flex items-center justify-center bg-[#25262b] rounded-lg">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 flex items-center justify-center bg-[#25262b] rounded-md">
                 {selectedMethod.icon}
               </div>
               <div className="text-left">
-                <p className="text-[13px] text-[#7E7E7E] font-medium">Payment method</p>
-                <p className="text-base font-bold text-white">{selectedMethod.name}</p>
+                <p className="text-[11px] text-[#7E7E7E] font-medium">Payment method</p>
+                <p className="text-sm font-bold text-white">{selectedMethod.name}</p>
               </div>
             </div>
-            <ChevronRight size={24} className="text-[#7E7E7E]" />
+            <ChevronRight size={18} className="text-[#7E7E7E]" />
           </button>
 
           {/* Amount Selector */}
@@ -157,13 +157,13 @@ const SummaryView = ({ onClose, selectedMethod, amount, currencyCode, currencySy
               e.stopPropagation();
               setStep('AMOUNT_SELECTION');
             }}
-            className="w-full bg-[#1a1b1e] rounded-xl p-4 flex items-center justify-between hover:bg-[#25262b] transition-all cursor-pointer group"
+            className="w-full bg-[#1a1b1e] rounded-lg p-3 flex items-center justify-between hover:bg-[#25262b] transition-all cursor-pointer group border border-white/5"
           >
             <div className="text-left">
-              <p className="text-[13px] text-[#7E7E7E] font-medium">Amount</p>
-              <p className="text-base font-bold text-white">{currencyCode} {amount.toLocaleString()}</p>
+              <p className="text-[11px] text-[#7E7E7E] font-medium">Amount</p>
+              <p className="text-sm font-bold text-white">{currencyCode} {amount.toLocaleString()}</p>
             </div>
-            <ChevronRight size={24} className="text-[#7E7E7E]" />
+            <ChevronRight size={18} className="text-[#7E7E7E]" />
           </button>
 
           {/* Promo Code Selector */}
@@ -172,35 +172,35 @@ const SummaryView = ({ onClose, selectedMethod, amount, currencyCode, currencySy
               e.stopPropagation();
               setStep('PROMO_SELECTION');
             }}
-            className="w-full bg-[#1a1b1e] rounded-xl p-4 flex items-center justify-between hover:bg-[#25262b] transition-all cursor-pointer group"
+            className="w-full bg-[#1a1b1e] rounded-lg p-3 flex items-center justify-between hover:bg-[#25262b] transition-all cursor-pointer group border border-white/5"
           >
             <div className="text-left">
-              <p className="text-[13px] text-[#7E7E7E] font-medium">Promo Code</p>
-              <p className="text-base font-bold text-white">
+              <p className="text-[11px] text-[#7E7E7E] font-medium">Promo Code</p>
+              <p className="text-sm font-bold text-white">
                 {selectedPromo === 'ACTIVE' ? promoInput : 'Choose Promo Code'}
               </p>
             </div>
             <div className="flex items-center gap-2">
               {selectedPromo === 'ACTIVE' ? (
-                <div className="bg-[#00ff00]/10 text-[#00ff00] text-xs font-bold px-2 py-1 rounded">
+                <div className="bg-[#00ff00]/10 text-[#00ff00] text-[10px] font-bold px-1.5 py-0.5 rounded">
                   {promoCodes.find((p: any) => p.code === promoInput)?.bonusPercentage || 0}% BONUS
                 </div>
               ) : (
-                <span className="text-base font-bold text-white">{promoCodes?.length || 0}</span>
+                <span className="text-sm font-bold text-white">{promoCodes?.length || 0}</span>
               )}
-              <ChevronRight size={24} className="text-[#7E7E7E]" />
+              <ChevronRight size={18} className="text-[#7E7E7E]" />
             </div>
           </button>
 
           {selectedPromo === 'ACTIVE' && (
-            <div className="bg-[#00ff00]/5 border border-[#00ff00]/20 rounded-xl p-4">
-              <div className="flex justify-between items-center">
+            <div className="bg-[#00ff00]/5 border border-[#00ff00]/10 rounded-lg p-3">
+              <div className="flex justify-between items-center text-xs">
                 <span className="text-[#7E7E7E]">Bonus Amount</span>
                 <span className="text-[#00ff00] font-bold">
                   +{currencyCode} {Math.round(amount * ((promoCodes.find((p: any) => p.code === promoInput)?.bonusPercentage || 0) / 100)).toLocaleString()}
                 </span>
               </div>
-              <div className="flex justify-between items-center mt-2 pt-2 border-t border-white/5">
+              <div className="flex justify-between items-center mt-1.5 pt-1.5 border-t border-white/5 text-xs">
                 <span className="text-[#7E7E7E]">Total to Receive</span>
                 <span className="text-white font-bold">
                   {currencyCode} {(amount + Math.round(amount * ((promoCodes.find((p: any) => p.code === promoInput)?.bonusPercentage || 0) / 100))).toLocaleString()}
@@ -210,22 +210,22 @@ const SummaryView = ({ onClose, selectedMethod, amount, currencyCode, currencySy
           )}
         </div>
 
-        <div className="pt-2 space-y-8">
+        <div className="pt-1 space-y-4">
           <button 
             onClick={(e) => {
               e.stopPropagation();
               handleNextToDetails();
             }}
-            className="w-full bg-[#00ff00] hover:bg-[#00e600] text-black font-bold py-4 rounded-xl transition-all active:scale-[0.98] text-lg cursor-pointer"
+            className="w-full bg-[#00ff00] hover:bg-[#00e600] text-black font-bold py-3 rounded-lg transition-all active:scale-[0.98] text-base cursor-pointer shadow-lg shadow-green-500/10"
           >
             Next
           </button>
 
-          <div className="flex flex-col items-center text-center space-y-4">
-            <div className="w-10 h-10 rounded-xl flex items-center justify-center text-[#7E7E7E] border border-white/10">
-              <Lock size={24} />
+          <div className="flex flex-col items-center text-center space-y-2">
+            <div className="w-8 h-8 rounded-lg flex items-center justify-center text-[#7E7E7E] border border-white/5">
+              <Lock size={18} />
             </div>
-            <p className="text-[13px] text-[#7E7E7E] max-w-[300px] leading-relaxed">
+            <p className="text-[11px] text-[#7E7E7E] max-w-[260px] leading-tight">
               Your data is encrypted using 256-bit SSL certificates, providing you with the strongest security available
             </p>
           </div>
@@ -267,48 +267,48 @@ const PaymentMethodSelection = ({ handleBack, selectedMethod, setSelectedMethod,
     return (
       <div className="flex flex-col flex-1 min-h-0 bg-[#0a0a0a] text-white">
         {/* Header */}
-        <div className="p-3 flex items-center justify-between border-b border-white/5">
+        <div className="p-2 flex items-center justify-between border-b border-white/5">
           <button 
             onClick={(e) => {
               e.stopPropagation();
               handleBack();
             }} 
-            className="p-2 -ml-2 hover:bg-white/5 rounded-full transition cursor-pointer"
+            className="p-1.5 -ml-1 hover:bg-white/5 rounded-full transition cursor-pointer"
           >
-            <ChevronLeft size={24} className="text-white" />
+            <ChevronLeft size={20} className="text-white" />
           </button>
-          <h2 className="text-base font-bold text-white">Deposit</h2>
-          <div className="w-10" />
+          <h2 className="text-sm font-bold text-white">Deposit</h2>
+          <div className="w-8" />
         </div>
 
-        <div className="flex-1 overflow-y-auto p-3 space-y-3 scrollbar-hide pb-10">
+        <div className="flex-1 overflow-y-auto p-2 space-y-2 scrollbar-hide pb-8">
           {/* Selected Method Box (Matches Image Header) */}
-          <div className="w-full bg-[#1a1b1e] rounded-xl border border-blue-500/50 p-3 flex items-center justify-between shadow-lg">
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 flex items-center justify-center bg-[#25262b] rounded-lg">
+          <div className="w-full bg-[#1a1b1e] rounded-lg border border-blue-500/30 p-2.5 flex items-center justify-between shadow-lg">
+            <div className="flex items-center gap-2.5">
+              <div className="w-7 h-7 flex items-center justify-center bg-[#25262b] rounded-md">
                 {selectedMethod.icon}
               </div>
-              <span className="text-lg font-bold text-white">{selectedMethod.name}</span>
+              <span className="text-base font-bold text-white">{selectedMethod.name}</span>
             </div>
-            <ChevronRight size={20} className="text-white rotate-[-90deg]" />
+            <ChevronRight size={18} className="text-white rotate-[-90deg]" />
           </div>
 
           {/* Search Bar (Matches Image) */}
           <div className="relative">
-            <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none">
-              <Search size={18} className="text-[#7E7E7E]" />
+            <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none">
+              <Search size={16} className="text-[#7E7E7E]" />
             </div>
             <input 
               type="text"
               placeholder="Search by deposit method"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-[#1a1b1e] border border-white/10 rounded-xl py-3 pl-12 pr-4 text-white text-sm focus:outline-none focus:border-blue-500/30 transition-all placeholder-[#7E7E7E]"
+              className="w-full bg-[#1a1b1e] border border-white/5 rounded-lg py-2.5 pl-10 pr-3 text-white text-xs focus:outline-none focus:border-blue-500/20 transition-all placeholder-[#7E7E7E]"
             />
           </div>
 
           {/* Methods List (Matches Image) */}
-          <div className="bg-[#1a1b1e] rounded-xl overflow-hidden border border-white/5">
+          <div className="bg-[#1a1b1e] rounded-lg overflow-hidden border border-white/5">
             {filteredMethods.map(method => {
               const isSelected = method.id === selectedMethod.id;
               return (
@@ -320,18 +320,18 @@ const PaymentMethodSelection = ({ handleBack, selectedMethod, setSelectedMethod,
                     setStep('SUMMARY');
                   }}
                   className={cn(
-                    "w-full flex items-center gap-4 p-3 transition-all text-left cursor-pointer group",
+                    "w-full flex items-center gap-3 p-2.5 transition-all text-left cursor-pointer group",
                     isSelected ? "bg-[#3b82f6] text-white" : "hover:bg-white/5 text-[#7E7E7E]"
                   )}
                 >
                   <div className={cn(
-                    "w-10 h-10 rounded-lg flex items-center justify-center shrink-0 border transition-colors",
+                    "w-8 h-8 rounded-md flex items-center justify-center shrink-0 border transition-colors",
                     isSelected ? "bg-white/20 border-white/20" : "bg-[#25262b] border-white/10"
                   )}>
                     {method.icon}
                   </div>
                   <span className={cn(
-                    "text-base font-bold flex-1",
+                    "text-sm font-bold flex-1",
                     isSelected ? "text-white" : "text-white/90"
                   )}>
                     {method.name}
@@ -354,33 +354,33 @@ const AmountSelection = ({ handleBack, amount, setAmount, amountError, setAmount
     return (
       <div className="flex flex-col flex-1 min-h-0 bg-[#0a0a0a] text-white">
         {/* Header */}
-        <div className="p-3 flex items-center justify-between border-b border-white/5">
+        <div className="p-2 flex items-center justify-between border-b border-white/5">
           <button 
             onClick={(e) => {
               e.stopPropagation();
               handleBack();
             }} 
-            className="p-2 -ml-2 hover:bg-white/5 rounded-full transition cursor-pointer"
+            className="p-1.5 -ml-1 hover:bg-white/5 rounded-full transition cursor-pointer"
           >
-            <ChevronLeft size={24} className="text-white" />
+            <ChevronLeft size={20} className="text-white" />
           </button>
-          <h2 className="text-base font-bold text-white">Deposit</h2>
-          <div className="w-10" />
+          <h2 className="text-sm font-bold text-white">Deposit</h2>
+          <div className="w-8" />
         </div>
 
-        <div className="px-3 pb-1 pt-3">
-          <h1 className="text-xl font-bold text-white mb-4">Deposit Amount</h1>
+        <div className="px-3 pb-1 pt-2">
+          <h1 className="text-lg font-bold text-white mb-2">Deposit Amount</h1>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-3 space-y-6 pb-16 scrollbar-hide">
+        <div className="flex-1 overflow-y-auto px-3 space-y-4 pb-12 scrollbar-hide">
           {/* Input Field */}
-          <div className="space-y-2">
-            <label className="text-[11px] text-[#7E7E7E] font-black uppercase tracking-[0.15em] ml-1">Enter Amount</label>
+          <div className="space-y-1.5">
+            <label className="text-[10px] text-[#7E7E7E] font-black uppercase tracking-[0.15em] ml-1">Enter Amount</label>
             <div className={cn(
-              "bg-[#1a1b1e] rounded-2xl p-4 border-2 transition-all shadow-inner flex items-center gap-4",
-              amountError ? "border-red-500" : "border-transparent focus-within:border-[#00ff00]/30"
+              "bg-[#1a1b1e] rounded-xl p-3 border-2 transition-all shadow-inner flex items-center gap-3",
+              amountError ? "border-red-500" : "border-transparent focus-within:border-[#00ff00]/20"
             )}>
-              <span className="text-2xl font-black text-[#7E7E7E]">{currencySymbol}</span>
+              <span className="text-xl font-black text-[#7E7E7E]">{currencySymbol}</span>
               <input 
                 type="number" 
                 value={isNaN(amount) || !amount ? '' : amount}
@@ -390,18 +390,18 @@ const AmountSelection = ({ handleBack, amount, setAmount, amountError, setAmount
                   setAmount(num);
                   setAmountError(null);
                 }}
-                className="w-full bg-transparent text-3xl font-black text-white focus:outline-none placeholder-[#7E7E7E]/30"
+                className="w-full bg-transparent text-2xl font-black text-white focus:outline-none placeholder-[#7E7E7E]/20"
                 placeholder="0.00"
                 autoFocus
               />
             </div>
-            {amountError && <p className="text-xs text-red-500 font-bold ml-1">{amountError}</p>}
+            {amountError && <p className="text-[10px] text-red-500 font-bold ml-1">{amountError}</p>}
           </div>
 
           {/* Preset Grid */}
-          <div className="space-y-3">
-            <label className="text-[11px] text-[#7E7E7E] font-black uppercase tracking-[0.15em] ml-1">Quick Select</label>
-            <div className="grid grid-cols-3 gap-2">
+          <div className="space-y-2">
+            <label className="text-[10px] text-[#7E7E7E] font-black uppercase tracking-[0.15em] ml-1">Quick Select</label>
+            <div className="grid grid-cols-3 gap-1.5">
               {presets.map(val => (
                 <button
                   key={val}
@@ -411,8 +411,8 @@ const AmountSelection = ({ handleBack, amount, setAmount, amountError, setAmount
                     setAmountError(null);
                   }}
                   className={cn(
-                    "py-3 rounded-xl bg-[#1a1b1e] transition-all font-black text-sm border-2 active:scale-95",
-                    amount === val ? "border-[#00ff00] text-[#00ff00] bg-[#00ff00]/5" : "border-transparent text-white hover:border-white/20"
+                    "py-2.5 rounded-lg bg-[#1a1b1e] transition-all font-black text-xs border-2 active:scale-95",
+                    amount === val ? "border-[#00ff00] text-[#00ff00] bg-[#00ff00]/5" : "border-transparent text-white hover:border-white/10"
                   )}
                 >
                   {currencySymbol}{val.toLocaleString()}
@@ -422,7 +422,7 @@ const AmountSelection = ({ handleBack, amount, setAmount, amountError, setAmount
           </div>
 
           {/* Confirm Button */}
-          <div className="pt-4">
+          <div className="pt-2">
             <button 
               disabled={!!amountError || !amount || amount < minDeposit}
               onClick={(e) => {
@@ -430,15 +430,15 @@ const AmountSelection = ({ handleBack, amount, setAmount, amountError, setAmount
                 setStep('SUMMARY');
               }}
               className={cn(
-                "w-full font-black py-4 rounded-xl transition-all active:scale-[0.98] text-lg shadow-lg cursor-pointer",
+                "w-full font-black py-3 rounded-lg transition-all active:scale-[0.98] text-base shadow-lg cursor-pointer",
                 (!amountError && amount >= minDeposit) 
-                  ? "bg-[#00ff00] text-black shadow-green-500/20" 
+                  ? "bg-[#00ff00] text-black shadow-green-500/10" 
                   : "bg-[#1a1b1e] text-[#7E7E7E] cursor-not-allowed opacity-50"
               )}
             >
               Confirm Amount
             </button>
-            <p className="text-center text-[10px] text-[#7E7E7E] mt-4 font-medium">
+            <p className="text-center text-[9px] text-[#7E7E7E] mt-3 font-medium">
               Minimum deposit for {currencyCode} is {currencySymbol}{minDeposit}
             </p>
           </div>
@@ -496,28 +496,28 @@ const PromoSelection = ({ handleBack, amount, currencyCode, currencySymbol, depo
     return (
       <div className="flex flex-col flex-1 min-h-0 bg-[#0a0a0a] text-white">
         {/* Header */}
-        <div className="p-3 flex items-center justify-between border-b border-white/5">
+        <div className="p-2 flex items-center justify-between border-b border-white/5">
           <button 
             onClick={(e) => {
               e.stopPropagation();
               handleBack();
             }} 
-            className="p-2 -ml-2 hover:bg-white/5 rounded-full transition cursor-pointer"
+            className="p-1.5 -ml-1 hover:bg-white/5 rounded-full transition cursor-pointer"
           >
-            <ChevronLeft size={24} className="text-white" />
+            <ChevronLeft size={20} className="text-white" />
           </button>
-          <h2 className="text-base font-bold text-white">Deposit</h2>
-          <div className="w-10" />
+          <h2 className="text-sm font-bold text-white">Deposit</h2>
+          <div className="w-8" />
         </div>
 
-        <div className="px-3 pb-1 pt-3">
-          <h1 className="text-xl font-bold text-white mb-4">Choose Promo Code</h1>
+        <div className="px-3 pb-1 pt-2">
+          <h1 className="text-lg font-bold text-white mb-2">Choose Promo Code</h1>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-3 space-y-3 pb-16 scrollbar-hide">
+        <div className="flex-1 overflow-y-auto px-3 space-y-2 pb-12 scrollbar-hide">
           {/* Manual Entry */}
-          <div className="bg-[#1a1b1e] rounded-xl p-4 shadow-sm border border-white/10">
-            <label className="block text-[12px] text-[#7E7E7E] uppercase font-bold mb-2">Enter Manual Code</label>
+          <div className="bg-[#1a1b1e] rounded-lg p-3 shadow-sm border border-white/5">
+            <label className="block text-[10px] text-[#7E7E7E] uppercase font-bold mb-1.5">Enter Manual Code</label>
             <div className="flex gap-2">
               <input 
                 type="text"
@@ -529,26 +529,26 @@ const PromoSelection = ({ handleBack, amount, currencyCode, currencySymbol, depo
                 }}
                 placeholder="PROMO123"
                 className={cn(
-                  "flex-1 bg-black/20 border rounded-xl px-4 py-3 text-white focus:outline-none transition",
+                  "flex-1 bg-black/20 border rounded-lg px-3 py-2 text-xs text-white focus:outline-none transition",
                   error ? "border-red-500/50 focus:border-red-500" : "border-white/10 focus:border-[#00ff00]"
                 )}
               />
               <button 
                 onClick={() => validateAndApply(manualCode)}
                 disabled={!manualCode}
-                className="bg-[#00ff00] text-black font-bold px-6 rounded-xl hover:bg-[#00dd00] transition disabled:opacity-50 disabled:cursor-not-allowed"
+                className="bg-[#00ff00] text-black font-bold px-4 rounded-lg hover:bg-[#00dd00] transition disabled:opacity-50 disabled:cursor-not-allowed text-xs"
               >
                 Apply
               </button>
             </div>
-            {error && <p className="text-red-500 text-xs mt-2">{error}</p>}
+            {error && <p className="text-red-500 text-[10px] mt-1.5">{error}</p>}
           </div>
 
-          <div className="relative">
+          <div className="relative py-1">
             <div className="absolute inset-0 flex items-center">
               <div className="w-full border-t border-white/5"></div>
             </div>
-            <div className="relative flex justify-center text-xs uppercase">
+            <div className="relative flex justify-center text-[10px] uppercase">
               <span className="bg-[#0a0a0a] px-2 text-[#7E7E7E]">Or choose from active</span>
             </div>
           </div>
@@ -562,21 +562,21 @@ const PromoSelection = ({ handleBack, amount, currencyCode, currencySymbol, depo
               const isMinNotMet = (amount / rate) < promo.minDeposit;
 
               return (
-                <div key={promo.id} className={`bg-[#1a1b1e] rounded-xl overflow-hidden shadow-sm border border-white/10 ${isExpired ? 'opacity-50 grayscale' : ''}`}>
-                  <div className="p-4 relative">
-                    <div className="text-[12px] text-[#7E7E7E] mb-1">
+                <div key={promo.id} className={`bg-[#1a1b1e] rounded-lg overflow-hidden shadow-sm border border-white/5 ${isExpired ? 'opacity-50 grayscale' : ''}`}>
+                  <div className="p-3 relative">
+                    <div className="text-[10px] text-[#7E7E7E] mb-0.5">
                       {isExpired ? 'Expired' : `Expires on ${new Date(promo.expiresAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`}
                     </div>
-                    <h3 className="text-lg font-bold text-white mb-3">{promo.title || 'Deposit Bonus'}</h3>
-                    <p className="text-[14px] text-[#7E7E7E] max-w-[240px]">
+                    <h3 className="text-base font-bold text-white mb-2">{promo.title || 'Deposit Bonus'}</h3>
+                    <p className="text-[12px] text-[#7E7E7E] max-w-[200px] leading-tight">
                       Use {promo.code} when depositing {currencyCode} {Math.round(promo.minDeposit * rate).toLocaleString()}+
                     </p>
                     
                     {/* Badge */}
-                    <div className="absolute top-4 right-4">
-                      <div className="relative w-14 h-14 flex items-center justify-center">
+                    <div className="absolute top-3 right-3">
+                      <div className="relative w-11 h-11 flex items-center justify-center">
                         <div className={`absolute inset-0 bg-[#00ff00] rounded-full opacity-20 ${!isExpired ? 'animate-pulse' : ''}`} />
-                        <div className="bg-[#00ff00] text-black text-[10px] font-bold px-2 py-1 rounded-lg rotate-[-15deg] shadow-sm z-10 text-center leading-tight">
+                        <div className="bg-[#00ff00] text-black text-[9px] font-bold px-1.5 py-0.5 rounded-md rotate-[-15deg] shadow-sm z-10 text-center leading-tight">
                           UP TO<br/>{promo.bonusPercentage}%
                         </div>
                       </div>
@@ -591,7 +591,7 @@ const PromoSelection = ({ handleBack, amount, currencyCode, currencySymbol, depo
                       setSelectedPromo('ACTIVE');
                       setStep('SUMMARY');
                     }}
-                    className={`w-full py-4 border-t border-white/5 font-bold transition cursor-pointer ${isExpired || isMinNotMet ? 'text-[#7E7E7E] cursor-not-allowed' : 'text-[#00ff00] hover:bg-white/5'}`}
+                    className={`w-full py-2.5 border-t border-white/5 font-bold transition cursor-pointer text-xs ${isExpired || isMinNotMet ? 'text-[#7E7E7E] cursor-not-allowed' : 'text-[#00ff00] hover:bg-white/5'}`}
                   >
                     {isExpired ? 'Expired' : isMinNotMet ? 'Min. Deposit Not Met' : 'Apply Promo Code'}
                   </button>
@@ -599,7 +599,7 @@ const PromoSelection = ({ handleBack, amount, currencyCode, currencySymbol, depo
               );
             })
           ) : (
-            <div className="text-center py-10 text-[#7E7E7E]">
+            <div className="text-center py-6 text-[#7E7E7E] text-xs">
               No active promo codes available.
             </div>
           )}
@@ -760,71 +760,71 @@ const PaymentDetails = ({ handleBack, selectedMethod, amount, currencyCode, curr
 
     return (
       <div className="flex flex-col flex-1 min-h-0 bg-white text-black font-sans">
-        {/* Header (Cyan) */}
-        <div className="bg-[#4DD8F5] p-4 rounded-b-[30px] flex justify-between items-start text-[#1a1b1e] shadow-lg">
+        {/* Header (Cyan) - Compact */}
+        <div className="bg-[#4DD8F5] p-3 rounded-b-[20px] flex justify-between items-center text-[#1a1b1e] shadow-md">
           <div>
-            <p className="text-lg font-bold opacity-80">{displayCurrency}</p>
-            <p className="text-2xl font-black">{localAmount.toFixed(2)}</p>
+            <p className="text-xs font-bold opacity-80">{displayCurrency}</p>
+            <p className="text-xl font-black">{localAmount.toFixed(2)}</p>
           </div>
           <div className="text-right">
-            <p className="text-sm font-medium">Time left <span className="text-lg font-bold ml-1">{formatTime(timeLeft)}</span></p>
+            <p className="text-[11px] font-medium">Time left <span className="text-sm font-bold ml-1">{formatTime(timeLeft)}</span></p>
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-4 space-y-6 pb-20">
-          {/* Method Logo Section */}
-          <div className="flex items-center gap-3 py-2">
-             <div className="w-12 h-12 flex items-center justify-center bg-gray-50 rounded-xl p-2 border border-gray-100">
+        <div className="flex-1 overflow-y-auto p-3 space-y-4 pb-16 scrollbar-hide">
+          {/* Method Logo Section - Compact */}
+          <div className="flex items-center gap-2.5 py-1">
+             <div className="w-10 h-10 flex items-center justify-center bg-gray-50 rounded-lg p-1.5 border border-gray-100">
                 {selectedMethod.icon}
              </div>
              <div className="flex flex-col">
-                <span className="text-lg font-bold text-[#1a1b1e]">{selectedMethod.name}</span>
-                <span className="text-sm font-medium text-gray-500">
+                <span className="text-base font-bold text-[#1a1b1e]">{selectedMethod.name}</span>
+                <span className="text-xs font-medium text-gray-500">
                   {isLocalMethod ? target.paymentType : isCrypto ? 'Crypto Transfer' : 'E-Wallet Payment'}
                 </span>
              </div>
           </div>
 
-          {/* Step 1 */}
+          {/* Step 1 - Compact */}
           <div className="relative">
-            <div className="absolute -left-4 top-0 text-[80px] font-black text-gray-100 -z-0 leading-none select-none">1</div>
-            <div className="pl-12 space-y-2 relative z-10">
+            <div className="absolute -left-3 top-0 text-[60px] font-black text-gray-100 -z-0 leading-none select-none">1</div>
+            <div className="pl-10 space-y-1 relative z-10">
                 <div className="flex justify-between items-center">
-                  <p className="text-base font-bold text-gray-700">{target.label}</p>
+                  <p className="text-sm font-bold text-gray-700">{target.label}</p>
                 </div>
                 {isLocalMethod && (
-                  <p className="text-sm font-bold text-gray-500">
+                  <p className="text-[11px] font-bold text-gray-500">
                     এই নাম্বারে শুধুমাত্র {target.paymentType === 'Cash Out' ? 'ক্যাশআউট' : 'সেন্ড মানি'} গ্রহণ করা হয়
                   </p>
                 )}
-                <div className="flex items-center justify-between border-b border-gray-200 pb-2 pt-4">
+                <div className="flex items-center justify-between border-b border-gray-200 pb-1.5 pt-2">
                     <span className={cn(
-                      "font-bold tracking-wider break-all pr-4",
-                      target.value.length > 20 ? "text-lg" : "text-xl"
+                      "font-bold tracking-wider break-all pr-3",
+                      target.value.length > 20 ? "text-base" : "text-lg"
                     )}>{target.value}</span>
-                    <button onClick={() => handleCopy(target.value)} className="p-2 hover:bg-gray-100 rounded-full transition active:scale-90 shrink-0">
-                        <Copy size={24} className="text-cyan-500" />
+                    <button onClick={() => handleCopy(target.value)} className="p-1.5 hover:bg-gray-100 rounded-full transition active:scale-90 shrink-0">
+                        <Copy size={20} className="text-cyan-500" />
                     </button>
                 </div>
             </div>
           </div>
 
-          {/* Warning */}
-          <div className="flex items-center gap-4 bg-white p-3 rounded-xl">
-            <div className="w-10 h-10 flex items-center justify-center text-pink-500 shrink-0">
-                <AlertCircle size={32} />
+          {/* Warning - Compact */}
+          <div className="flex items-center gap-3 bg-white p-2 rounded-lg">
+            <div className="w-8 h-8 flex items-center justify-center text-pink-500 shrink-0">
+                <AlertCircle size={24} />
             </div>
-            <p className="text-base font-bold text-pink-500 leading-tight">
+            <p className="text-sm font-bold text-pink-500 leading-tight">
                 {isLocalMethod ? 'এই নীচে তথ্য প্রবেশ করুন প্রদানের পরে' : 'Please enter the transaction details below after payment'}
             </p>
           </div>
 
-          {/* Step 2 */}
-          <div className="relative bg-[#4DD8F5] rounded-[30px] p-6 overflow-hidden shadow-md">
-            <div className="absolute -left-4 -bottom-8 text-[120px] font-black text-white/30 -z-0 leading-none select-none">2</div>
-            <div className="relative z-10 space-y-4">
-                <p className="text-lg font-bold text-[#1a1b1e]">Transaction ID / Hash</p>
-                <p className="text-sm font-bold text-[#1a1b1e] opacity-80 leading-relaxed">
+          {/* Step 2 - Compact */}
+          <div className="relative bg-[#4DD8F5] rounded-[20px] p-4 overflow-hidden shadow-sm">
+            <div className="absolute -left-3 -bottom-6 text-[80px] font-black text-white/30 -z-0 leading-none select-none">2</div>
+            <div className="relative z-10 space-y-3">
+                <p className="text-base font-bold text-[#1a1b1e]">Transaction ID / Hash</p>
+                <p className="text-[12px] font-bold text-[#1a1b1e] opacity-80 leading-tight">
                     {isLocalMethod 
                       ? 'bKash/Nagad অ্যাপ থেকে লেনদেন (TrxID) আইডি কপি করুন এবং পেমেন্ট পৃষ্ঠার লেনদেন বাক্সে পেস্ট করুন।'
                       : 'Copy the transaction ID or hash from your wallet and paste it into the box below.'}
@@ -835,28 +835,28 @@ const PaymentDetails = ({ handleBack, selectedMethod, amount, currencyCode, curr
                         value={transactionId}
                         onChange={(e) => setTransactionId(e.target.value)}
                         placeholder="ex. BBSDA3GH23"
-                        className="w-full bg-white rounded-full py-3 px-6 text-lg font-bold text-gray-800 focus:outline-none shadow-inner"
+                        className="w-full bg-white rounded-full py-2.5 px-5 text-base font-bold text-gray-800 focus:outline-none shadow-inner"
                     />
-                    <div className="absolute right-4 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full border-2 border-gray-400 flex items-center justify-center">
-                        <span className="font-bold text-gray-400 text-xl">!</span>
+                    <div className="absolute right-3 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full border-2 border-gray-400 flex items-center justify-center">
+                        <span className="font-bold text-gray-400 text-sm">!</span>
                     </div>
                 </div>
             </div>
           </div>
 
-          {/* Submit Button */}
+          {/* Submit Button - Compact */}
           <button 
             disabled={!transactionId || isProcessing}
             onClick={handleSubmitDeposit}
             className={cn(
-                "w-full py-4 rounded-full font-bold text-xl transition-all shadow-xl mt-4",
+                "w-full py-3 rounded-full font-bold text-base transition-all shadow-lg mt-2",
                 transactionId && !isProcessing ? "bg-[#D12053] text-white active:scale-95 shadow-pink-500/20" : "bg-gray-200 text-gray-400 cursor-not-allowed"
             )}
           >
             {isProcessing ? (
               <div className="flex items-center justify-center gap-2">
-                <Loader2 className="animate-spin" />
-                <span>Processing...</span>
+                <Loader2 className="animate-spin size-4" />
+                <span className="text-sm">Processing...</span>
               </div>
             ) : "Confirm Payment"}
           </button>

@@ -961,6 +961,7 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
   const balanceRef = useRef(balance);
   const demoBalanceRef = useRef(demoBalance);
   const tradesRef = useRef(trades);
+  const resolvedTradeIdsRef = useRef<Set<string>>(new Set());
   const dataRef = useRef(data);
   const userRef = useRef(user);
   const selectedAssetRef = useRef(selectedAsset);
@@ -1076,13 +1077,25 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
 
   useEffect(() => {
     if (socket && user) {
-      socket.emit('user-sync', {
-        email: user.email,
-        name: user.displayName,
-        photoURL: user.photoURL,
-        uid: user.uid
-      });
-      socket.emit('get-notifications', user.email);
+      const syncUser = () => {
+        socket.emit('user-sync', {
+          email: user.email,
+          name: user.displayName,
+          photoURL: user.photoURL,
+          uid: user.uid
+        });
+        socket.emit('get-notifications', user.email);
+      };
+
+      if (socket.connected) {
+        syncUser();
+      }
+
+      socket.on('connect', syncUser);
+
+      return () => {
+        socket.off('connect', syncUser);
+      };
     }
   }, [socket, user]);
 
@@ -1520,7 +1533,8 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
       const trade = currentTrades.find(t => t.id === result.id);
       
       // Prevent processing the same trade multiple times
-      if (!trade || trade.status !== 'ACTIVE') return;
+      if (resolvedTradeIdsRef.current.has(result.id)) return;
+      resolvedTradeIdsRef.current.add(result.id);
 
       const isWin = result.status === 'WIN';
       
@@ -1530,10 +1544,13 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
         playSound('loss');
       }
 
+      // If trade is already updated by user-data-updated, don't update state again
+      if (!trade || trade.status !== 'ACTIVE') return;
+
       const updatedTrades = currentTrades.map(t => {
         if (t.id === result.id) {
           const isWin = result.status === 'WIN';
-          const profit = isWin ? result.profit : -t.amount;
+          const profit = result.profit !== undefined ? result.profit : (isWin ? t.amount * (t.payout / 100) : -t.amount);
           
           return { 
             ...t, 

@@ -51,11 +51,11 @@ interface Drawing {
 
 const DRAWING_TOOLS = ['TrendLine', 'HorizontalLine', 'VerticalLine', 'Rectangle', 'Ray', 'FibonacciLevels', 'FibonacciFan', 'ParallelChannel'];
 
-const ChartSkeleton = () => (
+const ChartSkeleton = ({ message = "Loading chart data..." }) => (
   <div className="absolute inset-0 bg-[var(--bg-primary)] flex items-center justify-center z-50">
     <div className="flex flex-col items-center gap-4">
       <div className="w-8 h-8 border-4 border-blue-500/30 border-t-blue-500 rounded-full animate-spin" />
-      <span className="text-sm font-medium text-[var(--text-secondary)] animate-pulse">Loading chart data...</span>
+      <span className="text-sm font-medium text-[var(--text-secondary)] animate-pulse">{message}</span>
     </div>
   </div>
 );
@@ -1140,24 +1140,26 @@ export const TradingChart: React.FC<TradingChartProps> = ({
     timerString = `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
   }
 
+  const isStalled = Date.now() - currentTime > 5000;
+
   return (
     <div ref={chartContainerRef} className="w-full h-full relative overflow-hidden bg-[var(--bg-primary)] flex-1 min-h-[300px] touch-none">
         <AnimatePresence>
-            {(isLoading || data.length === 0) && (
+            {(isLoading || data.length === 0 || isStalled) && (
                 <motion.div 
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
                     className="absolute inset-0 z-50"
                 >
-                    <ChartSkeleton />
+                    <ChartSkeleton message={isStalled ? "Reconnecting..." : "Loading chart data..."} />
                 </motion.div>
             )}
         </AnimatePresence>
         
         <motion.div 
             initial={{ opacity: 0 }}
-            animate={{ opacity: (isLoading || data.length === 0) ? 0 : 1 }}
+            animate={{ opacity: (isLoading || data.length === 0 || isStalled) ? 0 : 1 }}
             transition={{ duration: 0.4 }}
             className="w-full h-full absolute inset-0"
         >

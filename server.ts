@@ -279,9 +279,10 @@ async function startServer() {
   try {
     db = initDb(dbPath);
   } catch (dbError: any) {
-    console.error('Database initialization error:', String(dbError));
-    if (dbError.code === 'SQLITE_CORRUPT' || String(dbError).includes('malformed')) {
-      console.error('Database file is corrupt. Deleting and recreating...');
+    const errorStr = String(dbError);
+    console.error('Database initialization error:', errorStr);
+    if (dbError.code === 'SQLITE_CORRUPT' || errorStr.includes('malformed') || errorStr.includes('unsupported file format')) {
+      console.error('Database file is corrupt or invalid. Deleting and recreating...');
       try {
         if (fs.existsSync(dbPath)) fs.unlinkSync(dbPath);
         db = initDb(dbPath);
@@ -427,6 +428,10 @@ async function startServer() {
       if (canSyncFirestore() && user.uid) {
         firestore.collection('users').doc(user.uid).set({ trades: tradesJson }, { merge: true })
           .catch((e: any) => console.error('Firestore user trades update error:', e));
+          
+        // Also save directly to a subcollection for easier viewing
+        firestore.collection('users').doc(user.uid).collection('trades').doc(trade.id).set(trade, { merge: true })
+          .catch((e: any) => console.error('Firestore trade document update error:', e));
       }
     }
   };
@@ -455,6 +460,14 @@ async function startServer() {
       }
 
       socketIds.forEach(socketId => {
+        if (connectedUsers[socketId]) {
+          connectedUsers[socketId] = {
+            ...connectedUsers[socketId],
+            ...user,
+            trades,
+            extraAccounts
+          };
+        }
         io.to(socketId).emit('user-data-updated', {
           ...user,
           trades,
@@ -482,10 +495,21 @@ async function startServer() {
           .catch((e: any) => console.error('Firestore user sync error:', e));
       }
       
-      // Also update admin panel
-      const allUsers = db.prepare('SELECT * FROM users').all();
-      io.to('admin-room').emit('admin-all-users', allUsers);
+      // Also update admin panel (only send the updated user, not all users)
+      io.to('admin-room').emit('admin-user-updated', {
+        ...user,
+        trades,
+        extraAccounts
+      });
     }
+  };
+
+  // Helper to emit an event to all connected sockets of a specific user
+  const emitToUser = (email: string, event: string, data?: any) => {
+    const socketIds = Object.keys(connectedUsers).filter(id => connectedUsers[id].email === email);
+    socketIds.forEach(socketId => {
+      io.to(socketId).emit(event, data);
+    });
   };
 
   // API Routes
@@ -776,7 +800,7 @@ async function startServer() {
         : currentPrice < activeTrade.entryPrice;
     }
     
-    const profit = isWin ? activeTrade.amount * (activeTrade.payout / 100) : 0;
+    const profit = isWin ? activeTrade.amount * (activeTrade.payout / 100) : -activeTrade.amount;
     
     // Add profit to balance
     if (isWin) {
@@ -785,6 +809,30 @@ async function startServer() {
         db.prepare('UPDATE users SET balance = balance + ? WHERE email = ?').run(totalReturn, email);
       } else if (activeTrade.accountType === 'DEMO') {
         db.prepare('UPDATE users SET demoBalance = demoBalance + ? WHERE email = ?').run(totalReturn, email);
+      } else {
+        // Handle extra accounts
+        const user = db.prepare('SELECT extraAccounts FROM users WHERE email = ?').get(email) as any;
+        if (user) {
+          let extraAccounts = [];
+          try {
+            extraAccounts = typeof user.extraAccounts === 'string' ? JSON.parse(user.extraAccounts) : (user.extraAccounts || []);
+          } catch (e) {
+            extraAccounts = [];
+          }
+          
+          let updated = false;
+          extraAccounts = extraAccounts.map((acc: any) => {
+            if (acc.id === activeTrade.accountType) {
+              updated = true;
+              return { ...acc, balance: acc.balance + totalReturn };
+            }
+            return acc;
+          });
+          
+          if (updated) {
+            db.prepare('UPDATE users SET extraAccounts = ? WHERE email = ?').run(JSON.stringify(extraAccounts), email);
+          }
+        }
       }
       
       // Update Firestore after adding profit
@@ -804,14 +852,12 @@ async function startServer() {
     // Broadcast stats to admin
     io.to('admin-room').emit('admin-stats', platformStats);
 
-    if (activeTrade.socketId) {
-      io.to(activeTrade.socketId).emit('trade-result', {
-        id: activeTrade.id,
-        status: isWin ? 'WIN' : 'LOSS',
-        closePrice: finalClosePrice,
-        profit: profit
-      });
-    }
+    emitToUser(email, 'trade-result', {
+      id: activeTrade.id,
+      status: isWin ? 'WIN' : 'LOSS',
+      closePrice: finalClosePrice,
+      profit: profit
+    });
     
     logActivity(email, 'TRADE_RESULT', `${isWin ? 'WIN' : 'LOSS'} on ${activeTrade.assetShortName} - Profit: ${profit.toFixed(2)}`);
 
@@ -831,7 +877,8 @@ async function startServer() {
   // Load active trades from DB on startup
   const loadActiveTradesFromDB = () => {
     try {
-      const allUsers = db.prepare('SELECT email, trades FROM users').all() as any[];
+      // Only fetch users who potentially have active trades to save memory
+      const allUsers = db.prepare('SELECT email, trades FROM users WHERE trades LIKE \'%"status":"ACTIVE"%\'').all() as any[];
       let activeCount = 0;
       allUsers.forEach(user => {
         let trades = [];
@@ -843,6 +890,7 @@ async function startServer() {
 
         trades.forEach((trade: any) => {
           if (trade.status === 'ACTIVE') {
+            trade.email = user.email; // Ensure email is present
             activeTrades[trade.id] = trade;
             activeCount++;
             
@@ -925,10 +973,10 @@ async function startServer() {
     }
   ];
 
-  // Generate initial history (6 hours)
+  // Generate initial history (24 hours)
   const now = Date.now();
-  const historyDurationMs = 21600 * 1000;
-  const historyTicksCount = 21600;
+  const historyDurationMs = 24 * 3600 * 1000;
+  const historyTicksCount = 24 * 3600;
   
   Object.keys(assets).forEach(symbol => {
     const asset = assets[symbol as keyof typeof assets];
@@ -1102,9 +1150,15 @@ async function startServer() {
         history[symbol].push(tick);
         insertTick.run(symbol, Math.floor(now / 1000) * 1000, tick.open, tick.high, tick.low, tick.close);
         
-        // Keep up to 24 hours of history (86400 seconds)
-        if (history[symbol].length > 86400) {
+        // Keep up to 1 hour of history in memory (3600 seconds)
+        if (history[symbol].length > 3600) {
           history[symbol].shift(); 
+        }
+
+        // Prune DB history every 1000 ticks (approx 16 mins) to keep last 7 days
+        if (tickCounter % 1000 === 0) {
+          const sevenDaysAgo = now - (7 * 24 * 3600 * 1000);
+          db.prepare('DELETE FROM market_history WHERE time < ?').run(sevenDaysAgo);
         }
       }
       
@@ -1154,7 +1208,7 @@ async function startServer() {
       forcedResult = isWin ? 'WIN' : 'LOSS';
     }
 
-    const email = trade.userEmail || trade.email;
+    const email = trade.userEmail || trade.email || user.email;
     if (!email) {
       console.error('place-trade: userEmail is missing in trade object');
       socket.emit('trade-error', 'User email is missing.');
@@ -1162,10 +1216,26 @@ async function startServer() {
     }
 
     // Validate and deduct balance
-    const userFromDb = db.prepare('SELECT balance, demoBalance, uid FROM users WHERE email = ?').get(email) as any;
+    const userFromDb = db.prepare('SELECT balance, demoBalance, uid, trades FROM users WHERE email = ?').get(email) as any;
     if (!userFromDb) {
       console.error(`place-trade: user not found for email ${email}`);
       socket.emit('trade-error', 'User not found.');
+      return;
+    }
+
+    // Check if trade already exists to prevent duplicate processing on reconnect
+    let userTrades = [];
+    try {
+      userTrades = typeof userFromDb.trades === 'string' ? JSON.parse(userFromDb.trades) : (userFromDb.trades || []);
+    } catch (e) {
+      userTrades = [];
+    }
+    const existingTrade = userTrades.find((t: any) => t.id === trade.id);
+    if (existingTrade) {
+      console.log(`Trade ${trade.id} already exists, skipping duplicate processing.`);
+      if (existingTrade.status === 'ACTIVE' && activeTrades[trade.id]) {
+        activeTrades[trade.id].socketId = socket.id;
+      }
       return;
     }
 
@@ -1425,7 +1495,7 @@ async function startServer() {
       // If history is small or empty, try to load from DB to provide "unlimited" candles
       if (data.length < 10000) {
         try {
-          const rows = db.prepare('SELECT * FROM market_history WHERE symbol = ? ORDER BY time DESC LIMIT 20000').all(assetShortName) as any[];
+          const rows = db.prepare('SELECT * FROM market_history WHERE symbol = ? ORDER BY time DESC LIMIT 100000').all(assetShortName) as any[];
           if (rows.length > 0) {
             data = rows.map(r => ({
               time: r.time,
@@ -1539,7 +1609,7 @@ async function startServer() {
         const allDeposits = db.prepare('SELECT * FROM deposits ORDER BY submittedAt DESC').all();
         socket.emit('admin-deposits', allDeposits);
         
-        const allUsers = db.prepare('SELECT * FROM users').all();
+        const allUsers = db.prepare('SELECT * FROM users LIMIT 1000').all();
         socket.emit('admin-all-users', allUsers);
         
         const allWithdrawals = db.prepare('SELECT * FROM withdrawals ORDER BY submittedAt DESC').all();
@@ -1650,14 +1720,11 @@ async function startServer() {
         
         // Notify the specific user if they are connected
         const userEmail = pendingRequests[requestIndex].userEmail;
-        const userSocket = Object.values(connectedUsers).find(u => u.email === userEmail);
-        if (userSocket) {
-          io.to(userSocket.socketId).emit('request-status-updated', {
-            requestId,
-            status,
-            message
-          });
-        }
+        emitToUser(userEmail, 'request-status-updated', {
+          requestId,
+          status,
+          message
+        });
         
         io.to('admin-room').emit('admin-requests', pendingRequests);
       }
@@ -1675,10 +1742,7 @@ async function startServer() {
         const newNotification = { id, email, title, message, type, timestamp, isRead: 0 };
         
         // Find user socket and emit
-        const userSocket = Object.values(connectedUsers).find(u => u.email === email);
-        if (userSocket) {
-          io.to(userSocket.socketId).emit('new-notification', newNotification);
-        }
+        emitToUser(email, 'new-notification', newNotification);
         
         // Update admin list
         const allNotifications = db.prepare('SELECT * FROM notifications ORDER BY timestamp DESC LIMIT 100').all();
@@ -1857,7 +1921,7 @@ async function startServer() {
     });
 
     socket.on('admin-get-all-users', () => {
-      const allUsers = db.prepare('SELECT * FROM users').all();
+      const allUsers = db.prepare('SELECT * FROM users LIMIT 1000').all();
       socket.emit('admin-all-users', allUsers);
     });
 
@@ -1888,16 +1952,14 @@ async function startServer() {
         logActivity(email, 'ADMIN_BALANCE_UPDATE', `Admin updated ${type} balance to ${balance}`);
 
         // Notify user if connected
-        const user = Object.values(connectedUsers).find(u => u.email === email);
-        if (user) {
-          if (type === 'REAL') user.balance = balance;
-          else user.demoBalance = balance;
-          io.to(user.socketId).emit('balance-updated', { balance, type });
-        }
+        emitUserUpdate(email);
+        emitToUser(email, 'balance-updated', { balance, type });
         
-        // Refresh admin user list
-        const allUsers = db.prepare('SELECT * FROM users').all();
-        io.to('admin-room').emit('admin-all-users', allUsers);
+        // Refresh admin user list (only send the updated user)
+        const updatedUser = db.prepare('SELECT * FROM users WHERE email = ?').get(email) as any;
+        if (updatedUser) {
+          io.to('admin-room').emit('admin-user-updated', updatedUser);
+        }
         io.to('admin-room').emit('admin-users', Object.values(connectedUsers));
       } catch (error) {
         console.error('Update Balance Error:', error);
@@ -1909,8 +1971,13 @@ async function startServer() {
         db.prepare('UPDATE users SET name = ?, isBoosted = ?, allowed_withdrawal_methods = ? WHERE email = ?').run(name, isBoosted ? 1 : 0, allowed_withdrawal_methods, email);
         logActivity(email, 'ADMIN_UPDATE_DETAILS', `Admin updated user details`);
         
-        const allUsers = db.prepare('SELECT * FROM users').all();
-        io.to('admin-room').emit('admin-all-users', allUsers);
+        emitUserUpdate(email);
+        emitToUser(email, 'allowed-withdraw-methods-updated', allowed_withdrawal_methods);
+        
+        const updatedUser = db.prepare('SELECT * FROM users WHERE email = ?').get(email) as any;
+        if (updatedUser) {
+          io.to('admin-room').emit('admin-user-updated', updatedUser);
+        }
         io.to('admin-room').emit('admin-users', Object.values(connectedUsers));
       } catch (error) {
         console.error('Error updating user details:', error);
@@ -1922,8 +1989,13 @@ async function startServer() {
         db.prepare('UPDATE users SET turnover_required = ?, turnover_achieved = ? WHERE email = ?').run(required, achieved, email);
         logActivity(email, 'ADMIN_UPDATE_TURNOVER', `Admin updated turnover requirements`);
         
-        const allUsers = db.prepare('SELECT * FROM users').all();
-        io.to('admin-room').emit('admin-all-users', allUsers);
+        emitUserUpdate(email);
+        emitToUser(email, 'turnover-updated', { required, achieved });
+        
+        const updatedUser = db.prepare('SELECT * FROM users WHERE email = ?').get(email) as any;
+        if (updatedUser) {
+          io.to('admin-room').emit('admin-user-updated', updatedUser);
+        }
         io.to('admin-room').emit('admin-users', Object.values(connectedUsers));
       } catch (error) {
         console.error('Error updating user turnover:', error);
@@ -1935,8 +2007,13 @@ async function startServer() {
         db.prepare('UPDATE users SET kycStatus = ? WHERE email = ?').run(status, email);
         logActivity(email, 'ADMIN_UPDATE_KYC', `Admin updated KYC status to ${status}`);
         
-        const allUsers = db.prepare('SELECT * FROM users').all();
-        io.to('admin-room').emit('admin-all-users', allUsers);
+        emitUserUpdate(email);
+        emitToUser(email, 'kyc-status-updated', { status });
+        
+        const updatedUser = db.prepare('SELECT * FROM users WHERE email = ?').get(email) as any;
+        if (updatedUser) {
+          io.to('admin-room').emit('admin-user-updated', updatedUser);
+        }
         io.to('admin-room').emit('admin-users', Object.values(connectedUsers));
       } catch (error) {
         console.error('Error updating user KYC:', error);
@@ -1970,18 +2047,16 @@ async function startServer() {
         io.to('admin-room').emit('admin-users', Object.values(connectedUsers));
         
         // Notify user
-        const targetSocketId = Object.keys(connectedUsers).find(id => connectedUsers[id].email === email);
-        if (targetSocketId) {
-          io.to(targetSocketId).emit('balance-updated', { balance: newBalance, type });
-          io.to(targetSocketId).emit('new-notification', {
-            id: Date.now().toString(),
-            title: 'Balance Adjusted',
-            message: `Your ${type} balance has been ${amount >= 0 ? 'credited' : 'debited'} by ${Math.abs(amount)}. Reason: ${reason}`,
-            type: 'SYSTEM',
-            read: false,
-            createdAt: Date.now()
-          });
-        }
+        emitUserUpdate(email);
+        emitToUser(email, 'balance-updated', { balance: newBalance, type });
+        emitToUser(email, 'new-notification', {
+          id: Date.now().toString(),
+          title: 'Balance Adjusted',
+          message: `Your ${type} balance has been ${amount >= 0 ? 'credited' : 'debited'} by ${Math.abs(amount)}. Reason: ${reason}`,
+          type: 'SYSTEM',
+          read: false,
+          createdAt: Date.now()
+        });
       } catch (error) {
         console.error('Error adjusting user balance:', error);
       }
@@ -1994,18 +2069,17 @@ async function startServer() {
         logActivity(email, 'ADMIN_STATUS_UPDATE', `Admin updated status to ${status}`);
 
         // Notify user if connected
-        const user = Object.values(connectedUsers).find(u => u.email === email);
-        if (user) {
-          user.status = status;
-          io.to(user.socketId).emit('status-updated', status);
-          if (status === 'BLOCKED') {
-            io.to(user.socketId).emit('force-logout');
-          }
+        emitUserUpdate(email);
+        emitToUser(email, 'status-updated', status);
+        if (status === 'BLOCKED') {
+          emitToUser(email, 'force-logout');
         }
         
         // Refresh admin user list
-        const allUsers = db.prepare('SELECT * FROM users').all();
-        io.to('admin-room').emit('admin-all-users', allUsers);
+        const updatedUser = db.prepare('SELECT * FROM users WHERE email = ?').get(email) as any;
+        if (updatedUser) {
+          io.to('admin-room').emit('admin-user-updated', updatedUser);
+        }
         io.to('admin-room').emit('admin-users', Object.values(connectedUsers));
       } catch (error) {
         console.error('Update Status Error:', error);
@@ -2091,18 +2165,18 @@ async function startServer() {
 
         socket.emit('transfer-success', { newBalance: sender.balance - amount });
         
-        const recipientSocket = Object.values(connectedUsers).find(u => u.email === recipientEmail);
-        if (recipientSocket) {
-          io.to(recipientSocket.socketId).emit('balance-updated', { balance: recipient.balance + amount, type: 'REAL' });
-          io.to(recipientSocket.socketId).emit('new-notification', {
-            id: Date.now().toString(),
-            title: 'Transfer Received',
-            message: `You received ${amount} from ${senderEmail}`,
-            type: 'SYSTEM',
-            read: false,
-            createdAt: Date.now()
-          });
-        }
+        emitUserUpdate(senderEmail);
+        emitUserUpdate(recipientEmail);
+        
+        emitToUser(recipientEmail, 'balance-updated', { balance: recipient.balance + amount, type: 'REAL' });
+        emitToUser(recipientEmail, 'new-notification', {
+          id: Date.now().toString(),
+          title: 'Transfer Received',
+          message: `You received ${amount} from ${senderEmail}`,
+          type: 'SYSTEM',
+          read: false,
+          createdAt: Date.now()
+        });
         
         // Notify admin
         io.to('admin-room').emit('admin-new-transfer', { id, fromEmail: senderEmail, toEmail: recipientEmail, amount, timestamp });
@@ -2131,13 +2205,10 @@ async function startServer() {
         db.prepare('DELETE FROM kyc_submissions WHERE email = ?').run(email);
         
         // Force logout if connected
-        const user = Object.values(connectedUsers).find(u => u.email === email);
-        if (user) {
-          io.to(user.socketId).emit('force-logout');
-        }
+        emitToUser(email, 'force-logout');
         
         // Refresh admin user list
-        const allUsers = db.prepare('SELECT * FROM users').all();
+        const allUsers = db.prepare('SELECT * FROM users LIMIT 1000').all();
         io.to('admin-room').emit('admin-all-users', allUsers);
         io.to('admin-room').emit('admin-users', Object.values(connectedUsers));
       } catch (error) {
@@ -2371,27 +2442,24 @@ async function startServer() {
                 `).run(referrer.uid, user.uid, user.email, commissionAmount, 'DEPOSIT', Date.now());
                 
                 // Notify referrer if connected
-                const connectedReferrer = Object.values(connectedUsers).find(u => u.email === referrer.email);
-                if (connectedReferrer) {
-                  connectedReferrer.balance = finalMainBalance;
-                  connectedReferrer.referralBalance = newReferralBalance;
-                  connectedReferrer.totalReferralEarnings = newTotalReferralEarnings;
-                  
-                  io.to(connectedReferrer.socketId).emit('balance-updated', { balance: finalMainBalance, type: 'REAL' });
-                  io.to(connectedReferrer.socketId).emit('referral-commission-received', {
+                emitUserUpdate(referrer.email);
+                const referrerSocketIds = Object.keys(connectedUsers).filter(id => connectedUsers[id].email === referrer.email);
+                referrerSocketIds.forEach(socketId => {
+                  io.to(socketId).emit('balance-updated', { balance: finalMainBalance, type: 'REAL' });
+                  io.to(socketId).emit('referral-commission-received', {
                     amount: commissionAmount,
                     from: user.email,
                     newReferralBalance,
                     newMainBalance: finalMainBalance
                   });
-                  io.to(connectedReferrer.socketId).emit('new-notification', {
+                  io.to(socketId).emit('new-notification', {
                     id: Date.now().toString(),
                     title: 'Referral Commission!',
                     message: `You earned USD ${commissionAmount.toFixed(2)} from a referral deposit.`,
                     type: 'success',
                     timestamp: Date.now()
                   });
-                }
+                });
               }
             }
             // --- End Referral Logic ---
@@ -2414,43 +2482,43 @@ async function startServer() {
               db.prepare('UPDATE users SET allowed_withdrawal_methods = ? WHERE email = ?').run(updatedAllowed, deposit.email);
               
               // Notify user if connected
-              const connectedUser = Object.values(connectedUsers).find(u => u.email === deposit.email);
-              if (connectedUser) {
-                connectedUser.allowed_withdrawal_methods = updatedAllowed;
-                io.to(connectedUser.socketId).emit('allowed-withdraw-methods-updated', updatedAllowed);
-              }
+              const socketIds = Object.keys(connectedUsers).filter(id => connectedUsers[id].email === deposit.email);
+              socketIds.forEach(socketId => {
+                if (connectedUsers[socketId]) {
+                  connectedUsers[socketId].allowed_withdrawal_methods = updatedAllowed;
+                }
+                io.to(socketId).emit('allowed-withdraw-methods-updated', updatedAllowed);
+              });
             }
 
-            const connectedUser = Object.values(connectedUsers).find(u => u.email === deposit.email);
-            if (connectedUser) {
-              connectedUser.balance = newBalance;
-              connectedUser.turnover_required = newTurnoverRequired;
-              io.to(connectedUser.socketId).emit('balance-updated', { balance: newBalance, type: 'REAL' });
-              io.to(connectedUser.socketId).emit('turnover-updated', { required: newTurnoverRequired, achieved: connectedUser.turnover_achieved });
-            }
+            // Update user data across all their connected sockets
+            emitUserUpdate(deposit.email);
+            
+            // Also explicitly emit balance and turnover updates for backward compatibility
+            emitToUser(deposit.email, 'balance-updated', { balance: newBalance, type: 'REAL' });
+            emitToUser(deposit.email, 'turnover-updated', { required: newTurnoverRequired, achieved: user.turnover_achieved });
           }
         }
 
         const allDeposits = db.prepare('SELECT * FROM deposits ORDER BY submittedAt DESC').all();
         io.to('admin-room').emit('admin-deposits', allDeposits);
 
-        // Refresh user list for admin
-        const allUsers = db.prepare('SELECT * FROM users').all();
-        io.to('admin-room').emit('admin-all-users', allUsers);
+        // Refresh user list for admin (only send the updated user)
+        const updatedUser = db.prepare('SELECT * FROM users WHERE email = ?').get(deposit.email) as any;
+        if (updatedUser) {
+          io.to('admin-room').emit('admin-user-updated', updatedUser);
+        }
         io.to('admin-room').emit('admin-users', Object.values(connectedUsers));
 
-        const connectedUser = Object.values(connectedUsers).find(u => u.email === deposit.email);
-        if (connectedUser) {
-          const userDeposits = db.prepare('SELECT * FROM deposits WHERE email = ? ORDER BY submittedAt DESC').all(deposit.email);
-          const userWithdrawals = db.prepare('SELECT * FROM withdrawals WHERE email = ? ORDER BY submittedAt DESC').all(deposit.email);
-          io.to(connectedUser.socketId).emit('user-transactions', { deposits: userDeposits, withdrawals: userWithdrawals });
-          
-          io.to(connectedUser.socketId).emit('request-status-updated', {
-            requestId: deposit.id,
-            status,
-            message: `Your deposit of ${deposit.currency} ${deposit.amount} has been ${status.toLowerCase()}.`
-          });
-        }
+        const userDeposits = db.prepare('SELECT * FROM deposits WHERE email = ? ORDER BY submittedAt DESC').all(deposit.email);
+        const userWithdrawals = db.prepare('SELECT * FROM withdrawals WHERE email = ? ORDER BY submittedAt DESC').all(deposit.email);
+        emitToUser(deposit.email, 'user-transactions', { deposits: userDeposits, withdrawals: userWithdrawals });
+        
+        emitToUser(deposit.email, 'request-status-updated', {
+          requestId: deposit.id,
+          status,
+          message: `Your deposit of ${deposit.currency} ${deposit.amount} has been ${status.toLowerCase()}.`
+        });
       } catch (error) {
         console.error('Error updating deposit status:', error);
       }
@@ -2520,11 +2588,8 @@ async function startServer() {
         const withdrawalId = info.lastInsertRowid;
         
         // Update connected user balance
-        const connectedUser = Object.values(connectedUsers).find(u => u.email === email);
-        if (connectedUser) {
-          connectedUser.balance = newBalance;
-          io.to(connectedUser.socketId).emit('balance-updated', { balance: newBalance, type: 'REAL' });
-        }
+        emitUserUpdate(email);
+        emitToUser(email, 'balance-updated', { balance: newBalance, type: 'REAL' });
 
         socket.emit('withdraw-submitted', { id: withdrawalId, status: 'PENDING', newBalance });
         
@@ -2559,12 +2624,9 @@ async function startServer() {
           const newBalance = user.balance + withdrawal.amount;
           db.prepare('UPDATE users SET balance = ? WHERE email = ?').run(newBalance, email);
           
-          const connectedUser = Object.values(connectedUsers).find(u => u.email === email);
-          if (connectedUser) {
-            connectedUser.balance = newBalance;
-            io.to(connectedUser.socketId).emit('balance-updated', { balance: newBalance, type: 'REAL' });
-          }
-          socket.emit('withdrawal-cancelled', { id, newBalance });
+          emitUserUpdate(email);
+          emitToUser(email, 'balance-updated', { balance: newBalance, type: 'REAL' });
+          emitToUser(email, 'withdrawal-cancelled', { id, newBalance });
         }
 
         // Refresh admin list
@@ -2603,34 +2665,30 @@ async function startServer() {
               }
             }
             
-            const connectedUser = Object.values(connectedUsers).find(u => u.email === withdrawal.email);
-            if (connectedUser) {
-              connectedUser.balance = newBalance;
-              io.to(connectedUser.socketId).emit('balance-updated', { balance: newBalance, type: 'REAL' });
-            }
+            emitUserUpdate(withdrawal.email);
+            emitToUser(withdrawal.email, 'balance-updated', { balance: newBalance, type: 'REAL' });
           }
         }
 
         const allWithdrawals = db.prepare('SELECT * FROM withdrawals ORDER BY submittedAt DESC').all();
         io.to('admin-room').emit('admin-withdrawals', allWithdrawals);
 
-        // Refresh user list for admin
-        const allUsers = db.prepare('SELECT * FROM users').all();
-        io.to('admin-room').emit('admin-all-users', allUsers);
+        // Refresh user list for admin (only send the updated user)
+        const updatedUser = db.prepare('SELECT * FROM users WHERE email = ?').get(withdrawal.email) as any;
+        if (updatedUser) {
+          io.to('admin-room').emit('admin-user-updated', updatedUser);
+        }
         io.to('admin-room').emit('admin-users', Object.values(connectedUsers));
 
-        const connectedUser = Object.values(connectedUsers).find(u => u.email === withdrawal.email);
-        if (connectedUser) {
-          const userDeposits = db.prepare('SELECT * FROM deposits WHERE email = ? ORDER BY submittedAt DESC').all(withdrawal.email);
-          const userWithdrawals = db.prepare('SELECT * FROM withdrawals WHERE email = ? ORDER BY submittedAt DESC').all(withdrawal.email);
-          io.to(connectedUser.socketId).emit('user-transactions', { deposits: userDeposits, withdrawals: userWithdrawals });
-          
-          io.to(connectedUser.socketId).emit('request-status-updated', {
-            requestId: withdrawal.id,
-            status,
-            message: `Your withdrawal of ${withdrawal.currency} ${withdrawal.amount} has been ${status.toLowerCase()}.`
-          });
-        }
+        const userDeposits = db.prepare('SELECT * FROM deposits WHERE email = ? ORDER BY submittedAt DESC').all(withdrawal.email);
+        const userWithdrawals = db.prepare('SELECT * FROM withdrawals WHERE email = ? ORDER BY submittedAt DESC').all(withdrawal.email);
+        emitToUser(withdrawal.email, 'user-transactions', { deposits: userDeposits, withdrawals: userWithdrawals });
+        
+        emitToUser(withdrawal.email, 'request-status-updated', {
+          requestId: withdrawal.id,
+          status,
+          message: `Your withdrawal of ${withdrawal.currency} ${withdrawal.amount} has been ${status.toLowerCase()}.`
+        });
       } catch (error) {
         console.error('Error updating withdraw status:', error);
       }
@@ -2711,10 +2769,8 @@ async function startServer() {
         
         if (kyc) {
           // Notify the user if connected
-          const userSocket = Object.values(connectedUsers).find(u => u.email === kyc.email);
-          if (userSocket) {
-            io.to(userSocket.socketId).emit('kyc-status-updated', { status, reason });
-          }
+          emitUserUpdate(kyc.email);
+          emitToUser(kyc.email, 'kyc-status-updated', { status, reason });
         }
         
         // Refresh admin KYC list
