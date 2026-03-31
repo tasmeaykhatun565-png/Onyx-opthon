@@ -935,9 +935,17 @@ export default function DepositFlow({ isOpen, onClose, currencySymbol, currencyC
   const [step, setStep] = useState<Step>('SUMMARY');
   const [isLoading, setIsLoading] = useState(true);
   const [selectedMethod, setSelectedMethod] = useState<PaymentMethod>(PAYMENT_METHODS[0]);
-  const rate = EXCHANGE_RATES[currencyCode] || 1;
-  const minDeposit = currencyCode === 'BDT' ? 500 : Math.round(10 * rate);
+  const isBdtMethod = ['bkash_p2c', 'nagad_p2c', 'rocket_p2c', 'upay_p2c'].includes(selectedMethod.id);
+  const displayCurrencyCode = isBdtMethod ? 'BDT' : currencyCode;
+  const displayCurrencySymbol = isBdtMethod ? '৳' : currencySymbol;
+
+  const rate = EXCHANGE_RATES[displayCurrencyCode] || 1;
+  const minDeposit = displayCurrencyCode === 'BDT' ? 500 : Math.round(10 * rate);
   const [amount, setAmount] = useState<number>(minDeposit);
+
+  useEffect(() => {
+    setAmount(minDeposit);
+  }, [displayCurrencyCode, minDeposit]);
   const [selectedPromo, setSelectedPromo] = useState<string | null>(initialPromoCode ? 'ACTIVE' : null);
   const [promoInput, setPromoInput] = useState<string>(initialPromoCode || '');
 
@@ -1050,7 +1058,7 @@ export default function DepositFlow({ isOpen, onClose, currencySymbol, currencyC
     if (selectedPromo === 'ACTIVE' && promoInput && promoCodes.length > 0) {
       const promo = promoCodes.find(p => p.code.toUpperCase() === promoInput.toUpperCase());
       if (promo) {
-        const rate = EXCHANGE_RATES[currencyCode] || 1;
+        const rate = EXCHANGE_RATES[displayCurrencyCode] || 1;
         const amountUSD = amount / rate;
         const now = Date.now();
         const isExpired = promo.expiresAt && now > promo.expiresAt;
@@ -1062,7 +1070,7 @@ export default function DepositFlow({ isOpen, onClose, currencySymbol, currencyC
         }
       }
     }
-  }, [amount, promoInput, promoCodes, currencyCode, selectedPromo]);
+  }, [amount, promoInput, promoCodes, displayCurrencyCode, selectedPromo]);
 
   const handleNextToDetails = () => {
     setIsStepLoading(true);
@@ -1087,7 +1095,7 @@ export default function DepositFlow({ isOpen, onClose, currencySymbol, currencyC
   const handleSubmitDeposit = () => {
     if (!transactionId) return;
     
-    if (currencyCode === 'BDT' && amount < 500) {
+    if (displayCurrencyCode === 'BDT' && amount < 500) {
       setAmountError("Minimum deposit is 500 BDT");
       return;
     }
@@ -1100,7 +1108,7 @@ export default function DepositFlow({ isOpen, onClose, currencySymbol, currencyC
         socket.emit('submit-deposit', {
           email: userEmail,
           amount: amount,
-          currency: currencyCode,
+          currency: displayCurrencyCode,
           method: selectedMethod.id,
           transactionId,
           promoCode: selectedPromo ? promoInput : null
@@ -1198,8 +1206,8 @@ export default function DepositFlow({ isOpen, onClose, currencySymbol, currencyC
             onClose={onClose} 
             selectedMethod={selectedMethod} 
             amount={amount} 
-            currencyCode={currencyCode} 
-            currencySymbol={currencySymbol} 
+            currencyCode={displayCurrencyCode} 
+            currencySymbol={displayCurrencySymbol} 
             promoInput={promoInput} 
             selectedPromo={selectedPromo}
             setStep={setStep}
@@ -1221,16 +1229,16 @@ export default function DepositFlow({ isOpen, onClose, currencySymbol, currencyC
             setAmount={setAmount} 
             amountError={amountError} 
             setAmountError={setAmountError} 
-            currencyCode={currencyCode} 
-            currencySymbol={currencySymbol} 
+            currencyCode={displayCurrencyCode} 
+            currencySymbol={displayCurrencySymbol} 
             minDeposit={minDeposit} 
             setStep={setStep}
           />}
           {step === 'PROMO_SELECTION' && <PromoSelection 
             handleBack={handleBack} 
             amount={amount} 
-            currencyCode={currencyCode}
-            currencySymbol={currencySymbol} 
+            currencyCode={displayCurrencyCode}
+            currencySymbol={displayCurrencySymbol} 
             depositSettings={depositSettings} 
             selectedPromo={selectedPromo} 
             setSelectedPromo={setSelectedPromo} 
@@ -1243,8 +1251,8 @@ export default function DepositFlow({ isOpen, onClose, currencySymbol, currencyC
             handleBack={() => setStep('SUMMARY')} 
             selectedMethod={selectedMethod} 
             amount={amount} 
-            currencyCode={currencyCode} 
-            currencySymbol={currencySymbol} 
+            currencyCode={displayCurrencyCode} 
+            currencySymbol={displayCurrencySymbol} 
             depositSettings={depositSettings} 
             transactionId={transactionId} 
             setTransactionId={setTransactionId} 
@@ -1256,9 +1264,9 @@ export default function DepositFlow({ isOpen, onClose, currencySymbol, currencyC
             transactionId={transactionId} 
             selectedMethod={selectedMethod} 
             amount={amount} 
-            currencyCode={currencyCode} 
-            currencySymbol={currencySymbol} 
-            localAmount={['bkash', 'nagad', 'rocket', 'upay'].some(m => selectedMethod.id.includes(m)) && currencyCode !== 'BDT' ? amount * (depositSettings.exchangeRate || 120) : amount}
+            currencyCode={displayCurrencyCode} 
+            currencySymbol={displayCurrencySymbol} 
+            localAmount={['bkash', 'nagad', 'rocket', 'upay'].some(m => selectedMethod.id.includes(m)) && displayCurrencyCode !== 'BDT' ? amount * (depositSettings.exchangeRate || 120) : amount}
             depositStatus={depositStatus}
           />}
         </motion.div>

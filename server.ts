@@ -168,7 +168,11 @@ async function startServer() {
         referralBalance REAL DEFAULT 0,
         totalReferralEarnings REAL DEFAULT 0,
         allowed_withdrawal_methods TEXT DEFAULT '',
-        trades TEXT DEFAULT '[]'
+        trades TEXT DEFAULT '[]',
+        language TEXT DEFAULT 'en',
+        currency TEXT DEFAULT 'USD',
+        timeframe TEXT DEFAULT '1m',
+        chartType TEXT DEFAULT 'candles'
       );
 
       CREATE TABLE IF NOT EXISTS promo_codes (
@@ -234,6 +238,12 @@ async function startServer() {
         text TEXT,
         sender TEXT,
         timestamp INTEGER
+      );
+
+      CREATE TABLE IF NOT EXISTS chat_sessions (
+        email TEXT PRIMARY KEY,
+        status TEXT DEFAULT 'active',
+        lastUpdated INTEGER
       );
 
       CREATE TABLE IF NOT EXISTS transfers (
@@ -302,6 +312,44 @@ async function startServer() {
 
   app.use(cors());
   app.use(express.json());
+
+  app.get('/api/user', async (req, res) => {
+    const { email } = req.query;
+    if (!email) return res.status(400).json({ error: 'Email is required' });
+
+    try {
+      const user = db.prepare('SELECT * FROM users WHERE email = ?').get(email) as any;
+      if (!user) return res.status(404).json({ error: 'User not found' });
+      res.json(user);
+    } catch (error) {
+      console.error('Error fetching user:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
+  app.post('/api/user/preferences', async (req, res) => {
+    const { email, language, currency, timeframe, chartType } = req.body;
+    try {
+      const updates = [];
+      const values = [];
+
+      if (language) { updates.push('language = ?'); values.push(language); }
+      if (currency) { updates.push('currency = ?'); values.push(currency); }
+      if (timeframe) { updates.push('timeframe = ?'); values.push(timeframe); }
+      if (chartType) { updates.push('chartType = ?'); values.push(chartType); }
+
+      if (updates.length > 0) {
+        values.push(email);
+        db.prepare(`UPDATE users SET ${updates.join(', ')} WHERE email = ?`).run(...values);
+        res.json({ success: true });
+      } else {
+        res.status(400).json({ error: 'No preferences provided' });
+      }
+    } catch (error) {
+      console.error('Error updating preferences:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
 
   // Auth Routes
   app.post('/api/auth/signup', async (req, res) => {
@@ -1103,17 +1151,35 @@ async function startServer() {
             asset.targetPrice = null;
           }
         } else {
-          // Natural movement logic (scaled for 200ms)
-          asset.trend += (Math.random() - 0.5) * asset.volatility * 0.02;
-          asset.trend *= 0.99;
+          // --- Erratic Movement Logic (More Chaos) ---
+          // Reduce trend persistence to make it change direction more often
+          asset.trend += (Math.random() - 0.5) * asset.volatility * 0.05;
+          asset.trend *= 0.85; // Faster trend decay for more "random" feel
           
           const candleTypeRand = Math.random();
           let moveMultiplier = 1.0;
-          if (candleTypeRand < 0.15) moveMultiplier = 0.15; // Doji / Small body
-          else if (candleTypeRand < 0.35) moveMultiplier = 1.5; // Healthy / Strong body
           
-          const move = (asset.trend + (Math.random() - 0.5) * asset.volatility * 0.24) * moveMultiplier;
+          // Add more variety to candle sizes
+          if (candleTypeRand < 0.20) moveMultiplier = 0.05; // Tiny/Doji
+          else if (candleTypeRand < 0.40) moveMultiplier = 2.5;  // Sudden large move
+          else if (candleTypeRand < 0.50) moveMultiplier = -1.5; // Sudden reversal move
+          
+          // Increase the random noise component significantly
+          const noise = (Math.random() - 0.5) * asset.volatility * 0.6; 
+          const move = (asset.trend + noise) * moveMultiplier;
           newPrice += move;
+
+          // --- Frequent "Jitter" Logic ---
+          // Add a small random jitter on almost every tick
+          newPrice += (Math.random() - 0.5) * asset.volatility * 0.1;
+
+          // --- Gap Up / Gap Down Logic (Increased frequency) ---
+          if (isFullSecond && Math.random() < 0.05) { // 5% chance every second
+            const gapDirection = Math.random() > 0.5 ? 1 : -1;
+            const gapSize = (Math.random() * 3 + 1) * asset.volatility; 
+            newPrice += gapDirection * gapSize;
+          }
+          // --------------------------------------------
         }
       }
       
@@ -1197,16 +1263,18 @@ async function startServer() {
     // Apply Global Automation Rules
     let forcedResult = undefined;
     
-    if (globalTradeSettings.mode === 'FORCE_LOSS') {
-      forcedResult = 'LOSS';
-    } else if (globalTradeSettings.mode === 'FORCE_WIN') {
-      forcedResult = 'WIN';
-    } else if (globalTradeSettings.mode === 'PERCENTAGE') {
-      const assetKey = trade.assetShortName || trade.asset;
-      const asset = assets[assetKey as keyof typeof assets];
-      const winPercentage = asset?.winPercentage || globalTradeSettings.winPercentage;
-      const isWin = Math.random() * 100 < winPercentage;
-      forcedResult = isWin ? 'WIN' : 'LOSS';
+    if (trade.accountType === 'REAL') {
+      if (globalTradeSettings.mode === 'FORCE_LOSS') {
+        forcedResult = 'LOSS';
+      } else if (globalTradeSettings.mode === 'FORCE_WIN') {
+        forcedResult = 'WIN';
+      } else if (globalTradeSettings.mode === 'PERCENTAGE') {
+        const assetKey = trade.assetShortName || trade.asset;
+        const asset = assets[assetKey as keyof typeof assets];
+        const winPercentage = asset?.winPercentage || globalTradeSettings.winPercentage;
+        const isWin = Math.random() * 100 < winPercentage;
+        forcedResult = isWin ? 'WIN' : 'LOSS';
+      }
     }
 
     const email = trade.userEmail || trade.email || user.email;
@@ -1812,8 +1880,17 @@ async function startServer() {
           console.warn('Table support_chat does not exist, skipping chat history fetch.');
           socket.emit('chat-history', []);
         }
+
+        // Fetch or create session status
+        const session = db.prepare('SELECT status FROM chat_sessions WHERE email = ?').get(email);
+        if (session) {
+          socket.emit('chat-status', session.status);
+        } else {
+          db.prepare('INSERT INTO chat_sessions (email, status, lastUpdated) VALUES (?, ?, ?)').run(email, 'active', Date.now());
+          socket.emit('chat-status', 'active');
+        }
       } catch (error) {
-        console.error('Error fetching chat history:', error);
+        console.error('Error fetching chat history/status:', error);
       }
     });
 
@@ -1842,6 +1919,16 @@ async function startServer() {
       const message = { id, email, text, sender, timestamp };
       
       try {
+        // Ensure session exists and is active
+        const session = db.prepare('SELECT status FROM chat_sessions WHERE email = ?').get(email);
+        if (!session) {
+          db.prepare('INSERT INTO chat_sessions (email, status, lastUpdated) VALUES (?, ?, ?)').run(email, 'active', timestamp);
+        } else if (session.status === 'closed') {
+          db.prepare('UPDATE chat_sessions SET status = ?, lastUpdated = ? WHERE email = ?').run('active', timestamp, email);
+        } else {
+          db.prepare('UPDATE chat_sessions SET lastUpdated = ? WHERE email = ?').run(timestamp, email);
+        }
+
         const tableExists = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='support_chat'").get();
         if (tableExists) {
           db.prepare('INSERT INTO support_chat (id, email, text, sender, timestamp) VALUES (?, ?, ?, ?, ?)')
@@ -1859,25 +1946,67 @@ async function startServer() {
           firestore.collection('support_chats').doc(email).set({
             lastUpdated: timestamp,
             lastMessage: text,
-            email: email
+            email: email,
+            status: 'active'
           }, { merge: true }).catch((e: any) => console.error('Firestore chat meta sync error:', e));
         }
         
         io.to(`chat-${email}`).emit('new-chat-message', message);
         
-        // Notify admin room about new message to update chat list
-        if (tableExists) {
-          const allChats = db.prepare('SELECT email, MAX(timestamp) as lastUpdated, text as lastMessage FROM support_chat GROUP BY email ORDER BY lastUpdated DESC').all();
-          io.to('admin-room').emit('admin-chats', allChats);
-        }
+        // Refresh admin chat list for all admins
+        const allChats = db.prepare(`
+          SELECT 
+            s.email, 
+            COALESCE(MAX(m.timestamp), s.lastUpdated) as lastUpdated, 
+            m.text as lastMessage, 
+            s.status 
+          FROM chat_sessions s 
+          LEFT JOIN support_chat m ON s.email = m.email 
+          GROUP BY s.email 
+          ORDER BY lastUpdated DESC
+        `).all();
+        io.to('admin-room').emit('admin-chats', allChats);
       } catch (error) {
         console.error('Error saving chat message:', error);
       }
     });
 
+    socket.on('start-new-chat', (email) => {
+      try {
+        db.prepare('UPDATE chat_sessions SET status = ?, lastUpdated = ? WHERE email = ?').run('active', Date.now(), email);
+        console.log(`User ${email} started a new chat session`);
+        
+        // Refresh admin chat list
+        const allChats = db.prepare(`
+          SELECT 
+            s.email, 
+            COALESCE(MAX(m.timestamp), s.lastUpdated) as lastUpdated, 
+            m.text as lastMessage, 
+            s.status 
+          FROM chat_sessions s 
+          LEFT JOIN support_chat m ON s.email = m.email 
+          GROUP BY s.email 
+          ORDER BY lastUpdated DESC
+        `).all();
+        io.to('admin-room').emit('admin-chats', allChats);
+      } catch (error) {
+        console.error('Error starting new chat session:', error);
+      }
+    });
+
     socket.on('admin-get-chats', () => {
       try {
-        const allChats = db.prepare('SELECT email, MAX(timestamp) as lastUpdated, text as lastMessage FROM support_chat GROUP BY email ORDER BY lastUpdated DESC').all();
+        const allChats = db.prepare(`
+          SELECT 
+            s.email, 
+            COALESCE(MAX(m.timestamp), s.lastUpdated) as lastUpdated, 
+            m.text as lastMessage, 
+            s.status 
+          FROM chat_sessions s 
+          LEFT JOIN support_chat m ON s.email = m.email 
+          GROUP BY s.email 
+          ORDER BY lastUpdated DESC
+        `).all();
         socket.emit('admin-chats', allChats);
       } catch (error) {
         console.error('Error fetching all chats:', error);
@@ -1885,8 +2014,69 @@ async function startServer() {
     });
 
     socket.on('admin-close-chat', (email) => {
-      io.to(`chat-${email}`).emit('chat-closed');
-      console.log(`Admin closed chat for ${email}`);
+      try {
+        db.prepare('UPDATE chat_sessions SET status = ?, lastUpdated = ? WHERE email = ?').run('closed', Date.now(), email);
+        io.to(`chat-${email}`).emit('chat-closed');
+        
+        // Refresh admin chat list
+        const allChats = db.prepare(`
+          SELECT 
+            s.email, 
+            COALESCE(MAX(m.timestamp), s.lastUpdated) as lastUpdated, 
+            m.text as lastMessage, 
+            s.status 
+          FROM chat_sessions s 
+          LEFT JOIN support_chat m ON s.email = m.email 
+          GROUP BY s.email 
+          ORDER BY lastUpdated DESC
+        `).all();
+        io.to('admin-room').emit('admin-chats', allChats);
+        
+        console.log(`Admin closed chat for ${email}`);
+      } catch (error) {
+        console.error('Error closing chat:', error);
+      }
+    });
+
+    socket.on('admin-delete-chat-history', async (email) => {
+      try {
+        // Delete from SQLite
+        db.prepare('DELETE FROM support_chat WHERE email = ?').run(email);
+        db.prepare('DELETE FROM chat_sessions WHERE email = ?').run(email);
+        
+        // Delete from Firestore
+        if (canSyncFirestore()) {
+          const messagesRef = firestore.collection('support_chats').doc(email).collection('messages');
+          const snapshot = await messagesRef.get();
+          const batch = firestore.batch();
+          snapshot.docs.forEach((doc: any) => {
+            batch.delete(doc.ref);
+          });
+          await batch.commit();
+          await firestore.collection('support_chats').doc(email).delete();
+        }
+        
+        // Notify user to clear their local state if they are online
+        io.to(`chat-${email}`).emit('chat-history-deleted');
+        
+        // Refresh admin chat list
+        const allChats = db.prepare(`
+          SELECT 
+            s.email, 
+            COALESCE(MAX(m.timestamp), s.lastUpdated) as lastUpdated, 
+            m.text as lastMessage, 
+            s.status 
+          FROM chat_sessions s 
+          LEFT JOIN support_chat m ON s.email = m.email 
+          GROUP BY s.email 
+          ORDER BY lastUpdated DESC
+        `).all();
+        io.to('admin-room').emit('admin-chats', allChats);
+        
+        console.log(`Admin deleted chat history for ${email}`);
+      } catch (error) {
+        console.error('Error deleting chat history:', error);
+      }
     });
 
     socket.on('admin-chat-message', ({ email, text, sender }) => {

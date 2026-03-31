@@ -94,12 +94,14 @@ export default function TradeInputSheet({
           {activeTab === 'DURATION' && (
             <div className="flex flex-col items-center">
               {/* Mode Toggle */}
-              <div className="flex bg-[var(--bg-secondary)] rounded-xl p-1 w-full mb-6">
+              <div className="flex bg-[var(--bg-secondary)] rounded-2xl p-1.5 w-full mb-6 border border-[var(--border-color)]">
                 <button 
                   onClick={() => setTradeMode('TIMER')}
                   className={cn(
-                    "flex-1 py-2.5 rounded-lg text-sm font-bold transition",
-                    tradeMode === 'TIMER' ? "bg-[#a3ff33] text-black" : "text-[var(--text-secondary)]"
+                    "flex-1 py-2 rounded-xl text-xs font-bold transition-all duration-300",
+                    tradeMode === 'TIMER' 
+                      ? "bg-[#22c55e] text-white shadow-lg shadow-green-500/20" 
+                      : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
                   )}
                 >
                   Timer
@@ -107,21 +109,23 @@ export default function TradeInputSheet({
                 <button 
                   onClick={() => setTradeMode('CLOCK')}
                   className={cn(
-                    "flex-1 py-2.5 rounded-lg text-sm font-bold transition",
-                    tradeMode === 'CLOCK' ? "bg-[#a3ff33] text-black" : "text-[var(--text-secondary)]"
+                    "flex-1 py-2 rounded-xl text-xs font-bold transition-all duration-300",
+                    tradeMode === 'CLOCK' 
+                      ? "bg-[#22c55e] text-white shadow-lg shadow-green-500/20" 
+                      : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
                   )}
                 >
                   Clock
                 </button>
               </div>
 
-              <p className="text-[var(--text-secondary)] text-sm mb-8 font-medium">
+              <p className="text-[var(--text-secondary)] text-[11px] uppercase tracking-[0.1em] mb-6 font-bold opacity-60">
                 {tradeMode === 'CLOCK' ? 'Trade will close at' : 'Trade will close after'}
               </p>
 
               {/* Dynamic Pickers based on Mode */}
               {tradeMode === 'TIMER' && (
-                <div className="w-full grid grid-cols-3 gap-3 py-4 max-h-[300px] overflow-y-auto scrollbar-hide">
+                <div className="w-full grid grid-cols-3 gap-2.5 py-2 max-h-[320px] overflow-y-auto scrollbar-hide">
                   {[
                     { label: '1 min', value: 60 },
                     { label: '2 min', value: 120 },
@@ -143,10 +147,10 @@ export default function TradeInputSheet({
                         onClose();
                       }}
                       className={cn(
-                        "py-3 rounded-xl font-bold border transition",
+                        "py-3.5 rounded-xl font-bold text-xs border transition-all duration-200",
                         timerDuration === option.value 
-                          ? "bg-[#a3ff33] border-[#a3ff33] text-black" 
-                          : "bg-[var(--bg-secondary)] border-[var(--border-color)] text-[var(--text-primary)] hover:border-[#a3ff33]/50"
+                          ? "bg-[#22c55e]/10 border-[#22c55e] text-[#22c55e] shadow-[0_0_15px_rgba(34,197,94,0.1)]" 
+                          : "bg-[var(--bg-secondary)] border-[var(--border-color)] text-[var(--text-secondary)] hover:border-[var(--text-primary)]/30"
                       )}
                     >
                       {option.label}
@@ -156,7 +160,7 @@ export default function TradeInputSheet({
               )}
 
               {tradeMode === 'CLOCK' && (
-                <div className="w-full grid grid-cols-2 gap-3 py-4 max-h-[300px] overflow-y-auto scrollbar-hide">
+                <div className="w-full grid grid-cols-2 gap-3 py-2 max-h-[320px] overflow-y-auto scrollbar-hide">
                   {(() => {
                     const now = currentTime;
                     const msToNextMinute = 60000 - (now % 60000);
@@ -179,14 +183,22 @@ export default function TradeInputSheet({
                             onClose();
                           }}
                           className={cn(
-                            "flex flex-col items-center justify-center py-3 rounded-xl border transition",
+                            "flex flex-col items-center justify-center py-4 rounded-2xl border transition-all duration-200 relative overflow-hidden group",
                             isSelected 
-                              ? "bg-[#a3ff33] border-[#a3ff33] text-black" 
-                              : "bg-[var(--bg-secondary)] border-[var(--border-color)] text-[var(--text-primary)] hover:border-[#a3ff33]/50"
+                              ? "bg-[#22c55e]/10 border-[#22c55e] text-[#22c55e] shadow-[0_0_20px_rgba(34,197,94,0.1)]" 
+                              : "bg-[var(--bg-secondary)] border-[var(--border-color)] text-[var(--text-primary)] hover:border-[var(--text-primary)]/30"
                           )}
                         >
-                          <span className="font-bold text-lg">{format(expTime, 'HH:mm:ss')}</span>
-                          <span className={cn("text-xs mt-1", isSelected ? "text-black/70" : "text-[var(--text-secondary)]")}>
+                          {isSelected && (
+                            <div className="absolute top-0 right-0 w-6 h-6 bg-[#22c55e] rounded-bl-xl flex items-center justify-center">
+                              <div className="w-1.5 h-3 border-r-2 border-b-2 border-white rotate-45 -mt-0.5" />
+                            </div>
+                          )}
+                          <span className="font-bold text-base tracking-tight">{format(expTime, 'HH:mm:ss')}</span>
+                          <span className={cn(
+                            "text-[10px] mt-1 font-medium tracking-wider", 
+                            isSelected ? "text-[#22c55e]/80" : "text-[var(--text-secondary)]"
+                          )}>
                             {m.toString().padStart(2, '0')}:{s.toString().padStart(2, '0')}
                           </span>
                         </button>
@@ -199,9 +211,11 @@ export default function TradeInputSheet({
           )}
 
           {activeTab === 'AMOUNT' && (
-            <div className="flex flex-col items-center py-8">
-              <p className="text-[var(--text-secondary)] mb-4">Select Investment Amount</p>
-              <div className="grid grid-cols-3 gap-3 w-full">
+            <div className="flex flex-col items-center py-4">
+              <p className="text-[var(--text-secondary)] text-[11px] uppercase tracking-[0.1em] mb-6 font-bold opacity-60">
+                Select Investment Amount
+              </p>
+              <div className="grid grid-cols-3 gap-2.5 w-full">
                 {(currencySymbol === '৳' ? [20, 50, 100, 200, 500, 1000, 2000, 5000, 10000] : [1, 5, 10, 20, 50, 100, 200, 500, 1000]).map(amt => (
                   <button 
                     key={amt}
@@ -210,8 +224,10 @@ export default function TradeInputSheet({
                       onClose();
                     }}
                     className={cn(
-                      "py-3 rounded-xl font-bold border transition",
-                      investment === amt ? "bg-[#22c55e] border-[#22c55e] text-white" : "bg-[var(--bg-secondary)] border-[var(--border-color)] text-[var(--text-secondary)]"
+                      "py-3.5 rounded-xl font-bold text-xs border transition-all duration-200",
+                      investment === amt 
+                        ? "bg-[#22c55e]/10 border-[#22c55e] text-[#22c55e] shadow-[0_0_15px_rgba(34,197,94,0.1)]" 
+                        : "bg-[var(--bg-secondary)] border-[var(--border-color)] text-[var(--text-secondary)] hover:border-[var(--text-primary)]/30"
                     )}
                   >
                     {currencySymbol}{amt}

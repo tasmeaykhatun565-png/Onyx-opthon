@@ -804,7 +804,39 @@ export default function TradingPlatform() {
   // State
   const [socket, setSocket] = useState<Socket | null>(null);
   const [user, setUser] = useState<FirebaseUser | null>(null);
+  const [preferences, setPreferences] = useState({
+    language: 'en',
+    currency: 'USD',
+    timeframe: '1m',
+    chartType: 'candles'
+  });
+
+  const savePreferences = useCallback(async (newPrefs: Partial<typeof preferences>) => {
+    if (!user?.email) return;
+    
+    setPreferences(prev => ({ ...prev, ...newPrefs }));
+
+    try {
+      await fetch('/api/user/preferences', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: user.email,
+          ...newPrefs
+        })
+      });
+    } catch (error) {
+      console.error('Error saving preferences:', error);
+    }
+  }, [user?.email]);
+  const { language, setLanguage } = useTranslation();
   const [authLoading, setAuthLoading] = useState(true);
+
+  useEffect(() => {
+    if (preferences.language && preferences.language !== language) {
+      setLanguage(preferences.language as any);
+    }
+  }, [preferences.language, setLanguage, language]);
   const [view, setView] = useState<'HOME' | 'TRADING' | 'PROFILE' | 'MARKET' | 'REWARDS' | 'REFERRAL' | 'HELP' | 'TRADES' | 'SETTINGS' | 'ADMIN' | 'INFO_PAGE' | 'NEWS'>('HOME');
   const [infoPageTitle, setInfoPageTitle] = useState<string>('');
   const [data, setData] = useState<OHLCData[]>([]);
@@ -996,8 +1028,22 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
     };
     testConnection();
 
-    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       setUser(firebaseUser);
+      if (firebaseUser?.email) {
+        try {
+          const response = await fetch(`/api/user?email=${firebaseUser.email}`);
+          if (response.ok) {
+            const userData = await response.json();
+            if (userData.language) setPreferences(prev => ({ ...prev, language: userData.language }));
+            if (userData.currency) setPreferences(prev => ({ ...prev, currency: userData.currency }));
+            if (userData.timeframe) setPreferences(prev => ({ ...prev, timeframe: userData.timeframe }));
+            if (userData.chartType) setPreferences(prev => ({ ...prev, chartType: userData.chartType }));
+          }
+        } catch (error) {
+          console.error('Error loading user preferences:', error);
+        }
+      }
       setAuthLoading(false);
     });
 
@@ -1037,7 +1083,7 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
         
         if (userData.currency && userData.currencySymbol) {
           setCurrency(prev => {
-            if (prev.code === userData.currency && prev.symbol === userData.currencySymbol) return prev;
+            if (prev.code === userData.currency && prev.symbol === userData.currencySymbol && prev.name === (userData.currencyName || userData.currency) && prev.flag === (userData.currencyFlag || '')) return prev;
             return {
               code: userData.currency,
               symbol: userData.currencySymbol,
@@ -1048,17 +1094,22 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
         }
         
         // Sync Referral Stats
-        setReferralStats(prev => {
-          const newStats = {
-            ...prev,
-            totalEarnings: userData.totalReferralEarnings || 0,
-            referralBalance: userData.referralBalance || 0,
-            referralCount: userData.referralCount || 0,
-            recentReferrals: userData.recentReferrals || []
-          };
-          if (JSON.stringify(prev) === JSON.stringify(newStats)) return prev;
-          return newStats;
-        });
+        if (userData.totalReferralEarnings !== undefined || userData.referralBalance !== undefined || userData.referralCount !== undefined || userData.recentReferrals !== undefined) {
+          setReferralStats(prev => {
+            const newStats = {
+              ...prev,
+              totalEarnings: userData.totalReferralEarnings ?? prev.totalEarnings,
+              referralBalance: userData.referralBalance ?? prev.referralBalance,
+              referralCount: userData.referralCount ?? prev.referralCount,
+              recentReferrals: userData.recentReferrals ?? prev.recentReferrals
+            };
+            if (prev.totalEarnings === newStats.totalEarnings && 
+                prev.referralBalance === newStats.referralBalance && 
+                prev.referralCount === newStats.referralCount && 
+                JSON.stringify(prev.recentReferrals) === JSON.stringify(newStats.recentReferrals)) return prev;
+            return newStats;
+          });
+        }
 
         setIsUserDataLoaded(true);
       }
@@ -1512,6 +1563,8 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
 
   // Re-send active trades to server on connection
   const sentTradesRef = useRef<Set<string>>(new Set());
+  const activeTradesCount = useMemo(() => trades.filter(t => t.status === 'ACTIVE').length, [trades]);
+  
   useEffect(() => {
     if (!socket || !user || !trades) return;
     
@@ -1522,7 +1575,7 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
         socket.emit('place-trade', trade);
       }
     });
-  }, [socket, user, trades.filter(t => t.status === 'ACTIVE').length]);
+  }, [socket, user, activeTradesCount]);
 
   // Handle Trade Results from Server
   useEffect(() => {
@@ -1899,7 +1952,7 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
       
       {/* --- Top Header (Only for Trading) --- */}
       {view === 'TRADING' && (
-        <header className="flex items-center justify-between px-4 py-1 bg-[var(--bg-primary)] z-20 border-b border-[var(--border-color)]">
+        <header className="flex items-center justify-between px-4 py-0.5 bg-[var(--bg-primary)] z-20 border-b border-[var(--border-color)]">
           {/* Left: Profile */}
           <div 
             onClick={() => setView('PROFILE')}
@@ -1961,10 +2014,10 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
 
       {/* --- Asset Bar (Only for Trading) --- */}
       {view === 'TRADING' && (
-        <div className="flex items-center justify-between px-4 py-1.5 bg-[var(--bg-primary)] z-10 border-b border-[var(--border-color)]">
+        <div className="flex items-center justify-between px-4 py-0.5 bg-[var(--bg-primary)] z-10 border-b border-[var(--border-color)]">
           <div 
             onClick={() => setIsAssetSelectorOpen(true)}
-            className="flex items-center gap-3 cursor-pointer active:scale-95 transition -ml-1 rounded-lg hover:bg-white/5 py-1 px-1"
+            className="flex items-center gap-3 cursor-pointer active:scale-95 transition -ml-1 rounded-lg hover:bg-white/5 py-0.5 px-1"
           >
             <div className="relative">
               <AssetIcon 
@@ -1979,26 +2032,26 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
               )}
             </div>
             <div className="flex flex-col justify-center">
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-1.5 leading-tight">
                 <span className="text-[var(--text-primary)] font-bold text-sm tracking-wide">{selectedAsset.name.split('(')[0].trim()}</span>
                 <span className="text-[10px] text-[var(--text-secondary)] font-medium">OTC</span>
                 <ChevronDown size={12} className="text-[var(--text-secondary)]" />
               </div>
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-1.5 leading-none">
                  <span className="text-green-500 text-[10px] font-bold">{selectedAsset.payout}%</span>
               </div>
             </div>
           </div>
           
           <div className="flex items-center gap-5 text-[var(--text-secondary)]">
-            <Shield size={20} strokeWidth={1.5} className="hover:text-[var(--text-primary)] transition cursor-pointer" onClick={() => setIsRiskManagementOpen(true)} />
-            <Compass size={20} strokeWidth={1.5} className="hover:text-[var(--text-primary)] transition cursor-pointer" onClick={() => setIsIndicatorSheetOpen(true)} />
+            <Shield size={18} strokeWidth={1.5} className="hover:text-[var(--text-primary)] transition cursor-pointer" onClick={() => setIsRiskManagementOpen(true)} />
+            <Compass size={18} strokeWidth={1.5} className="hover:text-[var(--text-primary)] transition cursor-pointer" onClick={() => setIsIndicatorSheetOpen(true)} />
             <div 
               onClick={() => setIsChartSettingsOpen(true)}
               className="flex items-center gap-1.5 text-[var(--text-primary)] cursor-pointer hover:text-[var(--text-secondary)] transition active:scale-95"
             >
               <div className="flex items-center justify-center w-5 h-5">
-                 <BarChart2 size={20} strokeWidth={1.5} className="text-[var(--text-primary)]" />
+                 <BarChart2 size={18} strokeWidth={1.5} className="text-[var(--text-primary)]" />
               </div>
               <span className="text-xs font-bold">{chartTimeFrame}</span>
             </div>
@@ -2319,29 +2372,29 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
               </div>
 
               {/* Row 2: Trade Buttons */}
-              <div className="flex items-center gap-2 h-10 mb-1">
+              <div className="flex items-center gap-2 h-8 mb-1">
                 <button 
                   onClick={() => handleTrade('UP')}
-                  className="flex-1 h-full bg-[#22c55e] hover:bg-[#16a34a] active:scale-[0.98] transition rounded-lg flex items-center justify-between px-4 shadow-md z-10"
+                  className="flex-1 h-full bg-[#22c55e] hover:bg-[#16a34a] active:scale-[0.98] transition rounded-lg flex items-center justify-between px-3 shadow-md z-10"
                 >
-                  <span className="font-bold text-white text-xs uppercase tracking-wider">Up</span>
-                  <ArrowUp size={18} strokeWidth={3} className="text-white" />
+                  <span className="font-bold text-white text-[10px] uppercase tracking-wider">Up</span>
+                  <ArrowUp size={16} strokeWidth={3} className="text-white" />
                 </button>
 
                 {/* Middle Clock/Pending Button */}
                 <button 
                   onClick={() => setIsPendingOrderSheetOpen(true)}
-                  className="w-10 h-full bg-[var(--bg-secondary)] hover:bg-[var(--bg-tertiary)] active:scale-[0.95] transition rounded-lg flex items-center justify-center text-[var(--text-primary)] border border-[var(--border-color)] z-10"
+                  className="w-8 h-full bg-[var(--bg-secondary)] hover:bg-[var(--bg-tertiary)] active:scale-[0.95] transition rounded-lg flex items-center justify-center text-[var(--text-primary)] border border-[var(--border-color)] z-10"
                 >
-                  <Clock size={18} />
+                  <Clock size={16} />
                 </button>
 
                 <button 
                   onClick={() => handleTrade('DOWN')}
-                  className="flex-1 h-full bg-[#ff4757] hover:bg-[#ff1f33] active:scale-[0.98] transition rounded-lg flex items-center justify-between px-4 shadow-md z-10"
+                  className="flex-1 h-full bg-[#ff4757] hover:bg-[#ff1f33] active:scale-[0.98] transition rounded-lg flex items-center justify-between px-3 shadow-md z-10"
                 >
-                  <span className="font-bold text-white text-xs uppercase tracking-wider">Down</span>
-                  <ArrowDown size={18} strokeWidth={3} className="text-white" />
+                  <span className="font-bold text-white text-[10px] uppercase tracking-wider">Down</span>
+                  <ArrowDown size={16} strokeWidth={3} className="text-white" />
                 </button>
               </div>
             </>
@@ -2350,7 +2403,7 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
       )}
 
       {/* --- Bottom Navigation --- */}
-      <nav className="bg-[var(--bg-primary)] border-t border-[var(--border-color)] px-2 py-1 flex justify-between items-center text-[9px] font-medium text-[var(--text-secondary)]">
+      <nav className="bg-[var(--bg-primary)] border-t border-[var(--border-color)] px-2 py-0.5 flex justify-between items-center text-[8px] font-medium text-[var(--text-secondary)]">
         <NavButton 
           icon={<BarChart2 size={18} />} 
           label={t('nav.terminal')} 
@@ -2575,13 +2628,13 @@ function NavButton({ icon, label, active, count, onClick }: { icon: React.ReactN
     <button 
       onClick={onClick}
       className={cn(
-      "flex flex-col items-center gap-0.5 p-2 rounded-lg transition min-w-[60px] relative",
+      "flex flex-col items-center gap-0 p-1 rounded-lg transition min-w-[55px] relative",
       active ? "text-[var(--text-primary)]" : "hover:text-[var(--text-secondary)]"
     )}>
-      <div className={cn("p-1 rounded-md", active && "bg-[var(--text-primary)]/10")}>
-        {icon}
+      <div className={cn("p-0.5 rounded-md", active && "bg-[var(--text-primary)]/10")}>
+        {React.isValidElement(icon) ? React.cloneElement(icon as React.ReactElement<any>, { size: 16 }) : icon}
       </div>
-      <span>{label}</span>
+      <span className="scale-90 origin-top">{label}</span>
       {count !== undefined && count > 0 && (
         <span className="absolute top-0 right-1 w-3.5 h-3.5 bg-red-500 text-white text-[8px] flex items-center justify-center rounded-full border border-[var(--bg-primary)]">
           {count}

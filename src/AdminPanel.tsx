@@ -362,6 +362,18 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
     }
   };
 
+  const handleDeleteChatHistory = (chatId: string) => {
+    if (window.confirm(`Are you sure you want to delete all chat history for ${chatId}? This action cannot be undone.`)) {
+      if (socket) {
+        socket.emit('admin-delete-chat-history', chatId);
+        if (selectedChat === chatId) {
+          setSelectedChatMessages([]);
+          setSelectedChat(null);
+        }
+      }
+    }
+  };
+
   const handleUpdatePlatformSettings = (newSettings: any) => {
     const updated = { ...platformSettings, ...newSettings };
     setPlatformSettings(updated);
@@ -1445,10 +1457,20 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                         e.stopPropagation();
                         handleCloseChat(session.id);
                       }}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 text-red-500 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-500/10 rounded-lg"
+                      className="absolute right-10 top-1/2 -translate-y-1/2 p-1.5 text-red-500 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-500/10 rounded-lg"
                       title="Close Chat"
                     >
                       <X size={14} />
+                    </button>
+                    <button 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDeleteChatHistory(session.id);
+                      }}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 text-red-500 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-500/10 rounded-lg"
+                      title="Delete History"
+                    >
+                      <Trash2 size={14} />
                     </button>
                   </div>
                 ))}
@@ -1479,12 +1501,20 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                         <div className="font-black text-sm text-[var(--text-primary)]">{selectedChat}</div>
                         <div className="text-[10px] text-green-500 font-bold uppercase tracking-widest">Live Support Session</div>
                       </div>
-                      <button 
-                        onClick={() => handleCloseChat(selectedChat)}
-                        className="text-[10px] font-black text-red-500 uppercase tracking-widest hover:bg-red-500/10 px-3 py-1.5 rounded-lg transition"
-                      >
-                        End Session
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <button 
+                          onClick={() => handleCloseChat(selectedChat)}
+                          className="text-[10px] font-black text-red-500 uppercase tracking-widest hover:bg-red-500/10 px-3 py-1.5 rounded-lg transition"
+                        >
+                          End Session
+                        </button>
+                        <button 
+                          onClick={() => handleDeleteChatHistory(selectedChat)}
+                          className="text-[10px] font-black text-red-500 uppercase tracking-widest hover:bg-red-500/10 px-3 py-1.5 rounded-lg transition flex items-center gap-1"
+                        >
+                          <Trash2 size={12} /> Delete History
+                        </button>
+                      </div>
                     </div>
                     <div className="flex-1 overflow-y-auto mb-4 space-y-4 pr-2 no-scrollbar">
                       {selectedChatMessages.map((msg, i) => (

@@ -137,12 +137,32 @@ export default function SupportChat({ onClose, supportSettings, socket, userEmai
         }
       };
 
+      const handleChatClosed = () => {
+        setChatStatus('closed');
+      };
+
+      const handleChatHistoryDeleted = () => {
+        setMessages([]);
+        setChatStep('country');
+        setChatStatus('active');
+      };
+
+      const handleChatStatus = (status: 'active' | 'closed') => {
+        setChatStatus(status);
+      };
+
       socket.on('new-chat-message', handleNewMessage);
       socket.on('chat-history', handleChatHistory);
+      socket.on('chat-closed', handleChatClosed);
+      socket.on('chat-history-deleted', handleChatHistoryDeleted);
+      socket.on('chat-status', handleChatStatus);
 
       return () => {
         socket.off('new-chat-message', handleNewMessage);
         socket.off('chat-history', handleChatHistory);
+        socket.off('chat-closed', handleChatClosed);
+        socket.off('chat-history-deleted', handleChatHistoryDeleted);
+        socket.off('chat-status', handleChatStatus);
       };
     }
   }, [userEmail, chatStep, selectedCountry, socket]);
@@ -390,6 +410,10 @@ export default function SupportChat({ onClose, supportSettings, socket, userEmai
                 onClick={() => {
                   setChatStep('country');
                   setMessages([]);
+                  setChatStatus('active');
+                  if (socket && userEmail) {
+                    socket.emit('start-new-chat', userEmail);
+                  }
                 }}
                 className="w-full bg-blue-600 hover:bg-blue-500 text-white py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all active:scale-95"
               >
