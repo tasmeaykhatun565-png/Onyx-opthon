@@ -3133,6 +3133,7 @@ async function startServer() {
       console.error('Vite initialization error:', viteError);
     }
   } else {
+    console.log('Running in production mode, serving dist folder...');
     const distPath = path.join(process.cwd(), 'dist');
     app.use(express.static(distPath));
     app.get('*', (req, res) => {
