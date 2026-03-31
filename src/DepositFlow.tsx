@@ -348,7 +348,7 @@ const PaymentMethodSelection = ({ handleBack, selectedMethod, setSelectedMethod,
 const AmountSelection = ({ handleBack, amount, setAmount, amountError, setAmountError, currencyCode, currencySymbol, minDeposit, setStep }: any) => {
     const rate = EXCHANGE_RATES[currencyCode] || 1;
     const presets = currencyCode === 'BDT' 
-      ? [10000, 5000, 2000, 1000, 500, 100, 50, 20] 
+      ? [10000, 5000, 2000, 1000, 500] 
       : [Math.round(500 * rate), Math.round(250 * rate), Math.round(100 * rate), Math.round(50 * rate), Math.round(20 * rate), Math.round(10 * rate)];
 
     return (
@@ -936,7 +936,7 @@ export default function DepositFlow({ isOpen, onClose, currencySymbol, currencyC
   const [isLoading, setIsLoading] = useState(true);
   const [selectedMethod, setSelectedMethod] = useState<PaymentMethod>(PAYMENT_METHODS[0]);
   const rate = EXCHANGE_RATES[currencyCode] || 1;
-  const minDeposit = currencyCode === 'BDT' ? 20 : Math.round(10 * rate);
+  const minDeposit = currencyCode === 'BDT' ? 500 : Math.round(10 * rate);
   const [amount, setAmount] = useState<number>(minDeposit);
   const [selectedPromo, setSelectedPromo] = useState<string | null>(initialPromoCode ? 'ACTIVE' : null);
   const [promoInput, setPromoInput] = useState<string>(initialPromoCode || '');
@@ -1087,8 +1087,8 @@ export default function DepositFlow({ isOpen, onClose, currencySymbol, currencyC
   const handleSubmitDeposit = () => {
     if (!transactionId) return;
     
-    if (currencyCode === 'BDT' && amount < 20) {
-      setAmountError("Minimum deposit is 20 BDT");
+    if (currencyCode === 'BDT' && amount < 500) {
+      setAmountError("Minimum deposit is 500 BDT");
       return;
     }
     
@@ -1105,6 +1105,10 @@ export default function DepositFlow({ isOpen, onClose, currencySymbol, currencyC
           transactionId,
           promoCode: selectedPromo ? promoInput : null
         });
+      } else {
+        setIsProcessing(false);
+        setDepositStatus('ERROR');
+        alert("Connection lost or user not authenticated. Please try again.");
       }
     }, 10000);
   };

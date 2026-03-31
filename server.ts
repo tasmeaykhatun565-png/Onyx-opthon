@@ -266,7 +266,8 @@ async function startServer() {
       'ALTER TABLE users ADD COLUMN extraAccounts TEXT DEFAULT "[]"',
       'ALTER TABLE deposits ADD COLUMN promoCode TEXT',
       'ALTER TABLE deposits ADD COLUMN bonusAmount REAL DEFAULT 0',
-      'ALTER TABLE deposits ADD COLUMN turnoverRequired REAL DEFAULT 0'
+      'ALTER TABLE deposits ADD COLUMN turnoverRequired REAL DEFAULT 0',
+      'CREATE UNIQUE INDEX IF NOT EXISTS idx_deposits_transactionId ON deposits(transactionId)'
     ];
 
     for (const query of migrationQueries) {
@@ -2333,12 +2334,21 @@ async function startServer() {
     });
 
     socket.on('submit-deposit', (depositData) => {
+      console.log('Received submit-deposit request:', depositData);
       if (!globalPlatformSettings.isDepositsEnabled) {
         socket.emit('deposit-error', 'Deposits are currently disabled.');
         return;
       }
       try {
         const { email, amount, currency, method, transactionId, promoCode } = depositData;
+        console.log(`Processing deposit for ${email}: ${amount} ${currency} via ${method}`);
+        
+        // Check for existing transactionId
+        const existing = db.prepare('SELECT id FROM deposits WHERE transactionId = ?').get(transactionId);
+        if (existing) {
+          socket.emit('deposit-error', 'This transaction ID has already been submitted.');
+          return;
+        }
         
         const rate = EXCHANGE_RATES[currency] || 1;
         const amountUSD = amount / rate;
@@ -2374,7 +2384,7 @@ async function startServer() {
         // Notify admins
         io.to('admin-room').emit('new-deposit-notification', { email, amount, method, transactionId, bonusAmount, submittedAt: now });
         
-        const allDeposits = db.prepare('SELECT * FROM deposits ORDER BY submittedAt DESC').all();
+        const allDeposits = db.prepare('SELECT * FROM deposits ORDER BY submittedAt DESC LIMIT 500').all();
         io.to('admin-room').emit('admin-deposits', allDeposits);
         
       } catch (error) {
@@ -2506,7 +2516,7 @@ async function startServer() {
           }
         }
 
-        const allDeposits = db.prepare('SELECT * FROM deposits ORDER BY submittedAt DESC').all();
+        const allDeposits = db.prepare('SELECT * FROM deposits ORDER BY submittedAt DESC LIMIT 500').all();
         io.to('admin-room').emit('admin-deposits', allDeposits);
 
         // Refresh user list for admin (only send the updated user)
