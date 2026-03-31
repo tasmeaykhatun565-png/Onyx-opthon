@@ -697,7 +697,7 @@ function SettingsPage({
             timezoneOffset={timezoneOffset}
             setTimezoneOffset={setTimezoneOffset}
             currency={currency}
-            setCurrency={setCurrency}
+            setCurrency={handleCurrencyChange}
             chatBackground={chatBackground}
             setChatBackground={setChatBackground}
           />
@@ -712,7 +712,7 @@ function SettingsPage({
             setTimezoneOffset={setTimezoneOffset}
             user={user}
             currency={currency}
-            setCurrency={setCurrency}
+            setCurrency={handleCurrencyChange}
           />
         )}
         {activeSubPage === 'CONTACTS' && (
@@ -854,6 +854,35 @@ export default function TradingPlatform() {
     }
     return CURRENCIES[1];
   });
+
+  const handleCurrencyChange = async (newCurrency: typeof CURRENCIES[0]) => {
+    setCurrency(newCurrency);
+    localStorage.setItem('app-currency', JSON.stringify(newCurrency));
+    
+    if (user?.uid) {
+      try {
+        await setDoc(doc(db, 'users', user.uid), {
+          currency: newCurrency.code,
+          currencySymbol: newCurrency.symbol,
+          currencyName: newCurrency.name,
+          currencyFlag: newCurrency.flag
+        }, { merge: true });
+        
+        if (user.email) {
+          await fetch('/api/user/preferences', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              email: user.email,
+              currency: newCurrency.code
+            })
+          });
+        }
+      } catch (error) {
+        console.error('Error updating currency:', error);
+      }
+    }
+  };
   const [balance, setBalance] = useState<number>(0);
   const [demoBalance, setDemoBalance] = useState<number>(1000);
   const [turnoverRequired, setTurnoverRequired] = useState(0);
@@ -1928,7 +1957,7 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
       timezoneOffset={timezoneOffset}
       setTimezoneOffset={setTimezoneOffset}
       currency={currency}
-      setCurrency={setCurrency}
+      setCurrency={handleCurrencyChange}
       socket={socket}
       user={user}
       chatBackground={chatBackground}
