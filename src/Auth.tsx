@@ -220,7 +220,7 @@ export default function Auth({ onSuccess }: AuthProps) {
   };
 
   return (
-    <div className="min-h-screen bg-black flex flex-col font-sans selection:bg-blue-500/30 overflow-hidden">
+    <div className="min-h-[100dvh] bg-black flex flex-col font-sans selection:bg-blue-500/30 overflow-hidden">
       {/* Top Market Ticker */}
       <div className="h-10 bg-white/[0.02] border-b border-white/5 flex items-center overflow-hidden whitespace-nowrap relative z-50 backdrop-blur-md">
         <div className="flex animate-marquee items-center gap-12 px-12">

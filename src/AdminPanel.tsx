@@ -796,7 +796,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
 
   if (!isFullAdmin && !isSupportAgent) {
     return (
-      <div className="min-h-screen bg-[var(--bg-primary)] text-[var(--text-primary)] flex items-center justify-center">
+      <div className="min-h-[100dvh] bg-[var(--bg-primary)] text-[var(--text-primary)] flex items-center justify-center">
         <div className="text-center">
           <h1 className="text-2xl font-bold text-red-500 mb-4">Access Denied</h1>
           <p className="text-[var(--text-secondary)] mb-6">You do not have permission to view this page.</p>
@@ -807,7 +807,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
   }
 
   return (
-    <div className="min-h-screen bg-[var(--bg-primary)] text-[var(--text-primary)] font-sans flex flex-col">
+    <div className="min-h-[100dvh] bg-[var(--bg-primary)] text-[var(--text-primary)] font-sans flex flex-col">
       {/* Header */}
       <div className="bg-[var(--bg-secondary)] border-b border-[var(--border-color)] px-4 py-4 flex items-center justify-between sticky top-0 z-50 backdrop-blur-xl bg-[var(--bg-secondary)]/80">
         <div className="flex items-center gap-3">

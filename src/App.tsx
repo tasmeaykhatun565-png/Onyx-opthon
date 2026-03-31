@@ -595,7 +595,7 @@ function SettingsPage({
   const [activeSubPage, setActiveSubPage] = useState<string | null>(null);
 
   return (
-    <div className="min-h-screen bg-[var(--bg-primary)] text-[var(--text-primary)] font-sans flex flex-col relative overflow-hidden">
+    <div className="min-h-[100dvh] bg-[var(--bg-primary)] text-[var(--text-primary)] font-sans flex flex-col relative overflow-hidden">
       {/* Header */}
       <div className="flex items-center gap-4 p-4 border-b border-[var(--border-color)]">
         <button onClick={onBack} className="text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)] p-1 rounded-full transition">
@@ -1846,7 +1846,7 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
 
   if (authLoading) {
     return (
-      <div className="min-h-screen bg-[var(--bg-primary)] flex items-center justify-center">
+      <div className="min-h-[100dvh] bg-[var(--bg-primary)] flex items-center justify-center">
         <div className="w-12 h-12 border-4 border-blue-500/20 border-t-blue-500 rounded-full animate-spin"></div>
       </div>
     );
@@ -1948,7 +1948,7 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
 
 
   return (
-    <div className="flex flex-col h-screen bg-[var(--bg-primary)] text-[var(--text-primary)] font-sans overflow-hidden select-none">
+    <div className="flex flex-col h-[100dvh] bg-[var(--bg-primary)] text-[var(--text-primary)] font-sans overflow-hidden select-none">
       
       {/* --- Top Header (Only for Trading) --- */}
       {view === 'TRADING' && (
@@ -2254,7 +2254,7 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
 
       {/* --- Bottom Controls (Only for Trading) --- */}
       {view === 'TRADING' && (
-        <div className="bg-[var(--bg-primary)] px-2 py-1 z-20 border-t border-[var(--border-color)] flex flex-col gap-1">
+        <div className="bg-[var(--bg-primary)] px-2 pt-1 pb-[calc(env(safe-area-inset-bottom)+4px)] z-20 border-t border-[var(--border-color)] flex flex-col gap-1">
           {/* Top Info Overlay (Moved from chart) */}
           <div className="flex justify-between text-[10px] text-gray-500 font-medium px-2">
             <span>Fixed Time mode</span>
@@ -3119,7 +3119,7 @@ function ProfilePage({ onBack, onSettings, user, onAdmin, setView, balance, curr
   const remainingExp = nextLevel ? nextLevel.minExp - exp : 0;
 
   return (
-    <div className="min-h-screen bg-[var(--bg-primary)] text-[var(--text-primary)] font-sans p-4 flex flex-col">
+    <div className="min-h-[100dvh] bg-[var(--bg-primary)] text-[var(--text-primary)] font-sans p-4 flex flex-col">
       {/* Header */}
       <div className="flex justify-between items-center mb-8">
         <button onClick={onBack} className="p-2 -ml-2 text-[var(--text-primary)]">
