@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { X, Shield, AlertTriangle, CheckCircle2, Save } from 'lucide-react';
-import { cn } from './utils';
+import { cn, safeStringify } from './utils';
 
 interface RiskManagementSheetProps {
   isOpen: boolean;
@@ -28,7 +28,7 @@ export default function RiskManagementSheet({ isOpen, onClose, balance, currency
   }, []);
 
   const handleSave = () => {
-    localStorage.setItem('risk_management', JSON.stringify({
+    localStorage.setItem('risk_management', safeStringify({
       dailyStopLoss,
       dailyTakeProfit,
       maxTradeAmount

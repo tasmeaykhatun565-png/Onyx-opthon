@@ -80,7 +80,7 @@ export default function NewsFeed() {
     } catch (error: any) {
       console.error('Error fetching news:', error);
       
-      const errorStr = typeof error === 'object' ? JSON.stringify(error) : String(error);
+      const errorStr = error instanceof Error ? error.message : String(error);
       const isQuotaError = errorStr.includes('429') || errorStr.includes('RESOURCE_EXHAUSTED') || errorStr.includes('quota');
       
       if (isQuotaError) {

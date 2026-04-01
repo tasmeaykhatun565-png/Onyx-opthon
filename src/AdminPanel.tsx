@@ -7,7 +7,7 @@ import {
   Percent, Info, Send, Phone, Mail, Video, Trophy, FileText, Plus, BarChart2, Wallet, RefreshCw, CheckCircle2, XCircle, Search,
   ArrowUpCircle, ArrowDownCircle, MessageSquare, Edit, Smartphone, Globe, Shield, DollarSign, Layout, Bitcoin
 } from 'lucide-react';
-import { cn } from './utils';
+import { cn, safeStringify } from './utils';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useToast } from './Toast';
 
@@ -257,7 +257,13 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
     dailyStats: { trades: 0, volume: 0, profit: 0, loss: 0 }
   });
   const [tradeSettings, setTradeSettings] = useState({ mode: 'FAIR', winPercentage: 50, payoutPercentage: 90 });
-  const [supportSettings, setSupportSettings] = useState({ telegram: '', whatsapp: '', email: '' });
+  const [supportSettings, setSupportSettings] = useState({ 
+    telegram: '', 
+    whatsapp: '', 
+    email: '', 
+    isChatEnabled: true, 
+    supportStatus: 'online' as 'online' | 'offline' 
+  });
   const [chatSessions, setChatSessions] = useState<any[]>([]);
   const [selectedChatMessages, setSelectedChatMessages] = useState<any[]>([]);
   const [selectedChat, setSelectedChat] = useState<string | null>(null);
@@ -469,6 +475,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
 
     socket.on('admin-support-settings', (settings) => {
       setSupportSettings(settings);
+      if (settings.isChatEnabled !== undefined) {
+        setIsChatOpen(settings.isChatEnabled);
+      }
     });
 
     socket.on('admin-tutorials', (data) => {
@@ -709,7 +718,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
 
     // Filter
     let filteredLogs = logs.filter(log => {
-        const searchString = JSON.stringify(log).toLowerCase();
+        const searchString = safeStringify(log).toLowerCase();
         return searchString.includes(logFilter.toLowerCase());
     });
 
@@ -1423,24 +1432,57 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
               <div className="bg-[var(--bg-secondary)] p-4 rounded-3xl border border-[var(--border-color)] shadow-xl h-[600px] overflow-y-auto">
                 <div className="flex justify-between items-center mb-4">
                   <h3 className="font-black text-[10px] uppercase tracking-[0.2em] text-green-500">Active Chats</h3>
-                  <div className="flex items-center gap-2">
-                    <span className="text-[10px] font-bold text-[var(--text-secondary)]">Support:</span>
-                    <button 
-                      onClick={() => {
-                        const newState = !isChatOpen;
-                        setIsChatOpen(newState);
-                        socket?.emit('admin-update-support-settings', { ...supportSettings, isChatEnabled: newState });
-                      }}
-                      className={cn(
-                        "w-10 h-5 rounded-full relative transition-colors",
-                        isChatOpen ? "bg-green-500" : "bg-red-500"
-                      )}
-                    >
-                      <div className={cn(
-                        "absolute top-1 w-3 h-3 bg-white rounded-full transition-all",
-                        isChatOpen ? "right-1" : "left-1"
-                      )} />
-                    </button>
+                  <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] font-bold text-[var(--text-secondary)]">Status:</span>
+                      <div className="flex bg-[var(--bg-primary)] p-1 rounded-xl border border-[var(--border-color)]">
+                        <button 
+                          onClick={() => {
+                            const newSettings = { ...supportSettings, supportStatus: 'online' as const };
+                            setSupportSettings(newSettings);
+                            socket?.emit('admin-update-support-settings', newSettings);
+                          }}
+                          className={cn(
+                            "px-3 py-1 rounded-lg text-[10px] font-black uppercase transition-all",
+                            supportSettings.supportStatus === 'online' ? "bg-green-500 text-white shadow-lg shadow-green-500/20" : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+                          )}
+                        >
+                          Online
+                        </button>
+                        <button 
+                          onClick={() => {
+                            const newSettings = { ...supportSettings, supportStatus: 'offline' as const };
+                            setSupportSettings(newSettings);
+                            socket?.emit('admin-update-support-settings', newSettings);
+                          }}
+                          className={cn(
+                            "px-3 py-1 rounded-lg text-[10px] font-black uppercase transition-all",
+                            supportSettings.supportStatus === 'offline' ? "bg-red-500 text-white shadow-lg shadow-red-500/20" : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+                          )}
+                        >
+                          Offline
+                        </button>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] font-bold text-[var(--text-secondary)]">Chat:</span>
+                      <button 
+                        onClick={() => {
+                          const newState = !isChatOpen;
+                          setIsChatOpen(newState);
+                          socket?.emit('admin-update-support-settings', { ...supportSettings, isChatEnabled: newState });
+                        }}
+                        className={cn(
+                          "w-10 h-5 rounded-full relative transition-colors",
+                          isChatOpen ? "bg-green-500" : "bg-red-500"
+                        )}
+                      >
+                        <div className={cn(
+                          "absolute top-1 w-3 h-3 bg-white rounded-full transition-all",
+                          isChatOpen ? "right-1" : "left-1"
+                        )} />
+                      </button>
+                    </div>
                   </div>
                 </div>
                 {chatSessions.filter(s => s.status !== 'closed').map(session => (
@@ -2066,7 +2108,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                           </div>
                         </div>
 
-                        <div className="lg:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="lg:col-span-2 grid grid-cols-1 sm:grid-cols-3 gap-4">
                           <div className="space-y-2">
                             <div className="text-[10px] text-[var(--text-secondary)] font-black uppercase tracking-widest ml-1">Front Side</div>
                             <div className="aspect-[3/2] rounded-2xl bg-[var(--bg-primary)] border border-[var(--border-color)] overflow-hidden relative group shadow-inner">
@@ -2097,6 +2139,23 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                               ) : (
                                 <div className="w-full h-full flex items-center justify-center text-[var(--text-secondary)]">
                                   <FileText size={32} className="opacity-20" />
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                          <div className="space-y-2">
+                            <div className="text-[10px] text-[var(--text-secondary)] font-black uppercase tracking-widest ml-1">Selfie</div>
+                            <div className="aspect-[3/2] rounded-2xl bg-[var(--bg-primary)] border border-[var(--border-color)] overflow-hidden relative group shadow-inner">
+                              {req.selfieImage ? (
+                                <img 
+                                  src={req.selfieImage} 
+                                  alt="Selfie" 
+                                  className="w-full h-full object-cover cursor-pointer hover:scale-105 transition-transform"
+                                  onClick={() => window.open(req.selfieImage, '_blank')}
+                                />
+                              ) : (
+                                <div className="w-full h-full flex items-center justify-center text-[var(--text-secondary)]">
+                                  <User size={32} className="opacity-20" />
                                 </div>
                               )}
                             </div>

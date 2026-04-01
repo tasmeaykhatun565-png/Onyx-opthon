@@ -16,9 +16,19 @@ const JWT_SECRET = process.env.JWT_SECRET || 'trading-platform-secret-key';
 let firestore: any = null;
 let db: any = null;
 let currentFirebaseProjectId: string | null = null;
+let firestoreDisabledDueToError = false;
+
+process.on('unhandledRejection', (reason: any, promise) => {
+  if (reason && (reason.code === 7 || (reason.message && reason.message.includes('PERMISSION_DENIED')))) {
+    firestoreDisabledDueToError = true;
+    console.warn('Firestore sync disabled globally due to PERMISSION_DENIED. Please provide a service account key or use the default AI Studio Firebase project.');
+  } else {
+    console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+  }
+});
 
 const canSyncFirestore = () => {
-  return firestore && currentFirebaseProjectId === 'gen-lang-client-0086981611';
+  return firestore !== null && !firestoreDisabledDueToError;
 };
 
 const EXCHANGE_RATES: Record<string, number> = {
@@ -104,6 +114,7 @@ async function startServer() {
         dateOfBirth TEXT,
         frontImage TEXT,
         backImage TEXT,
+        selfieImage TEXT,
         status TEXT DEFAULT 'PENDING',
         submittedAt INTEGER,
         updatedAt INTEGER,
@@ -171,6 +182,9 @@ async function startServer() {
         trades TEXT DEFAULT '[]',
         language TEXT DEFAULT 'en',
         currency TEXT DEFAULT 'USD',
+        currencySymbol TEXT DEFAULT '$',
+        currencyName TEXT DEFAULT 'US Dollar',
+        currencyFlag TEXT DEFAULT '🇺🇸',
         timeframe TEXT DEFAULT '1m',
         chartType TEXT DEFAULT 'candles'
       );
@@ -274,6 +288,9 @@ async function startServer() {
       'ALTER TABLE users ADD COLUMN totalReferralEarnings REAL DEFAULT 0',
       'ALTER TABLE users ADD COLUMN allowed_withdrawal_methods TEXT DEFAULT ""',
       'ALTER TABLE users ADD COLUMN extraAccounts TEXT DEFAULT "[]"',
+      'ALTER TABLE users ADD COLUMN currencySymbol TEXT DEFAULT "$"',
+      'ALTER TABLE users ADD COLUMN currencyName TEXT DEFAULT "US Dollar"',
+      'ALTER TABLE users ADD COLUMN currencyFlag TEXT DEFAULT "🇺🇸"',
       'ALTER TABLE deposits ADD COLUMN promoCode TEXT',
       'ALTER TABLE deposits ADD COLUMN bonusAmount REAL DEFAULT 0',
       'ALTER TABLE deposits ADD COLUMN turnoverRequired REAL DEFAULT 0',
@@ -284,6 +301,17 @@ async function startServer() {
       try { database.prepare(query).run(); } catch (e) {}
     }
     
+    // Migrations
+    try {
+      database.exec("ALTER TABLE kyc_submissions ADD COLUMN selfieImage TEXT");
+      console.log('Added selfieImage column to kyc_submissions');
+    } catch (e) {}
+
+    try {
+      database.exec("ALTER TABLE users ADD COLUMN extraAccounts TEXT DEFAULT '[]'");
+      console.log('Added extraAccounts column to users');
+    } catch (e) {}
+
     return database;
   };
 
@@ -313,12 +341,108 @@ async function startServer() {
   app.use(cors());
   app.use(express.json());
 
+  // Helper to sync user from Firestore to SQLite
+  const syncUserFromFirestore = async (email: string, uid: string, defaultName: string, defaultPhoto: string) => {
+    if (!canSyncFirestore() || !uid) return null;
+    try {
+      const doc = await firestore.collection('users').doc(uid).get();
+      if (doc.exists) {
+        const data = doc.data();
+        const existingUser = db.prepare('SELECT * FROM users WHERE email = ?').get(email);
+        const now = Date.now();
+        
+        if (!existingUser) {
+          db.prepare('INSERT INTO users (email, name, photoURL, uid, balance, demoBalance, createdAt, lastLogin, status, kycStatus, turnover_achieved, turnover_required, referralBalance, totalReferralEarnings, allowed_withdrawal_methods, trades, language, currency, currencySymbol, currencyName, currencyFlag, timeframe, chartType, referredBy, referralCode, referralCount, extraAccounts) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+            .run(
+              email, 
+              data.name || defaultName || '', 
+              data.photoURL || defaultPhoto || '', 
+              uid, 
+              data.balance !== undefined ? data.balance : 0, 
+              data.demoBalance !== undefined ? data.demoBalance : 10000, 
+              data.createdAt || now, 
+              now,
+              data.status || 'ACTIVE',
+              data.kycStatus || 'NONE',
+              data.turnover_achieved || 0,
+              data.turnover_required || 0,
+              data.referralBalance || 0,
+              data.totalReferralEarnings || 0,
+              data.allowed_withdrawal_methods || '',
+              data.trades || '[]',
+              data.language || 'en',
+              data.currency || 'USD',
+              data.currencySymbol || '$',
+              data.currencyName || 'US Dollar',
+              data.currencyFlag || '🇺🇸',
+              data.timeframe || '1m',
+              data.chartType || 'candles',
+              data.referredBy || null,
+              data.referralCode || null,
+              data.referralCount || 0,
+              data.extraAccounts || '[]'
+            );
+        } else {
+          db.prepare('UPDATE users SET balance = ?, demoBalance = ?, status = ?, kycStatus = ?, turnover_achieved = ?, turnover_required = ?, referralBalance = ?, totalReferralEarnings = ?, allowed_withdrawal_methods = ?, trades = ?, language = ?, currency = ?, currencySymbol = ?, currencyName = ?, currencyFlag = ?, timeframe = ?, chartType = ?, referredBy = ?, referralCode = ?, referralCount = ?, extraAccounts = ? WHERE email = ?')
+            .run(
+              data.balance !== undefined ? data.balance : existingUser.balance,
+              data.demoBalance !== undefined ? data.demoBalance : existingUser.demoBalance,
+              data.status || existingUser.status,
+              data.kycStatus || existingUser.kycStatus,
+              data.turnover_achieved !== undefined ? data.turnover_achieved : existingUser.turnover_achieved,
+              data.turnover_required !== undefined ? data.turnover_required : existingUser.turnover_required,
+              data.referralBalance !== undefined ? data.referralBalance : existingUser.referralBalance,
+              data.totalReferralEarnings !== undefined ? data.totalReferralEarnings : existingUser.totalReferralEarnings,
+              data.allowed_withdrawal_methods !== undefined ? data.allowed_withdrawal_methods : existingUser.allowed_withdrawal_methods,
+              data.trades !== undefined ? data.trades : existingUser.trades,
+              data.language !== undefined ? data.language : existingUser.language,
+              data.currency !== undefined ? data.currency : existingUser.currency,
+              data.currencySymbol !== undefined ? data.currencySymbol : existingUser.currencySymbol,
+              data.currencyName !== undefined ? data.currencyName : existingUser.currencyName,
+              data.currencyFlag !== undefined ? data.currencyFlag : existingUser.currencyFlag,
+              data.timeframe !== undefined ? data.timeframe : existingUser.timeframe,
+              data.chartType !== undefined ? data.chartType : existingUser.chartType,
+              data.referredBy !== undefined ? data.referredBy : existingUser.referredBy,
+              data.referralCode !== undefined ? data.referralCode : existingUser.referralCode,
+              data.referralCount !== undefined ? data.referralCount : existingUser.referralCount,
+              data.extraAccounts !== undefined ? data.extraAccounts : existingUser.extraAccounts,
+              email
+            );
+        }
+        return db.prepare('SELECT * FROM users WHERE email = ?').get(email);
+      }
+    } catch (error: any) {
+      if (error.code === 7 || (error.message && error.message.includes('PERMISSION_DENIED'))) {
+        firestoreDisabledDueToError = true;
+        console.warn('Firestore sync disabled due to PERMISSION_DENIED. Please provide a service account key or use the default AI Studio Firebase project.');
+      } else {
+        console.error('Error syncing user from Firestore:', error);
+      }
+    }
+    return null;
+  };
+
   app.get('/api/user', async (req, res) => {
     const { email } = req.query;
     if (!email) return res.status(400).json({ error: 'Email is required' });
 
     try {
-      const user = db.prepare('SELECT * FROM users WHERE email = ?').get(email) as any;
+      let user = db.prepare('SELECT * FROM users WHERE email = ?').get(email) as any;
+      
+      // Try to fetch from Firestore if not found in SQLite
+      if (!user && canSyncFirestore()) {
+         try {
+           const snapshot = await firestore.collection('users').where('email', '==', email).limit(1).get();
+           if (!snapshot.empty) {
+             const doc = snapshot.docs[0];
+             const uid = doc.id;
+             user = await syncUserFromFirestore(email as string, uid, '', '');
+           }
+         } catch (e) {
+           console.error('Error fetching user from Firestore by email:', e);
+         }
+      }
+      
       if (!user) return res.status(404).json({ error: 'User not found' });
       res.json(user);
     } catch (error) {
@@ -328,19 +452,40 @@ async function startServer() {
   });
 
   app.post('/api/user/preferences', async (req, res) => {
-    const { email, language, currency, timeframe, chartType } = req.body;
+    const { email, language, currency, currencySymbol, currencyName, currencyFlag, timeframe, chartType } = req.body;
     try {
       const updates = [];
       const values = [];
+      const firestoreUpdates: any = {};
 
-      if (language) { updates.push('language = ?'); values.push(language); }
-      if (currency) { updates.push('currency = ?'); values.push(currency); }
-      if (timeframe) { updates.push('timeframe = ?'); values.push(timeframe); }
-      if (chartType) { updates.push('chartType = ?'); values.push(chartType); }
+      if (language) { updates.push('language = ?'); values.push(language); firestoreUpdates.language = language; }
+      if (currency) { updates.push('currency = ?'); values.push(currency); firestoreUpdates.currency = currency; }
+      if (currencySymbol) { updates.push('currencySymbol = ?'); values.push(currencySymbol); firestoreUpdates.currencySymbol = currencySymbol; }
+      if (currencyName) { updates.push('currencyName = ?'); values.push(currencyName); firestoreUpdates.currencyName = currencyName; }
+      if (currencyFlag) { updates.push('currencyFlag = ?'); values.push(currencyFlag); firestoreUpdates.currencyFlag = currencyFlag; }
+      if (timeframe) { updates.push('timeframe = ?'); values.push(timeframe); firestoreUpdates.timeframe = timeframe; }
+      if (chartType) { updates.push('chartType = ?'); values.push(chartType); firestoreUpdates.chartType = chartType; }
 
       if (updates.length > 0) {
         values.push(email);
         db.prepare(`UPDATE users SET ${updates.join(', ')} WHERE email = ?`).run(...values);
+        
+        // Sync to Firestore
+        if (canSyncFirestore()) {
+          const user = db.prepare('SELECT uid FROM users WHERE email = ?').get(email) as any;
+          if (user && user.uid) {
+            firestore.collection('users').doc(user.uid).set(firestoreUpdates, { merge: true })
+              .catch((error: any) => {
+                if (error.code === 7 || (error.message && error.message.includes('PERMISSION_DENIED'))) {
+                  firestoreDisabledDueToError = true;
+                  console.warn('Firestore sync disabled globally due to PERMISSION_DENIED.');
+                } else {
+                  console.error('Firestore preferences sync error:', error);
+                }
+              });
+          }
+        }
+        
         res.json({ success: true });
       } else {
         res.status(400).json({ error: 'No preferences provided' });
@@ -541,7 +686,14 @@ async function startServer() {
           turnover_required: user.turnover_required
         };
         firestore.collection('users').doc(user.uid).set(syncData, { merge: true })
-          .catch((e: any) => console.error('Firestore user sync error:', e));
+          .catch((error: any) => {
+            if (error.code === 7 || (error.message && error.message.includes('PERMISSION_DENIED'))) {
+              firestoreDisabledDueToError = true;
+              console.warn('Firestore sync disabled due to PERMISSION_DENIED. Please provide a service account key or use the default AI Studio Firebase project.');
+            } else {
+              console.error('Firestore user sync error:', error);
+            }
+          });
       }
       
       // Also update admin panel (only send the updated user, not all users)
@@ -965,7 +1117,9 @@ async function startServer() {
   let globalSupportSettings = {
     telegram: 'https://t.me/onyxtrade_support',
     whatsapp: 'https://wa.me/1234567890',
-    email: 'support@onyxtrade.com'
+    email: 'support@onyxtrade.com',
+    isChatEnabled: true,
+    supportStatus: 'online' as 'online' | 'offline'
   };
 
   // Referral Settings
@@ -1143,40 +1297,43 @@ async function startServer() {
         if (asset.targetPrice) {
           // Move towards target price (scaled for 200ms)
           const diff = asset.targetPrice - asset.price;
-          const step = diff * 0.01; // Move 1% towards target each tick (smooth)
+          const step = diff * 0.05; // Move 5% towards target each tick (faster to ensure it gets there)
           newPrice += step;
+          
+          // Add a tiny bit of noise so it doesn't look completely artificial
+          newPrice += (Math.random() - 0.5) * asset.volatility * 0.05;
           
           // If close enough, clear target
           if (Math.abs(diff) < asset.volatility * 0.02) {
             asset.targetPrice = null;
           }
         } else {
-          // --- Erratic Movement Logic (More Chaos) ---
-          // Reduce trend persistence to make it change direction more often
-          asset.trend += (Math.random() - 0.5) * asset.volatility * 0.05;
-          asset.trend *= 0.85; // Faster trend decay for more "random" feel
+          // --- Smoother Movement Logic ---
+          // Keep trend persistence higher for smoother moves
+          asset.trend += (Math.random() - 0.5) * asset.volatility * 0.02;
+          asset.trend *= 0.95; // Slower trend decay for smoother feel
           
           const candleTypeRand = Math.random();
           let moveMultiplier = 1.0;
           
-          // Add more variety to candle sizes
-          if (candleTypeRand < 0.20) moveMultiplier = 0.05; // Tiny/Doji
-          else if (candleTypeRand < 0.40) moveMultiplier = 2.5;  // Sudden large move
-          else if (candleTypeRand < 0.50) moveMultiplier = -1.5; // Sudden reversal move
+          // Add some variety but less extreme
+          if (candleTypeRand < 0.20) moveMultiplier = 0.5; // Smaller move
+          else if (candleTypeRand < 0.30) moveMultiplier = 1.5;  // Slightly larger move
+          else if (candleTypeRand < 0.40) moveMultiplier = -0.8; // Reversal move
           
-          // Increase the random noise component significantly
-          const noise = (Math.random() - 0.5) * asset.volatility * 0.6; 
+          // Decrease the random noise component
+          const noise = (Math.random() - 0.5) * asset.volatility * 0.2; 
           const move = (asset.trend + noise) * moveMultiplier;
           newPrice += move;
 
-          // --- Frequent "Jitter" Logic ---
-          // Add a small random jitter on almost every tick
-          newPrice += (Math.random() - 0.5) * asset.volatility * 0.1;
+          // --- Less Frequent "Jitter" Logic ---
+          // Add a very small random jitter
+          newPrice += (Math.random() - 0.5) * asset.volatility * 0.02;
 
-          // --- Gap Up / Gap Down Logic (Increased frequency) ---
-          if (isFullSecond && Math.random() < 0.05) { // 5% chance every second
+          // --- Gap Up / Gap Down Logic (Decreased frequency and size) ---
+          if (isFullSecond && Math.random() < 0.01) { // 1% chance every second
             const gapDirection = Math.random() > 0.5 ? 1 : -1;
-            const gapSize = (Math.random() * 3 + 1) * asset.volatility; 
+            const gapSize = (Math.random() * 1.5 + 0.5) * asset.volatility; 
             newPrice += gapDirection * gapSize;
           }
           // --------------------------------------------
@@ -1237,7 +1394,8 @@ async function startServer() {
     
     // Broadcast active trades to admin every second
     if (isFullSecond) {
-      io.to('admin-room').emit('admin-active-trades', Object.values(activeTrades));
+      const realActiveTrades = Object.values(activeTrades).filter((t: any) => t.accountType === 'REAL');
+      io.to('admin-room').emit('admin-active-trades', realActiveTrades);
       io.to('admin-room').emit('admin-users', Object.values(connectedUsers));
     }
     
@@ -1271,7 +1429,7 @@ async function startServer() {
       } else if (globalTradeSettings.mode === 'PERCENTAGE') {
         const assetKey = trade.assetShortName || trade.asset;
         const asset = assets[assetKey as keyof typeof assets];
-        const winPercentage = asset?.winPercentage || globalTradeSettings.winPercentage;
+        const winPercentage = asset?.winPercentage !== undefined ? asset.winPercentage : globalTradeSettings.winPercentage;
         const isWin = Math.random() * 100 < winPercentage;
         forcedResult = isWin ? 'WIN' : 'LOSS';
       }
@@ -1349,38 +1507,44 @@ async function startServer() {
     // Set a timer to resolve the trade
     const durationMs = Math.max(0, trade.endTime - Date.now());
     
-    // If there's a forced result, manipulate the price slightly before the trade ends
+    // If there's a forced result, start manipulating the price immediately so it looks natural
     if (forcedResult) {
-      // Start manipulation earlier (e.g., halfway through the trade or at least 5 seconds before end)
-      const manipulationTime = Math.max(0, Math.min(durationMs / 2, durationMs - 5000));
-      setTimeout(() => {
-        const activeTrade = activeTrades[trade.id];
-        if (!activeTrade) return;
-        const assetKey = activeTrade.assetShortName || activeTrade.asset;
-        const asset = assets[assetKey as keyof typeof assets];
-        if (!asset) return;
-
+      const activeTrade = activeTrades[trade.id];
+      const assetKey = activeTrade.assetShortName || activeTrade.asset;
+      const asset = assets[assetKey as keyof typeof assets];
+      
+      if (asset) {
         const isUp = activeTrade.type === 'UP';
         const shouldWin = forcedResult === 'WIN';
-        
-        // Determine if we need to move price UP or DOWN
         const needsUp = (isUp && shouldWin) || (!isUp && !shouldWin);
         
-        // Calculate a safe target price
-        const offset = asset.volatility * 2; // Smaller offset for natural look
+        // Function to continuously guide the price
+        const guidePrice = () => {
+          if (!activeTrades[trade.id]) return; // Stop if trade is resolved
+          
+          const currentPrice = asset.price;
+          const safeMargin = asset.volatility * 3;
+          let target = activeTrade.entryPrice + (needsUp ? safeMargin : -safeMargin);
+          
+          // If price is on the wrong side or too close to entry, aggressively target the correct side
+          if (needsUp && currentPrice < activeTrade.entryPrice + asset.volatility) {
+             asset.targetPrice = target;
+          } else if (!needsUp && currentPrice > activeTrade.entryPrice - asset.volatility) {
+             asset.targetPrice = target;
+          } else {
+             // If it's already safely on the correct side, let it wander naturally but keep a slight bias
+             asset.targetPrice = null;
+             asset.trend = needsUp ? asset.volatility * 0.5 : -asset.volatility * 0.5;
+          }
+        };
+
+        // Start immediately and check every 1 second
+        guidePrice();
+        const guideInterval = setInterval(guidePrice, 1000);
         
-        // If the current price is already on the wrong side, we need a bigger target to pull it across
-        const currentPrice = asset.price;
-        let target = activeTrade.entryPrice + (needsUp ? offset : -offset);
-        
-        if (needsUp && currentPrice < activeTrade.entryPrice) {
-           target = activeTrade.entryPrice + Math.abs(activeTrade.entryPrice - currentPrice) + offset;
-        } else if (!needsUp && currentPrice > activeTrade.entryPrice) {
-           target = activeTrade.entryPrice - Math.abs(activeTrade.entryPrice - currentPrice) - offset;
-        }
-        
-        asset.targetPrice = target;
-      }, manipulationTime);
+        // Clean up when trade ends
+        setTimeout(() => clearInterval(guideInterval), durationMs + 1000);
+      }
     }
 
     setTimeout(() => resolveTrade(trade.id), durationMs);
@@ -1480,11 +1644,16 @@ async function startServer() {
     });
 
     // Handle user authentication/sync from client
-    socket.on('user-sync', (userData) => {
+    socket.on('user-sync', async (userData) => {
       if (userData && userData.email) {
         // Fetch latest KYC status
         const kyc = db.prepare('SELECT status, rejectionReason FROM kyc_submissions WHERE email = ? ORDER BY submittedAt DESC LIMIT 1').get(userData.email) as any;
         
+        // Try to sync from Firestore first
+        if (canSyncFirestore() && userData.uid) {
+          await syncUserFromFirestore(userData.email, userData.uid, userData.name || userData.displayName, userData.photoURL);
+        }
+
         // Upsert user into users table
         const existingUser = db.prepare('SELECT * FROM users WHERE email = ?').get(userData.email);
         const now = Date.now();
@@ -1500,6 +1669,23 @@ async function startServer() {
               db.prepare('UPDATE users SET referralCount = referralCount + 1 WHERE email = ?').run(referrer.email);
             }
           }
+          
+          // Sync to Firestore since it's a new user
+          if (canSyncFirestore() && userData.uid) {
+             firestore.collection('users').doc(userData.uid).set({
+               email: userData.email,
+               name: userData.name || userData.displayName || '',
+               photoURL: userData.photoURL || '',
+               uid: userData.uid,
+               balance: 0,
+               demoBalance: 10000,
+               createdAt: now,
+               lastLogin: now,
+               status: 'ACTIVE',
+               turnover_achieved: 0,
+               turnover_required: 0
+             }, { merge: true }).catch((e: any) => console.error('Firestore new user sync error:', e));
+          }
         } else {
           db.prepare('UPDATE users SET name = ?, photoURL = ?, uid = ?, lastLogin = ?, kycStatus = ?, referredBy = ?, referralCode = ? WHERE email = ?')
             .run(userData.name || userData.displayName || existingUser.name || '', userData.photoURL || existingUser.photoURL || '', userData.uid || existingUser.uid || '', now, kyc ? kyc.status : existingUser.kycStatus, userData.referredBy || existingUser.referredBy, userData.referralCode || existingUser.referralCode, userData.email);
@@ -1511,7 +1697,7 @@ async function startServer() {
           ...connectedUsers[socket.id],
           ...userData,
           ...userFromDb,
-          kycStatus: kyc ? kyc.status : 'NOT_SUBMITTED',
+          kycStatus: userFromDb.kycStatus || 'NOT_SUBMITTED',
           kycRejectionReason: kyc ? kyc.rejectionReason : null,
           id: socket.id,
           socketId: socket.id
@@ -1952,6 +2138,7 @@ async function startServer() {
         }
         
         io.to(`chat-${email}`).emit('new-chat-message', message);
+        io.to('admin-room').emit('new-chat-message', message);
         
         // Refresh admin chat list for all admins
         const allChats = db.prepare(`
@@ -2168,6 +2355,18 @@ async function startServer() {
         db.prepare('UPDATE users SET name = ?, isBoosted = ?, allowed_withdrawal_methods = ? WHERE email = ?').run(name, isBoosted ? 1 : 0, allowed_withdrawal_methods, email);
         logActivity(email, 'ADMIN_UPDATE_DETAILS', `Admin updated user details`);
         
+        // Update Firestore
+        if (canSyncFirestore()) {
+          const userFromDb = db.prepare('SELECT uid FROM users WHERE email = ?').get(email) as any;
+          if (userFromDb && userFromDb.uid) {
+            firestore.collection('users').doc(userFromDb.uid).set({
+              name,
+              isBoosted: isBoosted ? 1 : 0,
+              allowed_withdrawal_methods
+            }, { merge: true }).catch((e: any) => console.error('Firestore user details update error:', e));
+          }
+        }
+        
         emitUserUpdate(email);
         emitToUser(email, 'allowed-withdraw-methods-updated', allowed_withdrawal_methods);
         
@@ -2204,6 +2403,16 @@ async function startServer() {
         db.prepare('UPDATE users SET kycStatus = ? WHERE email = ?').run(status, email);
         logActivity(email, 'ADMIN_UPDATE_KYC', `Admin updated KYC status to ${status}`);
         
+        // Update Firestore
+        if (canSyncFirestore()) {
+          const userFromDb = db.prepare('SELECT uid FROM users WHERE email = ?').get(email) as any;
+          if (userFromDb && userFromDb.uid) {
+            firestore.collection('users').doc(userFromDb.uid).set({
+              kycStatus: status
+            }, { merge: true }).catch((e: any) => console.error('Firestore user kycStatus update error:', e));
+          }
+        }
+
         emitUserUpdate(email);
         emitToUser(email, 'kyc-status-updated', { status });
         
@@ -2434,6 +2643,7 @@ async function startServer() {
       globalSupportSettings = { ...globalSupportSettings, ...settings };
       io.emit('support-settings', globalSupportSettings);
       io.to('admin-room').emit('admin-support-settings', globalSupportSettings);
+      io.emit('support-status-update', globalSupportSettings.supportStatus);
     });
 
     socket.on('admin-update-platform-settings', (settings) => {
@@ -2784,6 +2994,13 @@ async function startServer() {
         const newBalance = user.balance - amountUSD;
         db.prepare('UPDATE users SET balance = ? WHERE email = ?').run(newBalance, email);
 
+        // Update Firestore for User
+        if (canSyncFirestore() && user.uid) {
+          firestore.collection('users').doc(user.uid).set({
+            balance: newBalance
+          }, { merge: true }).catch((e: any) => console.error('Firestore user balance update error (withdraw submit):', e));
+        }
+
         const stmt = db.prepare(`
           INSERT INTO withdrawals (email, amount, currency, method, accountDetails, status, submittedAt, updatedAt)
           VALUES (?, ?, ?, ?, ?, 'PENDING', ?, ?)
@@ -2840,6 +3057,16 @@ async function startServer() {
           } else {
             newBalance = user.balance + withdrawal.amount;
             db.prepare('UPDATE users SET balance = ? WHERE email = ?').run(newBalance, email);
+          }
+          
+          // Update Firestore for User
+          if (canSyncFirestore()) {
+            const userFromDb = db.prepare('SELECT uid FROM users WHERE email = ?').get(email) as any;
+            if (userFromDb && userFromDb.uid) {
+              const updateData = currency === 'BDT' ? { extraAccounts: userFromDb.extraAccounts } : { balance: newBalance };
+              firestore.collection('users').doc(userFromDb.uid).set(updateData, { merge: true })
+                .catch((e: any) => console.error('Firestore user balance update error (withdrawal cancel):', e));
+            }
           }
           
           emitUserUpdate(email);
@@ -2916,9 +3143,9 @@ async function startServer() {
     socket.on('submit-kyc', (kycData) => {
       console.log('KYC Submission Data:', kycData);
       try {
-        const { email, documentType, documentNumber, fullName, dateOfBirth, frontImage, backImage } = kycData;
+        const { email, documentType, documentNumber, fullName, dateOfBirth, frontImage, backImage, selfieImage } = kycData;
         
-        if (!email || !documentType || !documentNumber || !fullName || !dateOfBirth || !frontImage) {
+        if (!email || !documentType || !documentNumber || !fullName || !dateOfBirth || !frontImage || !selfieImage) {
           socket.emit('kyc-error', 'Missing required fields.');
           return;
         }
@@ -2932,12 +3159,12 @@ async function startServer() {
         }
 
         const stmt = db.prepare(`
-          INSERT INTO kyc_submissions (email, documentType, documentNumber, fullName, dateOfBirth, frontImage, backImage, submittedAt, updatedAt)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+          INSERT INTO kyc_submissions (email, documentType, documentNumber, fullName, dateOfBirth, frontImage, backImage, selfieImage, submittedAt, updatedAt)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `);
         
         const now = Date.now();
-        stmt.run(email, documentType, documentNumber, fullName, dateOfBirth, frontImage, backImage, now, now);
+        stmt.run(email, documentType, documentNumber, fullName, dateOfBirth, frontImage, backImage, selfieImage, now, now);
         
         // Update user status in memory
         const user = Object.values(connectedUsers).find(u => u.email === email);
@@ -2963,7 +3190,13 @@ async function startServer() {
     });
 
     socket.on('get-kyc-status', (email) => {
-      const kyc = db.prepare('SELECT status, rejectionReason FROM kyc_submissions WHERE email = ? ORDER BY submittedAt DESC LIMIT 1').get(email);
+      let kyc = db.prepare('SELECT status, rejectionReason FROM kyc_submissions WHERE email = ? ORDER BY submittedAt DESC LIMIT 1').get(email) as any;
+      if (!kyc) {
+        const user = db.prepare('SELECT kycStatus FROM users WHERE email = ?').get(email) as any;
+        if (user && user.kycStatus && user.kycStatus !== 'NONE') {
+          kyc = { status: user.kycStatus, rejectionReason: null };
+        }
+      }
       socket.emit('kyc-status', kyc || { status: 'NOT_SUBMITTED' });
     });
 
@@ -2986,6 +3219,19 @@ async function startServer() {
         const kyc = db.prepare('SELECT email FROM kyc_submissions WHERE id = ?').get(id) as any;
         
         if (kyc) {
+          // Update the users table
+          db.prepare('UPDATE users SET kycStatus = ? WHERE email = ?').run(status, kyc.email);
+          
+          // Update Firestore
+          if (canSyncFirestore()) {
+            const userFromDb = db.prepare('SELECT uid FROM users WHERE email = ?').get(kyc.email) as any;
+            if (userFromDb && userFromDb.uid) {
+              firestore.collection('users').doc(userFromDb.uid).set({
+                kycStatus: status
+              }, { merge: true }).catch((e: any) => console.error('Firestore user kycStatus update error:', e));
+            }
+          }
+
           // Notify the user if connected
           emitUserUpdate(kyc.email);
           emitToUser(kyc.email, 'kyc-status-updated', { status, reason });
@@ -3120,7 +3366,7 @@ async function startServer() {
         socket.emit('admin-user-logs', { 
             email, 
             activityLogs, 
-            trades, 
+            trades: trades.filter((t: any) => t.accountType === 'REAL'), 
             deposits, 
             withdrawals, 
             kyc 

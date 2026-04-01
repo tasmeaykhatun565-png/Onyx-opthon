@@ -72,7 +72,7 @@ const COUNTRIES: Country[] = [
 
 interface SupportChatProps {
   onClose: () => void;
-  supportSettings: { telegram: string; whatsapp: string; email: string };
+  supportSettings: { telegram: string; whatsapp: string; email: string; supportStatus?: 'online' | 'offline' };
   socket: any;
   userEmail: string;
   chatBackground?: string | null;
@@ -82,6 +82,7 @@ export default function SupportChat({ onClose, supportSettings, socket, userEmai
   const [chatStep, setChatStep] = useState<'country' | 'chat'>('country');
   const [selectedCountry, setSelectedCountry] = useState<Country | null>(null);
   const [chatStatus, setChatStatus] = useState<'active' | 'closed'>('active');
+  const [supportStatus, setSupportStatus] = useState<'online' | 'offline'>(supportSettings.supportStatus || 'online');
   const [connectionError, setConnectionError] = useState<boolean>(false);
   
   const [messages, setMessages] = useState<Message[]>([]);
@@ -154,11 +155,16 @@ export default function SupportChat({ onClose, supportSettings, socket, userEmai
         setChatStatus(status);
       };
 
+      const handleSupportStatusUpdate = (status: 'online' | 'offline') => {
+        setSupportStatus(status);
+      };
+
       socket.on('new-chat-message', handleNewMessage);
       socket.on('chat-history', handleChatHistory);
       socket.on('chat-closed', handleChatClosed);
       socket.on('chat-history-deleted', handleChatHistoryDeleted);
       socket.on('chat-status', handleChatStatus);
+      socket.on('support-status-update', handleSupportStatusUpdate);
 
       return () => {
         socket.off('new-chat-message', handleNewMessage);
@@ -166,6 +172,7 @@ export default function SupportChat({ onClose, supportSettings, socket, userEmai
         socket.off('chat-closed', handleChatClosed);
         socket.off('chat-history-deleted', handleChatHistoryDeleted);
         socket.off('chat-status', handleChatStatus);
+        socket.off('support-status-update', handleSupportStatusUpdate);
       };
     }
   }, [userEmail, chatStep, selectedCountry, socket]);
@@ -221,7 +228,18 @@ export default function SupportChat({ onClose, supportSettings, socket, userEmai
           </div>
           <div>
             <h3 className="font-bold text-[var(--text-primary)]">Onyx Support</h3>
-            <p className="text-xs text-green-400 font-medium">Online</p>
+            <div className="flex items-center gap-1.5">
+              <div className={cn(
+                "w-1.5 h-1.5 rounded-full",
+                supportStatus === 'online' ? "bg-green-500 animate-pulse" : "bg-red-500"
+              )}></div>
+              <p className={cn(
+                "text-[10px] font-bold uppercase tracking-wider",
+                supportStatus === 'online' ? "text-green-400" : "text-red-400"
+              )}>
+                {supportStatus === 'online' ? 'Online' : 'Offline'}
+              </p>
+            </div>
           </div>
         </div>
         <div className="flex gap-2">
@@ -303,30 +321,62 @@ export default function SupportChat({ onClose, supportSettings, socket, userEmai
             </div>
 
             <div className="pt-4 border-t border-[var(--border-color)]">
-              <p className="text-xs font-bold text-[var(--text-secondary)] uppercase tracking-widest mb-4 text-center">Or contact us directly</p>
-              <div className="grid grid-cols-2 gap-3">
-                <a 
-                  href={supportSettings.telegram} 
-                  target="_blank" 
-                  rel="noopener noreferrer"
-                  className="flex flex-col items-center gap-2 p-4 bg-[var(--bg-secondary)] rounded-2xl border border-[var(--border-color)] hover:bg-[var(--bg-secondary)]/80 transition group"
+              <p className="text-xs font-bold text-[var(--text-secondary)] uppercase tracking-widest mb-4 text-center">Commitment & Support</p>
+              <div className="space-y-3">
+                <button 
+                  onClick={() => {
+                    if (supportStatus === 'online') {
+                      // Just a placeholder for "commitment" - maybe a special message
+                      handleCountrySelect(COUNTRIES.find(c => c.id === 'global')!);
+                    } else {
+                      // Leave a message
+                      handleCountrySelect(COUNTRIES.find(c => c.id === 'global')!);
+                    }
+                  }}
+                  className={cn(
+                    "w-full flex items-center justify-center gap-3 p-4 rounded-2xl border transition-all active:scale-95",
+                    supportStatus === 'online' 
+                      ? "bg-blue-600 text-white border-blue-500 shadow-lg shadow-blue-600/20" 
+                      : "bg-[var(--bg-secondary)] text-[var(--text-primary)] border-[var(--border-color)]"
+                  )}
                 >
-                  <div className="w-10 h-10 bg-blue-500/10 rounded-full flex items-center justify-center text-blue-500 group-hover:scale-110 transition">
-                    <Send size={20} />
-                  </div>
-                  <span className="text-xs font-bold text-[var(--text-primary)]">Telegram</span>
-                </a>
-                <a 
-                  href={supportSettings.whatsapp} 
-                  target="_blank" 
-                  rel="noopener noreferrer"
-                  className="flex flex-col items-center gap-2 p-4 bg-[var(--bg-secondary)] rounded-2xl border border-[var(--border-color)] hover:bg-[var(--bg-secondary)]/80 transition group"
-                >
-                  <div className="w-10 h-10 bg-green-500/10 rounded-full flex items-center justify-center text-green-500 group-hover:scale-110 transition">
-                    <Phone size={20} />
-                  </div>
-                  <span className="text-xs font-bold text-[var(--text-primary)]">WhatsApp</span>
-                </a>
+                  {supportStatus === 'online' ? (
+                    <>
+                      <MessageCircle size={20} />
+                      <span className="font-bold">Start Priority Conversation</span>
+                    </>
+                  ) : (
+                    <>
+                      <Send size={20} />
+                      <span className="font-bold">Leave a Message (Offline)</span>
+                    </>
+                  )}
+                </button>
+                
+                <div className="grid grid-cols-2 gap-3">
+                  <a 
+                    href={supportSettings.telegram} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="flex flex-col items-center gap-2 p-4 bg-[var(--bg-secondary)] rounded-2xl border border-[var(--border-color)] hover:bg-[var(--bg-secondary)]/80 transition group"
+                  >
+                    <div className="w-10 h-10 bg-blue-500/10 rounded-full flex items-center justify-center text-blue-500 group-hover:scale-110 transition">
+                      <Send size={20} />
+                    </div>
+                    <span className="text-xs font-bold text-[var(--text-primary)]">Telegram</span>
+                  </a>
+                  <a 
+                    href={supportSettings.whatsapp} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="flex flex-col items-center gap-2 p-4 bg-[var(--bg-secondary)] rounded-2xl border border-[var(--border-color)] hover:bg-[var(--bg-secondary)]/80 transition group"
+                  >
+                    <div className="w-10 h-10 bg-green-500/10 rounded-full flex items-center justify-center text-green-500 group-hover:scale-110 transition">
+                      <Phone size={20} />
+                    </div>
+                    <span className="text-xs font-bold text-[var(--text-primary)]">WhatsApp</span>
+                  </a>
+                </div>
               </div>
             </div>
           </div>

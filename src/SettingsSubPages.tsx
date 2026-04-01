@@ -6,7 +6,7 @@ import {
   MousePointer2, ShieldCheck, Zap, AlertCircle, Clock,
   User, Mail, Phone, Calendar, MapPin, Upload, Lock, Key, Smartphone, Grid, Eye, EyeOff, Copy, Gift, UserCheck, Shield, Trash2, Info
 } from 'lucide-react';
-import { cn } from './utils';
+import { cn, safeStringify } from './utils';
 import { useToast } from './Toast';
 
 import { useTranslation, languages, Language } from './i18n';
@@ -387,7 +387,7 @@ export const ContactSettings: React.FC<SubPageProps> = ({ onBack }) => {
 
 export const VerificationSettings: React.FC<SubPageProps & { socket: any, userEmail: string }> = ({ onBack, socket, userEmail }) => {
   const { showToast } = useToast();
-  const [status, setStatus] = useState<'NOT_SUBMITTED' | 'PENDING' | 'VERIFIED' | 'REJECTED'>('NOT_SUBMITTED');
+  const [status, setStatus] = useState<'NOT_SUBMITTED' | 'PENDING' | 'APPROVED' | 'REJECTED'>('NOT_SUBMITTED');
   const [rejectionReason, setRejectionReason] = useState('');
   const [step, setStep] = useState<'status' | 'form'>('status');
   const [documentType, setDocumentType] = useState('NID');
@@ -463,6 +463,11 @@ export const VerificationSettings: React.FC<SubPageProps & { socket: any, userEm
       return;
     }
 
+    if (documentType === 'NID' && !formData.backImage) {
+      showToast('Please upload the back side of your NID', 'error');
+      return;
+    }
+
     if (!agreedToTerms) {
       showToast('You must agree to the terms and conditions', 'error');
       return;
@@ -477,9 +482,7 @@ export const VerificationSettings: React.FC<SubPageProps & { socket: any, userEm
 
   const docTypes = [
     { id: 'NID', label: 'National ID', icon: <User size={20} /> },
-    { id: 'Passport', label: 'Passport', icon: <Globe size={20} /> },
-    { id: 'Driving License', label: 'Driving License', icon: <Activity size={20} /> },
-    { id: 'Utility Bill', label: 'Utility Bill', icon: <MapPin size={20} /> }
+    { id: 'Passport', label: 'Passport', icon: <Globe size={20} /> }
   ];
 
   return (
@@ -502,29 +505,29 @@ export const VerificationSettings: React.FC<SubPageProps & { socket: any, userEm
             {/* Status Card */}
             <div className={cn(
               "p-8 rounded-2xl border flex flex-col items-center text-center gap-4 shadow-xl",
-              status === 'VERIFIED' ? "bg-green-500/10 border-green-500/20" : 
+              status === 'APPROVED' ? "bg-green-500/10 border-green-500/20" : 
               status === 'PENDING' ? "bg-yellow-500/10 border-yellow-500/20" : 
               status === 'REJECTED' ? "bg-red-500/10 border-red-500/20" :
               "bg-blue-500/5 border-[var(--border-color)]"
             )}>
               <div className={cn(
                 "w-20 h-20 rounded-full flex items-center justify-center shadow-lg",
-                status === 'VERIFIED' ? "bg-green-500 text-white" : 
+                status === 'APPROVED' ? "bg-green-500 text-white" : 
                 status === 'PENDING' ? "bg-yellow-500 text-black" : 
                 status === 'REJECTED' ? "bg-red-500 text-white" :
                 "bg-blue-500 text-white"
               )}>
-                {status === 'VERIFIED' ? <ShieldCheck size={40} /> : 
+                {status === 'APPROVED' ? <ShieldCheck size={40} /> : 
                  status === 'PENDING' ? <Clock size={40} /> : 
                  status === 'REJECTED' ? <AlertCircle size={40} /> :
                  <UserCheck size={40} />}
               </div>
               <div>
                 <h2 className="text-xl font-black text-[var(--text-primary)] uppercase tracking-widest">
-                  {status === 'NOT_SUBMITTED' ? 'Unverified' : status}
+                  {status === 'NOT_SUBMITTED' ? 'Unverified' : status === 'APPROVED' ? 'Verified' : status}
                 </h2>
                 <p className="text-sm text-[var(--text-secondary)] mt-2 max-w-xs mx-auto">
-                  {status === 'VERIFIED' ? "Congratulations! Your identity is verified. You have full access to all platform features." :
+                  {status === 'APPROVED' ? "Congratulations! Your identity is verified. You have full access to all platform features." :
                    status === 'PENDING' ? "Your documents are currently being reviewed by our compliance team. This usually takes 12-24 hours." :
                    status === 'REJECTED' ? `Verification failed: ${rejectionReason}. Please try again with correct documents.` :
                    "Complete your KYC verification to unlock withdrawals, higher limits, and professional trading tools."}
@@ -621,12 +624,14 @@ export const VerificationSettings: React.FC<SubPageProps & { socket: any, userEm
                   />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-[10px] font-bold text-[var(--text-secondary)] uppercase ml-1">Document Number</label>
+                  <label className="text-[10px] font-bold text-[var(--text-secondary)] uppercase ml-1">
+                    {documentType === 'NID' ? 'NID Number' : 'Passport Number'}
+                  </label>
                   <input 
                     type="text"
                     value={formData.documentNumber}
                     onChange={(e) => setFormData(prev => ({ ...prev, documentNumber: e.target.value }))}
-                    placeholder="Enter ID/Passport number"
+                    placeholder={documentType === 'NID' ? "Enter your NID number" : "Enter your Passport number"}
                     className="w-full bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-xl px-4 py-3 text-sm focus:border-blue-500 outline-none transition"
                   />
                 </div>
@@ -663,16 +668,20 @@ export const VerificationSettings: React.FC<SubPageProps & { socket: any, userEm
 
             <div className="space-y-4">
               <h3 className="text-xs font-black text-[var(--text-secondary)] uppercase tracking-widest">Document Photos</h3>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className={cn("grid gap-4", documentType === 'NID' ? "grid-cols-1 sm:grid-cols-2" : "grid-cols-1")}>
                 <div className="space-y-2">
-                  <label className="text-[10px] font-bold text-[var(--text-secondary)] uppercase ml-1">Front Side</label>
+                  <label className="text-[10px] font-bold text-[var(--text-secondary)] uppercase ml-1">
+                    {documentType === 'NID' ? 'Front Side' : 'Main Page'}
+                  </label>
                   <div className="relative aspect-[3/2] rounded-2xl border-2 border-dashed border-[var(--border-color)] bg-[var(--bg-secondary)] overflow-hidden group hover:border-blue-500/50 transition">
                     {formData.frontImage ? (
                       <img src={formData.frontImage} className="w-full h-full object-cover" />
                     ) : (
                       <div className="absolute inset-0 flex flex-col items-center justify-center text-[var(--text-secondary)]">
                         <Upload size={32} className="mb-2 opacity-50" />
-                        <span className="text-[10px] font-bold">Click to Upload Front</span>
+                        <span className="text-[10px] font-bold">
+                          {documentType === 'NID' ? 'Click to Upload Front' : 'Click to Upload Passport Page'}
+                        </span>
                       </div>
                     )}
                     <input 
@@ -683,25 +692,27 @@ export const VerificationSettings: React.FC<SubPageProps & { socket: any, userEm
                     />
                   </div>
                 </div>
-                <div className="space-y-2">
-                  <label className="text-[10px] font-bold text-[var(--text-secondary)] uppercase ml-1">Back Side (Optional)</label>
-                  <div className="relative aspect-[3/2] rounded-2xl border-2 border-dashed border-[var(--border-color)] bg-[var(--bg-secondary)] overflow-hidden group hover:border-blue-500/50 transition">
-                    {formData.backImage ? (
-                      <img src={formData.backImage} className="w-full h-full object-cover" />
-                    ) : (
-                      <div className="absolute inset-0 flex flex-col items-center justify-center text-[var(--text-secondary)]">
-                        <Upload size={32} className="mb-2 opacity-50" />
-                        <span className="text-[10px] font-bold">Click to Upload Back</span>
-                      </div>
-                    )}
-                    <input 
-                      type="file" 
-                      accept="image/*"
-                      onChange={(e) => handleFileChange(e, 'back')}
-                      className="absolute inset-0 opacity-0 cursor-pointer"
-                    />
+                {documentType === 'NID' && (
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-bold text-[var(--text-secondary)] uppercase ml-1">Back Side</label>
+                    <div className="relative aspect-[3/2] rounded-2xl border-2 border-dashed border-[var(--border-color)] bg-[var(--bg-secondary)] overflow-hidden group hover:border-blue-500/50 transition">
+                      {formData.backImage ? (
+                        <img src={formData.backImage} className="w-full h-full object-cover" />
+                      ) : (
+                        <div className="absolute inset-0 flex flex-col items-center justify-center text-[var(--text-secondary)]">
+                          <Upload size={32} className="mb-2 opacity-50" />
+                          <span className="text-[10px] font-bold">Click to Upload Back</span>
+                        </div>
+                      )}
+                      <input 
+                        type="file" 
+                        accept="image/*"
+                        onChange={(e) => handleFileChange(e, 'back')}
+                        className="absolute inset-0 opacity-0 cursor-pointer"
+                      />
+                    </div>
                   </div>
-                </div>
+                )}
               </div>
             </div>
 
@@ -1393,8 +1404,9 @@ export const AppearanceSettings: React.FC<SubPageProps & {
   currency: typeof CURRENCIES[0],
   setCurrency: (c: typeof CURRENCIES[0]) => void,
   chatBackground: string | null,
-  setChatBackground: (b: string | null) => void
-}> = ({ onBack, timezoneOffset = 0, setTimezoneOffset, currency, setCurrency, chatBackground, setChatBackground }) => {
+  setChatBackground: (b: string | null) => void,
+  savePreferences?: (prefs: any) => void
+}> = ({ onBack, timezoneOffset = 0, setTimezoneOffset, currency, setCurrency, chatBackground, setChatBackground, savePreferences }) => {
   const { t, language, setLanguage } = useTranslation();
   const { showToast } = useToast();
   const [theme, setTheme] = useState<string>(localStorage.getItem('app-theme') || 'dark');
@@ -1408,7 +1420,7 @@ export const AppearanceSettings: React.FC<SubPageProps & {
   });
 
   useEffect(() => {
-    localStorage.setItem('uploaded-chat-backgrounds', JSON.stringify(uploadedBackgrounds));
+    localStorage.setItem('uploaded-chat-backgrounds', safeStringify(uploadedBackgrounds));
   }, [uploadedBackgrounds]);
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1761,6 +1773,9 @@ export const AppearanceSettings: React.FC<SubPageProps & {
                     key={lang.code}
                     onClick={() => {
                       setLanguage(lang.code);
+                      if (savePreferences) {
+                        savePreferences({ language: lang.code });
+                      }
                       setIsLanguageOpen(false);
                     }}
                     className={cn(

@@ -13,7 +13,7 @@ import {
   Search, Info, AlignLeft, Star, MoreVertical, Lock, Video, FileText, Phone, Youtube, Globe, Send, Bitcoin, Gem, TrendingUp, RefreshCw, Users, Newspaper
 } from 'lucide-react';
 import { playSound } from './sounds';
-import { cn } from './utils';
+import { cn, deepEqual, safeStringify } from './utils';
 import { AnimatePresence, motion } from 'motion/react';
 import SupportChat from './SupportChat';
 import SocialChat from './SocialChat';
@@ -578,7 +578,8 @@ function SettingsPage({
   socket,
   user,
   chatBackground,
-  setChatBackground
+  setChatBackground,
+  savePreferences
 }: { 
   onBack: () => void, 
   onLogout: () => void, 
@@ -589,7 +590,8 @@ function SettingsPage({
   socket: any,
   user: FirebaseUser,
   chatBackground: string | null,
-  setChatBackground: (b: string | null) => void
+  setChatBackground: (b: string | null) => void,
+  savePreferences: (prefs: any) => void
 }) {
   const { t } = useTranslation();
   const [activeSubPage, setActiveSubPage] = useState<string | null>(null);
@@ -686,6 +688,8 @@ function SettingsPage({
         </div>
       </div>
 
+
+
       {/* Sub-Pages Overlay */}
       <AnimatePresence>
         {activeSubPage === 'TRADING' && (
@@ -697,9 +701,10 @@ function SettingsPage({
             timezoneOffset={timezoneOffset}
             setTimezoneOffset={setTimezoneOffset}
             currency={currency}
-            setCurrency={handleCurrencyChange}
+            setCurrency={setCurrency}
             chatBackground={chatBackground}
             setChatBackground={setChatBackground}
+            savePreferences={savePreferences}
           />
         )}
         {activeSubPage === 'NOTIFICATIONS' && (
@@ -712,7 +717,7 @@ function SettingsPage({
             setTimezoneOffset={setTimezoneOffset}
             user={user}
             currency={currency}
-            setCurrency={handleCurrencyChange}
+            setCurrency={setCurrency}
           />
         )}
         {activeSubPage === 'CONTACTS' && (
@@ -855,34 +860,11 @@ export default function TradingPlatform() {
     return CURRENCIES[1];
   });
 
-  const handleCurrencyChange = async (newCurrency: typeof CURRENCIES[0]) => {
-    setCurrency(newCurrency);
-    localStorage.setItem('app-currency', JSON.stringify(newCurrency));
-    
-    if (user?.uid) {
-      try {
-        await setDoc(doc(db, 'users', user.uid), {
-          currency: newCurrency.code,
-          currencySymbol: newCurrency.symbol,
-          currencyName: newCurrency.name,
-          currencyFlag: newCurrency.flag
-        }, { merge: true });
-        
-        if (user.email) {
-          await fetch('/api/user/preferences', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              email: user.email,
-              currency: newCurrency.code
-            })
-          });
-        }
-      } catch (error) {
-        console.error('Error updating currency:', error);
-      }
-    }
-  };
+  // Sync currency to localStorage
+  useEffect(() => {
+    localStorage.setItem('app-currency', safeStringify(currency));
+  }, [currency]);
+
   const [balance, setBalance] = useState<number>(0);
   const [demoBalance, setDemoBalance] = useState<number>(1000);
   const [turnoverRequired, setTurnoverRequired] = useState(0);
@@ -901,7 +883,7 @@ export default function TradingPlatform() {
   });
 
   useEffect(() => {
-    localStorage.setItem('app-extra-accounts', JSON.stringify(extraAccounts));
+    localStorage.setItem('app-extra-accounts', safeStringify(extraAccounts));
     if (socket && user) {
       socket.emit('sync-extra-accounts', {
         email: user.email,
@@ -926,12 +908,17 @@ export default function TradingPlatform() {
   });
 
   useEffect(() => {
-    localStorage.setItem('selectedAsset', JSON.stringify(selectedAsset));
+    localStorage.setItem('selectedAsset', safeStringify(selectedAsset));
   }, [selectedAsset]);
   const [marketAssets, setMarketAssets] = useState<Record<string, any>>({});
   const [isAssetSelectorOpen, setIsAssetSelectorOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [supportSettings, setSupportSettings] = useState({ telegram: 'https://t.me/onyxtrade_support', whatsapp: 'https://wa.me/1234567890', email: 'support@onyxtrade.com' });
+  const [supportSettings, setSupportSettings] = useState({ 
+    telegram: 'https://t.me/onyxtrade_support', 
+    whatsapp: 'https://wa.me/1234567890', 
+    email: 'support@onyxtrade.com',
+    supportStatus: 'online' as 'online' | 'offline'
+  });
   const [referralSettings, setReferralSettings] = useState({ bonusAmount: 10, referralPercentage: 5, minDepositForBonus: 20 });
   const [notifications, setNotifications] = useState<any[]>([]);
   const [tutorials, setTutorials] = useState<any[]>([]);
@@ -988,7 +975,7 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
 
   useEffect(() => {
     try {
-      localStorage.setItem('activeIndicators', JSON.stringify(activeIndicators));
+      localStorage.setItem('activeIndicators', safeStringify(activeIndicators));
     } catch (e) {
       console.error('Failed to save indicators', e);
     }
@@ -1029,7 +1016,7 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
   const selectedAssetRef = useRef(selectedAsset);
 
   useEffect(() => {
-    localStorage.setItem('onyx_trades', JSON.stringify(trades));
+    localStorage.setItem('onyx_trades', safeStringify(trades));
   }, [trades]);
 
   useEffect(() => {
@@ -1069,6 +1056,17 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
             if (userData.currency) setPreferences(prev => ({ ...prev, currency: userData.currency }));
             if (userData.timeframe) setPreferences(prev => ({ ...prev, timeframe: userData.timeframe }));
             if (userData.chartType) setPreferences(prev => ({ ...prev, chartType: userData.chartType }));
+            if (userData.currency && userData.currencySymbol) {
+              setCurrency(prev => {
+                if (prev.code === userData.currency && prev.symbol === userData.currencySymbol && prev.name === (userData.currencyName || userData.currency) && prev.flag === (userData.currencyFlag || '')) return prev;
+                return {
+                  code: userData.currency,
+                  symbol: userData.currencySymbol,
+                  name: userData.currencyName || userData.currency,
+                  flag: userData.currencyFlag || ''
+                };
+              });
+            }
           }
         } catch (error) {
           console.error('Error loading user preferences:', error);
@@ -1080,10 +1078,18 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
     return () => unsubscribe();
   }, []);
 
+  // Redirect logged-in users to TRADING view if they are on HOME
+  useEffect(() => {
+    if (!authLoading && user && view === 'HOME') {
+      setView('TRADING');
+    }
+  }, [authLoading, user, view]);
+
   const logout = async () => {
     try {
       await signOut(auth);
       setUser(null);
+      setView('HOME');
     } catch (error) {
       console.error('Logout error:', error);
     }
@@ -1108,8 +1114,8 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
         if (userData.kycStatus !== undefined) setKycStatus(prev => prev === userData.kycStatus ? prev : userData.kycStatus);
         if (userData.turnover_required !== undefined) setTurnoverRequired(prev => prev === userData.turnover_required ? prev : userData.turnover_required);
         if (userData.turnover_achieved !== undefined) setTurnoverAchieved(prev => prev === userData.turnover_achieved ? prev : userData.turnover_achieved);
-        if (userData.trades !== undefined) setTrades(prev => JSON.stringify(prev) === JSON.stringify(userData.trades) ? prev : userData.trades);
-        if (userData.extraAccounts !== undefined) setExtraAccounts(prev => JSON.stringify(prev) === JSON.stringify(userData.extraAccounts) ? prev : userData.extraAccounts);
+        if (userData.trades !== undefined) setTrades(prev => deepEqual(prev, userData.trades) ? prev : userData.trades);
+        if (userData.extraAccounts !== undefined) setExtraAccounts(prev => deepEqual(prev, userData.extraAccounts) ? prev : userData.extraAccounts);
         
         if (userData.currency && userData.currencySymbol) {
           setCurrency(prev => {
@@ -1136,7 +1142,7 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
             if (prev.totalEarnings === newStats.totalEarnings && 
                 prev.referralBalance === newStats.referralBalance && 
                 prev.referralCount === newStats.referralCount && 
-                JSON.stringify(prev.recentReferrals) === JSON.stringify(newStats.recentReferrals)) return prev;
+                deepEqual(prev.recentReferrals, newStats.recentReferrals)) return prev;
             return newStats;
           });
         }
@@ -1246,7 +1252,7 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
   }, [currency]);
 
   useEffect(() => {
-    localStorage.setItem('app-currency', JSON.stringify(currency));
+    localStorage.setItem('app-currency', safeStringify(currency));
   }, [currency]);
 
   const [chartTimeFrame, setChartTimeFrame] = useState(() => {
@@ -1263,6 +1269,29 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
   useEffect(() => {
     localStorage.setItem('chartType', chartType);
   }, [chartType]);
+
+  const handleCurrencyChange = async (newCurrency: typeof CURRENCIES[0]) => {
+    setCurrency(newCurrency);
+    setPreferences(prev => ({ ...prev, currency: newCurrency.code }));
+    
+    if (user?.email) {
+      try {
+        await fetch('/api/user/preferences', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: user.email,
+            currency: newCurrency.code,
+            currencySymbol: newCurrency.symbol,
+            currencyName: newCurrency.name,
+            currencyFlag: newCurrency.flag
+          })
+        });
+      } catch (error) {
+        console.error('Error updating currency:', error);
+      }
+    }
+  };
 
   const [sentiment, setSentiment] = useState(57); // Percentage of green (up) sentiment
 
@@ -1290,6 +1319,10 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
 
     newSocket.on('support-settings', (settings) => {
       setSupportSettings(settings);
+    });
+
+    newSocket.on('support-status-update', (status: 'online' | 'offline') => {
+      setSupportSettings(prev => ({ ...prev, supportStatus: status }));
     });
 
     newSocket.on('tutorials', (data) => {
@@ -1552,8 +1585,8 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
       if (userData.demoBalance !== undefined) setDemoBalance(prev => Math.abs(prev - userData.demoBalance) < 0.000001 ? prev : userData.demoBalance);
       if (userData.turnover_required !== undefined) setTurnoverRequired(prev => prev === userData.turnover_required ? prev : userData.turnover_required);
       if (userData.turnover_achieved !== undefined) setTurnoverAchieved(prev => prev === userData.turnover_achieved ? prev : userData.turnover_achieved);
-      if (userData.trades !== undefined) setTrades(prev => JSON.stringify(prev) === JSON.stringify(userData.trades) ? prev : userData.trades);
-      if (userData.extraAccounts !== undefined) setExtraAccounts(prev => JSON.stringify(prev) === JSON.stringify(userData.extraAccounts) ? prev : userData.extraAccounts);
+      if (userData.trades !== undefined) setTrades(prev => deepEqual(prev, userData.trades) ? prev : userData.trades);
+      if (userData.extraAccounts !== undefined) setExtraAccounts(prev => deepEqual(prev, userData.extraAccounts) ? prev : userData.extraAccounts);
     });
 
     socket.on('balance-updated', ({ balance: newBalance, type }) => {
@@ -1960,7 +1993,6 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
       onBack={() => setView('PROFILE')} 
       onLogout={() => {
         logout();
-        setView('TRADING');
       }} 
       timezoneOffset={timezoneOffset}
       setTimezoneOffset={setTimezoneOffset}
@@ -1970,6 +2002,7 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
       user={user}
       chatBackground={chatBackground}
       setChatBackground={setChatBackground}
+      savePreferences={savePreferences}
     />;
   }
 

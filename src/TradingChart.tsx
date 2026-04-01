@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { ArrowUp, ArrowDown, Clock, TrendingUp, TrendingDown, Trash2, ArrowUpRight, ArrowDownRight } from 'lucide-react';
 import { createChart, ColorType, IChartApi, ISeriesApi, Time, CrosshairMode, CandlestickSeries, AreaSeries, BarSeries, LineSeries, HistogramSeries } from 'lightweight-charts';
+import { deepEqual, safeStringify } from './utils';
 import { SMA, EMA, WMA, BollingerBands, MACD, RSI, CCI, ATR, PSAR, WilliamsR, ADX, AwesomeOscillator, ROC, Stochastic } from 'technicalindicators';
 
 interface Trade {
@@ -110,7 +111,7 @@ export const TradingChart: React.FC<TradingChartProps> = ({
 
   useEffect(() => {
     try {
-      localStorage.setItem(`drawings_${assetName}`, JSON.stringify(drawings));
+      localStorage.setItem(`drawings_${assetName}`, safeStringify(drawings));
     } catch (e) {
       console.error('Failed to save drawings', e);
     }
@@ -151,7 +152,7 @@ export const TradingChart: React.FC<TradingChartProps> = ({
     });
     
     setTradeCoords(prev => {
-      if (JSON.stringify(prev) === JSON.stringify(coords)) return prev;
+      if (deepEqual(prev, coords)) return prev;
       return coords;
     });
   }, [assetName, trades]);
@@ -212,7 +213,7 @@ export const TradingChart: React.FC<TradingChartProps> = ({
     });
     
     setDrawingCoords(prev => {
-      if (JSON.stringify(prev) === JSON.stringify(coords)) return prev;
+      if (deepEqual(prev, coords)) return prev;
       return coords;
     });
   }, [drawings]);
