@@ -2825,14 +2825,26 @@ async function startServer() {
         db.prepare('UPDATE withdrawals SET status = \'CANCELLED\', updatedAt = ? WHERE id = ?').run(Date.now(), id);
 
         // Return balance to user
-        const user = db.prepare('SELECT balance FROM users WHERE email = ?').get(email) as any;
+        const user = db.prepare('SELECT balance, extraAccounts FROM users WHERE email = ?').get(email) as any;
         if (user) {
-          const newBalance = user.balance + withdrawal.amount;
-          db.prepare('UPDATE users SET balance = ? WHERE email = ?').run(newBalance, email);
+          let newBalance = user.balance;
+          let currency = withdrawal.currency || 'USD';
+
+          if (currency === 'BDT') {
+            const extraAccounts = JSON.parse(user.extraAccounts || '[]');
+            const bdtAccount = extraAccounts.find((a: any) => a.currency === 'BDT');
+            if (bdtAccount) {
+              bdtAccount.balance += withdrawal.amount;
+              db.prepare('UPDATE users SET extraAccounts = ? WHERE email = ?').run(JSON.stringify(extraAccounts), email);
+            }
+          } else {
+            newBalance = user.balance + withdrawal.amount;
+            db.prepare('UPDATE users SET balance = ? WHERE email = ?').run(newBalance, email);
+          }
           
           emitUserUpdate(email);
-          emitToUser(email, 'balance-updated', { balance: newBalance, type: 'REAL' });
-          emitToUser(email, 'withdrawal-cancelled', { id, newBalance });
+          emitToUser(email, 'balance-updated', { balance: currency === 'BDT' ? withdrawal.amount : newBalance, type: currency === 'BDT' ? 'BDT' : 'REAL' });
+          emitToUser(email, 'withdrawal-cancelled', { id, newBalance: withdrawal.amount, currency });
         }
 
         // Refresh admin list

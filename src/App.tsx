@@ -1024,6 +1024,7 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
   const tradesRef = useRef(trades);
   const resolvedTradeIdsRef = useRef<Set<string>>(new Set());
   const dataRef = useRef(data);
+  const lastChartUpdateRef = useRef(0);
   const userRef = useRef(user);
   const selectedAssetRef = useRef(selectedAsset);
 
@@ -1490,6 +1491,7 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
             return prev;
         }
 
+        let updatedData: OHLCData[];
         if (lastCandle.time === currentTFStart) {
             // Update existing candle
             const updatedCandle = {
@@ -1499,7 +1501,7 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
                 low: Math.min(lastCandle.low, newPrice),
                 volume: (lastCandle.volume || 0) + Math.floor(Math.random() * 10) + 1,
             };
-            return [...prev.slice(0, -1), updatedCandle];
+            updatedData = [...prev.slice(0, -1), updatedCandle];
         } else {
             // New candle started
             const newCandle = {
@@ -1511,10 +1513,12 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
                 volume: Math.floor(Math.random() * 100) + 10,
                 formattedTime: format(currentTFStart, 'HH:mm:ss'),
             };
-            const newData = [...prev, newCandle];
-            if (newData.length > 20000) newData.shift();
-            return newData;
+            updatedData = [...prev, newCandle];
+            if (updatedData.length > 20000) updatedData.shift();
         }
+        
+        dataRef.current = updatedData;
+        return updatedData;
       });
     };
 
@@ -1560,8 +1564,12 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
       }
     });
 
-    socket.on('withdrawal-cancelled', ({ id, newBalance }) => {
-      setBalance(prev => Math.abs(prev - newBalance) < 0.000001 ? prev : newBalance);
+    socket.on('withdrawal-cancelled', ({ id, newBalance, currency }) => {
+      if (currency === 'BDT') {
+        setExtraAccounts(prev => prev.map(a => a.currency === 'BDT' ? { ...a, balance: a.balance + newBalance } : a));
+      } else {
+        setBalance(prev => Math.abs(prev - newBalance) < 0.000001 ? prev : newBalance);
+      }
     });
 
     socket.on('kyc-status-updated', (data: { status: any, reason?: string }) => {
