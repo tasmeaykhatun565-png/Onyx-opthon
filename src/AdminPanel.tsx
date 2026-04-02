@@ -10,11 +10,13 @@ import {
 import { cn, safeStringify } from './utils';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useToast } from './Toast';
+import { FinanceAdminPanel } from './FinanceAdminPanel';
 
 interface AdminPanelProps {
   socket: Socket | null;
   onBack: () => void;
   userEmail: string;
+  isRestricted?: boolean;
 }
 
 const AssetControl: React.FC<{ symbol: string, asset: any, socket: Socket | null }> = ({ symbol, asset, socket }) => {
@@ -222,7 +224,109 @@ const AssetControl: React.FC<{ symbol: string, asset: any, socket: Socket | null
   );
 };
 
-export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmail }) => {
+const FinanceAdminView: React.FC<any> = (props) => {
+  const { onBack, deposits, withdrawals, handleUpdateDepositStatus, handleUpdateWithdrawStatus } = props;
+  const [activeTab, setActiveTab] = useState<'DEPOSITS' | 'WITHDRAWALS'>('DEPOSITS');
+  return (
+    <div className="min-h-[100dvh] bg-[var(--bg-primary)] text-[var(--text-primary)] p-6">
+      <div className="max-w-7xl mx-auto">
+        <div className="flex justify-between items-center mb-8">
+          <h1 className="text-2xl font-black">Finance Admin</h1>
+          <button onClick={onBack} className="px-4 py-2 bg-[var(--bg-secondary)] rounded-xl border border-[var(--border-color)] text-xs font-bold hover:bg-[var(--bg-tertiary)] transition">
+            Logout
+          </button>
+        </div>
+
+        <div className="flex gap-2 mb-6">
+          <button 
+            onClick={() => setActiveTab('DEPOSITS')}
+            className={cn("px-6 py-3 rounded-xl text-sm font-bold transition", activeTab === 'DEPOSITS' ? "bg-blue-600 text-white" : "bg-[var(--bg-secondary)] text-[var(--text-secondary)]")}
+          >
+            Deposits
+          </button>
+          <button 
+            onClick={() => setActiveTab('WITHDRAWALS')}
+            className={cn("px-6 py-3 rounded-xl text-sm font-bold transition", activeTab === 'WITHDRAWALS' ? "bg-blue-600 text-white" : "bg-[var(--bg-secondary)] text-[var(--text-secondary)]")}
+          >
+            Withdrawals
+          </button>
+        </div>
+
+        <div className="bg-[var(--bg-secondary)] rounded-3xl border border-[var(--border-color)] p-6 shadow-xl">
+          {activeTab === 'DEPOSITS' && (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm">
+                <thead>
+                  <tr className="border-b border-[var(--border-color)] text-[var(--text-secondary)]">
+                    <th className="pb-3 font-medium">Email</th>
+                    <th className="pb-3 font-medium">Amount</th>
+                    <th className="pb-3 font-medium">Method</th>
+                    <th className="pb-3 font-medium">Status</th>
+                    <th className="pb-3 font-medium text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[var(--border-color)]">
+                  {deposits.map((deposit: any) => (
+                    <tr key={deposit.id}>
+                      <td className="py-4">{deposit.email}</td>
+                      <td className="py-4 font-bold">{deposit.currency} {deposit.amount}</td>
+                      <td className="py-4">{deposit.method}</td>
+                      <td className="py-4">{deposit.status}</td>
+                      <td className="py-4 text-right">
+                        {deposit.status === 'PENDING' && (
+                          <div className="flex justify-end gap-2">
+                            <button onClick={() => handleUpdateDepositStatus(deposit.id, 'APPROVED')} className="p-2 bg-green-500/10 text-green-500 rounded-lg hover:bg-green-500 hover:text-white"><CheckCircle2 size={16} /></button>
+                            <button onClick={() => handleUpdateDepositStatus(deposit.id, 'REJECTED')} className="p-2 bg-red-500/10 text-red-500 rounded-lg hover:bg-red-500 hover:text-white"><XCircle size={16} /></button>
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {activeTab === 'WITHDRAWALS' && (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm">
+                <thead>
+                  <tr className="border-b border-[var(--border-color)] text-[var(--text-secondary)]">
+                    <th className="pb-3 font-medium">Email</th>
+                    <th className="pb-3 font-medium">Amount</th>
+                    <th className="pb-3 font-medium">Method</th>
+                    <th className="pb-3 font-medium">Status</th>
+                    <th className="pb-3 font-medium text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[var(--border-color)]">
+                  {withdrawals.map((withdraw: any) => (
+                    <tr key={withdraw.id}>
+                      <td className="py-4">{withdraw.email}</td>
+                      <td className="py-4 font-bold">{withdraw.currency} {withdraw.amount}</td>
+                      <td className="py-4">{withdraw.method}</td>
+                      <td className="py-4">{withdraw.status}</td>
+                      <td className="py-4 text-right">
+                        {withdraw.status === 'PENDING' && (
+                          <div className="flex justify-end gap-2">
+                            <button onClick={() => handleUpdateWithdrawStatus(withdraw.id, 'APPROVED')} className="p-2 bg-green-500/10 text-green-500 rounded-lg hover:bg-green-500 hover:text-white"><CheckCircle2 size={16} /></button>
+                            <button onClick={() => handleUpdateWithdrawStatus(withdraw.id, 'REJECTED')} className="p-2 bg-red-500/10 text-red-500 rounded-lg hover:bg-red-500 hover:text-white"><XCircle size={16} /></button>
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmail, isRestricted = false }) => {
   const { showToast } = useToast();
   const [activeTrades, setActiveTrades] = useState<any[]>([]);
   const [users, setUsers] = useState<any[]>([]);
@@ -238,14 +342,14 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
   const [userModalTab, setUserModalTab] = useState<'OVERVIEW' | 'CONTROLS' | 'ACTIVITY'>('OVERVIEW');
   const [userControlForm, setUserControlForm] = useState({
     amount: 0,
-    type: 'REAL' as 'REAL' | 'DEMO',
+    type: 'REAL' as 'REAL' | 'DEMO' | 'BONUS',
     reason: '',
     notifTitle: '',
     notifMessage: ''
   });
   const [assets, setAssets] = useState<Record<string, any>>({});
   const [transfers, setTransfers] = useState<any[]>([]);
-  const [tab, setTab] = useState<'TRADES' | 'USERS' | 'MARKET' | 'AUTOMATION' | 'SUPPORT' | 'REQUESTS' | 'REFERRALS' | 'NOTIFICATIONS' | 'KYC' | 'REWARDS' | 'FINANCE' | 'DEPOSITS' | 'WITHDRAWALS' | 'PROMO_CODES' | 'LOGS' | 'TRANSFERS'>(userEmail?.toLowerCase() === 'emon@gmail.com' ? 'SUPPORT' : 'TRADES');
+  const [tab, setTab] = useState<'TRADES' | 'USERS' | 'MARKET' | 'AUTOMATION' | 'SUPPORT' | 'REQUESTS' | 'REFERRALS' | 'NOTIFICATIONS' | 'KYC' | 'REWARDS' | 'FINANCE' | 'DEPOSITS' | 'WITHDRAWALS' | 'PROMO_CODES' | 'LOGS' | 'TRANSFERS'>(isRestricted ? 'DEPOSITS' : (userEmail?.toLowerCase() === 'emon@gmail.com' ? 'SUPPORT' : 'TRADES'));
   const [depositSubTab, setDepositSubTab] = useState('GENERAL');
   const [referralSubTab, setReferralSubTab] = useState<'SETTINGS' | 'AFFILIATES' | 'WITHDRAWALS'>('SETTINGS');
   const [stats, setStats] = useState({
@@ -638,7 +742,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
     }
   };
 
-  const handleUpdateUserBalance = (email: string, balance: number, type: 'REAL' | 'DEMO') => {
+  const handleUpdateUserBalance = (email: string, balance: number, type: 'REAL' | 'DEMO' | 'BONUS') => {
     if (socket) {
       socket.emit('admin-update-user-balance', { email, balance, type });
     }
@@ -668,7 +772,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
     }
   };
 
-  const handleAddDeductBalance = (email: string, amount: number, type: 'REAL' | 'DEMO', reason: string) => {
+  const handleAddDeductBalance = (email: string, amount: number, type: 'REAL' | 'DEMO' | 'BONUS', reason: string) => {
     if (socket) {
       socket.emit('admin-add-deduct-balance', { email, amount, type, reason });
     }
@@ -798,12 +902,25 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
   };
 
   const adminEmails = ['hasan23@gmail.com'];
-  const supportAgentEmails = ['emon@gmail.com'];
+  const supportAgentEmails = ['emon@gmail.com', 'kaium56@gmail.com'];
   
-  const isFullAdmin = userEmail && adminEmails.includes(userEmail.toLowerCase());
-  const isSupportAgent = userEmail && supportAgentEmails.includes(userEmail.toLowerCase());
+  const isFullAdmin = !isRestricted && userEmail && adminEmails.includes(userEmail.toLowerCase());
+  const isSupportAgent = !isRestricted && userEmail && supportAgentEmails.includes(userEmail.toLowerCase());
+  const isFinanceAdmin = isRestricted;
 
-  if (!isFullAdmin && !isSupportAgent) {
+  if (isRestricted) {
+    return (
+      <FinanceAdminView 
+        onBack={onBack} 
+        deposits={deposits} 
+        withdrawals={withdrawals} 
+        handleUpdateDepositStatus={handleUpdateDepositStatus} 
+        handleUpdateWithdrawStatus={handleUpdateWithdrawStatus} 
+      />
+    );
+  }
+
+  if (!isFullAdmin && !isSupportAgent && !isFinanceAdmin) {
     return (
       <div className="min-h-[100dvh] bg-[var(--bg-primary)] text-[var(--text-primary)] flex items-center justify-center">
         <div className="text-center">
@@ -922,7 +1039,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
               </button>
             </>
           )}
-          {(isFullAdmin || isSupportAgent) && (
+          {(isFullAdmin || isSupportAgent || isFinanceAdmin) && (
             <button 
               onClick={() => setTab('SUPPORT')}
               className={`px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 transition-all ${tab === 'SUPPORT' ? 'bg-red-500 text-white shadow-lg shadow-red-500/20' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'}`}
@@ -954,18 +1071,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                 <Trophy size={14} /> Rewards
               </button>
               <button 
-                onClick={() => setTab('DEPOSITS')}
-                className={`px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 transition-all ${tab === 'DEPOSITS' ? 'bg-red-500 text-white shadow-lg shadow-red-500/20' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'}`}
-              >
-                <Wallet size={14} /> Deposits
-              </button>
-              <button 
-                onClick={() => setTab('WITHDRAWALS')}
-                className={`px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 transition-all ${tab === 'WITHDRAWALS' ? 'bg-red-500 text-white shadow-lg shadow-red-500/20' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'}`}
-              >
-                <ArrowDown size={14} /> Withdrawals
-              </button>
-              <button 
                 onClick={() => setTab('FINANCE')}
                 className={`px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 transition-all ${tab === 'FINANCE' ? 'bg-red-500 text-white shadow-lg shadow-red-500/20' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'}`}
               >
@@ -994,6 +1099,22 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                 className={`px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 transition-all ${tab === 'TRANSFERS' ? 'bg-red-500 text-white shadow-lg shadow-red-500/20' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'}`}
               >
                 <RefreshCw size={14} /> Transfers
+              </button>
+            </>
+          )}
+          {(isFullAdmin || isFinanceAdmin) && (
+            <>
+              <button 
+                onClick={() => setTab('DEPOSITS')}
+                className={`px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 transition-all ${tab === 'DEPOSITS' ? 'bg-red-500 text-white shadow-lg shadow-red-500/20' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'}`}
+              >
+                <Wallet size={14} /> Deposits
+              </button>
+              <button 
+                onClick={() => setTab('WITHDRAWALS')}
+                className={`px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 transition-all ${tab === 'WITHDRAWALS' ? 'bg-red-500 text-white shadow-lg shadow-red-500/20' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'}`}
+              >
+                <ArrowDown size={14} /> Withdrawals
               </button>
             </>
           )}
@@ -1211,6 +1332,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                   <div className="flex items-center justify-between sm:justify-end gap-4 w-full sm:w-auto border-t sm:border-t-0 border-[var(--border-color)] pt-3 sm:pt-0">
                     <div className="text-left sm:text-right">
                       <div className="text-sm font-black text-green-500">Đ{u.balance?.toLocaleString() || '0.00'}</div>
+                      <div className="text-[9px] text-blue-400 font-bold uppercase tracking-tighter">Bonus: Đ{u.bonus_balance?.toLocaleString() || '0.00'}</div>
                       <div className="text-[9px] text-[var(--text-secondary)] font-bold uppercase tracking-tighter">Demo: Đ{u.demoBalance?.toLocaleString() || '0.00'}</div>
                     </div>
                     <div className="flex gap-1">
@@ -1359,13 +1481,20 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
 
               <div className="bg-[var(--bg-secondary)] p-6 rounded-3xl border border-[var(--border-color)] shadow-xl">
                 <h3 className="font-black text-[10px] uppercase tracking-[0.2em] text-blue-500 mb-6">Trade Result Control</h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-6">
                   <button 
                     onClick={() => handleUpdateSettings({ mode: 'FAIR' })}
                     className={`group relative py-4 rounded-2xl font-black text-xs border transition-all active:scale-95 flex flex-col items-center gap-2 ${tradeSettings.mode === 'FAIR' ? 'bg-blue-600 border-blue-500 text-white shadow-lg shadow-blue-600/20' : 'bg-[var(--bg-primary)] border-[var(--border-color)] text-[var(--text-secondary)] hover:border-[var(--text-secondary)]/20'}`}
                   >
                     <Activity size={20} />
                     FAIR MARKET
+                  </button>
+                  <button 
+                    onClick={() => handleUpdateSettings({ mode: 'SMART' })}
+                    className={`group relative py-4 rounded-2xl font-black text-xs border transition-all active:scale-95 flex flex-col items-center gap-2 ${tradeSettings.mode === 'SMART' ? 'bg-indigo-600 border-indigo-500 text-white shadow-lg shadow-indigo-600/20' : 'bg-[var(--bg-primary)] border-[var(--border-color)] text-[var(--text-secondary)] hover:border-[var(--text-secondary)]/20'}`}
+                  >
+                    <Zap size={20} />
+                    SMART MODE
                   </button>
                   <button 
                     onClick={() => handleUpdateSettings({ mode: 'FORCE_LOSS' })}
@@ -2414,32 +2543,40 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                       { id: 'rocket_p2c', name: 'Rocket', key: 'rocketNumbers', color: 'bg-purple-600' },
                       { id: 'upay_p2c', name: 'Upay', key: 'upayNumbers', color: 'bg-blue-500' }
                     ].map(method => (
-                      <div key={method.id} className="bg-[var(--bg-primary)] rounded-2xl border border-[var(--border-color)] overflow-hidden flex flex-col">
+                      <div key={method.id} className="bg-[var(--bg-primary)] rounded-2xl border border-[var(--border-color)] overflow-hidden flex flex-col shadow-sm hover:shadow-md transition-shadow">
                         <div className="p-4 border-b border-[var(--border-color)] flex items-center justify-between bg-[var(--bg-secondary)]/30">
                           <div className="flex items-center gap-3">
-                            <div className={cn("w-8 h-8 rounded-lg flex items-center justify-center text-white font-bold text-xs", method.color)}>
+                            <div className={cn("w-8 h-8 rounded-lg flex items-center justify-center text-white font-bold text-xs shadow-sm", method.color)}>
                               {method.name[0]}
                             </div>
-                            <span className="font-bold text-sm">{method.name}</span>
+                            <span className="font-bold text-sm tracking-tight">{method.name}</span>
                           </div>
-                          <label className="relative inline-flex items-center cursor-pointer">
-                            <input 
-                              type="checkbox" 
-                              className="sr-only peer"
-                              checked={(depositSettings.enabledMethods || []).includes(method.id)}
-                              onChange={(e) => {
-                                setDepositSettings(prev => {
-                                  const current = prev.enabledMethods || [];
-                                  if (e.target.checked) {
-                                    return { ...prev, enabledMethods: [...current, method.id] };
-                                  } else {
-                                    return { ...prev, enabledMethods: current.filter(id => id !== method.id) };
-                                  }
-                                });
-                              }}
-                            />
-                            <div className="w-11 h-6 bg-[var(--bg-secondary)] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-                          </label>
+                          <div className="flex items-center gap-2">
+                            <span className={cn(
+                              "text-[9px] font-black uppercase tracking-widest transition-colors",
+                              (depositSettings.enabledMethods || []).includes(method.id) ? "text-green-500" : "text-[var(--text-secondary)]"
+                            )}>
+                              {(depositSettings.enabledMethods || []).includes(method.id) ? 'ON' : 'OFF'}
+                            </span>
+                            <label className="relative inline-flex items-center cursor-pointer">
+                              <input 
+                                type="checkbox" 
+                                className="sr-only peer"
+                                checked={(depositSettings.enabledMethods || []).includes(method.id)}
+                                onChange={(e) => {
+                                  setDepositSettings(prev => {
+                                    const current = prev.enabledMethods || [];
+                                    if (e.target.checked) {
+                                      return { ...prev, enabledMethods: [...current, method.id] };
+                                    } else {
+                                      return { ...prev, enabledMethods: current.filter(id => id !== method.id) };
+                                    }
+                                  });
+                                }}
+                              />
+                              <div className="w-11 h-6 bg-[var(--bg-secondary)] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-500 border border-[var(--border-color)]"></div>
+                            </label>
+                          </div>
                         </div>
                         <div className="p-4 space-y-4 flex-1">
                           <div className="space-y-2">
@@ -2728,30 +2865,38 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                       { id: 'dogecoin', name: 'Dogecoin (DOGE)', key: 'dogeAddress', icon: Bitcoin, color: 'text-yellow-700' },
                       { id: 'usdt_ton', name: 'USDT (TON)', key: 'usdtTonAddress', icon: Shield, color: 'text-blue-500' }
                     ].map(method => (
-                      <div key={method.id} className="bg-[var(--bg-primary)] rounded-2xl border border-[var(--border-color)] overflow-hidden flex flex-col">
+                      <div key={method.id} className="bg-[var(--bg-primary)] rounded-2xl border border-[var(--border-color)] overflow-hidden flex flex-col shadow-sm hover:shadow-md transition-shadow">
                         <div className="p-4 border-b border-[var(--border-color)] flex items-center justify-between bg-[var(--bg-secondary)]/30">
-                          <div className="flex items-center gap-2">
-                            <method.icon size={16} className={method.color} />
-                            <span className="font-bold text-xs">{method.name}</span>
+                          <div className="flex items-center gap-3">
+                            <method.icon size={18} className={method.color} />
+                            <span className="font-bold text-sm tracking-tight">{method.name}</span>
                           </div>
-                          <label className="relative inline-flex items-center cursor-pointer scale-75">
-                            <input 
-                              type="checkbox" 
-                              className="sr-only peer"
-                              checked={(depositSettings.enabledMethods || []).includes(method.id)}
-                              onChange={(e) => {
-                                setDepositSettings(prev => {
-                                  const current = prev.enabledMethods || [];
-                                  if (e.target.checked) {
-                                    return { ...prev, enabledMethods: [...current, method.id] };
-                                  } else {
-                                    return { ...prev, enabledMethods: current.filter(id => id !== method.id) };
-                                  }
-                                });
-                              }}
-                            />
-                            <div className="w-11 h-6 bg-[var(--bg-secondary)] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-                          </label>
+                          <div className="flex items-center gap-2">
+                            <span className={cn(
+                              "text-[9px] font-black uppercase tracking-widest transition-colors",
+                              (depositSettings.enabledMethods || []).includes(method.id) ? "text-green-500" : "text-[var(--text-secondary)]"
+                            )}>
+                              {(depositSettings.enabledMethods || []).includes(method.id) ? 'ON' : 'OFF'}
+                            </span>
+                            <label className="relative inline-flex items-center cursor-pointer">
+                              <input 
+                                type="checkbox" 
+                                className="sr-only peer"
+                                checked={(depositSettings.enabledMethods || []).includes(method.id)}
+                                onChange={(e) => {
+                                  setDepositSettings(prev => {
+                                    const current = prev.enabledMethods || [];
+                                    if (e.target.checked) {
+                                      return { ...prev, enabledMethods: [...current, method.id] };
+                                    } else {
+                                      return { ...prev, enabledMethods: current.filter(id => id !== method.id) };
+                                    }
+                                  });
+                                }}
+                              />
+                              <div className="w-11 h-6 bg-[var(--bg-secondary)] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-500 border border-[var(--border-color)]"></div>
+                            </label>
+                          </div>
                         </div>
                         <div className="p-4 space-y-3">
                           <div className="space-y-1">
@@ -2784,6 +2929,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                 {depositSubTab === 'EWALLETS' && (
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
                     {[
+                      { id: 'bank_card', name: 'Bank Card', key: 'bankCardDetails', color: 'text-blue-500' },
                       { id: 'paypal', name: 'PayPal', key: 'paypalEmail', color: 'text-blue-500' },
                       { id: 'neteller', name: 'Neteller', key: 'netellerEmail', color: 'text-green-600' },
                       { id: 'skrill', name: 'Skrill', key: 'skrillEmail', color: 'text-purple-500' },
@@ -2795,30 +2941,38 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                       { id: 'onyx_option_pay', name: 'Onyx Option Pay', key: 'onyxOptionPayNumbers', isList: true, color: 'text-black' },
                       { id: 'hamproo_pay', name: 'Hamproo Pay', key: 'hamprooPayNumbers', isList: true, color: 'text-pink-600' }
                     ].map(method => (
-                      <div key={method.id} className="bg-[var(--bg-primary)] rounded-2xl border border-[var(--border-color)] overflow-hidden flex flex-col">
+                      <div key={method.id} className="bg-[var(--bg-primary)] rounded-2xl border border-[var(--border-color)] overflow-hidden flex flex-col shadow-sm hover:shadow-md transition-shadow">
                         <div className="p-4 border-b border-[var(--border-color)] flex items-center justify-between bg-[var(--bg-secondary)]/30">
-                          <div className="flex items-center gap-2">
-                            <Globe size={16} className={method.color} />
-                            <span className="font-bold text-xs">{method.name}</span>
+                          <div className="flex items-center gap-3">
+                            <Globe size={18} className={method.color} />
+                            <span className="font-bold text-sm tracking-tight">{method.name}</span>
                           </div>
-                          <label className="relative inline-flex items-center cursor-pointer scale-75">
-                            <input 
-                              type="checkbox" 
-                              className="sr-only peer"
-                              checked={(depositSettings.enabledMethods || []).includes(method.id)}
-                              onChange={(e) => {
-                                setDepositSettings(prev => {
-                                  const current = prev.enabledMethods || [];
-                                  if (e.target.checked) {
-                                    return { ...prev, enabledMethods: [...current, method.id] };
-                                  } else {
-                                    return { ...prev, enabledMethods: current.filter(id => id !== method.id) };
-                                  }
-                                });
-                              }}
-                            />
-                            <div className="w-11 h-6 bg-[var(--bg-secondary)] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-                          </label>
+                          <div className="flex items-center gap-2">
+                            <span className={cn(
+                              "text-[9px] font-black uppercase tracking-widest transition-colors",
+                              (depositSettings.enabledMethods || []).includes(method.id) ? "text-green-500" : "text-[var(--text-secondary)]"
+                            )}>
+                              {(depositSettings.enabledMethods || []).includes(method.id) ? 'ON' : 'OFF'}
+                            </span>
+                            <label className="relative inline-flex items-center cursor-pointer">
+                              <input 
+                                type="checkbox" 
+                                className="sr-only peer"
+                                checked={(depositSettings.enabledMethods || []).includes(method.id)}
+                                onChange={(e) => {
+                                  setDepositSettings(prev => {
+                                    const current = prev.enabledMethods || [];
+                                    if (e.target.checked) {
+                                      return { ...prev, enabledMethods: [...current, method.id] };
+                                    } else {
+                                      return { ...prev, enabledMethods: current.filter(id => id !== method.id) };
+                                    }
+                                  });
+                                }}
+                              />
+                              <div className="w-11 h-6 bg-[var(--bg-secondary)] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-500 border border-[var(--border-color)]"></div>
+                            </label>
+                          </div>
                         </div>
                         <div className="p-4 space-y-3">
                           <div className="space-y-1">
@@ -3875,28 +4029,33 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                       {/* Balance Controls */}
                       <div className="space-y-4">
                         <h4 className="text-[10px] font-black text-[var(--text-secondary)] uppercase tracking-[0.2em]">Balance Management</h4>
-                        <div className="grid grid-cols-2 gap-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                           <div className="space-y-2">
                             <label className="text-[10px] font-bold text-[var(--text-secondary)] uppercase">Real Balance (Đ)</label>
-                            <div className="flex gap-2">
-                              <input 
-                                type="number" 
-                                defaultValue={selectedUser.balance}
-                                onBlur={(e) => handleUpdateUserBalance(selectedUser.email, parseFloat(e.target.value), 'REAL')}
-                                className="w-full bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-xl px-4 py-2 text-sm font-bold focus:border-blue-500 outline-none transition"
-                              />
-                            </div>
+                            <input 
+                              type="number" 
+                              defaultValue={selectedUser.balance}
+                              onBlur={(e) => handleUpdateUserBalance(selectedUser.email, parseFloat(e.target.value), 'REAL')}
+                              className="w-full bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-xl px-4 py-2 text-sm font-bold focus:border-blue-500 outline-none transition"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <label className="text-[10px] font-bold text-[var(--text-secondary)] uppercase">Bonus Balance (Đ)</label>
+                            <input 
+                              type="number" 
+                              defaultValue={selectedUser.bonus_balance || 0}
+                              onBlur={(e) => handleUpdateUserBalance(selectedUser.email, parseFloat(e.target.value), 'BONUS')}
+                              className="w-full bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-xl px-4 py-2 text-sm font-bold focus:border-blue-500 outline-none transition"
+                            />
                           </div>
                           <div className="space-y-2">
                             <label className="text-[10px] font-bold text-[var(--text-secondary)] uppercase">Demo Balance (Đ)</label>
-                            <div className="flex gap-2">
-                              <input 
-                                type="number" 
-                                defaultValue={selectedUser.demoBalance}
-                                onBlur={(e) => handleUpdateUserBalance(selectedUser.email, parseFloat(e.target.value), 'DEMO')}
-                                className="w-full bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-xl px-4 py-2 text-sm font-bold focus:border-blue-500 outline-none transition"
-                              />
-                            </div>
+                            <input 
+                              type="number" 
+                              defaultValue={selectedUser.demoBalance}
+                              onBlur={(e) => handleUpdateUserBalance(selectedUser.email, parseFloat(e.target.value), 'DEMO')}
+                              className="w-full bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-xl px-4 py-2 text-sm font-bold focus:border-blue-500 outline-none transition"
+                            />
                           </div>
                         </div>
                       </div>
@@ -3971,10 +4130,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                               <label className="text-[10px] font-bold text-[var(--text-secondary)] uppercase">Type</label>
                               <select 
                                 value={userControlForm.type}
-                                onChange={(e) => setUserControlForm(prev => ({ ...prev, type: e.target.value as 'REAL' | 'DEMO' }))}
+                                onChange={(e) => setUserControlForm(prev => ({ ...prev, type: e.target.value as 'REAL' | 'DEMO' | 'BONUS' }))}
                                 className="w-full bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-xl px-4 py-2 text-sm font-bold focus:border-blue-500 outline-none transition"
                               >
                                 <option value="REAL">Real Balance</option>
+                                <option value="BONUS">Bonus Balance</option>
                                 <option value="DEMO">Demo Balance</option>
                               </select>
                             </div>

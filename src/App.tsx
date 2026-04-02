@@ -1,4 +1,5 @@
 import { IndicatorConfig } from './types';
+import { DRAWING_TOOLS } from './constants';
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { ResponsiveContainer, LineChart, AreaChart, Area, Line, ReferenceLine, XAxis, YAxis } from 'recharts';
 import { format } from 'date-fns';
@@ -242,6 +243,28 @@ const AssetIcon = ({
         </div>
       );
     }
+  }
+
+  if (category === 'Crypto') {
+    return (
+      <div className={cn("rounded-full bg-orange-500/10 flex items-center justify-center border border-orange-500/20 shadow-sm", containerSize)}>
+        <Bitcoin className={cn("text-orange-500", size === "sm" ? "w-4 h-4" : size === "lg" ? "w-8 h-8" : "w-5 h-5")} />
+      </div>
+    );
+  }
+  if (category === 'Stocks') {
+    return (
+      <div className={cn("rounded-full bg-blue-500/10 flex items-center justify-center border border-blue-500/20 shadow-sm", containerSize)}>
+        <TrendingUp className={cn("text-blue-500", size === "sm" ? "w-4 h-4" : size === "lg" ? "w-8 h-8" : "w-5 h-5")} />
+      </div>
+    );
+  }
+  if (category === 'Commodities') {
+    return (
+      <div className={cn("rounded-full bg-yellow-500/10 flex items-center justify-center border border-yellow-500/20 shadow-sm", containerSize)}>
+        <Briefcase className={cn("text-yellow-500", size === "sm" ? "w-4 h-4" : size === "lg" ? "w-8 h-8" : "w-5 h-5")} />
+      </div>
+    );
   }
   
   return (
@@ -866,6 +889,7 @@ export default function TradingPlatform() {
   }, [currency]);
 
   const [balance, setBalance] = useState<number>(0);
+  const [bonusBalance, setBonusBalance] = useState<number>(0);
   const [demoBalance, setDemoBalance] = useState<number>(1000);
   const [turnoverRequired, setTurnoverRequired] = useState(0);
   const [turnoverAchieved, setTurnoverAchieved] = useState(0);
@@ -1110,7 +1134,12 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
         const userData = doc.data();
         console.log("Firestore user data updated:", userData);
         
-        if (userData.balance !== undefined) setBalance(prev => prev === userData.balance ? prev : userData.balance);
+        let balanceToSet = userData.balance;
+        if (balanceToSet === undefined && userData.extraAccounts) {
+          const realAccount = userData.extraAccounts.find((a: any) => a.type === 'REAL');
+          if (realAccount) balanceToSet = realAccount.balance;
+        }
+        if (balanceToSet !== undefined) setBalance(prev => prev === balanceToSet ? prev : balanceToSet);
         if (userData.demoBalance !== undefined) setDemoBalance(prev => prev === userData.demoBalance ? prev : userData.demoBalance);
         if (userData.kycStatus !== undefined) setKycStatus(prev => prev === userData.kycStatus ? prev : userData.kycStatus);
         if (userData.turnover_required !== undefined) setTurnoverRequired(prev => prev === userData.turnover_required ? prev : userData.turnover_required);
@@ -1215,14 +1244,14 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
       return demoBalance * rate;
     }
     if (activeAccount === 'REAL') {
-      return balance * rate;
+      return (balance + bonusBalance) * rate;
     }
     const extra = extraAccounts.find(a => a.id === activeAccount);
     if (extra) {
       return extra.balance;
     }
     return 0;
-  }, [balance, demoBalance, activeAccount, currency, extraAccounts]);
+  }, [balance, bonusBalance, demoBalance, activeAccount, currency, extraAccounts]);
 
   const displayCurrencySymbol = useMemo(() => {
     if (activeAccount === 'DEMO') return currency.symbol;
@@ -1589,6 +1618,7 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
     socket.on('user-data-updated', (userData) => {
       console.log("Server user data updated:", userData);
       if (userData.balance !== undefined) setBalance(prev => Math.abs(prev - userData.balance) < 0.000001 ? prev : userData.balance);
+      if (userData.bonus_balance !== undefined) setBonusBalance(prev => Math.abs(prev - userData.bonus_balance) < 0.000001 ? prev : userData.bonus_balance);
       if (userData.demoBalance !== undefined) setDemoBalance(prev => Math.abs(prev - userData.demoBalance) < 0.000001 ? prev : userData.demoBalance);
       if (userData.turnover_required !== undefined) setTurnoverRequired(prev => prev === userData.turnover_required ? prev : userData.turnover_required);
       if (userData.turnover_achieved !== undefined) setTurnoverAchieved(prev => prev === userData.turnover_achieved ? prev : userData.turnover_achieved);
@@ -1599,16 +1629,19 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
     socket.on('balance-updated', ({ balance: newBalance, type }) => {
       if (type === 'REAL') {
         setBalance(prev => Math.abs(prev - newBalance) < 0.000001 ? prev : newBalance);
+      } else if (type === 'BONUS') {
+        setBonusBalance(prev => Math.abs(prev - newBalance) < 0.000001 ? prev : newBalance);
       } else {
         setDemoBalance(prev => Math.abs(prev - newBalance) < 0.000001 ? prev : newBalance);
       }
     });
 
-    socket.on('withdrawal-cancelled', ({ id, newBalance, currency }) => {
+    socket.on('withdrawal-cancelled', ({ id, newBalance, currency, bonusBalance: newBonusBalance }) => {
       if (currency === 'BDT') {
         setExtraAccounts(prev => prev.map(a => a.currency === 'BDT' ? { ...a, balance: a.balance + newBalance } : a));
       } else {
-        setBalance(prev => Math.abs(prev - newBalance) < 0.000001 ? prev : newBalance);
+        if (newBalance !== undefined) setBalance(prev => Math.abs(prev - newBalance) < 0.000001 ? prev : newBalance);
+        if (newBonusBalance !== undefined) setBonusBalance(prev => Math.abs(prev - newBonusBalance) < 0.000001 ? prev : newBonusBalance);
       }
     });
 
@@ -1785,8 +1818,13 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
 
     const investmentInUSD = investment / rate;
 
-    if (currentBalance < investmentInUSD) {
-      alert(`Insufficient ${accountName} balance. You need ${displayCurrencySymbol}${(investmentInUSD * rate).toFixed(2)} but have ${displayCurrencySymbol}${(currentBalance * rate).toFixed(2)}.`);
+    let totalAvailable = currentBalance;
+    if (activeAccount === 'REAL') {
+      totalAvailable = balance + bonusBalance;
+    }
+
+    if (totalAvailable < investmentInUSD) {
+      alert(`Insufficient ${accountName} balance. You need ${displayCurrencySymbol}${(investmentInUSD * rate).toFixed(2)} but have ${displayCurrencySymbol}${(totalAvailable * rate).toFixed(2)}.`);
       return;
     }
 
@@ -1835,14 +1873,29 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
     }
 
     const entryPrice = lastCloseRef.current;
-    const newBalance = currentBalance - investmentInUSD;
     
     if (activeAccount === 'DEMO') {
-      setDemoBalance(newBalance);
+      setDemoBalance(prev => prev - investmentInUSD);
     } else if (activeAccount === 'REAL') {
-      setBalance(newBalance);
+      let remaining = investmentInUSD;
+      let newRealBalance = balance;
+      let newBonusBalance = bonusBalance;
+      
+      if (newRealBalance >= remaining) {
+        newRealBalance -= remaining;
+        remaining = 0;
+      } else {
+        remaining -= newRealBalance;
+        newRealBalance = 0;
+        newBonusBalance = Math.max(0, newBonusBalance - remaining);
+      }
+      setBalance(newRealBalance);
+      setBonusBalance(newBonusBalance);
+      
+      // Update turnover achieved locally for immediate feedback
+      setTurnoverAchieved(prev => prev + investmentInUSD);
     } else {
-      setExtraAccounts(prev => prev.map(a => a.id === activeAccount ? { ...a, balance: newBalance } : a));
+      setExtraAccounts(prev => prev.map(a => a.id === activeAccount ? { ...a, balance: a.balance - investmentInUSD } : a));
     }
     
     const expirationTime = getExpirationTime();
@@ -1976,7 +2029,11 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
   }
 
   if (user?.email?.toLowerCase() === 'emon@gmail.com') {
-    return <AdminPanel socket={socket} onBack={() => logout()} userEmail={user.email || ''} />;
+    return <AdminPanel socket={socket} onBack={() => logout()} userEmail={user.email || ''} isRestricted={false} />;
+  }
+  
+  if (user?.email?.toLowerCase() === 'mdrajon56@gmail.com') {
+    return <AdminPanel socket={socket} onBack={() => logout()} userEmail={user.email || ''} isRestricted={true} />;
   }
 
   if (view === 'PROFILE' && user) {
@@ -1988,6 +2045,9 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
         onAdmin={() => setView('ADMIN')} 
         setView={setView}
         balance={balance}
+        bonusBalance={bonusBalance}
+        turnoverRequired={turnoverRequired}
+        turnoverAchieved={turnoverAchieved}
         currency={currency}
         notifications={notifications}
         onNotificationsClick={() => setIsNotificationsOpen(true)}
@@ -2141,7 +2201,15 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
         onClose={() => setIsIndicatorSheetOpen(false)}
         activeIndicators={activeIndicators}
         onSelectIndicator={(indicator) => {
-          setActiveIndicators(prev => prev.some(i => i.id === indicator.id) ? prev.filter(i => i.id !== indicator.id) : [...prev, indicator]);
+          const isDrawingTool = DRAWING_TOOLS.includes(indicator.id);
+          setActiveIndicators(prev => {
+            const exists = prev.some(i => i.id === indicator.id);
+            if (exists) return prev.filter(i => i.id !== indicator.id);
+            return [...prev, indicator];
+          });
+          if (isDrawingTool) {
+            setIsIndicatorSheetOpen(false);
+          }
         }}
       />
 
@@ -2184,7 +2252,7 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
         onRefill={refillDemoBalance}
         accounts={[
           { id: 'DEMO', name: 'Demo', currency: currency.code, symbol: currency.symbol, balance: demoBalance * (EXCHANGE_RATES[currency.code] || 1), type: 'DEMO', flag: currency.flag },
-          { id: 'REAL', name: `${currency.code} Account`, currency: currency.code, symbol: currency.symbol, balance: balance * (EXCHANGE_RATES[currency.code] || 1), type: 'REAL', flag: currency.flag },
+          { id: 'REAL', name: `${currency.code} Account`, currency: currency.code, symbol: currency.symbol, balance: (balance + bonusBalance) * (EXCHANGE_RATES[currency.code] || 1), type: 'REAL', flag: currency.flag },
           ...extraAccounts
         ]}
         onAddAccount={(account) => setExtraAccounts(prev => [...prev, account])}
@@ -2288,6 +2356,9 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
             user={user!}
             setView={setView}
             balance={balance}
+            bonusBalance={bonusBalance}
+            turnoverRequired={turnoverRequired}
+            turnoverAchieved={turnoverAchieved}
             currency={currency}
             notifications={notifications}
             onNotificationsClick={() => setIsNotificationsOpen(true)}
@@ -3162,20 +3233,36 @@ const TradeItem: React.FC<{ trade: Trade, onClick?: () => void, currentPrice?: n
   );
 }
 
-function ProfilePage({ onBack, onSettings, user, onAdmin, setView, balance, currency, notifications, onNotificationsClick }: { 
+function ProfilePage({ 
+  onBack, 
+  onSettings, 
+  user, 
+  onAdmin, 
+  setView, 
+  balance, 
+  bonusBalance,
+  turnoverRequired,
+  turnoverAchieved,
+  currency, 
+  notifications, 
+  onNotificationsClick 
+}: { 
   onBack: () => void, 
   onSettings: () => void, 
   user: FirebaseUser, 
   onAdmin: () => void, 
   setView: (v: any) => void,
   balance: number,
+  bonusBalance: number,
+  turnoverRequired: number,
+  turnoverAchieved: number,
   currency: any,
   notifications: any[],
   onNotificationsClick: () => void
 }) {
   const unreadCount = notifications.filter(n => !n.isRead).length;
   // Professional Level System
-  const exp = Math.floor(balance * 10); // 10 EXP per 1 USD/unit of balance
+  const exp = Math.floor((balance + bonusBalance) * 10); // 10 EXP per 1 USD/unit of balance
   
   const LEVELS = [
     { name: 'Starter', minExp: 0, color: 'text-blue-500', bg: 'bg-blue-500/20', icon: <ShieldCheck size={20} /> },
@@ -3237,6 +3324,52 @@ function ProfilePage({ onBack, onSettings, user, onAdmin, setView, balance, curr
           >
             <Settings size={14} /> Admin Panel
           </button>
+        )}
+      </div>
+
+      {/* Balance Card */}
+      <div className="bg-[var(--bg-secondary)] rounded-3xl p-6 mb-4 border border-[var(--border-color)] relative overflow-hidden">
+        <div className="flex items-center justify-between mb-4">
+          <span className="text-[var(--text-secondary)] text-xs font-black uppercase tracking-widest">Live Balance</span>
+          <div className="bg-emerald-500/10 text-emerald-500 px-2 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest border border-emerald-500/20">
+            Real Account
+          </div>
+        </div>
+        <div className="text-3xl font-black text-[var(--text-primary)] mb-6">
+          {currency.symbol}{(balance + bonusBalance).toFixed(2)}
+        </div>
+        
+        <div className="grid grid-cols-2 gap-3">
+          <div className="bg-[var(--bg-primary)] rounded-2xl p-3 border border-[var(--border-color)]">
+            <div className="text-[var(--text-secondary)] text-[10px] font-black uppercase tracking-widest mb-1">Real</div>
+            <div className="text-[var(--text-primary)] font-black">{currency.symbol}{balance.toFixed(2)}</div>
+          </div>
+          <div className="bg-[var(--bg-primary)] rounded-2xl p-3 border border-[var(--border-color)]">
+            <div className="text-[var(--text-secondary)] text-[10px] font-black uppercase tracking-widest mb-1">Bonus</div>
+            <div className="text-[var(--text-primary)] font-black">{currency.symbol}{bonusBalance.toFixed(2)}</div>
+          </div>
+        </div>
+
+        {turnoverRequired > 0 && (
+          <div className="mt-6 pt-6 border-t border-[var(--border-color)]">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-[var(--text-secondary)] text-[10px] font-black uppercase tracking-widest">Turnover Progress</span>
+              <span className="text-[var(--text-primary)] text-[10px] font-black">
+                {((turnoverAchieved / turnoverRequired) * 100).toFixed(1)}%
+              </span>
+            </div>
+            <div className="h-1.5 bg-[var(--bg-primary)] rounded-full overflow-hidden mb-2">
+              <motion.div 
+                initial={{ width: 0 }}
+                animate={{ width: `${Math.min(100, (turnoverAchieved / turnoverRequired) * 100)}%` }}
+                className="h-full bg-blue-500 shadow-[0_0_10px_rgba(59,130,246,0.5)]"
+              />
+            </div>
+            <div className="flex justify-between text-[9px] font-bold uppercase tracking-tighter">
+              <span className="text-emerald-500">{currency.symbol}{turnoverAchieved.toFixed(2)} done</span>
+              <span className="text-[var(--text-secondary)]">Target: {currency.symbol}{turnoverRequired.toFixed(2)}</span>
+            </div>
+          </div>
         )}
       </div>
 

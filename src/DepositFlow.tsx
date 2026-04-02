@@ -637,10 +637,16 @@ const PaymentDetails = ({ handleBack, selectedMethod, amount, currencyCode, curr
         return () => clearTimeout(timer);
     }, []);
 
-    // Select a random number index when the component mounts or method changes
+    // Select a rotated number index when the component mounts or method changes
     useEffect(() => {
       if (numbers.length > 1) {
-        setNumberIndex(Math.floor(Math.random() * numbers.length));
+        // Get the last used index for this method from localStorage to ensure rotation
+        const storageKey = `deposit_index_${selectedMethod.id}`;
+        const lastIndex = parseInt(localStorage.getItem(storageKey) || '-1');
+        const nextIndex = (lastIndex + 1) % numbers.length;
+        
+        setNumberIndex(nextIndex);
+        localStorage.setItem(storageKey, nextIndex.toString());
       } else {
         setNumberIndex(0);
       }

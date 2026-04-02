@@ -22,12 +22,44 @@ export function deepEqual(a: any, b: any): boolean {
 }
 
 export function safeStringify(obj: any): string {
-  const cache = new Set();
-  return JSON.stringify(obj, (key, value) => {
-    if (typeof value === 'object' && value !== null) {
-      if (cache.has(value)) return;
-      cache.add(value);
-    }
-    return value;
-  });
+  if (obj === undefined) return 'undefined';
+  if (obj === null) return 'null';
+  
+  const cache = new WeakSet();
+  try {
+    const result = JSON.stringify(obj, (key, value) => {
+      if (typeof value === 'object' && value !== null) {
+        // Robust check for Socket objects and other circular-prone structures
+        try {
+          if (
+            value.io || 
+            value.nsp || 
+            value._callbacks ||
+            value.connected !== undefined || 
+            (value.constructor && (
+              value.constructor.name === 'Socket' || 
+              value.constructor.name === 'Socket2' || 
+              value.constructor.name === 'Manager' ||
+              value.constructor.name === 'EventEmitter'
+            ))
+          ) {
+            return '[Socket]';
+          }
+        } catch (e) {
+          // If property access fails (e.g. cross-origin), skip this object
+          return '[Unsafe Object]';
+        }
+        
+        if (cache.has(value)) {
+          return "[Circular]";
+        }
+        cache.add(value);
+      }
+      return value;
+    });
+    return result || String(obj);
+  } catch (err) {
+    console.error('safeStringify failed:', err);
+    return '[Unstringifiable Object]';
+  }
 }

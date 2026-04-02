@@ -121,13 +121,11 @@ export default function SupportChat({ onClose, supportSettings, socket, userEmai
       socket.emit('join-chat', userEmail);
       
       const handleNewMessage = (message: any) => {
-        console.log('New message received:', message);
         setMessages(prev => [...prev, message]);
         setIsTyping(false);
       };
 
       const handleChatHistory = (history: any[]) => {
-        console.log('Chat history received:', history);
         if (history && history.length > 0) {
           setMessages(history);
         } else if (selectedCountry) {

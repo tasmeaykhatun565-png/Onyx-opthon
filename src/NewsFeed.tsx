@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { getAi } from './services/geminiService';
 import { Newspaper, Loader2, RefreshCw } from 'lucide-react';
 import { Type } from '@google/genai';
+import { safeStringify } from './utils';
 
 type NewsItem = {
   title: string;
@@ -73,7 +74,7 @@ export default function NewsFeed() {
       if (response.text) {
         const parsedNews = JSON.parse(response.text);
         setNews(parsedNews);
-        localStorage.setItem('market_news', JSON.stringify(parsedNews));
+        localStorage.setItem('market_news', safeStringify(parsedNews));
         localStorage.setItem('market_news_timestamp', now.toString());
         localStorage.removeItem('news_fetch_cooldown');
       }

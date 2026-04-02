@@ -51,7 +51,7 @@ interface Drawing {
   color: string;
 }
 
-const DRAWING_TOOLS = ['TrendLine', 'HorizontalLine', 'VerticalLine', 'Rectangle', 'Ray', 'FibonacciLevels', 'FibonacciFan', 'ParallelChannel'];
+import { DRAWING_TOOLS } from './constants';
 
 const ChartSkeleton = ({ message = "Loading chart data..." }) => (
   <div className="absolute inset-0 bg-[var(--bg-primary)] flex items-center justify-center z-50">
@@ -242,19 +242,16 @@ export const TradingChart: React.FC<TradingChartProps> = ({
     const container = chartContainerRef.current;
     if (!container || !chartRef.current) return;
 
-    const handleMouseDown = (e: MouseEvent) => {
+    const startDrawing = (clientX: number, clientY: number) => {
       const mode = drawingModeRef.current;
-      console.log('MouseDown', mode);
       if (!mode || !chartRef.current) return;
       
       const rect = container.getBoundingClientRect();
-      const x = e.clientX - rect.left;
-      const y = e.clientY - rect.top;
+      const x = clientX - rect.left;
+      const y = clientY - rect.top;
       
       const time = chartRef.current.timeScale().coordinateToTime(x) as number;
       const price = seriesRef.current?.coordinateToPrice(y) as number;
-      
-      console.log('Time/Price', time, price);
       
       if (time && price) {
         setCurrentDrawing({
@@ -266,13 +263,13 @@ export const TradingChart: React.FC<TradingChartProps> = ({
       }
     };
 
-    const handleMouseMove = (e: MouseEvent) => {
+    const moveDrawing = (clientX: number, clientY: number) => {
       const drawing = currentDrawingRef.current;
       if (!drawing || !chartRef.current) return;
       
       const rect = container.getBoundingClientRect();
-      const x = e.clientX - rect.left;
-      const y = e.clientY - rect.top;
+      const x = clientX - rect.left;
+      const y = clientY - rect.top;
       
       const time = chartRef.current.timeScale().coordinateToTime(x) as number;
       const price = seriesRef.current?.coordinateToPrice(y) as number;
@@ -287,7 +284,7 @@ export const TradingChart: React.FC<TradingChartProps> = ({
       }
     };
 
-    const handleMouseUp = () => {
+    const endDrawing = () => {
       const drawing = currentDrawingRef.current;
       if (drawing) {
         setDrawings(prev => [...prev, drawing]);
@@ -295,14 +292,44 @@ export const TradingChart: React.FC<TradingChartProps> = ({
       }
     };
 
+    const handleMouseDown = (e: MouseEvent) => startDrawing(e.clientX, e.clientY);
+    const handleMouseMove = (e: MouseEvent) => moveDrawing(e.clientX, e.clientY);
+    const handleMouseUp = () => endDrawing();
+
+    const handleTouchStart = (e: TouchEvent) => {
+      if (drawingModeRef.current) {
+        e.preventDefault();
+        startDrawing(e.touches[0].clientX, e.touches[0].clientY);
+      }
+    };
+
+    const handleTouchMove = (e: TouchEvent) => {
+      if (currentDrawingRef.current) {
+        e.preventDefault();
+        moveDrawing(e.touches[0].clientX, e.touches[0].clientY);
+      }
+    };
+
+    const handleTouchEnd = (e: TouchEvent) => {
+      if (currentDrawingRef.current) {
+        endDrawing();
+      }
+    };
+
     container.addEventListener('mousedown', handleMouseDown);
     window.addEventListener('mousemove', handleMouseMove);
     window.addEventListener('mouseup', handleMouseUp);
+    container.addEventListener('touchstart', handleTouchStart, { passive: false, capture: true });
+    window.addEventListener('touchmove', handleTouchMove, { passive: false, capture: true });
+    window.addEventListener('touchend', handleTouchEnd, { capture: true });
 
     return () => {
       container.removeEventListener('mousedown', handleMouseDown);
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
+      container.removeEventListener('touchstart', handleTouchStart, { capture: true });
+      window.removeEventListener('touchmove', handleTouchMove, { capture: true });
+      window.removeEventListener('touchend', handleTouchEnd, { capture: true });
     };
   }, []);
 
@@ -1011,12 +1038,17 @@ export const TradingChart: React.FC<TradingChartProps> = ({
     // Check if asset changed, first load, or data length changed significantly (full reset)
     const currentSeriesData = series.data();
     const assetChanged = prevAssetRef.current !== assetName;
+    console.log('TradingChart Update Check:', { assetName, assetChanged, dataLength: data.length, currentSeriesDataLength: currentSeriesData.length });
     
-    if (data.length === 0) {
-      if (assetChanged) {
+    // Force full reset if asset changed
+    if (assetChanged) {
+        console.log('TradingChart: Asset changed, forcing full reset');
         series.setData([]);
         prevAssetRef.current = assetName;
-      }
+        prevHARef.current = null; // Reset Heikin Ashi state
+    }
+
+    if (data.length === 0) {
       return;
     }
 
@@ -1026,9 +1058,10 @@ export const TradingChart: React.FC<TradingChartProps> = ({
       Math.abs(data.length - currentSeriesData.length) > 5; // Increased threshold to avoid reset on small updates
 
     if (shouldFullReset) {
-       if (assetChanged) {
-          series.setData([]); // Explicitly clear old asset data
-       }
+       console.log('TradingChart: Performing full reset', { shouldFullReset, assetChanged });
+       
+       // CRITICAL: Clear existing data before setting new data to prevent visual artifacts
+       series.setData([]); 
        
        let prevHA: any = null;
        const formattedData = data.map(d => {
@@ -1146,7 +1179,7 @@ export const TradingChart: React.FC<TradingChartProps> = ({
   const isStalled = !isConnected;
 
   return (
-    <div ref={chartContainerRef} className="w-full h-full relative overflow-hidden bg-[var(--bg-primary)] flex-1 min-h-[300px] touch-none">
+    <div ref={chartContainerRef} className="w-full h-full relative overflow-hidden bg-[var(--bg-primary)] flex-1 min-h-[300px]">
         <AnimatePresence>
             {(isLoading || data.length === 0 || isStalled) && (
                 <motion.div 

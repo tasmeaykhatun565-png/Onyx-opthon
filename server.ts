@@ -155,7 +155,9 @@ async function startServer() {
         status TEXT DEFAULT 'PENDING',
         submittedAt INTEGER,
         updatedAt INTEGER,
-        rejectionReason TEXT
+        rejectionReason TEXT,
+        realAmount REAL DEFAULT 0,
+        bonusAmount REAL DEFAULT 0
       );
 
       CREATE TABLE IF NOT EXISTS users (
@@ -173,6 +175,7 @@ async function startServer() {
         lastLogin INTEGER,
         turnover_required REAL DEFAULT 0,
         turnover_achieved REAL DEFAULT 0,
+        bonus_balance REAL DEFAULT 0,
         referredBy TEXT,
         referralCode TEXT,
         referralCount INTEGER DEFAULT 0,
@@ -281,6 +284,7 @@ async function startServer() {
       'ALTER TABLE users ADD COLUMN uid TEXT',
       'ALTER TABLE users ADD COLUMN turnover_required REAL DEFAULT 0',
       'ALTER TABLE users ADD COLUMN turnover_achieved REAL DEFAULT 0',
+      'ALTER TABLE users ADD COLUMN bonus_balance REAL DEFAULT 0',
       'ALTER TABLE users ADD COLUMN referredBy TEXT',
       'ALTER TABLE users ADD COLUMN referralCode TEXT',
       'ALTER TABLE users ADD COLUMN referralCount INTEGER DEFAULT 0',
@@ -294,6 +298,8 @@ async function startServer() {
       'ALTER TABLE deposits ADD COLUMN promoCode TEXT',
       'ALTER TABLE deposits ADD COLUMN bonusAmount REAL DEFAULT 0',
       'ALTER TABLE deposits ADD COLUMN turnoverRequired REAL DEFAULT 0',
+      'ALTER TABLE withdrawals ADD COLUMN realAmount REAL DEFAULT 0',
+      'ALTER TABLE withdrawals ADD COLUMN bonusAmount REAL DEFAULT 0',
       'CREATE UNIQUE INDEX IF NOT EXISTS idx_deposits_transactionId ON deposits(transactionId)'
     ];
 
@@ -352,7 +358,7 @@ async function startServer() {
         const now = Date.now();
         
         if (!existingUser) {
-          db.prepare('INSERT INTO users (email, name, photoURL, uid, balance, demoBalance, createdAt, lastLogin, status, kycStatus, turnover_achieved, turnover_required, referralBalance, totalReferralEarnings, allowed_withdrawal_methods, trades, language, currency, currencySymbol, currencyName, currencyFlag, timeframe, chartType, referredBy, referralCode, referralCount, extraAccounts) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+          db.prepare('INSERT INTO users (email, name, photoURL, uid, balance, demoBalance, createdAt, lastLogin, status, kycStatus, turnover_achieved, turnover_required, bonus_balance, referralBalance, totalReferralEarnings, allowed_withdrawal_methods, trades, language, currency, currencySymbol, currencyName, currencyFlag, timeframe, chartType, referredBy, referralCode, referralCount, extraAccounts) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
             .run(
               email, 
               data.name || defaultName || '', 
@@ -366,6 +372,7 @@ async function startServer() {
               data.kycStatus || 'NONE',
               data.turnover_achieved || 0,
               data.turnover_required || 0,
+              data.bonus_balance || 0,
               data.referralBalance || 0,
               data.totalReferralEarnings || 0,
               data.allowed_withdrawal_methods || '',
@@ -383,7 +390,7 @@ async function startServer() {
               data.extraAccounts || '[]'
             );
         } else {
-          db.prepare('UPDATE users SET balance = ?, demoBalance = ?, status = ?, kycStatus = ?, turnover_achieved = ?, turnover_required = ?, referralBalance = ?, totalReferralEarnings = ?, allowed_withdrawal_methods = ?, trades = ?, language = ?, currency = ?, currencySymbol = ?, currencyName = ?, currencyFlag = ?, timeframe = ?, chartType = ?, referredBy = ?, referralCode = ?, referralCount = ?, extraAccounts = ? WHERE email = ?')
+          db.prepare('UPDATE users SET balance = ?, demoBalance = ?, status = ?, kycStatus = ?, turnover_achieved = ?, turnover_required = ?, bonus_balance = ?, referralBalance = ?, totalReferralEarnings = ?, allowed_withdrawal_methods = ?, trades = ?, language = ?, currency = ?, currencySymbol = ?, currencyName = ?, currencyFlag = ?, timeframe = ?, chartType = ?, referredBy = ?, referralCode = ?, referralCount = ?, extraAccounts = ? WHERE email = ?')
             .run(
               data.balance !== undefined ? data.balance : existingUser.balance,
               data.demoBalance !== undefined ? data.demoBalance : existingUser.demoBalance,
@@ -391,6 +398,7 @@ async function startServer() {
               data.kycStatus || existingUser.kycStatus,
               data.turnover_achieved !== undefined ? data.turnover_achieved : existingUser.turnover_achieved,
               data.turnover_required !== undefined ? data.turnover_required : existingUser.turnover_required,
+              data.bonus_balance !== undefined ? data.bonus_balance : existingUser.bonus_balance,
               data.referralBalance !== undefined ? data.referralBalance : existingUser.referralBalance,
               data.totalReferralEarnings !== undefined ? data.totalReferralEarnings : existingUser.totalReferralEarnings,
               data.allowed_withdrawal_methods !== undefined ? data.allowed_withdrawal_methods : existingUser.allowed_withdrawal_methods,
@@ -686,6 +694,7 @@ async function startServer() {
       if (canSyncFirestore() && user.uid) {
         const syncData = {
           balance: user.balance,
+          bonus_balance: user.bonus_balance || 0,
           demoBalance: user.demoBalance,
           referralBalance: user.referralBalance,
           totalReferralEarnings: user.totalReferralEarnings,
@@ -808,7 +817,7 @@ async function startServer() {
 
   // Global Trade Automation Settings
   let globalTradeSettings = {
-    mode: 'FAIR', // 'FAIR', 'FORCE_LOSS', 'FORCE_WIN', 'PERCENTAGE'
+    mode: 'FAIR', // 'FAIR', 'FORCE_LOSS', 'FORCE_WIN', 'PERCENTAGE', 'SMART'
     winPercentage: 50,
     payoutPercentage: 90
   };
@@ -828,17 +837,32 @@ async function startServer() {
     usdcErc20Address: '0xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',
     usdcBep20Address: '0xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',
     btcAddress: '1xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',
+    bankCardDetails: 'Bank: Onyx Bank, Account: 1234567890, Branch: Main',
+    onyxOptionPayNumbers: ['01712-345678'],
+    hamprooPayNumbers: ['01712-345678'],
+    upiId: 'onyxtrade@upi',
+    perfectMoneyAccount: 'U12345678',
+    advcashEmail: 'payments@onyxtrade.com',
+    payeerAccount: 'P12345678',
+    webmoneyWmz: 'Z123456789012',
+    ltcAddress: 'Lxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',
+    xrpAddress: 'rxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',
+    xlmAddress: 'Gxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',
+    dogeAddress: 'Dxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',
+    usdtTonAddress: 'UQxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',
     enabledMethods: [
       'bkash_p2c', 'nagad_p2c', 'rocket_p2c', 'upay_p2c', 
       'binance_pay', 'usdt_trc20', 'usdt_bep20', 'bitcoin',
       'bank_card', 'skrill', 'xrp', 'usdt_ton', 'usdc_erc20', 'usdc_bep20', 'ethereum', 'litecoin',
-      'paypal', 'neteller'
+      'paypal', 'neteller', 'upi', 'perfect_money', 'advcash', 'payeer', 'webmoney', 'stellar', 'dogecoin',
+      'onyx_option_pay', 'hamproo_pay'
     ],
     exchangeRate: 120,
     depositNote: 'Ensure you include your account ID in the reference if required. Deposits usually reflect within 5-15 minutes.',
     minDepositForBonus: 50,
     bonusPercentage: 10,
-    turnoverMultiplier: 3
+    turnoverMultiplier: 3,
+    methodLogos: {} as Record<string, string>
   };
 
   let globalPlatformSettings = {
@@ -1015,17 +1039,31 @@ async function startServer() {
         : currentPrice < activeTrade.entryPrice;
     }
     
-    const profit = isWin ? activeTrade.amount * (activeTrade.payout / 100) : -activeTrade.amount;
+    const isDraw = !isWin && finalClosePrice === activeTrade.entryPrice;
+    const profit = isWin ? activeTrade.amount * (activeTrade.payout / 100) : (isDraw ? 0 : -activeTrade.amount);
     
     // Add profit to balance
     if (isWin) {
-      const totalReturn = activeTrade.amount + profit;
       if (activeTrade.accountType === 'REAL') {
-        db.prepare('UPDATE users SET balance = balance + ? WHERE email = ?').run(totalReturn, email);
+        const realAmount = activeTrade.realAmount || 0;
+        const bonusAmount = activeTrade.bonusAmount || 0;
+        const totalAmount = realAmount + bonusAmount;
+        
+        // Proportional profit distribution
+        const realProfit = profit * (realAmount / totalAmount);
+        const bonusProfit = profit * (bonusAmount / totalAmount);
+        
+        const realReturn = realAmount + realProfit;
+        const bonusReturn = bonusAmount + bonusProfit;
+        
+        db.prepare('UPDATE users SET balance = balance + ?, bonus_balance = bonus_balance + ? WHERE email = ?')
+          .run(realReturn, bonusReturn, email);
       } else if (activeTrade.accountType === 'DEMO') {
+        const totalReturn = activeTrade.amount + profit;
         db.prepare('UPDATE users SET demoBalance = demoBalance + ? WHERE email = ?').run(totalReturn, email);
       } else {
         // Handle extra accounts
+        const totalReturn = activeTrade.amount + profit;
         const user = db.prepare('SELECT extraAccounts FROM users WHERE email = ?').get(email) as any;
         if (user) {
           let extraAccounts = [];
@@ -1049,12 +1087,46 @@ async function startServer() {
           }
         }
       }
-      
-      // Update Firestore after adding profit
-      if (canSyncFirestore() && (activeTrade.accountType === 'REAL' || activeTrade.accountType === 'DEMO')) {
-        const updatedUser = db.prepare('SELECT balance, demoBalance, uid FROM users WHERE email = ?').get(email) as any;
+    } else if (isDraw) {
+      // Return investment on DRAW
+      if (activeTrade.accountType === 'REAL') {
+        const realAmount = activeTrade.realAmount || 0;
+        const bonusAmount = activeTrade.bonusAmount || 0;
+        db.prepare('UPDATE users SET balance = balance + ?, bonus_balance = bonus_balance + ? WHERE email = ?')
+          .run(realAmount, bonusAmount, email);
+      } else if (activeTrade.accountType === 'DEMO') {
+        db.prepare('UPDATE users SET demoBalance = demoBalance + ? WHERE email = ?').run(activeTrade.amount, email);
+      } else {
+        const user = db.prepare('SELECT extraAccounts FROM users WHERE email = ?').get(email) as any;
+        if (user) {
+          let extraAccounts = [];
+          try {
+            extraAccounts = typeof user.extraAccounts === 'string' ? JSON.parse(user.extraAccounts) : (user.extraAccounts || []);
+          } catch (e) {
+            extraAccounts = [];
+          }
+          let updated = false;
+          extraAccounts = extraAccounts.map((acc: any) => {
+            if (acc.id === activeTrade.accountType) {
+              updated = true;
+              return { ...acc, balance: acc.balance + activeTrade.amount };
+            }
+            return acc;
+          });
+          if (updated) {
+            db.prepare('UPDATE users SET extraAccounts = ? WHERE email = ?').run(JSON.stringify(extraAccounts), email);
+          }
+        }
+      }
+    }
+    
+    // Update Firestore after adding profit
+    if (canSyncFirestore() && (activeTrade.accountType === 'REAL' || activeTrade.accountType === 'DEMO')) {
+        const updatedUser = db.prepare('SELECT balance, bonus_balance, demoBalance, uid FROM users WHERE email = ?').get(email) as any;
         if (updatedUser) {
-          const updateData = activeTrade.accountType === 'REAL' ? { balance: updatedUser.balance } : { demoBalance: updatedUser.demoBalance };
+          const updateData = activeTrade.accountType === 'REAL' 
+            ? { balance: updatedUser.balance, bonus_balance: updatedUser.bonus_balance } 
+            : { demoBalance: updatedUser.demoBalance };
           firestore.collection('users').doc(updatedUser.uid).set(updateData, { merge: true })
             .catch((e: any) => {
                if (e.code === 7 || (e.message && e.message.includes('PERMISSION_DENIED'))) {
@@ -1064,7 +1136,6 @@ async function startServer() {
                }
             });
         }
-      }
     }
     
     // Update Platform Stats in DB (Live Balance only)
@@ -1145,7 +1216,7 @@ async function startServer() {
   // Referral Settings
   let globalReferralSettings = {
     bonusAmount: 10, // Fixed bonus for referrer
-    referralPercentage: 5, // Percentage of first deposit
+    referralPercentage: 20, // Percentage of first deposit
     minDepositForBonus: 20
   };
 
@@ -1342,15 +1413,30 @@ async function startServer() {
        let hasConflict = false;
        let targetPrice = null;
 
-       // If there are both UP and DOWN trades, we use the volume logic (minimize payout)
-       if (exposure.upAmount > 0 && exposure.downAmount > 0) {
+       // Determine outcome based on mode
+       if (globalTradeSettings.mode === 'SMART' && exposure.upAmount > 0 && exposure.downAmount > 0) {
           // House wants to pay out less.
           if (exposure.upPayout > exposure.downPayout) {
              needsUp = false; // House wants DOWN to win
           } else {
              needsUp = true; // House wants UP to win
           }
-          hasConflict = true; // We are overriding individual forcedResults
+          hasConflict = true; 
+       } else if (globalTradeSettings.mode === 'FORCE_LOSS') {
+          needsUp = exposure.upAmount > 0 ? false : true;
+          hasConflict = true;
+       } else if (globalTradeSettings.mode === 'FORCE_WIN') {
+          needsUp = exposure.upAmount > 0 ? true : false;
+          hasConflict = true;
+       } else if (exposure.upAmount > 0 && exposure.downAmount > 0) {
+          // In FAIR or PERCENTAGE mode with conflict, we still need a direction.
+          // If we don't have a specific mode, we default to FAIR (random if no forced results)
+          const firstTrade = [...exposure.upTrades, ...exposure.downTrades][0];
+          if (firstTrade.forcedResult) {
+             needsUp = (firstTrade.type === 'UP' && firstTrade.forcedResult === 'WIN') || (firstTrade.type === 'DOWN' && firstTrade.forcedResult === 'LOSS');
+          } else {
+             needsUp = Math.random() > 0.5;
+          }
        } else if (exposure.upAmount > 0) {
           // Only UP trades
           const trade = exposure.upTrades[0];
@@ -1581,7 +1667,7 @@ async function startServer() {
     }
 
     // Validate and deduct balance
-    const userFromDb = db.prepare('SELECT balance, demoBalance, uid, trades FROM users WHERE email = ?').get(email) as any;
+    const userFromDb = db.prepare('SELECT balance, bonus_balance, turnover_achieved, uid, trades FROM users WHERE email = ?').get(email) as any;
     if (!userFromDb) {
       console.error(`place-trade: user not found for email ${email}`);
       socket.emit('trade-error', 'User not found.');
@@ -1604,12 +1690,27 @@ async function startServer() {
       return;
     }
 
+    let realAmount = 0;
+    let bonusAmount = 0;
+
     if (trade.accountType === 'REAL') {
-      if (userFromDb.balance < trade.amount) {
-        socket.emit('trade-error', 'Insufficient real balance.');
+      const totalBalance = (userFromDb.balance || 0) + (userFromDb.bonus_balance || 0);
+      if (totalBalance < trade.amount) {
+        socket.emit('trade-error', 'Insufficient balance.');
         return;
       }
-      db.prepare('UPDATE users SET balance = balance - ? WHERE email = ?').run(trade.amount, email);
+      
+      // Deduct from real balance first, then bonus
+      if (userFromDb.balance >= trade.amount) {
+        realAmount = trade.amount;
+        bonusAmount = 0;
+      } else {
+        realAmount = userFromDb.balance;
+        bonusAmount = trade.amount - userFromDb.balance;
+      }
+
+      db.prepare('UPDATE users SET balance = balance - ?, bonus_balance = bonus_balance - ?, turnover_achieved = turnover_achieved + ? WHERE email = ?')
+        .run(realAmount, bonusAmount, trade.amount, email);
     } else if (trade.accountType === 'DEMO') {
       if (userFromDb.demoBalance < trade.amount) {
         socket.emit('trade-error', 'Insufficient demo balance.');
@@ -1620,9 +1721,11 @@ async function startServer() {
 
     // Update Firestore after deduction
     if (canSyncFirestore() && (trade.accountType === 'REAL' || trade.accountType === 'DEMO')) {
-      const updatedUser = db.prepare('SELECT balance, demoBalance FROM users WHERE email = ?').get(email) as any;
+      const updatedUser = db.prepare('SELECT balance, bonus_balance, demoBalance, turnover_achieved FROM users WHERE email = ?').get(email) as any;
       if (updatedUser) {
-        const updateData = trade.accountType === 'REAL' ? { balance: updatedUser.balance } : { demoBalance: updatedUser.demoBalance };
+        const updateData = trade.accountType === 'REAL' 
+          ? { balance: updatedUser.balance, bonus_balance: updatedUser.bonus_balance, turnover_achieved: updatedUser.turnover_achieved } 
+          : { demoBalance: updatedUser.demoBalance };
         firestore.collection('users').doc(userFromDb.uid).set(updateData, { merge: true })
           .catch((e: any) => {
              if (e.code === 7 || (e.message && e.message.includes('PERMISSION_DENIED'))) {
@@ -1635,7 +1738,7 @@ async function startServer() {
     }
 
     // Store active trade
-    activeTrades[trade.id] = { ...trade, email, socketId: socket.id, forcedResult };
+    activeTrades[trade.id] = { ...trade, email, socketId: socket.id, forcedResult, realAmount, bonusAmount };
     
     // Save to DB history
     updateUserTrades(email, { ...trade, status: 'ACTIVE' });
@@ -2429,13 +2532,15 @@ async function startServer() {
       try {
         if (type === 'REAL') {
           db.prepare('UPDATE users SET balance = ? WHERE email = ?').run(balance, email);
+        } else if (type === 'BONUS') {
+          db.prepare('UPDATE users SET bonus_balance = ? WHERE email = ?').run(balance, email);
         } else {
           db.prepare('UPDATE users SET demoBalance = ? WHERE email = ?').run(balance, email);
         }
         
         const userFromDb = db.prepare('SELECT uid FROM users WHERE email = ?').get(email) as any;
         if (userFromDb && canSyncFirestore()) {
-          const updateData = type === 'REAL' ? { balance } : { demoBalance: balance };
+          const updateData = type === 'REAL' ? { balance } : (type === 'BONUS' ? { bonus_balance: balance } : { demoBalance: balance });
           firestore.collection('users').doc(userFromDb.uid).set(updateData, { merge: true })
             .catch((e: any) => {
                if (e.code === 7 || (e.message && e.message.includes('PERMISSION_DENIED'))) {
@@ -2498,6 +2603,17 @@ async function startServer() {
         db.prepare('UPDATE users SET turnover_required = ?, turnover_achieved = ? WHERE email = ?').run(required, achieved, email);
         logActivity(email, 'ADMIN_UPDATE_TURNOVER', `Admin updated turnover requirements`);
         
+        // Update Firestore
+        if (canSyncFirestore()) {
+          const userFromDb = db.prepare('SELECT uid FROM users WHERE email = ?').get(email) as any;
+          if (userFromDb && userFromDb.uid) {
+            firestore.collection('users').doc(userFromDb.uid).set({
+              turnover_required: required,
+              turnover_achieved: achieved
+            }, { merge: true }).catch((e: any) => console.error('Firestore turnover update error:', e));
+          }
+        }
+
         emitUserUpdate(email);
         emitToUser(email, 'turnover-updated', { required, achieved });
         
@@ -2541,20 +2657,23 @@ async function startServer() {
 
     socket.on('admin-add-deduct-balance', ({ email, amount, type, reason }) => {
       try {
-        const user = db.prepare('SELECT balance, demoBalance, uid FROM users WHERE email = ?').get(email) as any;
+        const user = db.prepare('SELECT balance, bonus_balance, demoBalance, uid FROM users WHERE email = ?').get(email) as any;
         if (!user) return;
 
         let newBalance = 0;
         if (type === 'REAL') {
           newBalance = user.balance + amount;
           db.prepare('UPDATE users SET balance = ? WHERE email = ?').run(newBalance, email);
+        } else if (type === 'BONUS') {
+          newBalance = (user.bonus_balance || 0) + amount;
+          db.prepare('UPDATE users SET bonus_balance = ? WHERE email = ?').run(newBalance, email);
         } else {
           newBalance = user.demoBalance + amount;
           db.prepare('UPDATE users SET demoBalance = ? WHERE email = ?').run(newBalance, email);
         }
         
         if (canSyncFirestore()) {
-          const updateData = type === 'REAL' ? { balance: newBalance } : { demoBalance: newBalance };
+          const updateData = type === 'REAL' ? { balance: newBalance } : type === 'BONUS' ? { bonus_balance: newBalance } : { demoBalance: newBalance };
           firestore.collection('users').doc(user.uid).set(updateData, { merge: true })
             .catch((e: any) => {
                if (e.code === 7 || (e.message && e.message.includes('PERMISSION_DENIED'))) {
@@ -2933,18 +3052,20 @@ async function startServer() {
             
             console.log('Deposit Amount USD:', depositAmountUSD, 'Bonus Amount USD:', bonusAmountUSD);
 
-            const newBalance = user.balance + depositAmountUSD + bonusAmountUSD;
-            console.log('New Balance:', newBalance);
+            const newBalance = user.balance + depositAmountUSD;
+            const newBonusBalance = (user.bonus_balance || 0) + bonusAmountUSD;
+            console.log('New Balance:', newBalance, 'New Bonus Balance:', newBonusBalance);
             
             const newTurnoverRequired = (user.turnover_required || 0) + (deposit.turnoverRequired || 0);
             
-            db.prepare('UPDATE users SET balance = ?, turnover_required = ? WHERE email = ?')
-              .run(newBalance, newTurnoverRequired, deposit.email);
+            db.prepare('UPDATE users SET balance = ?, bonus_balance = ?, turnover_required = ? WHERE email = ?')
+              .run(newBalance, newBonusBalance, newTurnoverRequired, deposit.email);
             
             // Update Firestore for User
             if (canSyncFirestore()) {
               firestore.collection('users').doc(user.uid).set({
                 balance: newBalance,
+                bonus_balance: newBonusBalance,
                 turnover_required: newTurnoverRequired
               }, { merge: true }).catch((e: any) => {
                  if (e.code === 7 || (e.message && e.message.includes('PERMISSION_DENIED'))) {
@@ -3101,28 +3222,43 @@ async function startServer() {
         const amountUSD = amount / rate;
 
         // Check user balance
-        if (user.balance < amountUSD) {
+        const totalBalance = (user.balance || 0) + (user.bonus_balance || 0);
+        if (totalBalance < amountUSD) {
           socket.emit('withdraw-error', 'Insufficient balance.');
           return;
         }
 
-        // Check turnover requirement
+        // Check if withdrawal involves bonus balance
         const turnoverRequired = user.turnover_required || 0;
         const turnoverAchieved = user.turnover_achieved || 0;
-        if (turnoverAchieved < turnoverRequired) {
-          const remaining = (turnoverRequired - turnoverAchieved).toFixed(2);
-          socket.emit('withdraw-error', `You must complete your turnover requirement first. Remaining: $${remaining}`);
+        const turnoverMet = turnoverAchieved >= turnoverRequired;
+
+        if (amountUSD > user.balance && !turnoverMet) {
+          const bonusNeeded = amountUSD - user.balance;
+          const remainingTurnover = (turnoverRequired - turnoverAchieved).toFixed(2);
+          socket.emit('withdraw-error', `You can only withdraw up to your real balance ($${user.balance.toFixed(2)}) without completing turnover. You need $${remainingTurnover} more turnover to withdraw bonus funds.`);
           return;
         }
 
-        // Deduct balance immediately
-        const newBalance = user.balance - amountUSD;
-        db.prepare('UPDATE users SET balance = ? WHERE email = ?').run(newBalance, email);
+        // Deduct balance
+        let newBalance = user.balance;
+        let newBonusBalance = user.bonus_balance || 0;
+
+        if (amountUSD <= user.balance) {
+          newBalance -= amountUSD;
+        } else {
+          const fromBonus = amountUSD - user.balance;
+          newBalance = 0;
+          newBonusBalance -= fromBonus;
+        }
+
+        db.prepare('UPDATE users SET balance = ?, bonus_balance = ? WHERE email = ?').run(newBalance, newBonusBalance, email);
 
         // Update Firestore for User
         if (canSyncFirestore() && user.uid) {
           firestore.collection('users').doc(user.uid).set({
-            balance: newBalance
+            balance: newBalance,
+            bonus_balance: newBonusBalance
           }, { merge: true }).catch((e: any) => {
              if (e.code === 7 || (e.message && e.message.includes('PERMISSION_DENIED'))) {
                 firestoreDisabledDueToError = true;
@@ -3133,12 +3269,12 @@ async function startServer() {
         }
 
         const stmt = db.prepare(`
-          INSERT INTO withdrawals (email, amount, currency, method, accountDetails, status, submittedAt, updatedAt)
-          VALUES (?, ?, ?, ?, ?, 'PENDING', ?, ?)
+          INSERT INTO withdrawals (email, amount, currency, method, accountDetails, status, submittedAt, updatedAt, realAmount, bonusAmount)
+          VALUES (?, ?, ?, ?, ?, 'PENDING', ?, ?, ?, ?)
         `);
         
         const now = Date.now();
-        const info = stmt.run(email, amount, currency, method, accountDetails, now, now);
+        const info = stmt.run(email, amount, currency, method, accountDetails, now, now, newBalance === 0 ? user.balance : amountUSD, newBalance === 0 ? amountUSD - user.balance : 0);
         const withdrawalId = info.lastInsertRowid;
         
         // Update connected user balance
@@ -3173,9 +3309,10 @@ async function startServer() {
         db.prepare('UPDATE withdrawals SET status = \'CANCELLED\', updatedAt = ? WHERE id = ?').run(Date.now(), id);
 
         // Return balance to user
-        const user = db.prepare('SELECT balance, extraAccounts FROM users WHERE email = ?').get(email) as any;
+        const user = db.prepare('SELECT balance, bonus_balance, extraAccounts FROM users WHERE email = ?').get(email) as any;
         if (user) {
           let newBalance = user.balance;
+          let newBonusBalance = user.bonus_balance || 0;
           let currency = withdrawal.currency || 'USD';
 
           if (currency === 'BDT') {
@@ -3186,15 +3323,18 @@ async function startServer() {
               db.prepare('UPDATE users SET extraAccounts = ? WHERE email = ?').run(JSON.stringify(extraAccounts), email);
             }
           } else {
-            newBalance = user.balance + withdrawal.amount;
-            db.prepare('UPDATE users SET balance = ? WHERE email = ?').run(newBalance, email);
+            newBalance = user.balance + (withdrawal.realAmount || 0);
+            newBonusBalance = (user.bonus_balance || 0) + (withdrawal.bonusAmount || 0);
+            db.prepare('UPDATE users SET balance = ?, bonus_balance = ? WHERE email = ?').run(newBalance, newBonusBalance, email);
           }
           
           // Update Firestore for User
           if (canSyncFirestore()) {
             const userFromDb = db.prepare('SELECT uid FROM users WHERE email = ?').get(email) as any;
             if (userFromDb && userFromDb.uid) {
-              const updateData = currency === 'BDT' ? { extraAccounts: userFromDb.extraAccounts } : { balance: newBalance };
+              const updateData = currency === 'BDT' 
+                ? { extraAccounts: userFromDb.extraAccounts } 
+                : { balance: newBalance, bonus_balance: newBonusBalance };
               firestore.collection('users').doc(userFromDb.uid).set(updateData, { merge: true })
                 .catch((e: any) => {
                    if (e.code === 7 || (e.message && e.message.includes('PERMISSION_DENIED'))) {
