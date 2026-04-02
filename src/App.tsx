@@ -825,7 +825,7 @@ export default function TradingPlatform() {
       await fetch('/api/user/preferences', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+        body: safeStringify({
           email: user.email,
           ...newPrefs
         })
@@ -950,6 +950,7 @@ export default function TradingPlatform() {
   const [isSocialChatOpen, setIsSocialChatOpen] = useState(false);
   const [isSwitchingAccount, setIsSwitchingAccount] = useState(false);
   const [isLocked, setIsLocked] = useState(() => localStorage.getItem('pin-enabled') === 'true');
+  const [isConnected, setIsConnected] = useState(false);
   const [isIndicatorSheetOpen, setIsIndicatorSheetOpen] = useState(false);
   const [chatBackground, setChatBackground] = useState<string | null>(() => localStorage.getItem('chat-background'));
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
@@ -1279,7 +1280,7 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
         await fetch('/api/user/preferences', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
+          body: safeStringify({
             email: user.email,
             currency: newCurrency.code,
             currencySymbol: newCurrency.symbol,
@@ -1308,6 +1309,12 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
 
     newSocket.on('connect', () => {
       console.log('Connected to server');
+      setIsConnected(true);
+    });
+
+    newSocket.on('disconnect', () => {
+      console.log('Disconnected from server');
+      setIsConnected(false);
     });
 
     newSocket.on('initial-prices', (prices: Record<string, number>) => {
@@ -2234,6 +2241,7 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
               chartType={chartType}
               chartTimeFrame={chartTimeFrame}
               isLoading={isLoading}
+              isConnected={isConnected}
               timezoneOffset={timezoneOffset}
               activeIndicators={activeIndicators}
               currencySymbol={displayCurrencySymbol}
@@ -3644,24 +3652,24 @@ function HelpPage({
 
       <div className="max-w-4xl mx-auto p-4 pb-24">
         {/* Quick Actions */}
-        <div className="grid grid-cols-2 gap-3 mb-10 -mt-8">
+        <div className="grid grid-cols-2 gap-4 mb-10 -mt-8">
           <button 
             onClick={onSupportClick}
-            className="bg-[var(--bg-secondary)] p-4 rounded-2xl border border-[var(--border-color)] flex flex-col items-center gap-3 hover:bg-[var(--bg-tertiary)] transition shadow-lg group"
+            className="bg-[var(--bg-secondary)] p-6 rounded-2xl border border-[var(--border-color)] flex flex-col items-center justify-center gap-3 hover:bg-[var(--bg-tertiary)] transition shadow-lg group min-h-[140px]"
           >
-            <div className="w-12 h-12 bg-blue-500/10 rounded-full flex items-center justify-center text-blue-500 group-hover:scale-110 transition">
-              <MessageCircle size={24} />
+            <div className="w-14 h-14 bg-blue-500/10 rounded-full flex items-center justify-center text-blue-500 group-hover:scale-110 transition">
+              <MessageCircle size={28} />
             </div>
-            <span className="text-sm font-bold text-[var(--text-primary)]">Live Chat</span>
+            <span className="text-base font-bold text-[var(--text-primary)] text-center">Live Chat</span>
           </button>
           <a 
             href={`mailto:${supportSettings.email}`}
-            className="bg-[var(--bg-secondary)] p-4 rounded-2xl border border-[var(--border-color)] flex flex-col items-center gap-3 hover:bg-[var(--bg-tertiary)] transition shadow-lg group"
+            className="bg-[var(--bg-secondary)] p-6 rounded-2xl border border-[var(--border-color)] flex flex-col items-center justify-center gap-3 hover:bg-[var(--bg-tertiary)] transition shadow-lg group min-h-[140px]"
           >
-            <div className="w-12 h-12 bg-purple-500/10 rounded-full flex items-center justify-center text-purple-500 group-hover:scale-110 transition">
-              <Mail size={24} />
+            <div className="w-14 h-14 bg-purple-500/10 rounded-full flex items-center justify-center text-purple-500 group-hover:scale-110 transition">
+              <Mail size={28} />
             </div>
-            <span className="text-sm font-bold text-[var(--text-primary)]">Email Us</span>
+            <span className="text-base font-bold text-[var(--text-primary)] text-center">Email Us</span>
           </a>
         </div>
 

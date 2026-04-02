@@ -621,11 +621,24 @@ async function startServer() {
       // Sync with Firestore
       if (canSyncFirestore() && user.uid) {
         firestore.collection('users').doc(user.uid).set({ trades: tradesJson }, { merge: true })
-          .catch((e: any) => console.error('Firestore user trades update error:', e));
+          .catch((e: any) => {
+             if (e.code === 7 || (e.message && e.message.includes('PERMISSION_DENIED'))) {
+                firestoreDisabledDueToError = true;
+                console.warn('Firestore sync disabled globally due to PERMISSION_DENIED.');
+             } else {
+                console.error('Firestore user trades update error:', e);
+             }
+          });
           
         // Also save directly to a subcollection for easier viewing
         firestore.collection('users').doc(user.uid).collection('trades').doc(trade.id).set(trade, { merge: true })
-          .catch((e: any) => console.error('Firestore trade document update error:', e));
+          .catch((e: any) => {
+             if (e.code === 7 || (e.message && e.message.includes('PERMISSION_DENIED'))) {
+                firestoreDisabledDueToError = true;
+             } else {
+                console.error('Firestore trade document update error:', e);
+             }
+          });
       }
     }
   };
@@ -983,12 +996,13 @@ async function startServer() {
       const isUp = activeTrade.type === 'UP';
       const needsUp = (isUp && isWin) || (!isUp && !isWin);
       
-      // Ensure final close price is on the correct side
+      // Ensure final close price is on the correct side with a very small margin to avoid abnormal candles
       const volatility = assets[assetKey as keyof typeof assets]?.volatility || 0.001;
+      const smallMargin = volatility * 0.05; // 5% of volatility for a natural-looking tick
       if (needsUp && finalClosePrice <= activeTrade.entryPrice) {
-        finalClosePrice = activeTrade.entryPrice + volatility;
+        finalClosePrice = activeTrade.entryPrice + smallMargin;
       } else if (!needsUp && finalClosePrice >= activeTrade.entryPrice) {
-        finalClosePrice = activeTrade.entryPrice - volatility;
+        finalClosePrice = activeTrade.entryPrice - smallMargin;
       }
       
       // Update the asset price to match the forced close price so the chart doesn't jump back
@@ -1042,7 +1056,13 @@ async function startServer() {
         if (updatedUser) {
           const updateData = activeTrade.accountType === 'REAL' ? { balance: updatedUser.balance } : { demoBalance: updatedUser.demoBalance };
           firestore.collection('users').doc(updatedUser.uid).set(updateData, { merge: true })
-            .catch((e: any) => console.error('Firestore user balance update error (trade win):', e));
+            .catch((e: any) => {
+               if (e.code === 7 || (e.message && e.message.includes('PERMISSION_DENIED'))) {
+                  firestoreDisabledDueToError = true;
+               } else {
+                  console.error('Firestore user balance update error (trade win):', e);
+               }
+            });
         }
       }
     }
@@ -1284,59 +1304,160 @@ async function startServer() {
   const insertTick = db.prepare('INSERT OR REPLACE INTO market_history (symbol, time, open, high, low, close) VALUES (?, ?, ?, ?, ?, ?)');
   
   setInterval(() => {
-    const now = Date.now();
-    const ticks: Record<string, any> = {};
-    const isFullSecond = tickCounter % 5 === 0;
+    try {
+      const now = Date.now();
+      const ticks: Record<string, any> = {};
+      const isFullSecond = tickCounter % 5 === 0;
+
+      // --- Centralized Price Guiding Logic ---
+    const assetTargets: Record<string, { target: number | null, trend: number | null, timeRemaining?: number }> = {};
+    
+    // First, aggregate exposure per asset
+    const assetExposure: Record<string, { upAmount: number, downAmount: number, upPayout: number, downPayout: number, upTrades: any[], downTrades: any[] }> = {};
+
+    Object.values(activeTrades).forEach((trade: any) => {
+      if (trade.status === 'ACTIVE' && trade.accountType === 'REAL') {
+        const assetKey = trade.assetShortName || trade.asset;
+        if (!assetExposure[assetKey]) {
+           assetExposure[assetKey] = { upAmount: 0, downAmount: 0, upPayout: 0, downPayout: 0, upTrades: [], downTrades: [] };
+        }
+        if (trade.type === 'UP') {
+           assetExposure[assetKey].upAmount += trade.amount;
+           assetExposure[assetKey].upPayout += trade.amount * (1 + trade.payout / 100);
+           assetExposure[assetKey].upTrades.push(trade);
+        } else {
+           assetExposure[assetKey].downAmount += trade.amount;
+           assetExposure[assetKey].downPayout += trade.amount * (1 + trade.payout / 100);
+           assetExposure[assetKey].downTrades.push(trade);
+        }
+      }
+    });
+
+    Object.keys(assetExposure).forEach(assetKey => {
+       const exposure = assetExposure[assetKey];
+       const asset = assets[assetKey as keyof typeof assets];
+       if (!asset) return;
+
+       let needsUp = false;
+       let hasConflict = false;
+       let targetPrice = null;
+
+       // If there are both UP and DOWN trades, we use the volume logic (minimize payout)
+       if (exposure.upAmount > 0 && exposure.downAmount > 0) {
+          // House wants to pay out less.
+          if (exposure.upPayout > exposure.downPayout) {
+             needsUp = false; // House wants DOWN to win
+          } else {
+             needsUp = true; // House wants UP to win
+          }
+          hasConflict = true; // We are overriding individual forcedResults
+       } else if (exposure.upAmount > 0) {
+          // Only UP trades
+          const trade = exposure.upTrades[0];
+          if (trade.forcedResult === 'WIN') needsUp = true;
+          else needsUp = false;
+       } else if (exposure.downAmount > 0) {
+          // Only DOWN trades
+          const trade = exposure.downTrades[0];
+          if (trade.forcedResult === 'WIN') needsUp = false;
+          else needsUp = true;
+       } else {
+          return; // No real trades
+       }
+
+       const safeMargin = asset.volatility * 0.2; // Reduced further to avoid big candles
+       
+       // Find the most extreme entry price we need to beat and the minimum time remaining
+       let basePrice = asset.price;
+       let minTimeRemaining = Infinity;
+       const allTrades = [...exposure.upTrades, ...exposure.downTrades];
+       if (allTrades.length > 0) {
+           // Use the entry price of the first trade in the batch as the base
+           allTrades.sort((a, b) => a.startTime - b.startTime);
+           basePrice = allTrades[0].entryPrice;
+           if (isNaN(basePrice)) basePrice = asset.price;
+           
+           allTrades.forEach(t => {
+              const tr = t.endTime - now;
+              if (tr > 0 && tr < minTimeRemaining) minTimeRemaining = tr;
+           });
+       }
+
+       targetPrice = basePrice + (needsUp ? safeMargin : -safeMargin);
+       if (isNaN(targetPrice)) targetPrice = asset.price;
+
+       assetTargets[assetKey] = {
+          target: targetPrice,
+          trend: needsUp ? 1 : -1,
+          timeRemaining: minTimeRemaining === Infinity ? 10000 : minTimeRemaining
+       };
+       
+       // Update forcedResults of trades to match the new reality so resolveTrade doesn't jump the price back
+       if (hasConflict) {
+          exposure.upTrades.forEach(t => {
+             t.forcedResult = needsUp ? 'WIN' : 'LOSS';
+          });
+          exposure.downTrades.forEach(t => {
+             t.forcedResult = needsUp ? 'LOSS' : 'WIN';
+          });
+       }
+    });
 
     Object.keys(assets).forEach(symbol => {
-      const asset = assets[symbol];
+      const asset = assets[symbol as keyof typeof assets];
       
+      let drift = 0;
+      if (assetTargets[symbol]) {
+        const targetInfo = assetTargets[symbol];
+        const currentPrice = asset.price;
+        const diff = targetInfo.target! - currentPrice;
+        
+        // Only apply drift if we are on the wrong side or not far enough into the safe zone
+        const needsUp = targetInfo.trend! > 0;
+        const isSafe = needsUp ? currentPrice > targetInfo.target! : currentPrice < targetInfo.target!;
+        
+        if (!isSafe) {
+           const ticksRemaining = Math.max(15, targetInfo.timeRemaining! / 200); // Assume at least 3 seconds to avoid crazy jumps
+           drift = diff / ticksRemaining;
+           if (isNaN(drift)) drift = 0;
+           
+           // Cap the drift so it doesn't overpower the noise completely (max 15% of volatility per tick)
+           const maxDrift = asset.volatility * 0.15;
+           if (drift > maxDrift) drift = maxDrift;
+           if (drift < -maxDrift) drift = -maxDrift;
+        }
+      }
+
       let newPrice = asset.price;
+      if (isNaN(newPrice)) newPrice = 1.0; // Fallback
+      if (isNaN(asset.trend)) asset.trend = 0;
       
       if (!asset.isFrozen) {
-        if (asset.targetPrice) {
-          // Move towards target price (scaled for 200ms)
-          const diff = asset.targetPrice - asset.price;
-          const step = diff * 0.05; // Move 5% towards target each tick (faster to ensure it gets there)
-          newPrice += step;
-          
-          // Add a tiny bit of noise so it doesn't look completely artificial
-          newPrice += (Math.random() - 0.5) * asset.volatility * 0.05;
-          
-          // If close enough, clear target
-          if (Math.abs(diff) < asset.volatility * 0.02) {
-            asset.targetPrice = null;
-          }
-        } else {
-          // --- Smoother Movement Logic ---
-          // Keep trend persistence higher for smoother moves
-          asset.trend += (Math.random() - 0.5) * asset.volatility * 0.02;
-          asset.trend *= 0.95; // Slower trend decay for smoother feel
-          
-          const candleTypeRand = Math.random();
-          let moveMultiplier = 1.0;
-          
-          // Add some variety but less extreme
-          if (candleTypeRand < 0.20) moveMultiplier = 0.5; // Smaller move
-          else if (candleTypeRand < 0.30) moveMultiplier = 1.5;  // Slightly larger move
-          else if (candleTypeRand < 0.40) moveMultiplier = -0.8; // Reversal move
-          
-          // Decrease the random noise component
-          const noise = (Math.random() - 0.5) * asset.volatility * 0.2; 
-          const move = (asset.trend + noise) * moveMultiplier;
-          newPrice += move;
+        // --- Smoother Movement Logic (ALWAYS RUNS) ---
+        asset.trend += (Math.random() - 0.5) * asset.volatility * 0.05; // slightly more natural trend changes
+        asset.trend *= 0.90; // decay
+        
+        const candleTypeRand = Math.random();
+        let moveMultiplier = 1.0;
+        
+        if (candleTypeRand < 0.20) moveMultiplier = 0.5; 
+        else if (candleTypeRand < 0.30) moveMultiplier = 1.5;  
+        else if (candleTypeRand < 0.40) moveMultiplier = -0.8; 
+        
+        // Noise is larger than drift to ensure red and green candles
+        const noise = (Math.random() - 0.5) * asset.volatility * 0.6; 
+        
+        const move = (asset.trend + noise) * moveMultiplier + drift;
+        newPrice += move;
 
-          // --- Less Frequent "Jitter" Logic ---
-          // Add a very small random jitter
-          newPrice += (Math.random() - 0.5) * asset.volatility * 0.02;
+        // --- Less Frequent "Jitter" Logic ---
+        newPrice += (Math.random() - 0.5) * asset.volatility * 0.02;
 
-          // --- Gap Up / Gap Down Logic (Decreased frequency and size) ---
-          if (isFullSecond && Math.random() < 0.01) { // 1% chance every second
-            const gapDirection = Math.random() > 0.5 ? 1 : -1;
-            const gapSize = (Math.random() * 1.5 + 0.5) * asset.volatility; 
-            newPrice += gapDirection * gapSize;
-          }
-          // --------------------------------------------
+        // --- Gap Up / Gap Down Logic ---
+        if (isFullSecond && Math.random() < 0.01) { 
+          const gapDirection = Math.random() > 0.5 ? 1 : -1;
+          const gapSize = (Math.random() * 1.0 + 0.2) * asset.volatility; 
+          newPrice += gapDirection * gapSize;
         }
       }
       
@@ -1392,15 +1513,18 @@ async function startServer() {
     // Broadcast to all connected clients
     io.emit('market-tick', ticks);
     
-    // Broadcast active trades to admin every second
-    if (isFullSecond) {
-      const realActiveTrades = Object.values(activeTrades).filter((t: any) => t.accountType === 'REAL');
-      io.to('admin-room').emit('admin-active-trades', realActiveTrades);
-      io.to('admin-room').emit('admin-users', Object.values(connectedUsers));
+      // Broadcast active trades to admin every second
+      if (isFullSecond) {
+        const realActiveTrades = Object.values(activeTrades).filter((t: any) => t.accountType === 'REAL');
+        io.to('admin-room').emit('admin-active-trades', realActiveTrades);
+        io.to('admin-room').emit('admin-users', Object.values(connectedUsers));
+      }
+      
+      tickCounter++;
+    } catch (error) {
+      console.error("Error in tick loop:", error);
     }
-    
-    tickCounter++;
-  }, 100);
+  }, 200);
 
   // Handle Trade Execution
   const handleTradePlacement = (socket: any, trade: any) => {
@@ -1430,8 +1554,22 @@ async function startServer() {
         const assetKey = trade.assetShortName || trade.asset;
         const asset = assets[assetKey as keyof typeof assets];
         const winPercentage = asset?.winPercentage !== undefined ? asset.winPercentage : globalTradeSettings.winPercentage;
-        const isWin = Math.random() * 100 < winPercentage;
-        forcedResult = isWin ? 'WIN' : 'LOSS';
+        
+        // Check if there are active trades for this asset in the same direction
+        // If so, inherit their forcedResult to ensure consistent outcome for multiple entries
+        const existingTrades = Object.values(activeTrades).filter((t: any) => 
+          (t.assetShortName || t.asset) === assetKey && 
+          t.type === trade.type &&
+          t.status === 'ACTIVE' &&
+          t.forcedResult
+        );
+
+        if (existingTrades.length > 0) {
+           forcedResult = existingTrades[0].forcedResult;
+        } else {
+           const isWin = Math.random() * 100 < winPercentage;
+           forcedResult = isWin ? 'WIN' : 'LOSS';
+        }
       }
     }
 
@@ -1486,7 +1624,13 @@ async function startServer() {
       if (updatedUser) {
         const updateData = trade.accountType === 'REAL' ? { balance: updatedUser.balance } : { demoBalance: updatedUser.demoBalance };
         firestore.collection('users').doc(userFromDb.uid).set(updateData, { merge: true })
-          .catch((e: any) => console.error('Firestore user balance update error (trade placement):', e));
+          .catch((e: any) => {
+             if (e.code === 7 || (e.message && e.message.includes('PERMISSION_DENIED'))) {
+                firestoreDisabledDueToError = true;
+             } else {
+                console.error('Firestore user balance update error (trade placement):', e);
+             }
+          });
       }
     }
 
@@ -1507,45 +1651,8 @@ async function startServer() {
     // Set a timer to resolve the trade
     const durationMs = Math.max(0, trade.endTime - Date.now());
     
-    // If there's a forced result, start manipulating the price immediately so it looks natural
-    if (forcedResult) {
-      const activeTrade = activeTrades[trade.id];
-      const assetKey = activeTrade.assetShortName || activeTrade.asset;
-      const asset = assets[assetKey as keyof typeof assets];
-      
-      if (asset) {
-        const isUp = activeTrade.type === 'UP';
-        const shouldWin = forcedResult === 'WIN';
-        const needsUp = (isUp && shouldWin) || (!isUp && !shouldWin);
-        
-        // Function to continuously guide the price
-        const guidePrice = () => {
-          if (!activeTrades[trade.id]) return; // Stop if trade is resolved
-          
-          const currentPrice = asset.price;
-          const safeMargin = asset.volatility * 3;
-          let target = activeTrade.entryPrice + (needsUp ? safeMargin : -safeMargin);
-          
-          // If price is on the wrong side or too close to entry, aggressively target the correct side
-          if (needsUp && currentPrice < activeTrade.entryPrice + asset.volatility) {
-             asset.targetPrice = target;
-          } else if (!needsUp && currentPrice > activeTrade.entryPrice - asset.volatility) {
-             asset.targetPrice = target;
-          } else {
-             // If it's already safely on the correct side, let it wander naturally but keep a slight bias
-             asset.targetPrice = null;
-             asset.trend = needsUp ? asset.volatility * 0.5 : -asset.volatility * 0.5;
-          }
-        };
-
-        // Start immediately and check every 1 second
-        guidePrice();
-        const guideInterval = setInterval(guidePrice, 1000);
-        
-        // Clean up when trade ends
-        setTimeout(() => clearInterval(guideInterval), durationMs + 1000);
-      }
-    }
+    // If there's a forced result, the centralized price guiding logic in the market tick loop
+    // will automatically pick it up and guide the price.
 
     setTimeout(() => resolveTrade(trade.id), durationMs);
   };
@@ -2330,7 +2437,13 @@ async function startServer() {
         if (userFromDb && canSyncFirestore()) {
           const updateData = type === 'REAL' ? { balance } : { demoBalance: balance };
           firestore.collection('users').doc(userFromDb.uid).set(updateData, { merge: true })
-            .catch((e: any) => console.error('Firestore user balance update error (admin update):', e));
+            .catch((e: any) => {
+               if (e.code === 7 || (e.message && e.message.includes('PERMISSION_DENIED'))) {
+                  firestoreDisabledDueToError = true;
+               } else {
+                  console.error('Firestore user balance update error (admin update):', e);
+               }
+            });
         }
         
         logActivity(email, 'ADMIN_BALANCE_UPDATE', `Admin updated ${type} balance to ${balance}`);
@@ -2443,7 +2556,13 @@ async function startServer() {
         if (canSyncFirestore()) {
           const updateData = type === 'REAL' ? { balance: newBalance } : { demoBalance: newBalance };
           firestore.collection('users').doc(user.uid).set(updateData, { merge: true })
-            .catch((e: any) => console.error('Firestore user balance update error (admin add/deduct):', e));
+            .catch((e: any) => {
+               if (e.code === 7 || (e.message && e.message.includes('PERMISSION_DENIED'))) {
+                  firestoreDisabledDueToError = true;
+               } else {
+                  console.error('Firestore user balance update error (admin add/deduct):', e);
+               }
+            });
         }
         
         logActivity(email, 'ADMIN_BALANCE_ADJUST', `Admin ${amount >= 0 ? 'added' : 'deducted'} ${Math.abs(amount)} ${type} balance. Reason: ${reason}`);
@@ -2827,7 +2946,13 @@ async function startServer() {
               firestore.collection('users').doc(user.uid).set({
                 balance: newBalance,
                 turnover_required: newTurnoverRequired
-              }, { merge: true }).catch((e: any) => console.error('Firestore user balance update error (deposit approval):', e));
+              }, { merge: true }).catch((e: any) => {
+                 if (e.code === 7 || (e.message && e.message.includes('PERMISSION_DENIED'))) {
+                    firestoreDisabledDueToError = true;
+                 } else {
+                    console.error('Firestore user balance update error (deposit approval):', e);
+                 }
+              });
             }
             
             // --- Referral Commission Logic ---
@@ -2998,7 +3123,13 @@ async function startServer() {
         if (canSyncFirestore() && user.uid) {
           firestore.collection('users').doc(user.uid).set({
             balance: newBalance
-          }, { merge: true }).catch((e: any) => console.error('Firestore user balance update error (withdraw submit):', e));
+          }, { merge: true }).catch((e: any) => {
+             if (e.code === 7 || (e.message && e.message.includes('PERMISSION_DENIED'))) {
+                firestoreDisabledDueToError = true;
+             } else {
+                console.error('Firestore user balance update error (withdraw submit):', e);
+             }
+          });
         }
 
         const stmt = db.prepare(`
@@ -3065,7 +3196,13 @@ async function startServer() {
             if (userFromDb && userFromDb.uid) {
               const updateData = currency === 'BDT' ? { extraAccounts: userFromDb.extraAccounts } : { balance: newBalance };
               firestore.collection('users').doc(userFromDb.uid).set(updateData, { merge: true })
-                .catch((e: any) => console.error('Firestore user balance update error (withdrawal cancel):', e));
+                .catch((e: any) => {
+                   if (e.code === 7 || (e.message && e.message.includes('PERMISSION_DENIED'))) {
+                      firestoreDisabledDueToError = true;
+                   } else {
+                      console.error('Firestore user balance update error (withdrawal cancel):', e);
+                   }
+                });
             }
           }
           
@@ -3106,7 +3243,13 @@ async function startServer() {
               if (userFromDb && userFromDb.uid) {
                 firestore.collection('users').doc(userFromDb.uid).set({
                   balance: newBalance
-                }, { merge: true }).catch((e: any) => console.error('Firestore user balance update error (withdrawal rejection):', e));
+                }, { merge: true }).catch((e: any) => {
+                   if (e.code === 7 || (e.message && e.message.includes('PERMISSION_DENIED'))) {
+                      firestoreDisabledDueToError = true;
+                   } else {
+                      console.error('Firestore user balance update error (withdrawal rejection):', e);
+                   }
+                });
               }
             }
             

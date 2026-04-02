@@ -36,6 +36,7 @@ interface TradingChartProps {
   chartType: string;
   chartTimeFrame: string;
   isLoading?: boolean;
+  isConnected?: boolean;
   timezoneOffset?: number;
   activeIndicators?: IndicatorConfig[];
   currencySymbol?: string;
@@ -81,6 +82,7 @@ export const TradingChart: React.FC<TradingChartProps> = ({
   chartType,
   chartTimeFrame,
   isLoading,
+  isConnected = true,
   timezoneOffset = 0,
   activeIndicators = [],
   currencySymbol = '$',
@@ -1141,7 +1143,7 @@ export const TradingChart: React.FC<TradingChartProps> = ({
     timerString = `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
   }
 
-  const isStalled = Date.now() - currentTime > 5000;
+  const isStalled = !isConnected;
 
   return (
     <div ref={chartContainerRef} className="w-full h-full relative overflow-hidden bg-[var(--bg-primary)] flex-1 min-h-[300px] touch-none">
