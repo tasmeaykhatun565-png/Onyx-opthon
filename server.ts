@@ -2530,17 +2530,18 @@ async function startServer() {
 
     socket.on('admin-update-user-balance', ({ email, balance, type }) => {
       try {
+        const parsedBalance = parseFloat(balance);
         if (type === 'REAL') {
-          db.prepare('UPDATE users SET balance = ? WHERE email = ?').run(balance, email);
+          db.prepare('UPDATE users SET balance = ? WHERE email = ?').run(parsedBalance, email);
         } else if (type === 'BONUS') {
-          db.prepare('UPDATE users SET bonus_balance = ? WHERE email = ?').run(balance, email);
+          db.prepare('UPDATE users SET bonus_balance = ? WHERE email = ?').run(parsedBalance, email);
         } else {
-          db.prepare('UPDATE users SET demoBalance = ? WHERE email = ?').run(balance, email);
+          db.prepare('UPDATE users SET demoBalance = ? WHERE email = ?').run(parsedBalance, email);
         }
         
         const userFromDb = db.prepare('SELECT uid FROM users WHERE email = ?').get(email) as any;
-        if (userFromDb && canSyncFirestore()) {
-          const updateData = type === 'REAL' ? { balance } : (type === 'BONUS' ? { bonus_balance: balance } : { demoBalance: balance });
+        if (userFromDb && canSyncFirestore() && userFromDb.uid) {
+          const updateData = type === 'REAL' ? { balance: parsedBalance } : (type === 'BONUS' ? { bonus_balance: parsedBalance } : { demoBalance: parsedBalance });
           firestore.collection('users').doc(userFromDb.uid).set(updateData, { merge: true })
             .catch((e: any) => {
                if (e.code === 7 || (e.message && e.message.includes('PERMISSION_DENIED'))) {
@@ -2551,11 +2552,11 @@ async function startServer() {
             });
         }
         
-        logActivity(email, 'ADMIN_BALANCE_UPDATE', `Admin updated ${type} balance to ${balance}`);
+        logActivity(email, 'ADMIN_BALANCE_UPDATE', `Admin updated ${type} balance to ${parsedBalance}`);
 
         // Notify user if connected
         emitUserUpdate(email);
-        emitToUser(email, 'balance-updated', { balance, type });
+        emitToUser(email, 'balance-updated', { balance: parsedBalance, type });
         
         // Refresh admin user list (only send the updated user)
         const updatedUser = db.prepare('SELECT * FROM users WHERE email = ?').get(email) as any;
@@ -3052,17 +3053,17 @@ async function startServer() {
             
             console.log('Deposit Amount USD:', depositAmountUSD, 'Bonus Amount USD:', bonusAmountUSD);
 
-            const newBalance = user.balance + depositAmountUSD;
-            const newBonusBalance = (user.bonus_balance || 0) + bonusAmountUSD;
+            const newBalance = parseFloat(user.balance || 0) + depositAmountUSD;
+            const newBonusBalance = parseFloat(user.bonus_balance || 0) + bonusAmountUSD;
             console.log('New Balance:', newBalance, 'New Bonus Balance:', newBonusBalance);
             
-            const newTurnoverRequired = (user.turnover_required || 0) + (deposit.turnoverRequired || 0);
+            const newTurnoverRequired = parseFloat(user.turnover_required || 0) + parseFloat(deposit.turnoverRequired || 0);
             
             db.prepare('UPDATE users SET balance = ?, bonus_balance = ?, turnover_required = ? WHERE email = ?')
               .run(newBalance, newBonusBalance, newTurnoverRequired, deposit.email);
             
             // Update Firestore for User
-            if (canSyncFirestore()) {
+            if (canSyncFirestore() && user.uid) {
               firestore.collection('users').doc(user.uid).set({
                 balance: newBalance,
                 bonus_balance: newBonusBalance,
@@ -3131,12 +3132,13 @@ async function startServer() {
             const methods = currentAllowed ? currentAllowed.split(',') : [];
             // Map deposit method to withdrawal method ID
             let withdrawMethodId = '';
-            if (deposit.method.includes('bkash')) withdrawMethodId = 'bkash';
-            else if (deposit.method.includes('nagad')) withdrawMethodId = 'nagad';
-            else if (deposit.method.includes('rocket')) withdrawMethodId = 'rocket';
-            else if (deposit.method.includes('upay')) withdrawMethodId = 'upay';
-            else if (deposit.method.includes('usdt') || deposit.method.includes('bitcoin') || deposit.method.includes('crypto')) withdrawMethodId = 'usdt';
-            else if (deposit.method.includes('card')) withdrawMethodId = 'card';
+            const depMethod = deposit.method ? deposit.method.toLowerCase() : '';
+            if (depMethod.includes('bkash')) withdrawMethodId = 'bkash';
+            else if (depMethod.includes('nagad')) withdrawMethodId = 'nagad';
+            else if (depMethod.includes('rocket')) withdrawMethodId = 'rocket';
+            else if (depMethod.includes('upay')) withdrawMethodId = 'upay';
+            else if (depMethod.includes('usdt') || depMethod.includes('bitcoin') || depMethod.includes('crypto')) withdrawMethodId = 'usdt';
+            else if (depMethod.includes('card')) withdrawMethodId = 'card';
             
             if (withdrawMethodId && !methods.includes(withdrawMethodId)) {
               methods.push(withdrawMethodId);
