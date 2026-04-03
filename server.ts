@@ -998,52 +998,54 @@ async function startServer() {
 
   // Use a dedicated function for resolution to allow reuse
   const resolveTrade = (tradeId: string) => {
-    const activeTrade = activeTrades[tradeId];
-    if (!activeTrade) return;
+    try {
+      const activeTrade = activeTrades[tradeId];
+      if (!activeTrade) return;
 
-    const email = activeTrade.userEmail || activeTrade.email;
-    if (!email) {
-      console.error(`resolveTrade: email is missing for trade ${tradeId}`);
-      delete activeTrades[tradeId];
-      return;
-    }
+      const email = activeTrade.userEmail || activeTrade.email;
+      if (!email) {
+        console.error(`resolveTrade: email is missing for trade ${tradeId}`);
+        delete activeTrades[tradeId];
+        return;
+      }
 
-    const assetKey = activeTrade.assetShortName || activeTrade.asset;
-    const currentPrice = assets[assetKey as keyof typeof assets]?.price || activeTrade.entryPrice;
-    
-    // Check if admin forced a result
-    let isWin = false;
-    let finalClosePrice = currentPrice;
-    
-    if (activeTrade.forcedResult) {
-      isWin = activeTrade.forcedResult === 'WIN';
-      const isUp = activeTrade.type === 'UP';
-      const needsUp = (isUp && isWin) || (!isUp && !isWin);
+      const assetKey = activeTrade.assetShortName || activeTrade.asset;
+      const currentPrice = assets[assetKey as keyof typeof assets]?.price || activeTrade.entryPrice;
       
-      // Ensure final close price is on the correct side with a very small margin to avoid abnormal candles
-      const volatility = assets[assetKey as keyof typeof assets]?.volatility || 0.001;
-      const smallMargin = volatility * 0.05; // 5% of volatility for a natural-looking tick
-      if (needsUp && finalClosePrice <= activeTrade.entryPrice) {
-        finalClosePrice = activeTrade.entryPrice + smallMargin;
-      } else if (!needsUp && finalClosePrice >= activeTrade.entryPrice) {
-        finalClosePrice = activeTrade.entryPrice - smallMargin;
+      // Check if admin forced a result
+      let isWin = false;
+      let finalClosePrice = currentPrice;
+      
+      if (activeTrade.forcedResult) {
+        isWin = activeTrade.forcedResult === 'WIN';
+        const isUp = activeTrade.type === 'UP';
+        const needsUp = (isUp && isWin) || (!isUp && !isWin);
+        
+        // Ensure final close price is on the correct side with a very small margin to avoid abnormal candles
+        const volatility = assets[assetKey as keyof typeof assets]?.volatility || 0.001;
+        const smallMargin = volatility * 0.05; // 5% of volatility for a natural-looking tick
+        if (needsUp && finalClosePrice <= activeTrade.entryPrice) {
+          finalClosePrice = activeTrade.entryPrice + smallMargin;
+        } else if (!needsUp && finalClosePrice >= activeTrade.entryPrice) {
+          finalClosePrice = activeTrade.entryPrice - smallMargin;
+        }
+        
+        // Update the asset price to match the forced close price so the chart doesn't jump back
+        if (assets[assetKey as keyof typeof assets]) {
+           assets[assetKey as keyof typeof assets].price = finalClosePrice;
+        }
+      } else {
+        isWin = activeTrade.type === 'UP' 
+          ? currentPrice > activeTrade.entryPrice 
+          : currentPrice < activeTrade.entryPrice;
       }
       
-      // Update the asset price to match the forced close price so the chart doesn't jump back
-      if (assets[assetKey as keyof typeof assets]) {
-         assets[assetKey as keyof typeof assets].price = finalClosePrice;
-      }
-    } else {
-      isWin = activeTrade.type === 'UP' 
-        ? currentPrice > activeTrade.entryPrice 
-        : currentPrice < activeTrade.entryPrice;
-    }
-    
-    const isDraw = !isWin && finalClosePrice === activeTrade.entryPrice;
-    const profit = isWin ? activeTrade.amount * (activeTrade.payout / 100) : (isDraw ? 0 : -activeTrade.amount);
-    
-    // Add profit to balance
-    if (isWin) {
+      const isDraw = !isWin && finalClosePrice === activeTrade.entryPrice;
+      const payout = parseFloat(activeTrade.payout) || 80; // Default to 80% if missing
+      const profit = isWin ? activeTrade.amount * (payout / 100) : (isDraw ? 0 : -activeTrade.amount);
+      
+      // Add profit to balance
+      if (isWin) {
       if (activeTrade.accountType === 'REAL') {
         const realAmount = activeTrade.realAmount || 0;
         const bonusAmount = activeTrade.bonusAmount || 0;
@@ -1164,6 +1166,11 @@ async function startServer() {
     emitUserUpdate(email);
 
     delete activeTrades[tradeId];
+    } catch (error) {
+      console.error(`Error resolving trade ${tradeId}:`, error);
+      // Ensure we don't get stuck in an infinite loop
+      delete activeTrades[tradeId];
+    }
   };
 
   // Load active trades from DB on startup
