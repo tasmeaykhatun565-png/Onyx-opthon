@@ -471,35 +471,6 @@ export const TradingChart: React.FC<TradingChartProps> = ({
     seriesRef.current = series;
     isInitializedRef.current = true;
 
-    // Initial data load
-    if (data.length > 0) {
-      let prevHA: any = null;
-      const formattedData = data.map(d => {
-        const base = {
-          time: (d.time / 1000) as Time,
-          open: d.open,
-          high: d.high,
-          low: d.low,
-          close: d.close,
-        };
-        
-        if (chartType === 'Area') return { time: base.time, value: base.close };
-        
-        if (chartType === 'Heikin Ashi') {
-          const haClose = (base.open + base.high + base.low + base.close) / 4;
-          const haOpen = prevHA ? (prevHA.open + prevHA.close) / 2 : (base.open + base.close) / 2;
-          const haHigh = Math.max(base.high, haOpen, haClose);
-          const haLow = Math.min(base.low, haOpen, haClose);
-          const haCandle = { time: base.time, open: haOpen, high: haHigh, low: haLow, close: haClose };
-          prevHA = haCandle;
-          return haCandle;
-        }
-        
-        return base;
-      });
-      series.setData(formattedData);
-    }
-
     chart.priceScale('right').applyOptions({
       scaleMargins: {
         top: 0.1,
@@ -555,6 +526,37 @@ export const TradingChart: React.FC<TradingChartProps> = ({
       indicatorsRef.current = {};
     };
   }, [chartType]); // Recreate chart when type changes
+
+  // Update data when it changes
+  useEffect(() => {
+    if (!seriesRef.current || data.length === 0) return;
+    
+    let prevHA: any = null;
+    const formattedData = data.map(d => {
+      const base = {
+        time: (d.time / 1000) as Time,
+        open: d.open,
+        high: d.high,
+        low: d.low,
+        close: d.close,
+      };
+      
+      if (chartType === 'Area') return { time: base.time, value: base.close };
+      
+      if (chartType === 'Heikin Ashi') {
+        const haClose = (base.open + base.high + base.low + base.close) / 4;
+        const haOpen = prevHA ? (prevHA.open + prevHA.close) / 2 : (base.open + base.close) / 2;
+        const haHigh = Math.max(base.high, haOpen, haClose);
+        const haLow = Math.min(base.low, haOpen, haClose);
+        const haCandle = { time: base.time, open: haOpen, high: haHigh, low: haLow, close: haClose };
+        prevHA = haCandle;
+        return haCandle;
+      }
+      
+      return base;
+    });
+    seriesRef.current.setData(formattedData);
+  }, [data, chartType]);
 
   // Keep refs updated
   useEffect(() => {
