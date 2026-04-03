@@ -62,10 +62,15 @@ async function startServer() {
       console.log('Initializing Firebase Admin with project:', firebaseConfig.projectId);
       
       if (getApps().length === 0) {
-        initializeApp({
+        const options: any = {
           credential: applicationDefault(),
-          projectId: firebaseConfig.projectId,
-        });
+        };
+        // Only set projectId if it's explicitly provided and we're not using applicationDefault's inferred project
+        // In AI Studio, applicationDefault() already knows the project ID.
+        if (firebaseConfig.projectId && !process.env.GOOGLE_APPLICATION_CREDENTIALS) {
+           options.projectId = firebaseConfig.projectId;
+        }
+        initializeApp(options);
       }
       
       const app = getApps()[0];
@@ -91,6 +96,8 @@ async function startServer() {
         PRIMARY KEY (symbol, time)
       );
       
+      CREATE INDEX IF NOT EXISTS idx_market_history_time ON market_history(time);
+      
       CREATE TABLE IF NOT EXISTS trade_stats (
         date TEXT PRIMARY KEY,
         total_trades INTEGER DEFAULT 0,
@@ -112,6 +119,7 @@ async function startServer() {
         documentNumber TEXT,
         fullName TEXT,
         dateOfBirth TEXT,
+        gender TEXT,
         frontImage TEXT,
         backImage TEXT,
         selfieImage TEXT,
@@ -275,6 +283,7 @@ async function startServer() {
     
     // Add columns if they don't exist (for existing databases)
     const migrationQueries = [
+      'ALTER TABLE kyc_submissions ADD COLUMN gender TEXT',
       'ALTER TABLE users ADD COLUMN trades TEXT DEFAULT "[]"',
       'ALTER TABLE users ADD COLUMN password TEXT',
       'ALTER TABLE users ADD COLUMN twoFactorSecret TEXT',
@@ -389,6 +398,19 @@ async function startServer() {
               data.referralCount || 0,
               data.extraAccounts || '[]'
             );
+            
+          // Increment referralCount for referrer
+          if (data.referredBy) {
+            const referrer = db.prepare('SELECT * FROM users WHERE referralCode = ? OR UPPER(substr(uid, 1, 8)) = UPPER(?)').get(data.referredBy, data.referredBy) as any;
+            if (referrer) {
+              db.prepare('UPDATE users SET referralCount = referralCount + 1 WHERE email = ?').run(referrer.email);
+              if (canSyncFirestore() && referrer.uid) {
+                firestore.collection('users').doc(referrer.uid).set({
+                  referralCount: (referrer.referralCount || 0) + 1
+                }, { merge: true }).catch((e: any) => console.error('Firestore referrer count update error:', e));
+              }
+            }
+          }
         } else {
           db.prepare('UPDATE users SET balance = ?, demoBalance = ?, status = ?, kycStatus = ?, turnover_achieved = ?, turnover_required = ?, bonus_balance = ?, referralBalance = ?, totalReferralEarnings = ?, allowed_withdrawal_methods = ?, trades = ?, language = ?, currency = ?, currencySymbol = ?, currencyName = ?, currencyFlag = ?, timeframe = ?, chartType = ?, referredBy = ?, referralCode = ?, referralCount = ?, extraAccounts = ? WHERE email = ?')
             .run(
@@ -522,12 +544,16 @@ async function startServer() {
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
       `).run(email, hashedPassword, name, uid, createdAt, 0, 10000, Math.random().toString(36).substring(2, 8).toUpperCase());
 
-      // Handle referral if provided
       if (referralCode) {
-        const referrer = db.prepare('SELECT * FROM users WHERE referralCode = ?').get(referralCode) as any;
+        const referrer = db.prepare('SELECT * FROM users WHERE referralCode = ? OR UPPER(substr(uid, 1, 8)) = UPPER(?)').get(referralCode, referralCode) as any;
         if (referrer) {
-          db.prepare('UPDATE users SET referredBy = ? WHERE email = ?').run(referrer.email, email);
+          db.prepare('UPDATE users SET referredBy = ? WHERE email = ?').run(referrer.referralCode, email);
           db.prepare('UPDATE users SET referralCount = referralCount + 1 WHERE email = ?').run(referrer.email);
+          if (canSyncFirestore() && referrer.uid) {
+            firestore.collection('users').doc(referrer.uid).set({
+              referralCount: (referrer.referralCount || 0) + 1
+            }, { merge: true }).catch((e: any) => console.error('Firestore referrer count update error:', e));
+          }
         }
       }
 
@@ -674,19 +700,29 @@ async function startServer() {
         extraAccounts = [];
       }
 
+      // Get recent referrals
+      const recentReferrals = db.prepare('SELECT email, createdAt, status FROM users WHERE referredBy = ? ORDER BY createdAt DESC LIMIT 10').all(user.referralCode);
+      
+      // Get commission history
+      const commissionHistory = db.prepare('SELECT * FROM referrals WHERE referrerUid = ? OR referredEmail = ? ORDER BY timestamp DESC LIMIT 10').all(user.uid, user.email);
+
       socketIds.forEach(socketId => {
         if (connectedUsers[socketId]) {
           connectedUsers[socketId] = {
             ...connectedUsers[socketId],
             ...user,
             trades,
-            extraAccounts
+            extraAccounts,
+            recentReferrals,
+            commissionHistory
           };
         }
         io.to(socketId).emit('user-data-updated', {
           ...user,
           trades,
-          extraAccounts
+          extraAccounts,
+          recentReferrals,
+          commissionHistory
         });
       });
 
@@ -828,6 +864,7 @@ async function startServer() {
     rocketNumbers: ['01712-345678'],
     upayNumbers: ['01712-345678'],
     binancePayId: '123456789',
+    binancePayQrCode: '',
     paypalEmail: 'payments@onyxtrade.com',
     netellerEmail: 'payments@onyxtrade.com',
     skrillEmail: 'payments@onyxtrade.com',
@@ -889,6 +926,13 @@ async function startServer() {
     });
   }
 
+  let globalReferralSettings = {
+    bonusAmount: 10, // Fixed bonus for referrer
+    referralPercentage: 20, // Percentage of first deposit
+    minDepositForBonus: 20,
+    minWithdrawal: 10
+  };
+
   const savedDepositSettings = db.prepare('SELECT value FROM settings WHERE key = ?').get('deposit_settings') as any;
   if (savedDepositSettings) {
     globalDepositSettings = { ...globalDepositSettings, ...JSON.parse(savedDepositSettings.value) };
@@ -897,6 +941,11 @@ async function startServer() {
   const savedPlatformSettings = db.prepare('SELECT value FROM settings WHERE key = ?').get('platform_settings') as any;
   if (savedPlatformSettings) {
     globalPlatformSettings = { ...globalPlatformSettings, ...JSON.parse(savedPlatformSettings.value) };
+  }
+
+  const savedReferralSettings = db.prepare('SELECT value FROM settings WHERE key = ?').get('referral_settings') as any;
+  if (savedReferralSettings) {
+    globalReferralSettings = { ...globalReferralSettings, ...JSON.parse(savedReferralSettings.value) };
   }
 
   const saveTradeSettings = (settings: any) => {
@@ -1221,12 +1270,6 @@ async function startServer() {
   };
 
   // Referral Settings
-  let globalReferralSettings = {
-    bonusAmount: 10, // Fixed bonus for referrer
-    referralPercentage: 20, // Percentage of first deposit
-    minDepositForBonus: 20
-  };
-
   // Deposit & Withdrawal Requests
   let pendingRequests: any[] = [];
   
@@ -1357,16 +1400,8 @@ async function startServer() {
           price += move;
           const close = price;
           
-          const wickRand = Math.random();
-          let upperWickBase = Math.random() * asset.volatility * 1.2;
-          let lowerWickBase = Math.random() * asset.volatility * 1.2;
-          
-          if (wickRand < 0.1) { upperWickBase *= 3.5; lowerWickBase *= 3.5; }
-          else if (wickRand < 0.2) { lowerWickBase *= 4.5; upperWickBase *= 0.4; }
-          else if (wickRand < 0.3) { upperWickBase *= 4.5; lowerWickBase *= 0.4; }
-
-          const high = Math.max(open, close) + upperWickBase;
-          const low = Math.min(open, close) - lowerWickBase;
+          const high = Math.max(open, close);
+          const low = Math.min(open, close);
 
           insert.run(symbol, time, open, high, low, close);
           history[symbol].push({ time, price: close, open, high, low, close });
@@ -1526,25 +1561,33 @@ async function startServer() {
       if (isNaN(asset.trend)) asset.trend = 0;
       
       if (!asset.isFrozen) {
-        // --- Smoother Movement Logic (ALWAYS RUNS) ---
-        asset.trend += (Math.random() - 0.5) * asset.volatility * 0.05; // slightly more natural trend changes
-        asset.trend *= 0.90; // decay
+        // --- Professional Smoother Movement Logic (ALWAYS RUNS) ---
+        // Trend persistence: trends last longer and change more gradually
+        asset.trend += (Math.random() - 0.5) * asset.volatility * 0.01; 
+        asset.trend *= 0.97; // High decay to keep it stable but persistent
         
         const candleTypeRand = Math.random();
         let moveMultiplier = 1.0;
         
-        if (candleTypeRand < 0.20) moveMultiplier = 0.5; 
-        else if (candleTypeRand < 0.30) moveMultiplier = 1.5;  
-        else if (candleTypeRand < 0.40) moveMultiplier = -0.8; 
+        // Occasional slightly larger moves, but much rarer than before
+        if (candleTypeRand < 0.05) moveMultiplier = 1.3;  
+        else if (candleTypeRand < 0.10) moveMultiplier = 0.6; 
         
-        // Noise is larger than drift to ensure red and green candles
-        const noise = (Math.random() - 0.5) * asset.volatility * 0.6; 
+        // Noise is significantly reduced for a professional "fluid" feel
+        // We use a smaller factor (0.12) to ensure the price doesn't "jump"
+        const noise = (Math.random() - 0.5) * asset.volatility * 0.12; 
         
-        const move = (asset.trend + noise) * moveMultiplier + drift;
+        let move = (asset.trend + noise) * moveMultiplier + drift;
+        
+        // Hard limit on per-tick movement to prevent "teleporting" prices
+        const maxMovePerTick = asset.volatility * 0.08;
+        if (move > maxMovePerTick) move = maxMovePerTick;
+        if (move < -maxMovePerTick) move = -maxMovePerTick;
+        
         newPrice += move;
 
-        // --- Less Frequent "Jitter" Logic ---
-        newPrice += (Math.random() - 0.5) * asset.volatility * 0.02;
+        // --- Minimal Jitter removed for professional look ---
+        // (Removed the previous jitter line)
 
         // --- Gap Up / Gap Down Logic ---
         if (isFullSecond && Math.random() < 0.01) { 
@@ -1554,29 +1597,12 @@ async function startServer() {
         }
       }
       
-      const wickRand = Math.random();
-      let upperWickBase = (asset.isFrozen ? 0 : Math.random() * asset.volatility * 1.3);
-      let lowerWickBase = (asset.isFrozen ? 0 : Math.random() * asset.volatility * 1.3);
-      
-      if (!asset.isFrozen) {
-        if (wickRand < 0.08) { // Long shadows on both sides
-          upperWickBase *= 3.8;
-          lowerWickBase *= 3.8;
-        } else if (wickRand < 0.18) { // Long lower shadow (Hammer)
-          lowerWickBase *= 4.8;
-          upperWickBase *= 0.3;
-        } else if (wickRand < 0.28) { // Long upper shadow (Shooting Star)
-          upperWickBase *= 4.8;
-          lowerWickBase *= 0.3;
-        }
-      }
-
       const tick = {
         time: now,
         price: newPrice,
         open: asset.price,
-        high: Math.max(asset.price, newPrice) + upperWickBase,
-        low: Math.min(asset.price, newPrice) - lowerWickBase,
+        high: Math.max(asset.price, newPrice),
+        low: Math.min(asset.price, newPrice),
         close: newPrice,
         isFrozen: asset.isFrozen
       };
@@ -1877,35 +1903,44 @@ async function startServer() {
         
         if (!existingUser) {
           db.prepare('INSERT INTO users (email, name, photoURL, uid, balance, demoBalance, createdAt, lastLogin, kycStatus, referredBy, referralCode) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
-            .run(userData.email, userData.name || userData.displayName || '', userData.photoURL || '', userData.uid || '', 0, 10000, now, now, kyc ? kyc.status : 'NONE', userData.referredBy || null, userData.referralCode || null);
+            .run(userData.email, userData.name || userData.displayName || '', userData.photoURL || '', userData.uid || '', userData.balance || 0, userData.demoBalance || 10000, now, now, userData.kycStatus || (kyc ? kyc.status : 'NONE'), userData.referredBy || null, userData.referralCode || null);
           
           // Increment referralCount for referrer
           if (userData.referredBy) {
-            const referrer = db.prepare('SELECT * FROM users WHERE referralCode = ?').get(userData.referredBy) as any;
+            const referrer = db.prepare('SELECT * FROM users WHERE referralCode = ? OR UPPER(substr(uid, 1, 8)) = UPPER(?)').get(userData.referredBy, userData.referredBy) as any;
             if (referrer) {
               db.prepare('UPDATE users SET referralCount = referralCount + 1 WHERE email = ?').run(referrer.email);
+              if (canSyncFirestore() && referrer.uid) {
+                firestore.collection('users').doc(referrer.uid).set({
+                  referralCount: (referrer.referralCount || 0) + 1
+                }, { merge: true }).catch((e: any) => console.error('Firestore referrer count update error:', e));
+              }
             }
           }
           
-          // Sync to Firestore since it's a new user
+          // Sync to Firestore since it's a new user locally, but use merge to avoid overwriting existing balance/stats
           if (canSyncFirestore() && userData.uid) {
-             firestore.collection('users').doc(userData.uid).set({
+             const firestoreSyncData: any = {
                email: userData.email,
                name: userData.name || userData.displayName || '',
                photoURL: userData.photoURL || '',
                uid: userData.uid,
-               balance: 0,
-               demoBalance: 10000,
-               createdAt: now,
                lastLogin: now,
                status: 'ACTIVE',
-               turnover_achieved: 0,
-               turnover_required: 0
-             }, { merge: true }).catch((e: any) => console.error('Firestore new user sync error:', e));
+               kycStatus: userData.kycStatus || (kyc ? kyc.status : 'NONE'),
+               referralCode: userData.referralCode || Math.random().toString(36).substring(2, 8).toUpperCase()
+             };
+             
+             // Only include balance if we are sure it's a brand new user (handled by Auth.tsx usually)
+             // We omit balance here to prevent overwriting with 0 if syncFromFirestore failed
+             
+             firestore.collection('users').doc(userData.uid).set(firestoreSyncData, { merge: true })
+               .catch((e: any) => console.error('Firestore new user sync error:', e));
           }
         } else {
+          const fallbackReferralCode = existingUser.uid ? existingUser.uid.slice(0, 8).toUpperCase() : Math.random().toString(36).substring(2, 8).toUpperCase();
           db.prepare('UPDATE users SET name = ?, photoURL = ?, uid = ?, lastLogin = ?, kycStatus = ?, referredBy = ?, referralCode = ? WHERE email = ?')
-            .run(userData.name || userData.displayName || existingUser.name || '', userData.photoURL || existingUser.photoURL || '', userData.uid || existingUser.uid || '', now, kyc ? kyc.status : existingUser.kycStatus, userData.referredBy || existingUser.referredBy, userData.referralCode || existingUser.referralCode, userData.email);
+            .run(userData.name || userData.displayName || existingUser.name || '', userData.photoURL || existingUser.photoURL || '', userData.uid || existingUser.uid || '', now, kyc ? kyc.status : existingUser.kycStatus, userData.referredBy || existingUser.referredBy, userData.referralCode || existingUser.referralCode || fallbackReferralCode, userData.email);
         }
 
         const userFromDb = db.prepare('SELECT * FROM users WHERE email = ?').get(userData.email) as any;
@@ -3086,17 +3121,22 @@ async function startServer() {
             
             // --- Referral Commission Logic ---
             if (user.referredBy) {
-              const referrer = db.prepare('SELECT * FROM users WHERE referralCode = ? OR uid = ?').get(user.referredBy, user.referredBy) as any;
+              console.log('User has referrer:', user.referredBy);
+              const referrer = db.prepare('SELECT * FROM users WHERE referralCode = ? OR UPPER(substr(uid, 1, 8)) = UPPER(?) OR email = ?').get(user.referredBy, user.referredBy, user.referredBy) as any;
               if (referrer) {
-                const commissionRate = globalReferralSettings.referralPercentage / 100;
+                console.log('Referrer found:', referrer.email);
+                const commissionRate = (globalReferralSettings.referralPercentage || 10) / 100;
                 const commissionAmount = depositAmountUSD * commissionRate;
+                console.log('Commission Amount:', commissionAmount, 'Rate:', commissionRate);
                 
                 let newReferralBalance = (referrer.referralBalance || 0) + commissionAmount;
                 let newTotalReferralEarnings = (referrer.totalReferralEarnings || 0) + commissionAmount;
                 let finalMainBalance = referrer.balance;
                 
-                // If referral balance reaches $10, transfer to main balance
-                if (newReferralBalance >= 10) {
+                // If referral balance reaches threshold, transfer to main balance
+                const threshold = globalReferralSettings.minWithdrawal || 10;
+                if (newReferralBalance >= threshold) {
+                  console.log('Threshold reached, transferring to main balance:', newReferralBalance);
                   finalMainBalance += newReferralBalance;
                   logActivity(referrer.email, 'REFERRAL_TRANSFER', `Transferred ${newReferralBalance.toFixed(2)} to main balance`);
                   newReferralBalance = 0;
@@ -3104,6 +3144,21 @@ async function startServer() {
                 
                 db.prepare('UPDATE users SET balance = ?, referralBalance = ?, totalReferralEarnings = ? WHERE email = ?')
                   .run(finalMainBalance, newReferralBalance, newTotalReferralEarnings, referrer.email);
+                  
+                // Update Firestore for Referrer
+                if (canSyncFirestore() && referrer.uid) {
+                  firestore.collection('users').doc(referrer.uid).set({
+                    balance: finalMainBalance,
+                    referralBalance: newReferralBalance,
+                    totalReferralEarnings: newTotalReferralEarnings
+                  }, { merge: true }).catch((e: any) => {
+                    if (e.code === 7 || (e.message && e.message.includes('PERMISSION_DENIED'))) {
+                      firestoreDisabledDueToError = true;
+                    } else {
+                      console.error('Firestore referrer balance update error:', e);
+                    }
+                  });
+                }
                 
                 // Record referral event in SQLite
                 db.prepare(`
@@ -3130,6 +3185,8 @@ async function startServer() {
                     timestamp: Date.now()
                   });
                 });
+              } else {
+                console.log('Referrer not found for code:', user.referredBy);
               }
             }
             // --- End Referral Logic ---
@@ -3379,8 +3436,8 @@ async function startServer() {
 
         db.prepare('UPDATE withdrawals SET status = ?, updatedAt = ?, rejectionReason = ? WHERE id = ?').run(status, Date.now(), reason || null, id);
 
-        // If rejected or cancelled, return funds to user balance
-        if ((status === 'REJECTED' || status === 'CANCELLED') && oldStatus === 'PENDING') {
+        // If cancelled, return funds to user balance
+        if (status === 'CANCELLED' && oldStatus === 'PENDING') {
           const user = db.prepare('SELECT balance FROM users WHERE email = ?').get(withdrawal.email) as any;
           if (user) {
             const newBalance = user.balance + withdrawal.amount;
@@ -3396,7 +3453,7 @@ async function startServer() {
                    if (e.code === 7 || (e.message && e.message.includes('PERMISSION_DENIED'))) {
                       firestoreDisabledDueToError = true;
                    } else {
-                      console.error('Firestore user balance update error (withdrawal rejection):', e);
+                      console.error('Firestore user balance update error (withdrawal cancel):', e);
                    }
                 });
               }
@@ -3435,9 +3492,9 @@ async function startServer() {
     socket.on('submit-kyc', (kycData) => {
       console.log('KYC Submission Data:', kycData);
       try {
-        const { email, documentType, documentNumber, fullName, dateOfBirth, frontImage, backImage, selfieImage } = kycData;
+        const { email, documentType, documentNumber, fullName, dateOfBirth, gender, frontImage, backImage, selfieImage } = kycData;
         
-        if (!email || !documentType || !documentNumber || !fullName || !dateOfBirth || !frontImage || !selfieImage) {
+        if (!email || !documentType || !documentNumber || !fullName || !dateOfBirth || !gender || !frontImage || !selfieImage) {
           socket.emit('kyc-error', 'Missing required fields.');
           return;
         }
@@ -3451,12 +3508,26 @@ async function startServer() {
         }
 
         const stmt = db.prepare(`
-          INSERT INTO kyc_submissions (email, documentType, documentNumber, fullName, dateOfBirth, frontImage, backImage, selfieImage, submittedAt, updatedAt)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          INSERT INTO kyc_submissions (email, documentType, documentNumber, fullName, dateOfBirth, gender, frontImage, backImage, selfieImage, submittedAt, updatedAt)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `);
         
         const now = Date.now();
-        stmt.run(email, documentType, documentNumber, fullName, dateOfBirth, frontImage, backImage, selfieImage, now, now);
+        const result = stmt.run(email, documentType, documentNumber, fullName, dateOfBirth, gender, frontImage, backImage, selfieImage, now, now);
+        
+        socket.emit('kyc-submitted', { status: 'PENDING' });
+        
+        // Sync to Firestore
+        if (canSyncFirestore()) {
+          const kycId = result.lastInsertRowid.toString();
+          firestore.collection('kyc_submissions').doc(kycId).set({
+            id: kycId,
+            email, documentType, documentNumber, fullName, dateOfBirth, gender, frontImage, backImage, selfieImage, 
+            status: 'PENDING',
+            submittedAt: now, 
+            updatedAt: now
+          }).catch((e: any) => console.error('Firestore KYC submission sync error:', e));
+        }
         
         // Update user status in memory
         const user = Object.values(connectedUsers).find(u => u.email === email);
@@ -3497,9 +3568,31 @@ async function startServer() {
       socket.emit('allowed-withdraw-methods', user ? user.allowed_withdrawal_methods : '');
     });
 
-    socket.on('admin-get-kyc-list', () => {
-      const allKyc = db.prepare('SELECT * FROM kyc_submissions ORDER BY submittedAt DESC').all();
-      socket.emit('admin-kyc-list', allKyc);
+    socket.on('admin-get-kyc-list', async () => {
+      try {
+        let allKyc = db.prepare('SELECT * FROM kyc_submissions ORDER BY submittedAt DESC').all();
+        
+        // If local list is empty, try to recover from Firestore
+        if (allKyc.length === 0 && canSyncFirestore()) {
+          const snapshot = await firestore.collection('kyc_submissions').orderBy('submittedAt', 'desc').get();
+          if (!snapshot.empty) {
+            allKyc = snapshot.docs.map((doc: any) => doc.data());
+            // Populate local DB for faster access next time
+            allKyc.forEach((kyc: any) => {
+              try {
+                db.prepare(`
+                  INSERT OR IGNORE INTO kyc_submissions (id, email, documentType, documentNumber, fullName, dateOfBirth, frontImage, backImage, selfieImage, status, submittedAt, updatedAt, rejectionReason)
+                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                `).run(kyc.id, kyc.email, kyc.documentType, kyc.documentNumber, kyc.fullName, kyc.dateOfBirth, kyc.frontImage, kyc.backImage, kyc.selfieImage, kyc.status, kyc.submittedAt, kyc.updatedAt, kyc.rejectionReason || null);
+              } catch (e) {}
+            });
+          }
+        }
+        
+        socket.emit('admin-kyc-list', allKyc);
+      } catch (error) {
+        console.error('Error fetching KYC list:', error);
+      }
     });
 
     socket.on('admin-update-kyc-status', ({ id, status, reason }) => {
@@ -3508,6 +3601,15 @@ async function startServer() {
         db.prepare('UPDATE kyc_submissions SET status = ?, rejectionReason = ?, updatedAt = ? WHERE id = ?')
           .run(status, reason || null, now, id);
         
+        // Update Firestore KYC submission
+        if (canSyncFirestore()) {
+          firestore.collection('kyc_submissions').doc(id.toString()).set({
+            status,
+            rejectionReason: reason || null,
+            updatedAt: now
+          }, { merge: true }).catch((e: any) => console.error('Firestore KYC submission status update error:', e));
+        }
+
         const kyc = db.prepare('SELECT email FROM kyc_submissions WHERE id = ?').get(id) as any;
         
         if (kyc) {

@@ -4,7 +4,7 @@ import {
   ChevronLeft, Image, Activity, Bell, Check, X,
   Volume2, VolumeX, Moon, Sun, Monitor, Globe,
   MousePointer2, ShieldCheck, Zap, AlertCircle, Clock,
-  User, Mail, Phone, Calendar, MapPin, Upload, Lock, Key, Smartphone, Grid, Eye, EyeOff, Copy, Gift, UserCheck, Shield, Trash2, Info
+  User, Mail, Phone, Calendar, MapPin, Upload, Lock, Key, Smartphone, Grid, Eye, EyeOff, Copy, Gift, UserCheck, Shield, Trash2, Info, RefreshCw
 } from 'lucide-react';
 import { cn, safeStringify } from './utils';
 import { useToast } from './Toast';
@@ -389,7 +389,7 @@ export const VerificationSettings: React.FC<SubPageProps & { socket: any, userEm
   const { showToast } = useToast();
   const [status, setStatus] = useState<'NOT_SUBMITTED' | 'PENDING' | 'APPROVED' | 'REJECTED'>('NOT_SUBMITTED');
   const [rejectionReason, setRejectionReason] = useState('');
-  const [step, setStep] = useState<'status' | 'form'>('status');
+  const [step, setStep] = useState<'status' | 'personal' | 'documents' | 'selfie'>('status');
   const [documentType, setDocumentType] = useState('NID');
   const [formData, setFormData] = useState({
     fullName: '',
@@ -401,6 +401,8 @@ export const VerificationSettings: React.FC<SubPageProps & { socket: any, userEm
     selfieImage: ''
   });
   const [agreedToTerms, setAgreedToTerms] = useState(false);
+
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     if (!socket || !userEmail) return;
@@ -417,16 +419,19 @@ export const VerificationSettings: React.FC<SubPageProps & { socket: any, userEm
     const handleUpdate = (data: any) => {
       setStatus(data.status);
       setRejectionReason(data.reason || '');
+      setIsSubmitting(false);
     };
 
     const handleSubmitSuccess = () => {
       showToast('KYC submitted successfully!', 'success');
       setStatus('PENDING');
       setStep('status');
+      setIsSubmitting(false);
     };
 
     const handleError = (msg: string) => {
       showToast(msg, 'error');
+      setIsSubmitting(false);
     };
 
     socket.on('kyc-status', handleStatus);
@@ -458,6 +463,9 @@ export const VerificationSettings: React.FC<SubPageProps & { socket: any, userEm
   };
 
   const handleSubmit = () => {
+    console.log('Submitting KYC...', { email: userEmail, documentType, formData });
+    if (isSubmitting) return;
+
     if (!formData.fullName || !formData.documentNumber || !formData.dateOfBirth || !formData.frontImage || !formData.selfieImage) {
       showToast('Please fill all required fields and upload front image & selfie', 'error');
       return;
@@ -473,6 +481,7 @@ export const VerificationSettings: React.FC<SubPageProps & { socket: any, userEm
       return;
     }
 
+    setIsSubmitting(true);
     socket.emit('submit-kyc', {
       email: userEmail,
       documentType,
@@ -511,16 +520,19 @@ export const VerificationSettings: React.FC<SubPageProps & { socket: any, userEm
               "bg-blue-500/5 border-[var(--border-color)]"
             )}>
               <div className={cn(
-                "w-20 h-20 rounded-full flex items-center justify-center shadow-lg",
+                "w-20 h-20 rounded-full flex items-center justify-center shadow-lg relative",
                 status === 'APPROVED' ? "bg-green-500 text-white" : 
                 status === 'PENDING' ? "bg-yellow-500 text-black" : 
                 status === 'REJECTED' ? "bg-red-500 text-white" :
                 "bg-blue-500 text-white"
               )}>
                 {status === 'APPROVED' ? <ShieldCheck size={40} /> : 
-                 status === 'PENDING' ? <Clock size={40} /> : 
+                 status === 'PENDING' ? <Clock size={40} className="animate-pulse" /> : 
                  status === 'REJECTED' ? <AlertCircle size={40} /> :
                  <UserCheck size={40} />}
+                {status === 'PENDING' && (
+                  <div className="absolute -inset-1 rounded-full border-2 border-yellow-500/50 border-t-transparent animate-spin" />
+                )}
               </div>
               <div>
                 <h2 className="text-xl font-black text-[var(--text-primary)] uppercase tracking-widest">
@@ -536,7 +548,7 @@ export const VerificationSettings: React.FC<SubPageProps & { socket: any, userEm
 
               {(status === 'NOT_SUBMITTED' || status === 'REJECTED') && (
                 <button 
-                  onClick={() => setStep('form')}
+                  onClick={() => setStep('personal')}
                   className="mt-4 px-8 py-3 bg-blue-600 hover:bg-blue-500 text-white font-black rounded-xl transition shadow-lg shadow-blue-600/20 uppercase tracking-widest text-xs"
                 >
                   Start Verification
@@ -567,210 +579,343 @@ export const VerificationSettings: React.FC<SubPageProps & { socket: any, userEm
           </div>
         ) : (
           <div className="space-y-6 pb-10">
-            {/* Guidelines Section */}
-            <div className="bg-blue-500/5 border border-blue-500/20 rounded-2xl p-5 space-y-4">
-              <div className="flex items-center gap-2 text-blue-500">
-                <Info size={20} />
-                <h3 className="font-black uppercase tracking-widest text-xs">Verification Guidelines</h3>
-              </div>
-              <ul className="space-y-2">
-                {[
-                  'Ensure the document is valid and not expired.',
-                  'Photos must be clear, well-lit, and in color.',
-                  'All four corners of the document must be visible.',
-                  'Selfie must show your face clearly holding the ID.',
-                  'Document details must match your profile information.'
-                ].map((text, i) => (
-                  <li key={i} className="flex gap-3 text-[10px] text-[var(--text-secondary)]">
-                    <span className="w-4 h-4 rounded-full bg-blue-500/10 flex items-center justify-center text-blue-500 font-bold shrink-0">{i + 1}</span>
-                    <span>{text}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-
-            <div className="space-y-4">
-              <h3 className="text-xs font-black text-[var(--text-secondary)] uppercase tracking-widest">Select Document Type</h3>
-              <div className="grid grid-cols-2 gap-3">
-                {docTypes.map(type => (
-                  <button
-                    key={type.id}
-                    onClick={() => setDocumentType(type.id)}
-                    className={cn(
-                      "p-4 rounded-2xl border flex flex-col items-center gap-2 transition-all",
-                      documentType === type.id 
-                        ? "bg-blue-600 border-blue-500 text-white shadow-lg shadow-blue-600/20" 
-                        : "bg-[var(--bg-secondary)] border-[var(--border-color)] text-[var(--text-secondary)] hover:bg-white/5"
+            {/* Progress Bar */}
+            <div className="flex items-center justify-between px-2 mb-8">
+              {[
+                { id: 'personal', label: 'Personal', icon: <User size={14} /> },
+                { id: 'documents', label: 'Documents', icon: <Image size={14} /> },
+                { id: 'selfie', label: 'Selfie', icon: <UserCheck size={14} /> }
+              ].map((s, i) => {
+                const isActive = step === s.id;
+                const isCompleted = (step === 'documents' && i === 0) || (step === 'selfie' && i <= 1);
+                return (
+                  <React.Fragment key={s.id}>
+                    <div className="flex flex-col items-center gap-2 relative">
+                      <div className={cn(
+                        "w-8 h-8 rounded-full flex items-center justify-center transition-all duration-500 border-2",
+                        isActive ? "bg-blue-600 border-blue-500 text-white scale-110 shadow-lg shadow-blue-500/20" :
+                        isCompleted ? "bg-green-500 border-green-500 text-white" :
+                        "bg-[var(--bg-secondary)] border-[var(--border-color)] text-[var(--text-secondary)]"
+                      )}>
+                        {isCompleted ? <Check size={16} strokeWidth={3} /> : s.icon}
+                      </div>
+                      <span className={cn(
+                        "text-[9px] font-black uppercase tracking-widest transition-colors",
+                        isActive ? "text-blue-500" : isCompleted ? "text-green-500" : "text-[var(--text-secondary)]"
+                      )}>{s.label}</span>
+                    </div>
+                    {i < 2 && (
+                      <div className="flex-1 h-[2px] bg-[var(--border-color)] mx-2 -mt-6 relative overflow-hidden">
+                        <div className={cn(
+                          "absolute inset-0 bg-blue-500 transition-transform duration-500 origin-left",
+                          isCompleted ? "scale-x-100" : "scale-x-0"
+                        )} />
+                      </div>
                     )}
-                  >
-                    {type.icon}
-                    <span className="text-[10px] font-bold uppercase tracking-widest">{type.label}</span>
-                  </button>
-                ))}
-              </div>
+                  </React.Fragment>
+                );
+              })}
             </div>
 
-            <div className="space-y-4">
-              <h3 className="text-xs font-black text-[var(--text-secondary)] uppercase tracking-widest">Personal Details</h3>
-              <div className="space-y-3">
-                <div className="space-y-1">
-                  <label className="text-[10px] font-bold text-[var(--text-secondary)] uppercase ml-1">Full Name (As on Document)</label>
-                  <input 
-                    type="text"
-                    value={formData.fullName}
-                    onChange={(e) => setFormData(prev => ({ ...prev, fullName: e.target.value }))}
-                    placeholder="Enter your full name"
-                    className="w-full bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-xl px-4 py-3 text-sm focus:border-blue-500 outline-none transition"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-[10px] font-bold text-[var(--text-secondary)] uppercase ml-1">
-                    {documentType === 'NID' ? 'NID Number' : 'Passport Number'}
-                  </label>
-                  <input 
-                    type="text"
-                    value={formData.documentNumber}
-                    onChange={(e) => setFormData(prev => ({ ...prev, documentNumber: e.target.value }))}
-                    placeholder={documentType === 'NID' ? "Enter your NID number" : "Enter your Passport number"}
-                    className="w-full bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-xl px-4 py-3 text-sm focus:border-blue-500 outline-none transition"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-[10px] font-bold text-[var(--text-secondary)] uppercase ml-1">Date of Birth</label>
-                  <input 
-                    type="date"
-                    value={formData.dateOfBirth}
-                    onChange={(e) => setFormData(prev => ({ ...prev, dateOfBirth: e.target.value }))}
-                    className="w-full bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-xl px-4 py-3 text-sm focus:border-blue-500 outline-none transition"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-[10px] font-bold text-[var(--text-secondary)] uppercase ml-1">Gender</label>
-                  <div className="flex gap-2">
-                    {['Male', 'Female', 'Other'].map(g => (
+            {step === 'personal' && (
+              <motion.div 
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                className="space-y-6"
+              >
+                <div className="space-y-4">
+                  <h3 className="text-xs font-black text-[var(--text-secondary)] uppercase tracking-widest">Select Document Type</h3>
+                  <div className="grid grid-cols-2 gap-3">
+                    {docTypes.map(type => (
                       <button
-                        key={g}
-                        onClick={() => setFormData(prev => ({ ...prev, gender: g }))}
+                        key={type.id}
+                        onClick={() => setDocumentType(type.id)}
                         className={cn(
-                          "flex-1 py-3 rounded-xl border text-xs font-bold transition",
-                          formData.gender === g 
+                          "p-4 rounded-2xl border flex flex-col items-center gap-2 transition-all",
+                          documentType === type.id 
                             ? "bg-blue-600 border-blue-500 text-white shadow-lg shadow-blue-600/20" 
                             : "bg-[var(--bg-secondary)] border-[var(--border-color)] text-[var(--text-secondary)] hover:bg-white/5"
                         )}
                       >
-                        {g}
+                        {type.icon}
+                        <span className="text-[10px] font-bold uppercase tracking-widest">{type.label}</span>
                       </button>
                     ))}
                   </div>
                 </div>
-              </div>
-            </div>
 
-            <div className="space-y-4">
-              <h3 className="text-xs font-black text-[var(--text-secondary)] uppercase tracking-widest">Document Photos</h3>
-              <div className={cn("grid gap-4", documentType === 'NID' ? "grid-cols-1 sm:grid-cols-2" : "grid-cols-1")}>
-                <div className="space-y-2">
-                  <label className="text-[10px] font-bold text-[var(--text-secondary)] uppercase ml-1">
-                    {documentType === 'NID' ? 'Front Side' : 'Main Page'}
-                  </label>
-                  <div className="relative aspect-[3/2] rounded-2xl border-2 border-dashed border-[var(--border-color)] bg-[var(--bg-secondary)] overflow-hidden group hover:border-blue-500/50 transition">
-                    {formData.frontImage ? (
-                      <img src={formData.frontImage} className="w-full h-full object-cover" />
-                    ) : (
-                      <div className="absolute inset-0 flex flex-col items-center justify-center text-[var(--text-secondary)]">
-                        <Upload size={32} className="mb-2 opacity-50" />
-                        <span className="text-[10px] font-bold">
-                          {documentType === 'NID' ? 'Click to Upload Front' : 'Click to Upload Passport Page'}
-                        </span>
+                <div className="space-y-4">
+                  <h3 className="text-xs font-black text-[var(--text-secondary)] uppercase tracking-widest">Personal Details</h3>
+                  <div className="space-y-3">
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold text-[var(--text-secondary)] uppercase ml-1">Full Name (As on Document)</label>
+                      <input 
+                        type="text"
+                        value={formData.fullName}
+                        onChange={(e) => setFormData(prev => ({ ...prev, fullName: e.target.value }))}
+                        placeholder="Enter your full name"
+                        className="w-full bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-xl px-4 py-3 text-sm focus:border-blue-500 outline-none transition"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold text-[var(--text-secondary)] uppercase ml-1">
+                        {documentType === 'NID' ? 'NID Number' : 'Passport Number'}
+                      </label>
+                      <input 
+                        type="text"
+                        value={formData.documentNumber}
+                        onChange={(e) => setFormData(prev => ({ ...prev, documentNumber: e.target.value }))}
+                        placeholder={documentType === 'NID' ? "Enter your NID number" : "Enter your Passport number"}
+                        className="w-full bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-xl px-4 py-3 text-sm focus:border-blue-500 outline-none transition"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold text-[var(--text-secondary)] uppercase ml-1">Date of Birth</label>
+                      <input 
+                        type="date"
+                        value={formData.dateOfBirth}
+                        onChange={(e) => setFormData(prev => ({ ...prev, dateOfBirth: e.target.value }))}
+                        className="w-full bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-xl px-4 py-3 text-sm focus:border-blue-500 outline-none transition"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold text-[var(--text-secondary)] uppercase ml-1">Gender</label>
+                      <div className="flex gap-2">
+                        {['Male', 'Female', 'Other'].map(g => (
+                          <button
+                            key={g}
+                            onClick={() => setFormData(prev => ({ ...prev, gender: g }))}
+                            className={cn(
+                              "flex-1 py-3 rounded-xl border text-xs font-bold transition",
+                              formData.gender === g 
+                                ? "bg-blue-600 border-blue-500 text-white shadow-lg shadow-blue-600/20" 
+                                : "bg-[var(--bg-secondary)] border-[var(--border-color)] text-[var(--text-secondary)] hover:bg-white/5"
+                            )}
+                          >
+                            {g}
+                          </button>
+                        ))}
                       </div>
-                    )}
-                    <input 
-                      type="file" 
-                      accept="image/*"
-                      onChange={(e) => handleFileChange(e, 'front')}
-                      className="absolute inset-0 opacity-0 cursor-pointer"
-                    />
+                    </div>
                   </div>
                 </div>
-                {documentType === 'NID' && (
+
+                <div className="flex gap-3 pt-4">
+                  <button 
+                    onClick={() => setStep('status')}
+                    className="flex-1 py-4 bg-[var(--bg-secondary)] border border-[var(--border-color)] text-[var(--text-primary)] font-black rounded-xl transition uppercase tracking-widest text-xs"
+                  >
+                    Back
+                  </button>
+                  <button 
+                    onClick={() => {
+                      if (!formData.fullName || !formData.documentNumber || !formData.dateOfBirth) {
+                        showToast('Please fill all personal details', 'error');
+                        return;
+                      }
+                      setStep('documents');
+                    }}
+                    className="flex-[2] py-4 bg-blue-600 hover:bg-blue-500 text-white font-black rounded-xl transition shadow-lg shadow-blue-600/20 uppercase tracking-widest text-xs"
+                  >
+                    Next Step
+                  </button>
+                </div>
+              </motion.div>
+            )}
+
+            {step === 'documents' && (
+              <motion.div 
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                className="space-y-6"
+              >
+                <div className="bg-blue-500/5 border border-blue-500/20 rounded-2xl p-5 space-y-4">
+                  <div className="flex items-center gap-2 text-blue-500">
+                    <Info size={20} />
+                    <h3 className="font-black uppercase tracking-widest text-xs">Document Guidelines</h3>
+                  </div>
+                  <ul className="space-y-2">
+                    {[
+                      'Ensure the document is valid and not expired.',
+                      'Photos must be clear, well-lit, and in color.',
+                      'All four corners of the document must be visible.'
+                    ].map((text, i) => (
+                      <li key={i} className="flex gap-3 text-[10px] text-[var(--text-secondary)]">
+                        <span className="w-4 h-4 rounded-full bg-blue-500/10 flex items-center justify-center text-blue-500 font-bold shrink-0">{i + 1}</span>
+                        <span>{text}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+
+                <div className="space-y-4">
+                  <h3 className="text-xs font-black text-[var(--text-secondary)] uppercase tracking-widest">Document Photos</h3>
+                  <div className={cn("grid gap-4", documentType === 'NID' ? "grid-cols-1 sm:grid-cols-2" : "grid-cols-1")}>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-bold text-[var(--text-secondary)] uppercase ml-1">
+                        {documentType === 'NID' ? 'Front Side' : 'Main Page'}
+                      </label>
+                      <div className="relative aspect-[3/2] rounded-2xl border-2 border-dashed border-[var(--border-color)] bg-[var(--bg-secondary)] overflow-hidden group hover:border-blue-500/50 transition">
+                        {formData.frontImage ? (
+                          <img src={formData.frontImage} className="w-full h-full object-cover" />
+                        ) : (
+                          <div className="absolute inset-0 flex flex-col items-center justify-center text-[var(--text-secondary)]">
+                            <Upload size={32} className="mb-2 opacity-50" />
+                            <span className="text-[10px] font-bold">
+                              {documentType === 'NID' ? 'Click to Upload Front' : 'Click to Upload Passport Page'}
+                            </span>
+                          </div>
+                        )}
+                        <input 
+                          type="file" 
+                          accept="image/*"
+                          onChange={(e) => handleFileChange(e, 'front')}
+                          className="absolute inset-0 opacity-0 cursor-pointer"
+                        />
+                      </div>
+                    </div>
+                    {documentType === 'NID' && (
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-bold text-[var(--text-secondary)] uppercase ml-1">Back Side</label>
+                        <div className="relative aspect-[3/2] rounded-2xl border-2 border-dashed border-[var(--border-color)] bg-[var(--bg-secondary)] overflow-hidden group hover:border-blue-500/50 transition">
+                          {formData.backImage ? (
+                            <img src={formData.backImage} className="w-full h-full object-cover" />
+                          ) : (
+                            <div className="absolute inset-0 flex flex-col items-center justify-center text-[var(--text-secondary)]">
+                              <Upload size={32} className="mb-2 opacity-50" />
+                              <span className="text-[10px] font-bold">Click to Upload Back</span>
+                            </div>
+                          )}
+                          <input 
+                            type="file" 
+                            accept="image/*"
+                            onChange={(e) => handleFileChange(e, 'back')}
+                            className="absolute inset-0 opacity-0 cursor-pointer"
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex gap-3 pt-4">
+                  <button 
+                    onClick={() => setStep('personal')}
+                    className="flex-1 py-4 bg-[var(--bg-secondary)] border border-[var(--border-color)] text-[var(--text-primary)] font-black rounded-xl transition uppercase tracking-widest text-xs"
+                  >
+                    Back
+                  </button>
+                  <button 
+                    onClick={() => {
+                      if (!formData.frontImage || (documentType === 'NID' && !formData.backImage)) {
+                        showToast('Please upload required document photos', 'error');
+                        return;
+                      }
+                      setStep('selfie');
+                    }}
+                    className="flex-[2] py-4 bg-blue-600 hover:bg-blue-500 text-white font-black rounded-xl transition shadow-lg shadow-blue-600/20 uppercase tracking-widest text-xs"
+                  >
+                    Next Step
+                  </button>
+                </div>
+              </motion.div>
+            )}
+
+            {step === 'selfie' && (
+              <motion.div 
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                className="space-y-6"
+              >
+                <div className="bg-blue-500/5 border border-blue-500/20 rounded-2xl p-5 space-y-4">
+                  <div className="flex items-center gap-2 text-blue-500">
+                    <Info size={20} />
+                    <h3 className="font-black uppercase tracking-widest text-xs">Selfie Guidelines</h3>
+                  </div>
+                  <ul className="space-y-2">
+                    {[
+                      'Selfie must show your face clearly holding the ID.',
+                      'Make sure your face and ID are clearly visible.',
+                      'Do not wear glasses, hats, or masks.'
+                    ].map((text, i) => (
+                      <li key={i} className="flex gap-3 text-[10px] text-[var(--text-secondary)]">
+                        <span className="w-4 h-4 rounded-full bg-blue-500/10 flex items-center justify-center text-blue-500 font-bold shrink-0">{i + 1}</span>
+                        <span>{text}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+
+                <div className="space-y-4">
+                  <h3 className="text-xs font-black text-[var(--text-secondary)] uppercase tracking-widest">Security Selfie</h3>
                   <div className="space-y-2">
-                    <label className="text-[10px] font-bold text-[var(--text-secondary)] uppercase ml-1">Back Side</label>
-                    <div className="relative aspect-[3/2] rounded-2xl border-2 border-dashed border-[var(--border-color)] bg-[var(--bg-secondary)] overflow-hidden group hover:border-blue-500/50 transition">
-                      {formData.backImage ? (
-                        <img src={formData.backImage} className="w-full h-full object-cover" />
+                    <label className="text-[10px] font-bold text-[var(--text-secondary)] uppercase ml-1">Selfie with Document</label>
+                    <div className="relative aspect-[16/9] rounded-2xl border-2 border-dashed border-[var(--border-color)] bg-[var(--bg-secondary)] overflow-hidden group hover:border-blue-500/50 transition">
+                      {formData.selfieImage ? (
+                        <img src={formData.selfieImage} className="w-full h-full object-cover" />
                       ) : (
                         <div className="absolute inset-0 flex flex-col items-center justify-center text-[var(--text-secondary)]">
                           <Upload size={32} className="mb-2 opacity-50" />
-                          <span className="text-[10px] font-bold">Click to Upload Back</span>
+                          <span className="text-[10px] font-bold">Upload Selfie Holding ID</span>
+                          <p className="text-[8px] mt-1 opacity-50">Make sure your face and ID are clearly visible</p>
                         </div>
                       )}
                       <input 
                         type="file" 
                         accept="image/*"
-                        onChange={(e) => handleFileChange(e, 'back')}
+                        onChange={(e) => handleFileChange(e, 'selfie')}
                         className="absolute inset-0 opacity-0 cursor-pointer"
                       />
                     </div>
                   </div>
-                )}
-              </div>
-            </div>
+                </div>
 
-            <div className="space-y-4">
-              <h3 className="text-xs font-black text-[var(--text-secondary)] uppercase tracking-widest">Security Selfie</h3>
-              <div className="space-y-2">
-                <label className="text-[10px] font-bold text-[var(--text-secondary)] uppercase ml-1">Selfie with Document</label>
-                <div className="relative aspect-[16/9] rounded-2xl border-2 border-dashed border-[var(--border-color)] bg-[var(--bg-secondary)] overflow-hidden group hover:border-blue-500/50 transition">
-                  {formData.selfieImage ? (
-                    <img src={formData.selfieImage} className="w-full h-full object-cover" />
-                  ) : (
-                    <div className="absolute inset-0 flex flex-col items-center justify-center text-[var(--text-secondary)]">
-                      <Upload size={32} className="mb-2 opacity-50" />
-                      <span className="text-[10px] font-bold">Upload Selfie Holding ID</span>
-                      <p className="text-[8px] mt-1 opacity-50">Make sure your face and ID are clearly visible</p>
+                <div className="pt-2">
+                  <button 
+                    onClick={() => setAgreedToTerms(!agreedToTerms)}
+                    className="flex items-start gap-3 text-left group"
+                  >
+                    <div className={cn(
+                      "w-5 h-5 rounded-md border flex items-center justify-center transition shrink-0 mt-0.5",
+                      agreedToTerms ? "bg-blue-600 border-blue-500 text-white" : "bg-[var(--bg-secondary)] border-[var(--border-color)]"
+                    )}>
+                      {agreedToTerms && <Check size={14} strokeWidth={4} />}
                     </div>
-                  )}
-                  <input 
-                    type="file" 
-                    accept="image/*"
-                    onChange={(e) => handleFileChange(e, 'selfie')}
-                    className="absolute inset-0 opacity-0 cursor-pointer"
-                  />
+                    <p className="text-[10px] text-[var(--text-secondary)] leading-relaxed">
+                      I confirm that the information provided is accurate and I agree to the <span className="text-blue-500 font-bold">Terms of Service</span> and <span className="text-blue-500 font-bold">Privacy Policy</span> regarding data processing.
+                    </p>
+                  </button>
                 </div>
-              </div>
-            </div>
 
-            <div className="pt-2">
-              <button 
-                onClick={() => setAgreedToTerms(!agreedToTerms)}
-                className="flex items-start gap-3 text-left group"
-              >
-                <div className={cn(
-                  "w-5 h-5 rounded-md border flex items-center justify-center transition shrink-0 mt-0.5",
-                  agreedToTerms ? "bg-blue-600 border-blue-500 text-white" : "bg-[var(--bg-secondary)] border-[var(--border-color)]"
-                )}>
-                  {agreedToTerms && <Check size={14} strokeWidth={4} />}
+                <div className="flex gap-3 pt-4">
+                  <button 
+                    onClick={() => setStep('documents')}
+                    className="flex-1 py-4 bg-[var(--bg-secondary)] border border-[var(--border-color)] text-[var(--text-primary)] font-black rounded-xl transition uppercase tracking-widest text-xs"
+                  >
+                    Back
+                  </button>
+                  <button 
+                    onClick={handleSubmit}
+                    disabled={isSubmitting}
+                    className={cn(
+                      "flex-[2] py-4 font-black rounded-xl transition shadow-lg uppercase tracking-widest text-xs flex items-center justify-center gap-2",
+                      isSubmitting 
+                        ? "bg-blue-600/50 text-white/50 cursor-not-allowed" 
+                        : "bg-blue-600 hover:bg-blue-500 text-white shadow-blue-600/20 active:scale-95"
+                    )}
+                  >
+                    {isSubmitting ? (
+                      <>
+                        <RefreshCw size={14} className="animate-spin" />
+                        Processing...
+                      </>
+                    ) : (
+                      'Submit for Review'
+                    )}
+                  </button>
                 </div>
-                <p className="text-[10px] text-[var(--text-secondary)] leading-relaxed">
-                  I confirm that the information provided is accurate and I agree to the <span className="text-blue-500 font-bold">Terms of Service</span> and <span className="text-blue-500 font-bold">Privacy Policy</span> regarding data processing.
-                </p>
-              </button>
-            </div>
-
-            <div className="flex gap-3 pt-4">
-              <button 
-                onClick={() => setStep('status')}
-                className="flex-1 py-4 bg-[var(--bg-secondary)] border border-[var(--border-color)] text-[var(--text-primary)] font-black rounded-xl transition uppercase tracking-widest text-xs"
-              >
-                Cancel
-              </button>
-              <button 
-                onClick={handleSubmit}
-                className="flex-[2] py-4 bg-blue-600 hover:bg-blue-500 text-white font-black rounded-xl transition shadow-lg shadow-blue-600/20 uppercase tracking-widest text-xs"
-              >
-                Submit for Review
-              </button>
-            </div>
+              </motion.div>
+            )}
           </div>
         )}
       </div>

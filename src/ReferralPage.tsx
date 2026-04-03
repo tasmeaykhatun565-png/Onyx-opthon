@@ -4,9 +4,10 @@ import {
   Copy, Gift, Users, TrendingUp, ChevronLeft, Info, Check, Share2, Award, 
   ArrowRight, Wallet, ShieldCheck, Zap, Download, Image as ImageIcon, 
   ExternalLink, Target, MousePointer2, UserPlus, BarChart3, Compass, User,
-  ChevronRight
+  ChevronRight, AlertCircle, Sparkles
 } from 'lucide-react';
 import { cn } from './utils';
+import { useToast } from './Toast';
 
 interface ReferralPageProps {
   user: any;
@@ -17,6 +18,7 @@ interface ReferralPageProps {
 }
 
 export const ReferralPage: React.FC<ReferralPageProps> = ({ user, referralSettings, currencySymbol, onBack, referralStats }) => {
+  const { showToast } = useToast();
   const referralCode = user ? (user.referralCode || (user.uid ? user.uid.slice(0, 8).toUpperCase() : 'LOGIN')) : 'LOGIN';
   const referralLink = `${window.location.origin}?ref=${referralCode}`;
   const [copied, setCopied] = useState(false);
@@ -55,10 +57,14 @@ export const ReferralPage: React.FC<ReferralPageProps> = ({ user, referralSettin
   ];
 
   const handleWithdraw = () => {
+    if (affiliateStats.referralBalance < 10) {
+      showToast(`Minimum transfer amount is ${currencySymbol}10.00`, 'error');
+      return;
+    }
     setWithdrawing(true);
     setTimeout(() => {
       setWithdrawing(false);
-      alert('Withdrawal request submitted successfully! Our team will review it within 24 hours.');
+      showToast('Transfer request submitted successfully! Our team will review it.', 'success');
     }, 2000);
   };
 
@@ -113,39 +119,55 @@ export const ReferralPage: React.FC<ReferralPageProps> = ({ user, referralSettin
         <motion.div 
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-blue-600 via-indigo-600 to-purple-700 p-6 text-white shadow-2xl"
+          className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-blue-600 via-indigo-600 to-purple-700 p-8 text-white shadow-2xl border border-white/10"
         >
-          <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full blur-3xl -mr-20 -mt-20 pointer-events-none" />
-          <div className="absolute bottom-0 left-0 w-48 h-48 bg-blue-400/20 rounded-full blur-2xl -ml-10 -mb-10 pointer-events-none" />
+          <div className="absolute top-0 right-0 w-80 h-80 bg-white/10 rounded-full blur-3xl -mr-20 -mt-20 pointer-events-none" />
+          <div className="absolute bottom-0 left-0 w-64 h-64 bg-blue-400/20 rounded-full blur-2xl -ml-10 -mb-10 pointer-events-none" />
           
           <div className="relative z-10">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/20 backdrop-blur-md text-xs font-bold uppercase tracking-wider mb-4 border border-white/10">
-              <Award size={14} className="text-yellow-300" /> VIP Program
+            <div className="flex items-center justify-between mb-6">
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/20 backdrop-blur-md text-[10px] font-black uppercase tracking-widest border border-white/10">
+                <Award size={14} className="text-yellow-300" /> Affiliate Program
+              </div>
+              <div className="flex -space-x-2">
+                {[1, 2, 3, 4].map(i => (
+                  <div key={i} className="w-8 h-8 rounded-full border-2 border-blue-600 bg-blue-500 overflow-hidden">
+                    <img src={`https://i.pravatar.cc/100?u=${i}`} alt="User" className="w-full h-full object-cover" />
+                  </div>
+                ))}
+                <div className="w-8 h-8 rounded-full border-2 border-blue-600 bg-blue-400 flex items-center justify-center text-[10px] font-bold">
+                  +1k
+                </div>
+              </div>
             </div>
-            <h2 className="text-3xl font-black leading-tight mb-2">
-              Invite Friends,<br/>Earn 20% Commission.
+
+            <h2 className="text-4xl font-black leading-tight mb-3 tracking-tight">
+              Invite Friends,<br/>
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-yellow-200 to-yellow-500">Earn {referralSettings.referralPercentage}% Commission</span>
             </h2>
-            <p className="text-blue-100 text-sm mb-6 max-w-[280px]">
-              Get a 20% commission on every deposit your friends make. Earnings are automatically added to your main balance when you reach {currencySymbol}10.
+            <p className="text-blue-100 text-sm mb-8 max-w-sm leading-relaxed font-medium opacity-90">
+              Join our elite affiliate network. Earn high commissions on every deposit your referrals make. Your success is our priority.
             </p>
 
-            <div className="bg-black/40 backdrop-blur-xl rounded-2xl p-2 flex items-center gap-2 border border-white/10">
-              <div className="flex-1 px-3 py-2 bg-black/40 rounded-xl overflow-hidden">
-                <div className="text-[10px] text-blue-200 font-bold uppercase tracking-wider mb-1">Your Referral Link</div>
-                <div className="font-mono text-sm truncate text-white">{referralLink}</div>
+            <div className="bg-black/30 backdrop-blur-2xl rounded-2xl p-3 flex items-center gap-3 border border-white/10 shadow-2xl">
+              <div className="flex-1 px-4 py-3 bg-black/40 rounded-xl overflow-hidden border border-white/5">
+                <div className="text-[9px] text-blue-300 font-black uppercase tracking-[0.2em] mb-1.5 opacity-70">Your Referral Link</div>
+                <div className="font-mono text-xs truncate text-white font-bold">{referralLink}</div>
               </div>
-              <button 
-                onClick={handleCopy}
-                className="w-12 h-12 flex items-center justify-center bg-white text-blue-600 rounded-xl hover:bg-blue-50 transition active:scale-95 shrink-0"
-              >
-                {copied ? <Check size={20} /> : <Copy size={20} />}
-              </button>
-              <button 
-                onClick={handleShare}
-                className="w-12 h-12 flex items-center justify-center bg-blue-500 text-white rounded-xl hover:bg-blue-400 transition active:scale-95 shrink-0"
-              >
-                <Share2 size={20} />
-              </button>
+              <div className="flex gap-2">
+                <button 
+                  onClick={handleCopy}
+                  className="w-12 h-12 flex items-center justify-center bg-white text-blue-600 rounded-xl hover:bg-blue-50 transition active:scale-90 shrink-0 shadow-lg"
+                >
+                  {copied ? <Check size={20} strokeWidth={3} /> : <Copy size={20} strokeWidth={2.5} />}
+                </button>
+                <button 
+                  onClick={handleShare}
+                  className="w-12 h-12 flex items-center justify-center bg-blue-500 text-white rounded-xl hover:bg-blue-400 transition active:scale-90 shrink-0 shadow-lg border border-white/20"
+                >
+                  <Share2 size={20} strokeWidth={2.5} />
+                </button>
+              </div>
             </div>
           </div>
         </motion.div>

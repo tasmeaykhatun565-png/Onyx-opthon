@@ -5,7 +5,7 @@ import {
   Anchor, Play, Pause, Target, HelpCircle, X, Gift, Bell, CreditCard, 
   Check, Trash2, ShieldCheck, ShieldAlert, User, ArrowUp, ArrowDown, 
   Percent, Info, Send, Phone, Mail, Video, Trophy, FileText, Plus, BarChart2, Wallet, RefreshCw, CheckCircle2, XCircle, Search,
-  ArrowUpCircle, ArrowDownCircle, MessageSquare, Edit, Smartphone, Globe, Shield, DollarSign, Layout, Bitcoin
+  ArrowUpCircle, ArrowDownCircle, MessageSquare, Edit, Smartphone, Globe, Shield, DollarSign, Layout, Bitcoin, ExternalLink
 } from 'lucide-react';
 import { cn, safeStringify } from './utils';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -310,7 +310,6 @@ const FinanceAdminView: React.FC<any> = (props) => {
                         {withdraw.status === 'PENDING' && (
                           <div className="flex justify-end gap-2">
                             <button onClick={() => handleUpdateWithdrawStatus(withdraw.id, 'APPROVED')} className="p-2 bg-green-500/10 text-green-500 rounded-lg hover:bg-green-500 hover:text-white"><CheckCircle2 size={16} /></button>
-                            <button onClick={() => handleUpdateWithdrawStatus(withdraw.id, 'REJECTED')} className="p-2 bg-red-500/10 text-red-500 rounded-lg hover:bg-red-500 hover:text-white"><XCircle size={16} /></button>
                           </div>
                         )}
                       </td>
@@ -502,6 +501,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
     upayNumbers: [{ number: '01712-345678', type: 'Cash Out', label: 'Agent' }],
     customMethods: [] as any[],
     binancePayId: '123456789',
+    binancePayQrCode: '',
     paypalEmail: 'payments@onyxtrade.com',
     netellerEmail: 'payments@onyxtrade.com',
     skrillEmail: 'payments@onyxtrade.com',
@@ -723,6 +723,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
     }
   };
 
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
+
   const handleUpdateKycStatus = (requestId: string, status: 'APPROVED' | 'REJECTED', message: string = '') => {
     if (socket) {
       socket.emit('admin-update-kyc-status', { id: requestId, status, reason: message });
@@ -798,13 +800,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
     }
   };
 
-  const handleUpdateWithdrawStatus = (id: number, status: 'APPROVED' | 'REJECTED') => {
+  const handleUpdateWithdrawStatus = (id: number, status: 'APPROVED') => {
     if (socket) {
-      let reason = '';
-      if (status === 'REJECTED') {
-        reason = prompt('Enter rejection reason:') || '';
-      }
-      socket.emit('admin-update-withdraw-status', { id, status, reason });
+      socket.emit('admin-update-withdraw-status', { id, status });
     }
   };
 
@@ -2221,6 +2219,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                           <div className="bg-[var(--bg-primary)] p-5 rounded-2xl border border-[var(--border-color)] space-y-4 shadow-inner">
                             <h4 className="text-[10px] font-black text-[var(--text-secondary)] uppercase tracking-widest border-b border-[var(--border-color)] pb-2">User Details</h4>
                             <div className="flex justify-between items-center">
+                              <span className="text-[10px] text-[var(--text-secondary)] font-bold uppercase">Gender</span>
+                              <span className="text-xs text-[var(--text-primary)] font-black">{req.gender || 'N/A'}</span>
+                            </div>
+                            <div className="flex justify-between items-center">
                               <span className="text-[10px] text-[var(--text-secondary)] font-bold uppercase">Doc Number</span>
                               <span className="text-xs text-[var(--text-primary)] font-black">{req.documentNumber}</span>
                             </div>
@@ -2246,7 +2248,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                                   src={req.frontImage} 
                                   alt="Front Side" 
                                   className="w-full h-full object-cover cursor-pointer hover:scale-105 transition-transform"
-                                  onClick={() => window.open(req.frontImage, '_blank')}
+                                  onClick={() => setSelectedImage(req.frontImage)}
                                 />
                               ) : (
                                 <div className="w-full h-full flex items-center justify-center text-[var(--text-secondary)]">
@@ -2263,7 +2265,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                                   src={req.backImage} 
                                   alt="Back Side" 
                                   className="w-full h-full object-cover cursor-pointer hover:scale-105 transition-transform"
-                                  onClick={() => window.open(req.backImage, '_blank')}
+                                  onClick={() => setSelectedImage(req.backImage)}
                                 />
                               ) : (
                                 <div className="w-full h-full flex items-center justify-center text-[var(--text-secondary)]">
@@ -2280,7 +2282,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                                   src={req.selfieImage} 
                                   alt="Selfie" 
                                   className="w-full h-full object-cover cursor-pointer hover:scale-105 transition-transform"
-                                  onClick={() => window.open(req.selfieImage, '_blank')}
+                                  onClick={() => setSelectedImage(req.selfieImage)}
                                 />
                               ) : (
                                 <div className="w-full h-full flex items-center justify-center text-[var(--text-secondary)]">
@@ -2920,6 +2922,18 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                               className="w-full bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-lg px-3 py-2 text-[10px] focus:outline-none focus:border-blue-500 transition font-mono"
                             />
                           </div>
+                          {method.id === 'binance_pay' && (
+                            <div className="space-y-1">
+                              <label className="text-[9px] font-black text-[var(--text-secondary)] uppercase tracking-widest">QR Code URL</label>
+                              <input 
+                                type="text" 
+                                value={depositSettings.binancePayQrCode || ''}
+                                onChange={(e) => setDepositSettings(prev => ({ ...prev, binancePayQrCode: e.target.value }))}
+                                className="w-full bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-lg px-3 py-2 text-[10px] focus:outline-none focus:border-blue-500 transition font-mono"
+                                placeholder="https://example.com/qr.png"
+                              />
+                            </div>
+                          )}
                         </div>
                       </div>
                     ))}
@@ -3098,6 +3112,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                           hamprooPayNumbers: [],
                           customMethods: [],
                           binancePayId: '',
+                          binancePayQrCode: '',
                           usdtTrc20Address: '',
                           usdtBep20Address: '',
                           btcAddress: '',
@@ -3243,12 +3258,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                                   className="w-8 h-8 rounded-lg bg-green-500/10 text-green-500 flex items-center justify-center hover:bg-green-500 hover:text-white transition"
                                 >
                                   <CheckCircle2 size={16} />
-                                </button>
-                                <button 
-                                  onClick={() => handleUpdateWithdrawStatus(withdraw.id, 'REJECTED')}
-                                  className="w-8 h-8 rounded-lg bg-red-500/10 text-red-500 flex items-center justify-center hover:bg-red-500 hover:text-white transition"
-                                >
-                                  <XCircle size={16} />
                                 </button>
                               </div>
                             )}
@@ -3523,13 +3532,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                                 title="Approve"
                               >
                                 <Check size={14} />
-                              </button>
-                              <button 
-                                onClick={() => handleUpdateWithdrawStatus(withdraw.id, 'REJECTED')}
-                                className="p-2 bg-red-500/10 text-red-500 rounded-lg hover:bg-red-500 hover:text-white transition"
-                                title="Reject"
-                              >
-                                <X size={14} />
                               </button>
                             </div>
                           )}
@@ -4383,6 +4385,42 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
           )}
         </AnimatePresence>
       </div>
+
+      {/* Image Modal */}
+      <AnimatePresence>
+        {selectedImage && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/90 backdrop-blur-sm"
+            onClick={() => setSelectedImage(null)}
+          >
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="relative max-w-5xl w-full max-h-[90vh] rounded-3xl overflow-hidden shadow-2xl"
+              onClick={e => e.stopPropagation()}
+            >
+              <img src={selectedImage} className="w-full h-full object-contain" />
+              <button 
+                onClick={() => setSelectedImage(null)}
+                className="absolute top-4 right-4 w-10 h-10 bg-black/50 backdrop-blur-md text-white rounded-full flex items-center justify-center hover:bg-black/70 transition"
+              >
+                <X size={20} />
+              </button>
+              <button 
+                onClick={() => window.open(selectedImage, '_blank')}
+                className="absolute bottom-4 right-4 px-4 py-2 bg-blue-600 text-white rounded-xl flex items-center gap-2 text-xs font-bold hover:bg-blue-500 transition"
+              >
+                <ExternalLink size={14} />
+                Open Original
+              </button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   </div>
 );

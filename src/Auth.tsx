@@ -204,7 +204,9 @@ export default function Auth({ onSuccess }: AuthProps) {
             createdAt: Date.now(),
             country: 'US', // Default
             currency: 'USD',
-            currencySymbol: '$'
+            currencySymbol: '$',
+            referralCode: Math.random().toString(36).substring(2, 8).toUpperCase(),
+            referredBy: referralCode || null
           });
         } catch (error) {
           handleFirestoreError(error, OperationType.WRITE, `users/${user.uid}`);

@@ -1438,17 +1438,17 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
           if (currentCandle) candles.push(currentCandle);
           currentCandle = {
             time: candleTime,
-            open: tick.price,
-            high: tick.price,
-            low: tick.price,
-            close: tick.price,
+            open: tick.open !== undefined ? tick.open : tick.price,
+            high: tick.high !== undefined ? tick.high : tick.price,
+            low: tick.low !== undefined ? tick.low : tick.price,
+            close: tick.close !== undefined ? tick.close : tick.price,
             volume: Math.floor(Math.random() * 100) + 10,
             formattedTime: format(candleTime, 'HH:mm:ss')
           };
         } else {
-          currentCandle.high = Math.max(currentCandle.high, tick.price);
-          currentCandle.low = Math.min(currentCandle.low, tick.price);
-          currentCandle.close = tick.price;
+          currentCandle.high = Math.max(currentCandle.high, tick.high !== undefined ? tick.high : tick.price);
+          currentCandle.low = Math.min(currentCandle.low, tick.low !== undefined ? tick.low : tick.price);
+          currentCandle.close = tick.close !== undefined ? tick.close : tick.price;
           currentCandle.volume = (currentCandle.volume || 0) + Math.floor(Math.random() * 10) + 1;
         }
       }
@@ -1566,8 +1566,8 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
             const updatedCandle = {
                 ...lastCandle,
                 close: newPrice,
-                high: Math.max(lastCandle.high, newPrice),
-                low: Math.min(lastCandle.low, newPrice),
+                high: Math.max(lastCandle.high, tick.high || newPrice),
+                low: Math.min(lastCandle.low, tick.low || newPrice),
                 volume: (lastCandle.volume || 0) + Math.floor(Math.random() * 10) + 1,
             };
             updatedData = [...prev.slice(0, -1), updatedCandle];
@@ -1576,8 +1576,8 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
             const newCandle = {
                 time: currentTFStart,
                 open: lastCandle.close,
-                high: Math.max(lastCandle.close, newPrice),
-                low: Math.min(lastCandle.close, newPrice),
+                high: Math.max(lastCandle.close, tick.high || newPrice),
+                low: Math.min(lastCandle.close, tick.low || newPrice),
                 close: newPrice,
                 volume: Math.floor(Math.random() * 100) + 10,
                 formattedTime: format(currentTFStart, 'HH:mm:ss'),

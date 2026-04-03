@@ -9,7 +9,7 @@ interface FinanceAdminPanelProps {
   deposits: any[];
   withdrawals: any[];
   handleUpdateDepositStatus: (id: number, status: 'APPROVED' | 'REJECTED') => void;
-  handleUpdateWithdrawStatus: (id: number, status: 'APPROVED' | 'REJECTED') => void;
+  handleUpdateWithdrawStatus: (id: number, status: 'APPROVED') => void;
 }
 
 export const FinanceAdminPanel: React.FC<FinanceAdminPanelProps> = ({ 
@@ -100,7 +100,6 @@ export const FinanceAdminPanel: React.FC<FinanceAdminPanelProps> = ({
                         {withdraw.status === 'PENDING' && (
                           <div className="flex justify-end gap-2">
                             <button onClick={() => handleUpdateWithdrawStatus(withdraw.id, 'APPROVED')} className="p-2 bg-green-500/10 text-green-500 rounded-lg hover:bg-green-500 hover:text-white"><CheckCircle2 size={16} /></button>
-                            <button onClick={() => handleUpdateWithdrawStatus(withdraw.id, 'REJECTED')} className="p-2 bg-red-500/10 text-red-500 rounded-lg hover:bg-red-500 hover:text-white"><XCircle size={16} /></button>
                           </div>
                         )}
                       </td>

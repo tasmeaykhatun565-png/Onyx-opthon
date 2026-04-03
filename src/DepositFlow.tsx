@@ -19,7 +19,8 @@ import {
   CheckCircle2,
   Loader2,
   RefreshCw,
-  ShieldCheck
+  ShieldCheck,
+  Menu
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from './utils';
@@ -235,7 +236,7 @@ const SummaryView = ({ onClose, selectedMethod, amount, currencyCode, currencySy
   );
 };
 
-const PaymentMethodSelection = ({ handleBack, selectedMethod, setSelectedMethod, setStep, depositSettings }: any) => {
+const PaymentMethodSelection = ({ handleBack, selectedMethod, setSelectedMethod, setStep, depositSettings, setHasManuallySelected }: any) => {
     const [activeCategory, setActiveCategory] = useState<'ALL' | 'RECOMMENDED' | 'E-PAY' | 'CRYPTO'>('ALL');
     const [searchQuery, setSearchQuery] = useState('');
 
@@ -317,6 +318,7 @@ const PaymentMethodSelection = ({ handleBack, selectedMethod, setSelectedMethod,
                   onClick={(e) => {
                     e.stopPropagation();
                     setSelectedMethod(method);
+                    if (setHasManuallySelected) setHasManuallySelected(true);
                     setStep('SUMMARY');
                   }}
                   className={cn(
@@ -726,6 +728,92 @@ const PaymentDetails = ({ handleBack, selectedMethod, amount, currencyCode, curr
       return `${mins}:${secs.toString().padStart(2, '0')}`;
     };
 
+    if (selectedMethod.id === 'binance_pay') {
+      return (
+        <div className="flex flex-col flex-1 min-h-0 bg-[#181a20] text-white font-sans overflow-y-auto">
+          {/* Header */}
+          <div className="flex items-center justify-between p-4 border-b border-gray-800">
+            <div className="flex items-center gap-2">
+              <div className="w-6 h-6 bg-[#f3ba2f] rounded-sm flex items-center justify-center">
+                <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4 text-black"><path d="M16.624 13.9202l2.7175 2.7154-7.353 7.353-7.353-7.352 2.7175-2.7164 4.6355 4.6595 4.6356-4.6595zm4.6366-4.6366L24 12l-2.7394 2.7154-2.7384-2.7154 2.7384-2.7154zM7.376 10.0798L4.6585 7.3644 12 0l7.353 7.352-2.7175 2.7164-4.6355-4.6595-4.6356 4.6595zM2.7384 9.2846L0 12l2.7394 2.7154 2.7384-2.7154L2.7384 9.2846zm9.2616-2.7154l2.7175 2.7164-2.7175 2.7154-2.7175-2.7154 2.7175-2.7164z"/></svg>
+              </div>
+              <span className="text-[#f3ba2f] font-bold text-lg">BINANCE</span>
+            </div>
+            <div className="flex items-center gap-3">
+              <button className="bg-[#f3ba2f] text-black px-3 py-1 rounded text-sm font-medium">Sign Up</button>
+              <button className="text-white"><Menu size={20} /></button>
+            </div>
+          </div>
+
+          <div className="p-4 space-y-4">
+            {/* Warning Banner */}
+            <div className="bg-[#2b3139] rounded-lg p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+              <div className="flex items-center gap-2 text-gray-300">
+                <AlertCircle size={14} />
+                <span>Please do not close this window until the payment is confirmed.</span>
+              </div>
+              <div className="text-gray-400">
+                Payment page expires in <span className="text-[#f3ba2f] font-mono">{formatTime(timeLeft)}</span>
+              </div>
+            </div>
+
+            {/* Main Card */}
+            <div className="bg-[#1e2329] rounded-xl border border-gray-800 p-6 flex flex-col items-center">
+              <p className="text-gray-400 text-sm mb-2">Payment Amount</p>
+              <div className="flex items-baseline gap-1 mb-6">
+                <span className="text-3xl font-bold">{amount.toFixed(2)}</span>
+                <span className="text-sm text-gray-400">USDT</span>
+              </div>
+
+              <div className="bg-white p-2 rounded-xl mb-4">
+                {depositSettings.binancePayQrCode ? (
+                  <img src={depositSettings.binancePayQrCode} alt="Binance Pay QR" className="w-48 h-48 object-contain" />
+                ) : (
+                  <div className="w-48 h-48 flex items-center justify-center border-2 border-dashed border-gray-300 rounded-lg">
+                    <span className="text-gray-400 text-sm">QR Code Not Set</span>
+                  </div>
+                )}
+              </div>
+
+              <p className="font-medium mb-6">Scan to Pay with Binance App</p>
+
+              <div className="w-full flex items-center gap-4 mb-6">
+                <div className="flex-1 h-px bg-gray-800"></div>
+                <span className="text-gray-500 text-sm">or</span>
+                <div className="flex-1 h-px bg-gray-800"></div>
+              </div>
+
+              <button 
+                onClick={() => {
+                  setTransactionId('BINANCE_PAY_' + Date.now());
+                  handleSubmitDeposit();
+                }}
+                disabled={isProcessing}
+                className="w-full bg-[#f3ba2f] hover:bg-[#fcd535] text-black font-bold py-3 rounded-lg transition-colors mb-4"
+              >
+                {isProcessing ? 'Processing...' : 'Continue on Browser'}
+              </button>
+
+              <p className="text-xs text-gray-500 text-center mb-8">
+                For first-time users, please <span className="text-[#f3ba2f]">register a Binance Account</span> and complete identity verification.
+              </p>
+
+              <div className="w-full space-y-3 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-gray-500">Merchant Name</span>
+                  <span className="font-medium">AOLLIKUS LIMITED</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-500">Product Name</span>
+                  <span className="font-medium">Deposit for an account</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
     const handleCopy = (text: string) => {
         if (navigator.clipboard && navigator.clipboard.writeText) {
           navigator.clipboard.writeText(text)
@@ -941,6 +1029,8 @@ export default function DepositFlow({ isOpen, onClose, currencySymbol, currencyC
   const [step, setStep] = useState<Step>('SUMMARY');
   const [isLoading, setIsLoading] = useState(true);
   const [selectedMethod, setSelectedMethod] = useState<PaymentMethod>(PAYMENT_METHODS[0]);
+  const [hasManuallySelected, setHasManuallySelected] = useState(false);
+
   const isBdtMethod = ['bkash_p2c', 'nagad_p2c', 'rocket_p2c', 'upay_p2c'].includes(selectedMethod.id);
   const displayCurrencyCode = isBdtMethod ? 'BDT' : currencyCode;
   const displayCurrencySymbol = isBdtMethod ? '৳' : currencySymbol;
@@ -972,7 +1062,9 @@ export default function DepositFlow({ isOpen, onClose, currencySymbol, currencyC
     upayNumbers: ['01712-345678'],
     onyxOptionPayNumbers: ['01712-345678'],
     hamprooPayNumbers: ['01712-345678'],
+    customMethods: [] as any[],
     binancePayId: '123456789',
+    binancePayQrCode: '',
     paypalEmail: 'payments@onyxtrade.com',
     netellerEmail: 'payments@onyxtrade.com',
     skrillEmail: 'payments@onyxtrade.com',
@@ -1003,6 +1095,46 @@ export default function DepositFlow({ isOpen, onClose, currencySymbol, currencyC
     bonusPercentage: 10,
     methodLogos: {} as Record<string, string>
   });
+
+  useEffect(() => {
+    if (hasManuallySelected) return;
+
+    const allMethods = [
+      ...PAYMENT_METHODS,
+      ...(depositSettings?.customMethods || []).map((m: any) => ({
+        id: m.id,
+        name: m.name,
+        icon: m.logo ? <img src={m.logo} alt={m.name} className="w-10 h-10 object-contain" referrerPolicy="no-referrer" /> : <div className="w-10 h-10 flex items-center justify-center bg-gray-600 text-white rounded-md font-bold text-xs">{m.name.slice(0, 2)}</div>,
+        category: m.category === 'MOBILE' ? 'E-PAY' : m.category,
+        minAmount: '$10.00'
+      }))
+    ];
+
+    const filteredMethods = allMethods.filter(m => {
+      const isEnabled = depositSettings?.enabledMethods ? depositSettings.enabledMethods.includes(m.id) : true;
+      return isEnabled;
+    });
+
+    if (filteredMethods.length > 0) {
+      let defaultMethod = filteredMethods[0];
+      
+      if (currencyCode === 'BDT') {
+         const bdtMethod = filteredMethods.find(m => ['bkash_p2c', 'nagad_p2c', 'rocket_p2c', 'upay_p2c'].includes(m.id));
+         if (bdtMethod) defaultMethod = bdtMethod;
+      } else if (currencyCode === 'INR') {
+         const inrMethod = filteredMethods.find(m => m.id === 'upi');
+         if (inrMethod) defaultMethod = inrMethod;
+      } else {
+         const usdMethod = filteredMethods.find(m => ['binance_pay', 'usdt_bep20', 'usdt_trc20'].includes(m.id));
+         if (usdMethod) defaultMethod = usdMethod;
+      }
+      
+      if (selectedMethod.id !== defaultMethod.id) {
+        setSelectedMethod(defaultMethod);
+      }
+    }
+  }, [currencyCode, depositSettings?.enabledMethods, depositSettings?.customMethods, hasManuallySelected, selectedMethod.id]);
+
   const [amountError, setAmountError] = useState<string | null>(null);
 
 
@@ -1228,6 +1360,7 @@ export default function DepositFlow({ isOpen, onClose, currencySymbol, currencyC
             setSelectedMethod={setSelectedMethod} 
             setStep={setStep}
             depositSettings={depositSettings}
+            setHasManuallySelected={setHasManuallySelected}
           />}
           {step === 'AMOUNT_SELECTION' && <AmountSelection 
             handleBack={handleBack} 
