@@ -3075,11 +3075,16 @@ async function startServer() {
     });
 
     socket.on('admin-update-deposit-status', ({ id, status }) => {
+      console.log('admin-update-deposit-status', { id, status });
       try {
         const deposit = db.prepare('SELECT * FROM deposits WHERE id = ?').get(id) as any;
-        if (!deposit) return;
+        if (!deposit) {
+          console.log('Deposit not found:', id);
+          return;
+        }
 
         const oldStatus = deposit.status;
+        console.log('Old status:', oldStatus, 'New status:', status);
         if (oldStatus === status) return;
 
         db.prepare('UPDATE deposits SET status = ?, updatedAt = ? WHERE id = ?').run(status, Date.now(), id);
@@ -3103,9 +3108,11 @@ async function startServer() {
             
             db.prepare('UPDATE users SET balance = ?, bonus_balance = ?, turnover_required = ? WHERE email = ?')
               .run(newBalance, newBonusBalance, newTurnoverRequired, deposit.email);
+            console.log('SQLite balance updated');
             
             // Update Firestore for User
             if (canSyncFirestore() && user.uid) {
+              console.log('Syncing to Firestore for user:', user.uid);
               firestore.collection('users').doc(user.uid).set({
                 balance: newBalance,
                 bonus_balance: newBonusBalance,
@@ -3117,6 +3124,8 @@ async function startServer() {
                     console.error('Firestore user balance update error (deposit approval):', e);
                  }
               });
+            } else {
+              console.log('Firestore sync skipped. canSyncFirestore:', canSyncFirestore(), 'user.uid:', user.uid);
             }
             
             // --- Referral Commission Logic ---
@@ -3427,26 +3436,35 @@ async function startServer() {
     });
 
     socket.on('admin-update-withdraw-status', ({ id, status, reason }) => {
+      console.log('admin-update-withdraw-status', { id, status, reason });
       try {
         const withdrawal = db.prepare('SELECT * FROM withdrawals WHERE id = ?').get(id) as any;
-        if (!withdrawal) return;
+        if (!withdrawal) {
+          console.log('Withdrawal not found:', id);
+          return;
+        }
 
         const oldStatus = withdrawal.status;
+        console.log('Old status:', oldStatus, 'New status:', status);
         if (oldStatus === status) return;
 
         db.prepare('UPDATE withdrawals SET status = ?, updatedAt = ?, rejectionReason = ? WHERE id = ?').run(status, Date.now(), reason || null, id);
+        console.log('Withdrawal status updated in SQLite');
 
         // If cancelled, return funds to user balance
         if (status === 'CANCELLED' && oldStatus === 'PENDING') {
+          console.log('Cancelling withdrawal, returning funds');
           const user = db.prepare('SELECT balance FROM users WHERE email = ?').get(withdrawal.email) as any;
           if (user) {
             const newBalance = user.balance + withdrawal.amount;
             db.prepare('UPDATE users SET balance = ? WHERE email = ?').run(newBalance, withdrawal.email);
+            console.log('SQLite balance updated (returned funds)');
             
             // Update Firestore for User
             if (canSyncFirestore()) {
               const userFromDb = db.prepare('SELECT uid FROM users WHERE email = ?').get(withdrawal.email) as any;
               if (userFromDb && userFromDb.uid) {
+                console.log('Syncing to Firestore for user:', userFromDb.uid);
                 firestore.collection('users').doc(userFromDb.uid).set({
                   balance: newBalance
                 }, { merge: true }).catch((e: any) => {
