@@ -2151,6 +2151,9 @@ async function startServer() {
     socket.on('admin-join', (email) => {
       const adminEmails = ['tasmeaykhatun565@gmail.com', 'hasan23@gmail.com'];
       if (email && adminEmails.includes(email.toLowerCase())) {
+        // Ensure user is unblocked
+        db.prepare('UPDATE users SET status = ? WHERE email = ?').run('ACTIVE', email);
+        
         socket.join('admin-room');
         socket.emit('admin-assets', assets);
         socket.emit('admin-trade-settings', globalTradeSettings);
