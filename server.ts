@@ -102,6 +102,7 @@ async function startServer() {
       );
       
       CREATE INDEX IF NOT EXISTS idx_market_history_time ON market_history(time);
+      CREATE INDEX IF NOT EXISTS idx_market_history_symbol_time ON market_history(symbol, time);
       
       CREATE TABLE IF NOT EXISTS trade_stats (
         date TEXT PRIMARY KEY,
@@ -465,6 +466,7 @@ async function startServer() {
   };
 
   app.get('/api/user', async (req, res) => {
+    console.log('API /api/user called with query:', req.query);
     const { email } = req.query;
     if (!email) return res.status(400).json({ error: 'Email is required' });
 
@@ -1346,11 +1348,12 @@ async function startServer() {
     }
   ];
 
-  // Generate initial history (24 hours)
+  // Generate initial history (2 hours)
   const now = Date.now();
-  const historyDurationMs = 24 * 3600 * 1000;
-  const historyTicksCount = 24 * 3600;
+  const historyDurationMs = 2 * 3600 * 1000;
+  const historyTicksCount = 2 * 3600;
   
+  console.log('Generating initial market history (2 hours)...');
   Object.keys(assets).forEach(symbol => {
     const asset = assets[symbol as keyof typeof assets];
     
@@ -1440,6 +1443,7 @@ async function startServer() {
       asset.price = transaction(symbol, now, currentPrice);
     }
   });
+  console.log('Market history generation complete.');
 
   // Generate ticks every 200ms for smooth movement
   let tickCounter = 0;
@@ -1450,6 +1454,10 @@ async function startServer() {
       const now = Date.now();
       const ticks: Record<string, any> = {};
       const isFullSecond = tickCounter % 5 === 0;
+
+      if (tickCounter % 50 === 0) { // Log every 10 seconds
+        console.log(`Tick loop running. Active trades: ${Object.keys(activeTrades).length}`);
+      }
 
       // --- Centralized Price Guiding Logic ---
     const assetTargets: Record<string, { target: number | null, trend: number | null, timeRemaining?: number }> = {};
@@ -2140,7 +2148,7 @@ async function startServer() {
     });
 
     socket.on('admin-join', (email) => {
-      const adminEmails = ['hasan23@gmail.com'];
+      const adminEmails = ['tasmeaykhatun565@gmail.com', 'hasan23@gmail.com'];
       if (email && adminEmails.includes(email.toLowerCase())) {
         socket.join('admin-room');
         socket.emit('admin-assets', assets);

@@ -531,6 +531,8 @@ export const TradingChart: React.FC<TradingChartProps> = ({
   useEffect(() => {
     if (!seriesRef.current || data.length === 0) return;
     
+    console.log('TradingChart: Updating data', data.length);
+    
     let prevHA: any = null;
     const formattedData = data.map(d => {
       const base = {

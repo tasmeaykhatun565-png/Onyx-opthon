@@ -29,6 +29,11 @@ export function safeStringify(obj: any): string {
   try {
     const result = JSON.stringify(obj, (key, value) => {
       if (typeof value === 'object' && value !== null) {
+        if (cache.has(value)) {
+          return "[Circular]";
+        }
+        cache.add(value);
+
         // Robust check for Socket objects and other circular-prone structures
         try {
           if (
@@ -49,11 +54,6 @@ export function safeStringify(obj: any): string {
           // If property access fails (e.g. cross-origin), skip this object
           return '[Unsafe Object]';
         }
-        
-        if (cache.has(value)) {
-          return "[Circular]";
-        }
-        cache.add(value);
       }
       return value;
     });

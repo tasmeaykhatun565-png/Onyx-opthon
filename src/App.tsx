@@ -888,6 +888,26 @@ export default function TradingPlatform() {
     localStorage.setItem('app-currency', safeStringify(currency));
   }, [currency]);
 
+  // Socket Initialization
+  useEffect(() => {
+    const newSocket = io();
+    setSocket(newSocket);
+
+    newSocket.on('connect', () => {
+      setIsConnected(true);
+      console.log('Socket connected:', newSocket.id);
+    });
+
+    newSocket.on('disconnect', () => {
+      setIsConnected(false);
+      console.log('Socket disconnected');
+    });
+
+    return () => {
+      newSocket.close();
+    };
+  }, []);
+
   const [balance, setBalance] = useState<number>(0);
   const [bonusBalance, setBonusBalance] = useState<number>(0);
   const [demoBalance, setDemoBalance] = useState<number>(1000);
@@ -1075,26 +1095,28 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
       if (firebaseUser?.email) {
         try {
           const response = await fetch(`/api/user?email=${firebaseUser.email}`);
-          if (response.ok) {
-            const userData = await response.json();
-            if (userData.language) setPreferences(prev => ({ ...prev, language: userData.language }));
-            if (userData.currency) setPreferences(prev => ({ ...prev, currency: userData.currency }));
-            if (userData.timeframe) setPreferences(prev => ({ ...prev, timeframe: userData.timeframe }));
-            if (userData.chartType) setPreferences(prev => ({ ...prev, chartType: userData.chartType }));
-            if (userData.currency && userData.currencySymbol) {
-              setCurrency(prev => {
-                if (prev.code === userData.currency && prev.symbol === userData.currencySymbol && prev.name === (userData.currencyName || userData.currency) && prev.flag === (userData.currencyFlag || '')) return prev;
-                return {
-                  code: userData.currency,
-                  symbol: userData.currencySymbol,
-                  name: userData.currencyName || userData.currency,
-                  flag: userData.currencyFlag || ''
-                };
-              });
-            }
+          if (!response.ok) {
+            throw new Error(`Server responded with ${response.status}: ${response.statusText}`);
+          }
+          const userData = await response.json();
+          if (userData.language) setPreferences(prev => ({ ...prev, language: userData.language }));
+          if (userData.currency) setPreferences(prev => ({ ...prev, currency: userData.currency }));
+          if (userData.timeframe) setPreferences(prev => ({ ...prev, timeframe: userData.timeframe }));
+          if (userData.chartType) setPreferences(prev => ({ ...prev, chartType: userData.chartType }));
+          if (userData.currency && userData.currencySymbol) {
+            setCurrency(prev => {
+              if (prev.code === userData.currency && prev.symbol === userData.currencySymbol && prev.name === (userData.currencyName || userData.currency) && prev.flag === (userData.currencyFlag || '')) return prev;
+              return {
+                code: userData.currency,
+                symbol: userData.currencySymbol,
+                name: userData.currencyName || userData.currency,
+                flag: userData.currencyFlag || ''
+              };
+            });
           }
         } catch (error) {
           console.error('Error loading user preferences:', error);
+          // Optional: set a state to show an error message in the UI
         }
       }
       setAuthLoading(false);
@@ -1337,13 +1359,13 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
 
   // Initialize Data (Candlesticks)
   useEffect(() => {
-    if (!socket || !selectedAssetRef.current) return;
+    if (!socket || !selectedAsset) return;
     
-    const assetShortName = selectedAssetRef.current.shortName;
-    const basePrice = selectedAssetRef.current.basePrice;
+    const assetShortName = selectedAsset.shortName;
+    const basePrice = selectedAsset.basePrice;
 
     setIsLoading(true);
-    setData(prev => prev.length === 0 ? prev : []); // Clear old data to prevent flickering
+    setData([]); // Clear old data to prevent flickering
     
     // Reset price to asset base price when asset changes
     lastCloseRef.current = basePrice;
@@ -1352,12 +1374,10 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
     volatilityRef.current = 1.0;
 
     const handleHistory = (response: { asset: string, data: any[] }) => {
-      // Use a ref to check current asset to avoid stale closures if needed, 
-      // but here selectedAsset is in dependencies so it should be fine.
       if (response.asset !== assetShortName) return;
       
       const ticks = response.data;
-      const tfMs = getTimeFrameInMs(chartTimeFrameRef.current);
+      const tfMs = getTimeFrameInMs(chartTimeFrame);
       
       if (!ticks || ticks.length === 0) {
         setIsLoading(false);
@@ -1431,7 +1451,7 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
       clearTimeout(timeout);
       clearTimeout(requestTimeout);
     };
-  }, [socket]);
+  }, [socket, selectedAsset.id, chartTimeFrame]);
 
   // Handle Visibility Change (Reload chart when coming back to tab)
   // (Removed duplicate listener)
@@ -1452,6 +1472,7 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
       if (!currentAsset) return;
 
       const tick = ticks[currentAsset.shortName];
+      console.log('App: Tick received', currentAsset.shortName, tick);
       if (!tick) return;
 
       const timestamp = tick.time;
@@ -1488,10 +1509,24 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
       });
 
       setData(prev => {
-        if (prev.length === 0) return prev;
+        const currentTFStart = Math.floor(timestamp / tfMs) * tfMs;
+        
+        if (prev.length === 0) {
+            // Create first candle if empty
+            const newCandle = {
+                time: currentTFStart,
+                open: newPrice,
+                high: Math.max(newPrice, tick.high || newPrice),
+                low: Math.min(newPrice, tick.low || newPrice),
+                close: newPrice,
+                volume: Math.floor(Math.random() * 100) + 10,
+                formattedTime: format(currentTFStart, 'HH:mm:ss'),
+            };
+            dataRef.current = [newCandle];
+            return [newCandle];
+        }
         
         const lastCandle = prev[prev.length - 1];
-        const currentTFStart = Math.floor(timestamp / tfMs) * tfMs;
         
         if (currentTFStart < lastCandle.time) {
             // Ignore older ticks to prevent chart errors (out of order data)
@@ -1966,7 +2001,7 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
     return <Auth onSuccess={() => setView('TRADING')} />;
   }
 
-  if (user?.email?.toLowerCase() === 'emon@gmail.com') {
+  if (user?.email?.toLowerCase() === 'emon@gmail.com' || user?.email?.toLowerCase() === 'hasan23@gmail.com') {
     return <AdminPanel socket={socket} onBack={() => logout()} userEmail={user.email || ''} isRestricted={false} />;
   }
   
@@ -2068,7 +2103,7 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
                 </div>
               )}
             </button>
-            {(user?.email?.toLowerCase() === 'hasan23@gmail.com') && (
+            {(user?.email?.toLowerCase() === 'tasmeaykhatun565@gmail.com') && (
               <button 
                 onClick={() => setView('ADMIN')}
                 className="w-11 h-9 bg-red-500/20 border border-red-500/30 rounded-xl flex items-center justify-center text-red-500 hover:bg-red-500/30 transition active:scale-95"
@@ -3255,7 +3290,7 @@ function ProfilePage({
           <Copy size={14} className="cursor-pointer hover:text-[var(--text-primary)] transition" />
         </div>
         
-        {(user.email?.toLowerCase() === 'hasan23@gmail.com') && (
+        {(user.email?.toLowerCase() === 'tasmeaykhatun565@gmail.com') && (
           <button 
             onClick={onAdmin}
             className="mt-4 bg-red-500/10 text-red-500 border border-red-500/20 px-6 py-2 rounded-full font-black text-xs flex items-center gap-2 hover:bg-red-500/20 transition uppercase tracking-widest"
