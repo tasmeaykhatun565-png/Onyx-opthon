@@ -1667,6 +1667,7 @@ async function startServer() {
     });
 
     // Broadcast to all connected clients
+    console.log('Server: Broadcasting market-tick', Object.keys(ticks).length, 'assets');
     io.emit('market-tick', ticks);
     
       // Broadcast active trades to admin every second

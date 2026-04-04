@@ -1584,7 +1584,12 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
       });
     };
 
-    socket.on('market-tick', handleTick);
+    socket.on('connect', () => console.log('App: Socket connected'));
+    socket.on('disconnect', () => console.log('App: Socket disconnected'));
+    socket.on('market-tick', (ticks) => {
+      console.log('App: market-tick received', ticks);
+      handleTick(ticks);
+    });
     socket.on('asset-payout-updated', handlePayoutUpdate);
     socket.on('global-payout-updated', handleGlobalPayoutUpdate);
 
