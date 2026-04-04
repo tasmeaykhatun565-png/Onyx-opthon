@@ -1329,80 +1329,18 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
   const lastCloseRef = useRef(selectedAsset.basePrice);
   const trendRef = useRef(0); // Track trend for smoother movement
   const volatilityRef = useRef(1.0); // Dynamic volatility multiplier
+  const chartTimeFrameRef = useRef(chartTimeFrame);
 
-  // Initialize Socket.IO Connection
   useEffect(() => {
-    // Connect to the same origin (works with reverse proxy)
-    const newSocket = io();
-    setSocket(newSocket);
-
-    newSocket.on('connect', () => {
-      console.log('Connected to server');
-      setIsConnected(true);
-    });
-
-    newSocket.on('disconnect', () => {
-      console.log('Disconnected from server');
-      setIsConnected(false);
-    });
-
-    newSocket.on('initial-prices', (prices: Record<string, number>) => {
-      if (prices[selectedAsset.shortName]) {
-        setCurrentPrice(prices[selectedAsset.shortName]);
-        lastCloseRef.current = prices[selectedAsset.shortName];
-      }
-    });
-
-    newSocket.on('support-settings', (settings) => {
-      setSupportSettings(settings);
-    });
-
-    newSocket.on('support-status-update', (status: 'online' | 'offline') => {
-      setSupportSettings(prev => ({ ...prev, supportStatus: status }));
-    });
-
-    newSocket.on('tutorials', (data) => {
-      setTutorials(data);
-    });
-
-    newSocket.on('referral-settings', (settings) => {
-      setReferralSettings(settings);
-    });
-
-    newSocket.on('rewards', (data) => {
-      setRewards(data);
-    });
-
-    newSocket.on('turnover-updated', (data) => {
-      setTurnoverRequired(prev => Math.abs(prev - data.required) < 0.000001 ? prev : data.required);
-      setTurnoverAchieved(prev => Math.abs(prev - data.achieved) < 0.000001 ? prev : data.achieved);
-    });
-
-    newSocket.on('user-bonuses', (bonuses) => {
-      setUserBonuses(bonuses);
-    });
-
-    newSocket.on('request-status-updated', ({ requestId, status, message }) => {
-      setNotifications(prev => [...prev, {
-        id: Math.random().toString(36).substr(2, 9),
-        title: `Request ${status}`,
-        message: message || `Your request has been ${status.toLowerCase()}.`,
-        type: status === 'APPROVED' ? 'SUCCESS' : 'DANGER',
-        timestamp: Date.now()
-      }]);
-    });
-
-    return () => {
-      newSocket.disconnect();
-    };
-  }, []);
+    chartTimeFrameRef.current = chartTimeFrame;
+  }, [chartTimeFrame]);
 
   // Initialize Data (Candlesticks)
   useEffect(() => {
-    if (!socket || !selectedAsset) return;
+    if (!socket || !selectedAssetRef.current) return;
     
-    const assetShortName = selectedAsset.shortName;
-    const basePrice = selectedAsset.basePrice;
+    const assetShortName = selectedAssetRef.current.shortName;
+    const basePrice = selectedAssetRef.current.basePrice;
 
     setIsLoading(true);
     setData(prev => prev.length === 0 ? prev : []); // Clear old data to prevent flickering
@@ -1419,7 +1357,7 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
       if (response.asset !== assetShortName) return;
       
       const ticks = response.data;
-      const tfMs = getTimeFrameInMs(chartTimeFrame);
+      const tfMs = getTimeFrameInMs(chartTimeFrameRef.current);
       
       if (!ticks || ticks.length === 0) {
         setIsLoading(false);
@@ -1493,7 +1431,7 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
       clearTimeout(timeout);
       clearTimeout(requestTimeout);
     };
-  }, [socket, selectedAsset.shortName, chartTimeFrame]);
+  }, [socket]);
 
   // Handle Visibility Change (Reload chart when coming back to tab)
   // (Removed duplicate listener)
@@ -1518,7 +1456,7 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
 
       const timestamp = tick.time;
       const newPrice = tick.price;
-      const tfMs = getTimeFrameInMs(chartTimeFrame);
+      const tfMs = getTimeFrameInMs(chartTimeFrameRef.current);
 
       setCurrentTime(timestamp);
       setCurrentPrice(newPrice);
@@ -1669,7 +1607,7 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
       socket.off('new-notification');
       socket.off('user-notifications');
     };
-  }, [socket, selectedAsset.shortName, chartTimeFrame]); // Use shortName instead of full object
+  }, [socket]);
 
   // Re-send active trades to server on connection
   const sentTradesRef = useRef<Set<string>>(new Set());

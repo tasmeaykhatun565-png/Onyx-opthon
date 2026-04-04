@@ -65,9 +65,14 @@ async function startServer() {
         const options: any = {
           credential: applicationDefault(),
         };
-        // Only set projectId if it's explicitly provided and we're not using applicationDefault's inferred project
         // In AI Studio, applicationDefault() already knows the project ID.
-        if (firebaseConfig.projectId && !process.env.GOOGLE_APPLICATION_CREDENTIALS) {
+        // If we're in a remixed app, the projectId in config might be stale.
+        // We prefer the environment's project ID if available.
+        const envProjectId = process.env.GOOGLE_CLOUD_PROJECT || process.env.GCP_PROJECT;
+        if (envProjectId) {
+          options.projectId = envProjectId;
+          console.log('Using environment project ID:', envProjectId);
+        } else if (firebaseConfig.projectId && !process.env.GOOGLE_APPLICATION_CREDENTIALS) {
            options.projectId = firebaseConfig.projectId;
         }
         initializeApp(options);
@@ -407,7 +412,14 @@ async function startServer() {
               if (canSyncFirestore() && referrer.uid) {
                 firestore.collection('users').doc(referrer.uid).set({
                   referralCount: (referrer.referralCount || 0) + 1
-                }, { merge: true }).catch((e: any) => console.error('Firestore referrer count update error:', e));
+                }, { merge: true }).catch((e: any) => {
+                  if (e.code === 7 || (e.message && e.message.includes('PERMISSION_DENIED'))) {
+                    firestoreDisabledDueToError = true;
+                    console.warn('Firestore sync disabled globally due to PERMISSION_DENIED during referrer count update.');
+                  } else {
+                    console.error('Firestore referrer count update error:', e);
+                  }
+                });
               }
             }
           }
@@ -468,8 +480,13 @@ async function startServer() {
              const uid = doc.id;
              user = await syncUserFromFirestore(email as string, uid, '', '');
            }
-         } catch (e) {
-           console.error('Error fetching user from Firestore by email:', e);
+         } catch (e: any) {
+           if (e.code === 7 || (e.message && e.message.includes('PERMISSION_DENIED'))) {
+             firestoreDisabledDueToError = true;
+             console.warn('Firestore sync disabled globally due to PERMISSION_DENIED during user fetch.');
+           } else {
+             console.error('Error fetching user from Firestore by email:', e);
+           }
          }
       }
       
@@ -552,7 +569,14 @@ async function startServer() {
           if (canSyncFirestore() && referrer.uid) {
             firestore.collection('users').doc(referrer.uid).set({
               referralCount: (referrer.referralCount || 0) + 1
-            }, { merge: true }).catch((e: any) => console.error('Firestore referrer count update error:', e));
+            }, { merge: true }).catch((e: any) => {
+              if (e.code === 7 || (e.message && e.message.includes('PERMISSION_DENIED'))) {
+                firestoreDisabledDueToError = true;
+                console.warn('Firestore sync disabled globally due to PERMISSION_DENIED during referrer count update.');
+              } else {
+                console.error('Firestore referrer count update error:', e);
+              }
+            });
           }
         }
       }
@@ -1047,9 +1071,13 @@ async function startServer() {
 
   // Use a dedicated function for resolution to allow reuse
   const resolveTrade = (tradeId: string) => {
+    console.log(`resolveTrade called for trade: ${tradeId}`);
     try {
       const activeTrade = activeTrades[tradeId];
-      if (!activeTrade) return;
+      if (!activeTrade) {
+        console.log(`resolveTrade: Trade ${tradeId} not found in activeTrades.`);
+        return;
+      }
 
       const email = activeTrade.userEmail || activeTrade.email;
       if (!email) {
@@ -1057,6 +1085,7 @@ async function startServer() {
         delete activeTrades[tradeId];
         return;
       }
+      console.log(`resolveTrade: Processing trade ${tradeId} for user ${email}`);
 
       const assetKey = activeTrade.assetShortName || activeTrade.asset;
       const currentPrice = assets[assetKey as keyof typeof assets]?.price || activeTrade.entryPrice;
@@ -1913,7 +1942,14 @@ async function startServer() {
               if (canSyncFirestore() && referrer.uid) {
                 firestore.collection('users').doc(referrer.uid).set({
                   referralCount: (referrer.referralCount || 0) + 1
-                }, { merge: true }).catch((e: any) => console.error('Firestore referrer count update error:', e));
+                }, { merge: true }).catch((e: any) => {
+                  if (e.code === 7 || (e.message && e.message.includes('PERMISSION_DENIED'))) {
+                    firestoreDisabledDueToError = true;
+                    console.warn('Firestore sync disabled globally due to PERMISSION_DENIED during referrer count update.');
+                  } else {
+                    console.error('Firestore referrer count update error:', e);
+                  }
+                });
               }
             }
           }
@@ -1935,7 +1971,14 @@ async function startServer() {
              // We omit balance here to prevent overwriting with 0 if syncFromFirestore failed
              
              firestore.collection('users').doc(userData.uid).set(firestoreSyncData, { merge: true })
-               .catch((e: any) => console.error('Firestore new user sync error:', e));
+               .catch((e: any) => {
+                 if (e.code === 7 || (e.message && e.message.includes('PERMISSION_DENIED'))) {
+                   firestoreDisabledDueToError = true;
+                   console.warn('Firestore sync disabled globally due to PERMISSION_DENIED during new user sync.');
+                 } else {
+                   console.error('Firestore new user sync error:', e);
+                 }
+               });
           }
         } else {
           const fallbackReferralCode = existingUser.uid ? existingUser.uid.slice(0, 8).toUpperCase() : Math.random().toString(36).substring(2, 8).toUpperCase();
@@ -2378,7 +2421,14 @@ async function startServer() {
         // Sync to Firestore
         if (canSyncFirestore()) {
           firestore.collection('support_chats').doc(email).collection('messages').doc(id).set(message)
-            .catch((e: any) => console.error('Firestore chat sync error:', e));
+            .catch((e: any) => {
+              if (e.code === 7 || (e.message && e.message.includes('PERMISSION_DENIED'))) {
+                firestoreDisabledDueToError = true;
+                console.warn('Firestore sync disabled globally due to PERMISSION_DENIED during chat sync.');
+              } else {
+                console.error('Firestore chat sync error:', e);
+              }
+            });
           
           // Update last message in main doc
           firestore.collection('support_chats').doc(email).set({
@@ -2386,7 +2436,14 @@ async function startServer() {
             lastMessage: text,
             email: email,
             status: 'active'
-          }, { merge: true }).catch((e: any) => console.error('Firestore chat meta sync error:', e));
+          }, { merge: true }).catch((e: any) => {
+            if (e.code === 7 || (e.message && e.message.includes('PERMISSION_DENIED'))) {
+              firestoreDisabledDueToError = true;
+              console.warn('Firestore sync disabled globally due to PERMISSION_DENIED during chat meta sync.');
+            } else {
+              console.error('Firestore chat meta sync error:', e);
+            }
+          });
         }
         
         io.to(`chat-${email}`).emit('new-chat-message', message);
@@ -2544,13 +2601,27 @@ async function startServer() {
         firestore.collection('support_chats').doc(email).collection('messages').doc(id).set({
           ...message,
           email
-        }).catch((e: any) => console.error('Firestore admin chat sync error:', e));
+        }).catch((e: any) => {
+          if (e.code === 7 || (e.message && e.message.includes('PERMISSION_DENIED'))) {
+            firestoreDisabledDueToError = true;
+            console.warn('Firestore sync disabled globally due to PERMISSION_DENIED during admin chat sync.');
+          } else {
+            console.error('Firestore admin chat sync error:', e);
+          }
+        });
 
         firestore.collection('support_chats').doc(email).set({
           lastUpdated: timestamp,
           lastMessage: text,
           email: email
-        }, { merge: true }).catch((e: any) => console.error('Firestore admin chat meta sync error:', e));
+        }, { merge: true }).catch((e: any) => {
+          if (e.code === 7 || (e.message && e.message.includes('PERMISSION_DENIED'))) {
+            firestoreDisabledDueToError = true;
+            console.warn('Firestore sync disabled globally due to PERMISSION_DENIED during admin chat meta sync.');
+          } else {
+            console.error('Firestore admin chat meta sync error:', e);
+          }
+        });
       }
 
       io.to(`chat-${email}`).emit('new-chat-message', message);
@@ -2624,7 +2695,14 @@ async function startServer() {
               name,
               isBoosted: isBoosted ? 1 : 0,
               allowed_withdrawal_methods
-            }, { merge: true }).catch((e: any) => console.error('Firestore user details update error:', e));
+            }, { merge: true }).catch((e: any) => {
+              if (e.code === 7 || (e.message && e.message.includes('PERMISSION_DENIED'))) {
+                firestoreDisabledDueToError = true;
+                console.warn('Firestore sync disabled globally due to PERMISSION_DENIED during user details update.');
+              } else {
+                console.error('Firestore user details update error:', e);
+              }
+            });
           }
         }
         
@@ -2653,7 +2731,14 @@ async function startServer() {
             firestore.collection('users').doc(userFromDb.uid).set({
               turnover_required: required,
               turnover_achieved: achieved
-            }, { merge: true }).catch((e: any) => console.error('Firestore turnover update error:', e));
+            }, { merge: true }).catch((e: any) => {
+              if (e.code === 7 || (e.message && e.message.includes('PERMISSION_DENIED'))) {
+                firestoreDisabledDueToError = true;
+                console.warn('Firestore sync disabled globally due to PERMISSION_DENIED during turnover update.');
+              } else {
+                console.error('Firestore turnover update error:', e);
+              }
+            });
           }
         }
 
@@ -3091,28 +3176,29 @@ async function startServer() {
 
         // If approved, add funds to user balance
         if (status === 'APPROVED' && oldStatus === 'PENDING') {
+          console.log('Deposit approved, updating balance for:', deposit.email);
           const user = db.prepare('SELECT * FROM users WHERE email = ?').get(deposit.email) as any;
           if (user) {
-            console.log('User found:', user.email, 'Current Balance:', user.balance);
+            console.log('User found for balance update:', user.email, 'Current Balance:', user.balance);
             const rate = EXCHANGE_RATES[deposit.currency] || 1;
             const depositAmountUSD = deposit.amount / rate;
             const bonusAmountUSD = (deposit.bonusAmount || 0) / rate;
             
-            console.log('Deposit Amount USD:', depositAmountUSD, 'Bonus Amount USD:', bonusAmountUSD);
+            console.log('Deposit Details - Amount:', deposit.amount, 'Currency:', deposit.currency, 'Rate:', rate, 'USD:', depositAmountUSD);
 
-            const newBalance = parseFloat(user.balance || 0) + depositAmountUSD;
-            const newBonusBalance = parseFloat(user.bonus_balance || 0) + bonusAmountUSD;
-            console.log('New Balance:', newBalance, 'New Bonus Balance:', newBonusBalance);
+            const newBalance = (parseFloat(user.balance) || 0) + depositAmountUSD;
+            const newBonusBalance = (parseFloat(user.bonus_balance) || 0) + bonusAmountUSD;
+            console.log('New Balances - Main:', newBalance, 'Bonus:', newBonusBalance);
             
-            const newTurnoverRequired = parseFloat(user.turnover_required || 0) + parseFloat(deposit.turnoverRequired || 0);
+            const newTurnoverRequired = (parseFloat(user.turnover_required) || 0) + (parseFloat(deposit.turnoverRequired) || 0);
             
             db.prepare('UPDATE users SET balance = ?, bonus_balance = ?, turnover_required = ? WHERE email = ?')
               .run(newBalance, newBonusBalance, newTurnoverRequired, deposit.email);
-            console.log('SQLite balance updated');
+            console.log('SQLite balance updated successfully for:', deposit.email);
             
             // Update Firestore for User
             if (canSyncFirestore() && user.uid) {
-              console.log('Syncing to Firestore for user:', user.uid);
+              console.log('Attempting Firestore sync for user:', user.uid);
               firestore.collection('users').doc(user.uid).set({
                 balance: newBalance,
                 bonus_balance: newBonusBalance,
@@ -3120,6 +3206,7 @@ async function startServer() {
               }, { merge: true }).catch((e: any) => {
                  if (e.code === 7 || (e.message && e.message.includes('PERMISSION_DENIED'))) {
                     firestoreDisabledDueToError = true;
+                    console.warn('Firestore sync disabled globally due to PERMISSION_DENIED during deposit approval.');
                  } else {
                     console.error('Firestore user balance update error (deposit approval):', e);
                  }
