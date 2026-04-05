@@ -1354,12 +1354,12 @@ async function startServer() {
     }
   ];
 
-  // Generate initial history (1 day)
+  // Generate initial history (7 days)
   const now = Date.now();
-  const historyDurationMs = 24 * 3600 * 1000;
-  const historyTicksCount = 24 * 3600;
+  const historyDurationMs = 7 * 24 * 3600 * 1000;
+  const historyTicksCount = 7 * 24 * 3600;
   
-  console.log('Generating initial market history (1 day)...');
+  console.log('Generating initial market history (7 days)...');
   Object.keys(assets).forEach(symbol => {
     const asset = assets[symbol as keyof typeof assets];
     
@@ -1388,8 +1388,8 @@ async function startServer() {
       let currentTrend = 0;
       
       let gapSeconds = Math.floor((now - lastTime) / 1000);
-      if (gapSeconds > 24 * 3600) {
-        gapSeconds = 24 * 3600;
+      if (gapSeconds > 7 * 24 * 3600) {
+        gapSeconds = 7 * 24 * 3600;
         lastTime = now - (gapSeconds * 1000);
       }
       
@@ -1664,10 +1664,10 @@ async function startServer() {
           history[symbol].shift(); 
         }
 
-        // Prune DB history every 1000 ticks (approx 16 mins) to keep last 1 day
+        // Prune DB history every 1000 ticks (approx 16 mins) to keep last 7 days
         if (tickCounter % 1000 === 0) {
-          const oneDayAgo = now - (24 * 3600 * 1000);
-          db.prepare('DELETE FROM market_history WHERE time < ?').run(oneDayAgo);
+          const sevenDaysAgo = now - (7 * 24 * 3600 * 1000);
+          db.prepare('DELETE FROM market_history WHERE time < ?').run(sevenDaysAgo);
         }
       }
       
@@ -1678,8 +1678,17 @@ async function startServer() {
     console.log('Server: Broadcasting market-tick', Object.keys(ticks).length, 'assets');
     io.emit('market-tick', ticks);
     
-      // Broadcast active trades to admin every second
-      if (isFullSecond) {
+    // --- Resolve Expired Trades ---
+    Object.keys(activeTrades).forEach(tradeId => {
+      const trade = activeTrades[tradeId];
+      if (now >= trade.endTime) {
+        console.log(`Tick loop resolving expired trade: ${tradeId}`);
+        resolveTrade(tradeId);
+      }
+    });
+
+    // Broadcast active trades to admin every second
+    if (isFullSecond) {
         const realActiveTrades = Object.values(activeTrades).filter((t: any) => t.accountType === 'REAL');
         io.to('admin-room').emit('admin-active-trades', realActiveTrades);
         io.to('admin-room').emit('admin-users', Object.values(connectedUsers));
@@ -1817,10 +1826,26 @@ async function startServer() {
     }
 
     // Store active trade
-    activeTrades[trade.id] = { ...trade, email, socketId: socket.id, forcedResult, realAmount, bonusAmount };
+    // Calculate endTime on server to avoid clock desync issues
+    const serverNow = Date.now();
+    const durationSeconds = trade.duration || Math.max(1, Math.floor((trade.endTime - trade.startTime) / 1000));
+    const serverEndTime = serverNow + (durationSeconds * 1000);
+    
+    const tradeToStore = { 
+      ...trade, 
+      email, 
+      socketId: socket.id, 
+      forcedResult, 
+      realAmount, 
+      bonusAmount,
+      startTime: serverNow,
+      endTime: serverEndTime
+    };
+    
+    activeTrades[trade.id] = tradeToStore;
     
     // Save to DB history
-    updateUserTrades(email, { ...trade, status: 'ACTIVE' });
+    updateUserTrades(email, { ...tradeToStore, status: 'ACTIVE' });
     
     emitUserUpdate(email);
     
@@ -1828,29 +1853,8 @@ async function startServer() {
 
     // In a real app, we would validate balance and store in DB here
     // For now, we just acknowledge receipt
-    socket.emit('trade-accepted', { id: trade.id, status: 'ACTIVE' });
-
-    // Set a timer to resolve the trade
-    const durationMs = Math.max(0, trade.endTime - Date.now());
-    
-    // If there's a forced result, the centralized price guiding logic in the market tick loop
-    // will automatically pick it up and guide the price.
-
-    setTimeout(() => resolveTrade(trade.id), durationMs);
+    socket.emit('trade-accepted', { id: trade.id, status: 'ACTIVE', startTime: serverNow, endTime: serverEndTime });
   };
-
-  // --- Fallback: Periodically check for expired trades ---
-  setInterval(() => {
-    const now = Date.now();
-    Object.keys(activeTrades).forEach(tradeId => {
-      const trade = activeTrades[tradeId];
-      // If a trade is past its end time by more than 1 second, force close it
-      if (now >= trade.endTime) {
-        console.log(`Fallback closing expired trade: ${tradeId}`);
-        resolveTrade(tradeId);
-      }
-    });
-  }, 1000);
 
   // --- Pending Orders Logic ---
   const checkPendingOrders = () => {

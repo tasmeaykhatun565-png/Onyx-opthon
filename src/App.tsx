@@ -1057,6 +1057,16 @@ export default function TradingPlatform() {
     return Number(localStorage.getItem('app-timezone-offset')) || 0;
   });
   const [currentTime, setCurrentTime] = useState(Date.now());
+  const [serverTimeOffset, setServerTimeOffset] = useState<number>(0);
+
+  // Smooth local clock that syncs with server
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(Date.now() + serverTimeOffset);
+    }, 100); // Update every 100ms for smoothness
+    return () => clearInterval(timer);
+  }, [serverTimeOffset]);
+
   const [tradeResults, setTradeResults] = useState<TradeResult[]>([]);
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [isSocialChatOpen, setIsSocialChatOpen] = useState(false);
@@ -1573,10 +1583,13 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
       
       console.log('App: Updating data with tick', tick);
       const timestamp = tick.time;
+      
+      // Update server time offset
+      setServerTimeOffset(timestamp - Date.now());
+      
       const newPrice = tick.price;
       const tfMs = getTimeFrameInMs(chartTimeFrameRef.current);
 
-      setCurrentTime(timestamp);
       setCurrentPrice(newPrice);
       lastCloseRef.current = newPrice;
 
@@ -1683,6 +1696,10 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
 
     socket.on('connect', () => console.log('App: Socket connected'));
     socket.on('disconnect', () => console.log('App: Socket disconnected'));
+    socket.on('trade-accepted', ({ id, startTime, endTime }) => {
+      setTrades(prev => prev.map(t => t.id === id ? { ...t, startTime, endTime } : t));
+    });
+
     socket.on('market-tick', (ticks) => {
       console.log('App: market-tick received', ticks);
       handleTick(ticks);
@@ -1857,13 +1874,13 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
   }, [tradeResults.length]);
 
   const getExpirationTime = () => {
+    const now = currentTime || Date.now();
     if (tradeMode === 'CLOCK') {
-      const now = Date.now();
       const msToNextMinute = 60000 - (now % 60000);
       const nextClose = msToNextMinute < 30000 ? now + msToNextMinute + 60000 : now + msToNextMinute;
       return nextClose + (clockOffset - 1) * 60000;
     } else {
-      return Date.now() + timerDuration * 1000;
+      return now + timerDuration * 1000;
     }
   };
 
@@ -1973,15 +1990,16 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
       setExtraAccounts(prev => prev.map(a => a.id === activeAccount ? { ...a, balance: a.balance - investmentInUSD } : a));
     }
     
+    const now = currentTime || Date.now();
     const expirationTime = getExpirationTime();
-    const tradeDurationSeconds = Math.floor((expirationTime - Date.now()) / 1000);
+    const tradeDurationSeconds = Math.floor((expirationTime - now) / 1000);
 
     const newTrade: Trade = {
       id: Math.random().toString(36).substr(2, 9),
       type,
       entryPrice: entryPrice,
       amount: investmentInUSD, // Store in USD
-      startTime: Date.now(),
+      startTime: now,
       endTime: expirationTime,
       duration: tradeDurationSeconds,
       status: 'ACTIVE',
@@ -2873,7 +2891,7 @@ function NavButton({ icon, label, active, count, onClick }: { icon: React.ReactN
 
 
 
-function TradeDetailsSheet({ trade, onClose, tickHistory, currencySymbol, exchangeRate }: { trade: Trade, onClose: () => void, tickHistory: TickData[], currencySymbol: string, exchangeRate: number }) {
+function TradeDetailsSheet({ trade, onClose, tickHistory, currentTime, currencySymbol, exchangeRate }: { trade: Trade, onClose: () => void, tickHistory: TickData[], currentTime: number, currencySymbol: string, exchangeRate: number }) {
   const isWin = trade.status === 'WIN';
   const isLoss = trade.status === 'LOSS';
   const profit = (trade.profit !== undefined ? trade.profit : (isWin ? trade.amount * (trade.payout / 100) : -trade.amount)) * exchangeRate;
@@ -2894,7 +2912,7 @@ function TradeDetailsSheet({ trade, onClose, tickHistory, currencySymbol, exchan
 
   // Generate chart data from history or fallback to simulation
   const chartData = useMemo(() => {
-    const endTime = trade.status === 'ACTIVE' ? Date.now() : trade.endTime;
+    const endTime = trade.status === 'ACTIVE' ? currentTime : trade.endTime;
     const relevantTicks = tickHistory.filter(t => t.time >= trade.startTime - 5000 && t.time <= endTime + 2000);
     
     // If we have enough real data (at least 2 points), use it
@@ -2929,7 +2947,7 @@ function TradeDetailsSheet({ trade, onClose, tickHistory, currencySymbol, exchan
       });
     }
     return data;
-  }, [trade, tickHistory]);
+  }, [trade, tickHistory, currentTime]);
 
   const minPrice = Math.min(...chartData.map(d => d.price), trade.entryPrice, trade.closePrice || trade.entryPrice);
   const maxPrice = Math.max(...chartData.map(d => d.price), trade.entryPrice, trade.closePrice || trade.entryPrice);
@@ -3196,6 +3214,7 @@ function TradesPage({
           <TradeDetailsSheet 
             trade={selectedTrade} 
             tickHistory={tickHistory[selectedTrade.assetShortName] || []} 
+            currentTime={currentTime}
             onClose={() => setSelectedTrade(null)} 
             currencySymbol={currencySymbol}
             exchangeRate={exchangeRate}
