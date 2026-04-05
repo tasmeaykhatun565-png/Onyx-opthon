@@ -1354,12 +1354,12 @@ async function startServer() {
     }
   ];
 
-  // Generate initial history (7 days)
+  // Generate initial history (1 day)
   const now = Date.now();
-  const historyDurationMs = 30 * 24 * 3600 * 1000;
-  const historyTicksCount = 30 * 24 * 3600;
+  const historyDurationMs = 24 * 3600 * 1000;
+  const historyTicksCount = 24 * 3600;
   
-  console.log('Generating initial market history (30 days)...');
+  console.log('Generating initial market history (1 day)...');
   Object.keys(assets).forEach(symbol => {
     const asset = assets[symbol as keyof typeof assets];
     
@@ -1388,8 +1388,8 @@ async function startServer() {
       let currentTrend = 0;
       
       let gapSeconds = Math.floor((now - lastTime) / 1000);
-      if (gapSeconds > 30 * 24 * 3600) {
-        gapSeconds = 30 * 24 * 3600;
+      if (gapSeconds > 24 * 3600) {
+        gapSeconds = 24 * 3600;
         lastTime = now - (gapSeconds * 1000);
       }
       
@@ -1664,10 +1664,10 @@ async function startServer() {
           history[symbol].shift(); 
         }
 
-        // Prune DB history every 1000 ticks (approx 16 mins) to keep last 7 days
+        // Prune DB history every 1000 ticks (approx 16 mins) to keep last 1 day
         if (tickCounter % 1000 === 0) {
-          const thirtyDaysAgo = now - (30 * 24 * 3600 * 1000);
-          db.prepare('DELETE FROM market_history WHERE time < ?').run(thirtyDaysAgo);
+          const oneDayAgo = now - (24 * 3600 * 1000);
+          db.prepare('DELETE FROM market_history WHERE time < ?').run(oneDayAgo);
         }
       }
       
