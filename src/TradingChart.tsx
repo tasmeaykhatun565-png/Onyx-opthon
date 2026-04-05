@@ -42,6 +42,7 @@ interface TradingChartProps {
   currencySymbol?: string;
   exchangeRate?: number;
   onVisibleTimeRangeChange?: (range: { from: number; to: number }) => void;
+  onLoadMoreHistory?: () => void;
 }
 
 interface Drawing {
@@ -87,6 +88,7 @@ export const TradingChart: React.FC<TradingChartProps> = ({
   activeIndicators = [],
   currencySymbol = '$',
   exchangeRate = 1,
+  onLoadMoreHistory,
 }) => {
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
@@ -381,10 +383,10 @@ export const TradingChart: React.FC<TradingChartProps> = ({
         timeVisible: true,
         secondsVisible: true,
         borderColor: colors.border,
-        fixLeftEdge: true,
+        fixLeftEdge: false,
         fixRightEdge: false,
-        minBarSpacing: 0.5,
-        maxBarSpacing: 100,
+        minBarSpacing: 2,
+        maxBarSpacing: 1000,
         shiftVisibleRangeOnNewBar: true,
         rightOffset: 45,
         tickMarkFormatter: (time: number) => {
@@ -501,10 +503,23 @@ export const TradingChart: React.FC<TradingChartProps> = ({
 
     window.addEventListener('resize', handleResize);
 
-    chart.timeScale().subscribeVisibleLogicalRangeChange(() => {
+    chart.timeScale().subscribeVisibleLogicalRangeChange((logicalRange) => {
         updateTradeCoordsRef.current();
         updateLatestCoordsRef.current();
         updateDrawingCoordsRef.current();
+        
+        if (logicalRange && logicalRange.from < 100 && onLoadMoreHistory) {
+          // Prevent spamming
+          if (!chartContainerRef.current?.dataset.loadingMore) {
+            chartContainerRef.current!.dataset.loadingMore = 'true';
+            onLoadMoreHistory();
+            setTimeout(() => {
+              if (chartContainerRef.current) {
+                delete chartContainerRef.current.dataset.loadingMore;
+              }
+            }, 1000);
+          }
+        }
     });
 
     const observer = new MutationObserver(() => {
@@ -538,35 +553,98 @@ export const TradingChart: React.FC<TradingChartProps> = ({
       seriesRef.current = null;
       isInitializedRef.current = false;
       indicatorsRef.current = {};
+      lastDataLengthRef.current = 0;
     };
   }, [assetName, chartType]); // Recreate chart when asset or type changes
 
+  const lastDataLengthRef = useRef(0);
+  const lastDataFirstTimeRef = useRef(0);
+  const haDataRef = useRef<any[]>([]);
+
   const updateChartData = useCallback((series: ISeriesApi<any>, chartData: OHLCData[], type: string) => {
-    let prevHA: any = null;
-    const formattedData = chartData.map(d => {
-      const base = {
-        time: (d.time / 1000) as Time,
-        open: d.open,
-        high: d.high,
-        low: d.low,
-        close: d.close,
-      };
+    const isIncremental = lastDataLengthRef.current > 0 && 
+                          chartData.length >= lastDataLengthRef.current &&
+                          chartData.length > 0 &&
+                          chartData[0].time === lastDataFirstTimeRef.current;
+
+    if (isIncremental) {
+      const diff = chartData.length - lastDataLengthRef.current;
+      const startIndex = Math.max(0, chartData.length - diff - 1);
       
-      if (type === 'Area') return { time: base.time, value: base.close };
-      
-      if (type === 'Heikin Ashi') {
-        const haClose = (base.open + base.high + base.low + base.close) / 4;
-        const haOpen = prevHA ? (prevHA.open + prevHA.close) / 2 : (base.open + base.close) / 2;
-        const haHigh = Math.max(base.high, haOpen, haClose);
-        const haLow = Math.min(base.low, haOpen, haClose);
-        const haCandle = { time: base.time, open: haOpen, high: haHigh, low: haLow, close: haClose };
-        prevHA = haCandle;
-        return haCandle;
+      for (let i = startIndex; i < chartData.length; i++) {
+        const d = chartData[i];
+        const base = {
+          time: (d.time / 1000) as Time,
+          open: d.open,
+          high: d.high,
+          low: d.low,
+          close: d.close,
+        };
+        
+        let formatted: any = base;
+        if (type === 'Area') {
+          formatted = { time: base.time, value: base.close };
+        } else if (type === 'Heikin Ashi') {
+          let prevHA = i > 0 ? haDataRef.current[i - 1] : null;
+          const haClose = (base.open + base.high + base.low + base.close) / 4;
+          const haOpen = prevHA ? (prevHA.open + prevHA.close) / 2 : (base.open + base.close) / 2;
+          const haHigh = Math.max(base.high, haOpen, haClose);
+          const haLow = Math.min(base.low, haOpen, haClose);
+          formatted = { time: base.time, open: haOpen, high: haHigh, low: haLow, close: haClose };
+          haDataRef.current[i] = formatted;
+        }
+        
+        series.update(formatted);
       }
-      
-      return base;
-    });
-    series.setData(formattedData);
+    } else {
+      let prevHA: any = null;
+      haDataRef.current = [];
+      const formattedData = chartData.map((d, i) => {
+        const base = {
+          time: (d.time / 1000) as Time,
+          open: d.open,
+          high: d.high,
+          low: d.low,
+          close: d.close,
+        };
+        
+        if (type === 'Area') return { time: base.time, value: base.close };
+        
+        if (type === 'Heikin Ashi') {
+          const haClose = (base.open + base.high + base.low + base.close) / 4;
+          const haOpen = prevHA ? (prevHA.open + prevHA.close) / 2 : (base.open + base.close) / 2;
+          const haHigh = Math.max(base.high, haOpen, haClose);
+          const haLow = Math.min(base.low, haOpen, haClose);
+          const haCandle = { time: base.time, open: haOpen, high: haHigh, low: haLow, close: haClose };
+          prevHA = haCandle;
+          haDataRef.current[i] = haCandle;
+          return haCandle;
+        }
+        
+        return base;
+      });
+      if (formattedData.length > 0) {
+        // Save current logical range before setData
+        const timeScale = chartRef.current?.timeScale();
+        const currentRange = timeScale?.getVisibleLogicalRange();
+        
+        series.setData(formattedData);
+        
+        // Restore logical range shifted by the number of prepended items
+        if (currentRange && lastDataLengthRef.current > 0 && chartData.length > lastDataLengthRef.current) {
+          const diff = chartData.length - lastDataLengthRef.current;
+          timeScale?.setVisibleLogicalRange({
+            from: currentRange.from + diff,
+            to: currentRange.to + diff
+          });
+        }
+      }
+    }
+    
+    lastDataLengthRef.current = chartData.length;
+    if (chartData.length > 0) {
+      lastDataFirstTimeRef.current = chartData[0].time;
+    }
   }, []);
 
   // Update data when it changes
@@ -588,10 +666,13 @@ export const TradingChart: React.FC<TradingChartProps> = ({
     if (!chartRef.current || !data || data.length === 0) return;
 
     const chart = chartRef.current;
-    const closePrices = data.map(d => d.close);
-    const highPrices = data.map(d => d.high);
-    const lowPrices = data.map(d => d.low);
-    const times = data.map(d => (d.time / 1000) as Time);
+    
+    // Limit data for indicators to improve performance
+    const indicatorData = data.length > 2000 ? data.slice(-2000) : data;
+    const closePrices = indicatorData.map(d => d.close);
+    const highPrices = indicatorData.map(d => d.high);
+    const lowPrices = indicatorData.map(d => d.low);
+    const times = indicatorData.map(d => (d.time / 1000) as Time);
 
     // Helper to clear indicators
     const clearIndicators = () => {

@@ -51,6 +51,8 @@ export const FinanceAdminPanel: React.FC<FinanceAdminPanelProps> = ({
                     <th className="pb-3 font-medium">Email</th>
                     <th className="pb-3 font-medium">Amount</th>
                     <th className="pb-3 font-medium">Method</th>
+                    <th className="pb-3 font-medium">Transaction ID</th>
+                    <th className="pb-3 font-medium">Proof</th>
                     <th className="pb-3 font-medium">Status</th>
                     <th className="pb-3 font-medium text-right">Actions</th>
                   </tr>
@@ -61,6 +63,16 @@ export const FinanceAdminPanel: React.FC<FinanceAdminPanelProps> = ({
                       <td className="py-4">{deposit.email}</td>
                       <td className="py-4 font-bold">{deposit.currency} {deposit.amount}</td>
                       <td className="py-4">{deposit.method}</td>
+                      <td className="py-4 font-mono text-xs">{deposit.transactionId}</td>
+                      <td className="py-4">
+                        {deposit.screenshot ? (
+                          <a href={deposit.screenshot} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline text-xs">
+                            View Proof
+                          </a>
+                        ) : (
+                          <span className="text-gray-500 text-xs italic">No Proof</span>
+                        )}
+                      </td>
                       <td className="py-4">{deposit.status}</td>
                       <td className="py-4 text-right">
                         {deposit.status === 'PENDING' && (

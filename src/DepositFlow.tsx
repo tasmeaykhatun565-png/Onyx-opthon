@@ -20,7 +20,11 @@ import {
   Loader2,
   RefreshCw,
   ShieldCheck,
-  Menu
+  Menu,
+  QrCode,
+  Upload,
+  Image as ImageIcon,
+  Trash2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from './utils';
@@ -615,6 +619,21 @@ const PaymentDetails = ({ handleBack, selectedMethod, amount, currencyCode, curr
     const [timeLeft, setTimeLeft] = useState(3600); // 60 minutes as per image
     const [loading, setLoading] = useState(true);
     const [numberIndex, setNumberIndex] = useState(0);
+    const [screenshot, setScreenshot] = useState<File | null>(null);
+    const [screenshotPreview, setScreenshotPreview] = useState<string | null>(null);
+    const fileInputRef = React.useRef<HTMLInputElement>(null);
+
+    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (file) {
+        setScreenshot(file);
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          setScreenshotPreview(reader.result as string);
+        };
+        reader.readAsDataURL(file);
+      }
+    };
 
     const getNumbersArray = () => {
       if (selectedMethod.id.includes('bkash')) return depositSettings.bkashNumbers || [];
@@ -656,6 +675,7 @@ const PaymentDetails = ({ handleBack, selectedMethod, amount, currencyCode, curr
 
     const isLocalMethod = ['bkash', 'nagad', 'rocket', 'upay', 'upi'].some(m => selectedMethod.id.includes(m)) || selectedMethod.id.startsWith('custom_');
     const isCrypto = selectedMethod.category === 'CRYPTO';
+    const cryptoQrCode = depositSettings.cryptoQrCodes?.[selectedMethod.id] || (selectedMethod.id === 'binance_pay' ? depositSettings.binancePayQrCode : '');
     const isEPay = selectedMethod.category === 'E-PAY' && !isLocalMethod;
 
     const needsConversion = isLocalMethod && currencyCode !== 'BDT' && !selectedMethod.id.includes('upi');
@@ -696,6 +716,7 @@ const PaymentDetails = ({ handleBack, selectedMethod, amount, currencyCode, curr
       if (selectedMethod.id === 'dogecoin') return { label: 'DOGE Address', value: depositSettings.dogeAddress || 'Dxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx', type: 'ADDRESS', paymentType: 'Transfer' };
       if (selectedMethod.id === 'usdc_erc20') return { label: 'USDC (ERC20) Address', value: depositSettings.usdcErc20Address || '0xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx', type: 'ADDRESS', paymentType: 'Transfer' };
       if (selectedMethod.id === 'usdc_bep20') return { label: 'USDC (BEP20) Address', value: depositSettings.usdcBep20Address || '0xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx', type: 'ADDRESS', paymentType: 'Transfer' };
+      if (selectedMethod.id === 'usdt_ton') return { label: 'USDT (TON) Address', value: depositSettings.usdtTonAddress || 'Uxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx', type: 'ADDRESS', paymentType: 'Transfer' };
       
       return { label: 'Payment Address', value: 'Contact Support', type: 'OTHER', paymentType: 'Transfer' };
     };
@@ -727,6 +748,142 @@ const PaymentDetails = ({ handleBack, selectedMethod, amount, currencyCode, curr
       const secs = seconds % 60;
       return `${mins}:${secs.toString().padStart(2, '0')}`;
     };
+
+    if (isCrypto && selectedMethod.id !== 'binance_pay') {
+      return (
+        <div className="flex flex-col flex-1 min-h-0 bg-[#0a0a0a] text-white font-sans overflow-y-auto pb-20">
+          {/* Header */}
+          <div className="p-6 space-y-6">
+            <div className="flex flex-col items-center text-center space-y-2">
+              <div className="w-16 h-16 bg-white/5 rounded-2xl flex items-center justify-center border border-white/10 mb-2">
+                {selectedMethod.icon}
+              </div>
+              <h2 className="text-xl font-black tracking-tight">Deposit {selectedMethod.name}</h2>
+              <p className="text-sm text-gray-400 font-medium">Send only {selectedMethod.name} to this address</p>
+            </div>
+
+            {/* QR Code Section */}
+            <div className="flex flex-col items-center space-y-4">
+              <div className="bg-white p-3 rounded-3xl shadow-2xl shadow-blue-500/10">
+                {cryptoQrCode ? (
+                  <img src={cryptoQrCode} alt="QR Code" className="w-44 h-44 object-contain" />
+                ) : (
+                  <div className="w-44 h-44 flex flex-col items-center justify-center border-2 border-dashed border-gray-200 rounded-2xl text-gray-400">
+                    <QrCode size={40} strokeWidth={1.5} />
+                    <span className="text-[10px] font-bold mt-2 uppercase tracking-widest">QR Not Available</span>
+                  </div>
+                )}
+              </div>
+              <div className="flex items-center gap-2 px-4 py-1.5 bg-white/5 rounded-full border border-white/10">
+                <div className="w-2 h-2 bg-yellow-500 rounded-full animate-pulse"></div>
+                <span className="text-xs font-bold text-gray-300">Waiting for Payment...</span>
+              </div>
+            </div>
+
+            {/* Details Card */}
+            <div className="space-y-4">
+              <div className="bg-[#1a1b1e] rounded-3xl p-5 border border-white/5 space-y-4">
+                <div className="space-y-1.5">
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs font-bold text-gray-500 uppercase tracking-widest">Amount to Pay</span>
+                    <button onClick={() => handleCopy(amount.toString())} className="text-blue-500 text-[10px] font-black uppercase tracking-widest hover:text-blue-400 transition">Copy</button>
+                  </div>
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-2xl font-black text-white">{amount.toFixed(2)}</span>
+                    <span className="text-sm font-bold text-gray-400">USD</span>
+                  </div>
+                </div>
+
+                <div className="h-px bg-white/5 w-full"></div>
+
+                <div className="space-y-2">
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs font-bold text-gray-500 uppercase tracking-widest">Deposit Address</span>
+                    <button onClick={() => handleCopy(target.value)} className="text-blue-500 text-[10px] font-black uppercase tracking-widest hover:text-blue-400 transition">Copy</button>
+                  </div>
+                  <div className="bg-black/40 p-3 rounded-xl border border-white/5 break-all">
+                    <span className="text-sm font-mono text-gray-300 leading-relaxed">{target.value}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Transaction ID Input */}
+              <div className="bg-[#1a1b1e] rounded-3xl p-5 border border-white/5 space-y-4">
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-gray-500 uppercase tracking-widest">Transaction Hash / ID</label>
+                  <input 
+                    type="text"
+                    value={transactionId}
+                    onChange={(e) => setTransactionId(e.target.value)}
+                    placeholder="Enter transaction hash"
+                    className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm font-bold text-white focus:outline-none focus:border-blue-500 transition"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-gray-500 uppercase tracking-widest">Payment Screenshot</label>
+                  <div 
+                    onClick={() => fileInputRef.current?.click()}
+                    className="relative border-2 border-dashed border-white/10 rounded-2xl p-4 flex flex-col items-center justify-center gap-2 hover:border-blue-500 transition-colors cursor-pointer bg-black/20"
+                  >
+                    <input 
+                      type="file" 
+                      ref={fileInputRef}
+                      className="hidden" 
+                      accept="image/*"
+                      onChange={handleFileChange}
+                    />
+                    {screenshotPreview ? (
+                      <div className="relative w-full">
+                        <img src={screenshotPreview} alt="Preview" className="max-h-32 mx-auto rounded-lg" />
+                        <button 
+                          onClick={(e) => { e.stopPropagation(); setScreenshot(null); setScreenshotPreview(null); }}
+                          className="absolute -top-2 -right-2 bg-red-500 text-white p-1 rounded-full shadow-lg"
+                        >
+                          <X size={12} />
+                        </button>
+                      </div>
+                    ) : (
+                      <>
+                        <Upload size={20} className="text-gray-500" />
+                        <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest text-center">Upload Payment Proof</p>
+                      </>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between px-2">
+                <div className="flex items-center gap-2 text-gray-500">
+                  <Clock size={14} />
+                  <span className="text-[10px] font-bold uppercase tracking-widest">Expires in {formatTime(timeLeft)}</span>
+                </div>
+                <div className="flex items-center gap-1 text-blue-500">
+                  <ShieldCheck size={14} />
+                  <span className="text-[10px] font-bold uppercase tracking-widest">Secure Payment</span>
+                </div>
+              </div>
+
+              <button 
+                disabled={!transactionId || isProcessing}
+                onClick={() => handleSubmitDeposit(screenshotPreview)}
+                className={cn(
+                  "w-full py-4 rounded-2xl font-black text-base transition-all shadow-xl mt-2 uppercase tracking-widest",
+                  transactionId && !isProcessing ? "bg-blue-600 text-white active:scale-95 shadow-blue-500/20" : "bg-white/5 text-gray-600 cursor-not-allowed"
+                )}
+              >
+                {isProcessing ? (
+                  <div className="flex items-center justify-center gap-2">
+                    <Loader2 className="animate-spin size-5" />
+                    <span>Processing...</span>
+                  </div>
+                ) : "Confirm Deposit"}
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
 
     if (selectedMethod.id === 'binance_pay') {
       return (
@@ -935,13 +1092,45 @@ const PaymentDetails = ({ handleBack, selectedMethod, amount, currencyCode, curr
                         <span className="font-bold text-gray-400 text-sm">!</span>
                     </div>
                 </div>
+
+                <div className="space-y-2 mt-4">
+                  <p className="text-base font-bold text-[#1a1b1e]">Payment Screenshot</p>
+                  <div 
+                    onClick={() => fileInputRef.current?.click()}
+                    className="relative border-2 border-dashed border-gray-300 rounded-2xl p-4 flex flex-col items-center justify-center gap-2 hover:border-blue-500 transition-colors cursor-pointer bg-gray-50"
+                  >
+                    <input 
+                      type="file" 
+                      ref={fileInputRef}
+                      className="hidden" 
+                      accept="image/*"
+                      onChange={handleFileChange}
+                    />
+                    {screenshotPreview ? (
+                      <div className="relative w-full">
+                        <img src={screenshotPreview} alt="Preview" className="max-h-32 mx-auto rounded-lg" />
+                        <button 
+                          onClick={(e) => { e.stopPropagation(); setScreenshot(null); setScreenshotPreview(null); }}
+                          className="absolute -top-2 -right-2 bg-red-500 text-white p-1 rounded-full shadow-lg"
+                        >
+                          <X size={12} />
+                        </button>
+                      </div>
+                    ) : (
+                      <>
+                        <Upload size={24} className="text-gray-400" />
+                        <p className="text-xs text-gray-500 font-medium text-center">Click to upload payment screenshot</p>
+                      </>
+                    )}
+                  </div>
+                </div>
             </div>
           </div>
 
           {/* Submit Button - Compact */}
           <button 
             disabled={!transactionId || isProcessing}
-            onClick={handleSubmitDeposit}
+            onClick={() => handleSubmitDeposit(screenshotPreview)}
             className={cn(
                 "w-full py-3 rounded-full font-bold text-base transition-all shadow-lg mt-2",
                 transactionId && !isProcessing ? "bg-[#D12053] text-white active:scale-95 shadow-pink-500/20" : "bg-gray-200 text-gray-400 cursor-not-allowed"
@@ -1093,7 +1282,8 @@ export default function DepositFlow({ isOpen, onClose, currencySymbol, currencyC
     depositNote: 'Ensure you include your account ID in the reference if required. Deposits usually reflect within 5-15 minutes.',
     minDepositForBonus: 50,
     bonusPercentage: 10,
-    methodLogos: {} as Record<string, string>
+    methodLogos: {} as Record<string, string>,
+    cryptoQrCodes: {} as Record<string, string>
   });
 
   useEffect(() => {
@@ -1230,7 +1420,7 @@ export default function DepositFlow({ isOpen, onClose, currencySymbol, currencyC
     else setStep('SUMMARY');
   };
 
-  const handleSubmitDeposit = () => {
+  const handleSubmitDeposit = (screenshot?: string) => {
     if (!transactionId) return;
     
     if (displayCurrencyCode === 'BDT' && amount < 500) {
@@ -1249,7 +1439,8 @@ export default function DepositFlow({ isOpen, onClose, currencySymbol, currencyC
           currency: displayCurrencyCode,
           method: selectedMethod.id,
           transactionId,
-          promoCode: selectedPromo ? promoInput : null
+          promoCode: selectedPromo ? promoInput : null,
+          screenshot
         });
       } else {
         setIsProcessing(false);

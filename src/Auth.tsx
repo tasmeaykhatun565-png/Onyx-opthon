@@ -44,6 +44,21 @@ export default function Auth({ onSuccess }: AuthProps) {
   const [name, setName] = useState('');
   const [referralCode, setReferralCode] = useState('');
   const [country, setCountry] = useState(COUNTRIES[0].code);
+
+  useEffect(() => {
+    // Check for referral code in localStorage
+    const savedRefCode = localStorage.getItem('onyx_referral_code');
+    if (savedRefCode) {
+      setReferralCode(savedRefCode);
+      if (view === 'login') setView('signup'); // Auto-switch to signup if ref code is present
+    }
+
+    // Check if URL is /register
+    if (window.location.pathname === '/register') {
+      setView('signup');
+    }
+  }, []);
+
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
@@ -141,6 +156,9 @@ export default function Auth({ onSuccess }: AuthProps) {
         const userCredential = await createUserWithEmailAndPassword(auth, email, password);
         const user = userCredential.user;
         
+        // Generate a unique referral code for the new user
+        const newUserReferralCode = Math.random().toString(36).substring(2, 8).toUpperCase();
+        
         // Create user profile in Firestore
         try {
           await setDoc(doc(db, 'users', user.uid), {
@@ -149,7 +167,8 @@ export default function Auth({ onSuccess }: AuthProps) {
             name: name || user.displayName || 'Operative',
             balance: 0,
             demoBalance: 10000,
-            referralCode: referralCode || '',
+            referralCode: newUserReferralCode,
+            referredBy: referralCode || '',
             createdAt: Date.now(),
             country: country,
             currency: selectedCountryData.currency,

@@ -511,6 +511,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
     usdcErc20Address: '0xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',
     usdcBep20Address: '0xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',
     btcAddress: '1xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',
+    cryptoQrCodes: {} as Record<string, string>,
     enabledMethods: [
       'bkash_p2c', 'nagad_p2c', 'rocket_p2c', 'upay_p2c', 
       'binance_pay', 'usdt_trc20', 'usdt_bep20', 'bitcoin',
@@ -2922,18 +2923,23 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                               className="w-full bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-lg px-3 py-2 text-[10px] focus:outline-none focus:border-blue-500 transition font-mono"
                             />
                           </div>
-                          {method.id === 'binance_pay' && (
-                            <div className="space-y-1">
-                              <label className="text-[9px] font-black text-[var(--text-secondary)] uppercase tracking-widest">QR Code URL</label>
-                              <input 
-                                type="text" 
-                                value={depositSettings.binancePayQrCode || ''}
-                                onChange={(e) => setDepositSettings(prev => ({ ...prev, binancePayQrCode: e.target.value }))}
-                                className="w-full bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-lg px-3 py-2 text-[10px] focus:outline-none focus:border-blue-500 transition font-mono"
-                                placeholder="https://example.com/qr.png"
-                              />
-                            </div>
-                          )}
+                          <div className="space-y-1">
+                            <label className="text-[9px] font-black text-[var(--text-secondary)] uppercase tracking-widest">QR Code URL</label>
+                            <input 
+                              type="text" 
+                              value={depositSettings.cryptoQrCodes?.[method.id] || (method.id === 'binance_pay' ? depositSettings.binancePayQrCode : '') || ''}
+                              onChange={(e) => {
+                                const newQrCodes = { ...(depositSettings.cryptoQrCodes || {}), [method.id]: e.target.value };
+                                setDepositSettings(prev => ({ 
+                                  ...prev, 
+                                  cryptoQrCodes: newQrCodes,
+                                  ...(method.id === 'binance_pay' ? { binancePayQrCode: e.target.value } : {})
+                                }));
+                              }}
+                              className="w-full bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-lg px-3 py-2 text-[10px] focus:outline-none focus:border-blue-500 transition font-mono"
+                              placeholder="https://example.com/qr.png"
+                            />
+                          </div>
                         </div>
                       </div>
                     ))}
@@ -3133,7 +3139,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                           payeerAccount: '',
                           webmoneyWmz: '',
                           enabledMethods: ['bkash_p2c', 'nagad_p2c', 'rocket_p2c', 'upay_p2c', 'binance_pay', 'usdt_trc20', 'usdt_bep20', 'bitcoin'],
-                          methodLogos: {}
+                          methodLogos: {},
+                          cryptoQrCodes: {}
                         };
                         setDepositSettings(defaultSettings);
                         if (socket) {

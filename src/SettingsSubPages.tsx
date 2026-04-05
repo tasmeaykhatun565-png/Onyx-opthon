@@ -34,8 +34,8 @@ export const PersonalInformationSettings: React.FC<SubPageProps & {
   const [isTimezoneOpen, setIsTimezoneOpen] = useState(false);
   const [isCurrencyOpen, setIsCurrencyOpen] = useState(false);
 
-  const referralCode = user.uid.slice(0, 8).toUpperCase();
-  const referralLink = `${window.location.origin}/register?ref=${referralCode}`;
+  const referralCode = user.referralCode || user.uid.slice(0, 8).toUpperCase();
+  const referralLink = `${window.location.origin}?ref=${referralCode}`;
 
   const handleCopyReferral = () => {
     navigator.clipboard.writeText(referralLink);

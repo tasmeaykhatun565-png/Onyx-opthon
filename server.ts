@@ -156,7 +156,9 @@ async function startServer() {
         submittedAt INTEGER,
         updatedAt INTEGER,
         promoCode TEXT,
-        bonusAmount REAL DEFAULT 0
+        bonusAmount REAL DEFAULT 0,
+        turnoverRequired REAL DEFAULT 0,
+        screenshot TEXT
       );
 
       CREATE TABLE IF NOT EXISTS withdrawals (
@@ -994,6 +996,10 @@ async function startServer() {
     db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run('platform_settings', JSON.stringify(settings));
   };
 
+  const saveReferralSettings = (settings: any) => {
+    db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run('referral_settings', JSON.stringify(settings));
+  };
+
   const logActivity = (email: string, action: string, details: string = '', ip: string = '') => {
     try {
       const tableExists = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='activity_logs'").get();
@@ -1348,21 +1354,21 @@ async function startServer() {
     }
   ];
 
-  // Generate initial history (2 hours)
+  // Generate initial history (7 days)
   const now = Date.now();
-  const historyDurationMs = 2 * 3600 * 1000;
-  const historyTicksCount = 2 * 3600;
+  const historyDurationMs = 30 * 24 * 3600 * 1000;
+  const historyTicksCount = 30 * 24 * 3600;
   
-  console.log('Generating initial market history (2 hours)...');
+  console.log('Generating initial market history (30 days)...');
   Object.keys(assets).forEach(symbol => {
     const asset = assets[symbol as keyof typeof assets];
     
     // Check if we already have history in DB
     const existingHistory = db.prepare('SELECT * FROM market_history WHERE symbol = ? ORDER BY time DESC LIMIT 1').get(symbol) as any;
     
-    if (existingHistory && (now - existingHistory.time) < historyDurationMs) {
-      // Load existing history
-      const rows = db.prepare('SELECT * FROM market_history WHERE symbol = ? AND time > ? ORDER BY time ASC').all(symbol, now - historyDurationMs) as any[];
+      if (existingHistory && (now - existingHistory.time) < historyDurationMs) {
+      // Load existing history (only last 3600 items into memory)
+      const rows = db.prepare('SELECT * FROM market_history WHERE symbol = ? ORDER BY time DESC LIMIT 3600').all(symbol) as any[];
       history[symbol] = rows.map(r => ({
         time: r.time,
         price: r.close,
@@ -1370,10 +1376,10 @@ async function startServer() {
         high: r.high,
         low: r.low,
         close: r.close
-      }));
+      })).reverse();
       
       if (rows.length > 0) {
-        asset.price = rows[rows.length - 1].close;
+        asset.price = rows[0].close; // rows[0] is the newest because of DESC
       }
       
       // If there's a gap between last history and now, fill it
@@ -1382,8 +1388,8 @@ async function startServer() {
       let currentTrend = 0;
       
       let gapSeconds = Math.floor((now - lastTime) / 1000);
-      if (gapSeconds > historyTicksCount) {
-        gapSeconds = historyTicksCount;
+      if (gapSeconds > 30 * 24 * 3600) {
+        gapSeconds = 30 * 24 * 3600;
         lastTime = now - (gapSeconds * 1000);
       }
       
@@ -1404,6 +1410,7 @@ async function startServer() {
             
             insert.run(symbol, time, open, high, low, close);
             history[symbol].push({ time, price: close, open, high, low, close });
+            if (history[symbol].length > 3600) history[symbol].shift();
           }
           return price;
         });
@@ -1437,6 +1444,7 @@ async function startServer() {
 
           insert.run(symbol, time, open, high, low, close);
           history[symbol].push({ time, price: close, open, high, low, close });
+          if (history[symbol].length > 3600) history[symbol].shift();
         }
         return price;
       });
@@ -1658,8 +1666,8 @@ async function startServer() {
 
         // Prune DB history every 1000 ticks (approx 16 mins) to keep last 7 days
         if (tickCounter % 1000 === 0) {
-          const sevenDaysAgo = now - (7 * 24 * 3600 * 1000);
-          db.prepare('DELETE FROM market_history WHERE time < ?').run(sevenDaysAgo);
+          const thirtyDaysAgo = now - (30 * 24 * 3600 * 1000);
+          db.prepare('DELETE FROM market_history WHERE time < ?').run(thirtyDaysAgo);
         }
       }
       
@@ -2053,32 +2061,45 @@ async function startServer() {
     socket.emit('initial-prices', initialPrices);
 
     // Handle history request
-    socket.on('request-history', (assetShortName) => {
-      // Try to get from in-memory history first
-      let data = history[assetShortName] || [];
+    socket.on('request-history', (requestData) => {
+      let assetShortName = typeof requestData === 'string' ? requestData : requestData.asset;
+      let beforeTime = typeof requestData === 'object' ? requestData.beforeTime : null;
+      let limit = typeof requestData === 'object' ? requestData.limit : 5000; // Default to 5000 candles initially
+
+      let data = [];
       
-      // If history is small or empty, try to load from DB to provide "unlimited" candles
-      if (data.length < 10000) {
-        try {
-          const rows = db.prepare('SELECT * FROM market_history WHERE symbol = ? ORDER BY time DESC LIMIT 100000').all(assetShortName) as any[];
-          if (rows.length > 0) {
-            data = rows.map(r => ({
-              time: r.time,
-              price: r.close,
-              open: r.open,
-              high: r.high,
-              low: r.low,
-              close: r.close
-            })).reverse();
-          }
-        } catch (e) {
-          console.error('Failed to fetch history from DB:', e);
+      try {
+        let query = 'SELECT * FROM market_history WHERE symbol = ?';
+        let params: any[] = [assetShortName];
+        
+        if (beforeTime) {
+           query += ' AND time < ?';
+           params.push(beforeTime);
         }
+        
+        query += ' ORDER BY time DESC LIMIT ?';
+        params.push(limit);
+        
+        const rows = db.prepare(query).all(...params) as any[];
+        
+        if (rows.length > 0) {
+          data = rows.map(r => ({
+            time: r.time,
+            price: r.close,
+            open: r.open,
+            high: r.high,
+            low: r.low,
+            close: r.close
+          })).reverse();
+        }
+      } catch (e) {
+        console.error('Failed to fetch history from DB:', e);
       }
 
       socket.emit('asset-history', {
         asset: assetShortName,
-        data: data
+        data: data,
+        isOlder: !!beforeTime
       });
     });
 
@@ -2339,6 +2360,7 @@ async function startServer() {
 
     socket.on('admin-update-referral-settings', (settings) => {
       globalReferralSettings = { ...globalReferralSettings, ...settings };
+      saveReferralSettings(globalReferralSettings);
       io.emit('referral-settings', globalReferralSettings);
       io.to('admin-room').emit('admin-referral-settings', globalReferralSettings);
     });
@@ -3118,7 +3140,7 @@ async function startServer() {
         return;
       }
       try {
-        const { email, amount, currency, method, transactionId, promoCode } = depositData;
+        const { email, amount, currency, method, transactionId, promoCode, screenshot } = depositData;
         console.log(`Processing deposit for ${email}: ${amount} ${currency} via ${method}`);
         
         // Check for existing transactionId
@@ -3148,12 +3170,12 @@ async function startServer() {
         }
 
         const stmt = db.prepare(`
-          INSERT INTO deposits (email, amount, currency, method, transactionId, submittedAt, updatedAt, promoCode, bonusAmount, turnoverRequired)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          INSERT INTO deposits (email, amount, currency, method, transactionId, submittedAt, updatedAt, promoCode, bonusAmount, turnoverRequired, screenshot)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `);
         
         const now = Date.now();
-        stmt.run(email, amount, currency, method, transactionId, now, now, promoCode || null, bonusAmount, turnoverRequired);
+        stmt.run(email, amount, currency, method, transactionId, now, now, promoCode || null, bonusAmount, turnoverRequired, screenshot || null);
         
         socket.emit('deposit-submitted', { status: 'PENDING', bonusAmount });
         

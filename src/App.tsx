@@ -1433,7 +1433,7 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
     const basePrice = selectedAsset.basePrice;
 
     setIsLoading(true);
-    setData([]); // Clear old data to prevent flickering
+    setData([]); // Clear old data to show loading state
     
     // Reset price to asset base price when asset changes
     lastCloseRef.current = basePrice;
@@ -1441,7 +1441,7 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
     trendRef.current = 0;
     volatilityRef.current = 1.0;
 
-    const handleHistory = (response: { asset: string, data: any[] }) => {
+    const handleHistory = (response: { asset: string, data: any[], isOlder?: boolean }) => {
       if (response.asset !== assetShortName) return;
       
       const ticks = response.data;
@@ -1480,12 +1480,32 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
       }
       if (currentCandle) candles.push(currentCandle);
       
-      setTickHistory(prev => ({ ...prev, [response.asset]: historyTicks }));
-      setData(candles);
-      if (candles.length > 0) {
-        const last = candles[candles.length - 1];
-        lastCloseRef.current = last.close;
-        setCurrentPrice(last.close);
+      if (response.isOlder) {
+        setTickHistory(prev => {
+          const existing = prev[response.asset] || [];
+          // Prepend new history, removing overlap if any
+          const lastNewTime = historyTicks[historyTicks.length - 1]?.time || 0;
+          const filteredExisting = existing.filter(t => t.time > lastNewTime);
+          return { ...prev, [response.asset]: [...historyTicks, ...filteredExisting] };
+        });
+        
+        setData(prev => {
+          // Prepend new candles, removing overlap
+          const lastNewTime = candles[candles.length - 1]?.time || 0;
+          const filteredExisting = prev.filter(c => c.time > lastNewTime);
+          const newData = [...candles, ...filteredExisting];
+          dataRef.current = newData;
+          return newData;
+        });
+      } else {
+        setTickHistory(prev => ({ ...prev, [response.asset]: historyTicks }));
+        setData(candles);
+        dataRef.current = candles;
+        if (candles.length > 0) {
+          const last = candles[candles.length - 1];
+          lastCloseRef.current = last.close;
+          setCurrentPrice(last.close);
+        }
       }
       
       // Small delay before hiding loader for smoother transition
@@ -1521,8 +1541,16 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
     };
   }, [socket, selectedAsset.id, chartTimeFrame]);
 
-  // Handle Visibility Change (Reload chart when coming back to tab)
-  // (Removed duplicate listener)
+  const handleLoadMoreHistory = useCallback(() => {
+    if (!socket || !selectedAsset || data.length === 0) return;
+    const oldestTime = data[0].time;
+    // Request older history
+    socket.emit('request-history', {
+      asset: selectedAsset.shortName,
+      beforeTime: oldestTime,
+      limit: 10000 // Fetch 10k more candles
+    });
+  }, [socket, selectedAsset, data]);
 
   // Handle Live Ticks from Server
   useEffect(() => {
@@ -1542,7 +1570,8 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
       const tick = ticks[currentAsset.shortName];
       console.log('App: Tick received', currentAsset.shortName, tick);
       if (!tick) return;
-
+      
+      console.log('App: Updating data with tick', tick);
       const timestamp = tick.time;
       const newPrice = tick.price;
       const tfMs = getTimeFrameInMs(chartTimeFrameRef.current);
@@ -2360,6 +2389,7 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
               activeIndicators={activeIndicators}
               currencySymbol={displayCurrencySymbol}
               exchangeRate={currentExchangeRate}
+              onLoadMoreHistory={handleLoadMoreHistory}
             />
           </div>
         )}
