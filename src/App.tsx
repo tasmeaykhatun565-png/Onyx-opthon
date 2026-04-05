@@ -1451,57 +1451,71 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
     trendRef.current = 0;
     volatilityRef.current = 1.0;
 
-    const handleHistory = (response: { asset: string, data: any[], isOlder?: boolean }) => {
+    const handleHistory = (response: { asset: string, data: any[], candles?: any[], isOlder?: boolean }) => {
       if (response.asset !== assetShortName) return;
       
-      const ticks = response.data;
       const tfMs = getTimeFrameInMs(chartTimeFrame);
       
-      if (!ticks || ticks.length === 0) {
+      let candles: OHLCData[] = [];
+      let historyTicks: TickData[] = [];
+
+      if (response.candles && response.candles.length > 0) {
+        candles = response.candles.map(c => ({
+          ...c,
+          volume: Math.floor(Math.random() * 100) + 10,
+          formattedTime: format(c.time, 'HH:mm:ss')
+        }));
+        historyTicks = (response.data || []).map(t => ({ time: t.time, price: t.close || t.price }));
+      } else {
+        const ticks = response.data;
+        if (!ticks || ticks.length === 0) {
+          setIsLoading(false);
+          return;
+        }
+
+        let currentCandle: OHLCData | null = null;
+        for (const tick of ticks) {
+          historyTicks.push({ time: tick.time, price: tick.price });
+          const candleTime = Math.floor(tick.time / tfMs) * tfMs;
+          
+          if (!currentCandle || currentCandle.time !== candleTime) {
+            if (currentCandle) candles.push(currentCandle);
+            currentCandle = {
+              time: candleTime,
+              open: tick.open !== undefined ? tick.open : tick.price,
+              high: tick.high !== undefined ? tick.high : tick.price,
+              low: tick.low !== undefined ? tick.low : tick.price,
+              close: tick.close !== undefined ? tick.close : tick.price,
+              volume: Math.floor(Math.random() * 100) + 10,
+              formattedTime: format(candleTime, 'HH:mm:ss')
+            };
+          } else {
+            currentCandle.high = Math.max(currentCandle.high, tick.high !== undefined ? tick.high : tick.price);
+            currentCandle.low = Math.min(currentCandle.low, tick.low !== undefined ? tick.low : tick.price);
+            currentCandle.close = tick.close !== undefined ? tick.close : tick.price;
+            currentCandle.volume = (currentCandle.volume || 0) + Math.floor(Math.random() * 10) + 1;
+          }
+        }
+        if (currentCandle) candles.push(currentCandle);
+      }
+
+      if (candles.length === 0) {
         setIsLoading(false);
         return;
       }
-
-      const candles: OHLCData[] = [];
-      const historyTicks: TickData[] = [];
-      let currentCandle: OHLCData | null = null;
-      
-      for (const tick of ticks) {
-        historyTicks.push({ time: tick.time, price: tick.price });
-        const candleTime = Math.floor(tick.time / tfMs) * tfMs;
-        
-        if (!currentCandle || currentCandle.time !== candleTime) {
-          if (currentCandle) candles.push(currentCandle);
-          currentCandle = {
-            time: candleTime,
-            open: tick.open !== undefined ? tick.open : tick.price,
-            high: tick.high !== undefined ? tick.high : tick.price,
-            low: tick.low !== undefined ? tick.low : tick.price,
-            close: tick.close !== undefined ? tick.close : tick.price,
-            volume: Math.floor(Math.random() * 100) + 10,
-            formattedTime: format(candleTime, 'HH:mm:ss')
-          };
-        } else {
-          currentCandle.high = Math.max(currentCandle.high, tick.high !== undefined ? tick.high : tick.price);
-          currentCandle.low = Math.min(currentCandle.low, tick.low !== undefined ? tick.low : tick.price);
-          currentCandle.close = tick.close !== undefined ? tick.close : tick.price;
-          currentCandle.volume = (currentCandle.volume || 0) + Math.floor(Math.random() * 10) + 1;
-        }
-      }
-      if (currentCandle) candles.push(currentCandle);
       
       if (response.isOlder) {
         setTickHistory(prev => {
           const existing = prev[response.asset] || [];
           // Prepend new history, removing overlap if any
-          const lastNewTime = historyTicks[historyTicks.length - 1]?.time || 0;
+          const lastNewTime = historyTicks.length > 0 ? historyTicks[historyTicks.length - 1].time : 0;
           const filteredExisting = existing.filter(t => t.time > lastNewTime);
           return { ...prev, [response.asset]: [...historyTicks, ...filteredExisting] };
         });
         
         setData(prev => {
           // Prepend new candles, removing overlap
-          const lastNewTime = candles[candles.length - 1]?.time || 0;
+          const lastNewTime = candles.length > 0 ? candles[candles.length - 1].time : 0;
           const filteredExisting = prev.filter(c => c.time > lastNewTime);
           const newData = [...candles, ...filteredExisting];
           dataRef.current = newData;
@@ -1531,10 +1545,10 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
     // Add a small delay for the request to ensure the UI has cleared
     const requestTimeout = setTimeout(() => {
       if (socket.connected) {
-        socket.emit('request-history', assetShortName);
+        socket.emit('request-history', { asset: assetShortName, timeframe: chartTimeFrame, limit: 1000 });
       } else {
         socket.once('connect', () => {
-          socket.emit('request-history', assetShortName);
+          socket.emit('request-history', { asset: assetShortName, timeframe: chartTimeFrame, limit: 1000 });
         });
       }
     }, 100);
@@ -1558,9 +1572,10 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
     socket.emit('request-history', {
       asset: selectedAsset.shortName,
       beforeTime: oldestTime,
-      limit: 10000 // Fetch 10k more candles
+      limit: 1000, // Fetch 1000 more candles
+      timeframe: chartTimeFrame
     });
-  }, [socket, selectedAsset, data]);
+  }, [socket, selectedAsset, data, chartTimeFrame]);
 
   // Handle Live Ticks from Server
   useEffect(() => {

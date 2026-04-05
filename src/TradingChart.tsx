@@ -651,8 +651,11 @@ export const TradingChart: React.FC<TradingChartProps> = ({
   useEffect(() => {
     if (!seriesRef.current || data.length === 0) return;
     
-    console.log('TradingChart: Updating data', data.length);
     updateChartData(seriesRef.current, data, chartType);
+    
+    updateTradeCoordsRef.current();
+    updateLatestCoordsRef.current();
+    updateDrawingCoordsRef.current();
   }, [data, chartType, updateChartData]);
 
   // Keep refs updated
@@ -1128,138 +1131,6 @@ export const TradingChart: React.FC<TradingChartProps> = ({
       }
     });
   }, [data, activeIndicators, chartType]);
-
-  const prevHARef = useRef<any>(null);
-
-  // 2. Update Data
-  useEffect(() => {
-    if (!seriesRef.current || !isInitializedRef.current) return;
-
-    const series = seriesRef.current;
-    
-    // Check if asset changed, first load, or data length changed significantly (full reset)
-    const currentSeriesData = series.data();
-    const assetChanged = prevAssetRef.current !== assetName;
-    console.log('TradingChart Update Check:', { assetName, assetChanged, dataLength: data.length, currentSeriesDataLength: currentSeriesData.length });
-    
-    // Force full reset if asset changed
-    if (assetChanged) {
-        console.log('TradingChart: Asset changed, forcing full reset');
-        series.setData([]);
-        prevAssetRef.current = assetName;
-        prevHARef.current = null; // Reset Heikin Ashi state
-    }
-
-    if (data.length === 0) {
-      return;
-    }
-
-    const shouldFullReset = 
-      assetChanged || 
-      currentSeriesData.length === 0 ||
-      Math.abs(data.length - currentSeriesData.length) > 5; // Increased threshold to avoid reset on small updates
-
-    if (shouldFullReset) {
-       console.log('TradingChart: Performing full reset', { shouldFullReset, assetChanged });
-       
-       // CRITICAL: Clear existing data before setting new data to prevent visual artifacts
-       series.setData([]); 
-       
-       let prevHA: any = null;
-       const formattedData = data.map(d => {
-         const base = {
-           time: (d.time / 1000) as Time,
-           open: d.open,
-           high: d.high,
-           low: d.low,
-           close: d.close,
-         };
-         
-         if (chartType === 'Area') {
-           return { time: base.time, value: base.close };
-         }
-
-         if (chartType === 'Heikin Ashi') {
-            const haClose = (base.open + base.high + base.low + base.close) / 4;
-            const haOpen = prevHA ? (prevHA.open + prevHA.close) / 2 : (base.open + base.close) / 2;
-            const haHigh = Math.max(base.high, haOpen, haClose);
-            const haLow = Math.min(base.low, haOpen, haClose);
-            const haCandle = { time: base.time, open: haOpen, high: haHigh, low: haLow, close: haClose };
-            prevHA = haCandle;
-            return haCandle;
-         }
-
-         return base;
-       });
-       series.setData(formattedData);
-       prevAssetRef.current = assetName;
-       prevHARef.current = prevHA;
-       // Fit content on asset change or full reset
-       if (assetChanged) {
-          setTimeout(() => {
-             chartRef.current?.timeScale().fitContent();
-          }, 50);
-       }
-    } else {
-       // Update last candle (incremental update)
-       const lastCandle = data[data.length - 1];
-       if (lastCandle) {
-         let updateData: any;
-         
-         if (chartType === 'Area') {
-            updateData = { time: (lastCandle.time / 1000) as Time, value: lastCandle.close };
-         } else if (chartType === 'Heikin Ashi') {
-            const base = {
-                time: (lastCandle.time / 1000) as Time,
-                open: lastCandle.open,
-                high: lastCandle.high,
-                low: lastCandle.low,
-                close: lastCandle.close,
-            };
-            
-            // For Heikin Ashi update, we need the previous candle's HA values
-            const haClose = (base.open + base.high + base.low + base.close) / 4;
-            const haOpen = prevHARef.current ? (prevHARef.current.open + prevHARef.current.close) / 2 : (base.open + base.close) / 2;
-            const haHigh = Math.max(base.high, haOpen, haClose);
-            const haLow = Math.min(base.low, haOpen, haClose);
-            updateData = { time: base.time, open: haOpen, high: haHigh, low: haLow, close: haClose };
-            
-            // Update prevHARef only if this is a NEW candle (length increased)
-            if (data.length > currentSeriesData.length) {
-                prevHARef.current = updateData;
-            }
-         } else {
-            updateData = {
-               time: (lastCandle.time / 1000) as Time,
-               open: lastCandle.open,
-               high: lastCandle.high,
-               low: lastCandle.low,
-               close: lastCandle.close,
-             };
-         }
-         
-         try {
-            series.update(updateData);
-         } catch (e) {
-            console.warn("Chart update failed, falling back to setData:", e);
-            // Fallback to full setData if update fails for any reason
-            const formattedData = data.map(d => ({
-                time: (d.time / 1000) as Time,
-                open: d.open,
-                high: d.high,
-                low: d.low,
-                close: d.close,
-            }));
-            series.setData(formattedData as any);
-         }
-       }
-    }
-    
-    // Also update trade coords when price moves
-    updateTradeCoordsRef.current();
-    updateLatestCoordsRef.current();
-    updateDrawingCoordsRef.current();
-  }, [data, assetName, trades, chartType, drawings]);
 
   const tfMs = getTimeFrameInMs(chartTimeFrame);
   const currentTFStart = Math.floor(currentTime / tfMs) * tfMs;
