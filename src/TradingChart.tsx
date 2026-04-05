@@ -337,6 +337,14 @@ export const TradingChart: React.FC<TradingChartProps> = ({
   useEffect(() => {
     if (!chartContainerRef.current) return;
 
+    // Clear existing chart instance if any
+    if (chartRef.current) {
+      chartRef.current.remove();
+      chartRef.current = null;
+      seriesRef.current = null;
+      indicatorsRef.current = {};
+    }
+
     const getThemeColors = () => {
       const style = getComputedStyle(document.documentElement);
       const getVar = (name: string) => style.getPropertyValue(name).trim();
@@ -374,7 +382,7 @@ export const TradingChart: React.FC<TradingChartProps> = ({
         secondsVisible: true,
         borderColor: colors.border,
         fixLeftEdge: true,
-        fixRightEdge: false, // Allow pulling the candle to the middle
+        fixRightEdge: false,
         minBarSpacing: 0.5,
         maxBarSpacing: 100,
         shiftVisibleRangeOnNewBar: true,
@@ -404,8 +412,8 @@ export const TradingChart: React.FC<TradingChartProps> = ({
       handleScroll: true,
       handleScale: {
         axisPressedMouseMove: {
-            price: false, // Disable manual price scaling to keep the "system" stable
-            time: false,  // Disable manual time scaling to prevent distortion
+            price: false,
+            time: false,
         },
         mouseWheel: true,
         pinch: true,
@@ -471,14 +479,19 @@ export const TradingChart: React.FC<TradingChartProps> = ({
     seriesRef.current = series;
     isInitializedRef.current = true;
 
+    // Set initial data if available
+    if (data.length > 0) {
+        // ... (data formatting logic) ...
+        // I will re-use the logic from the data update useEffect here
+        updateChartData(series, data, chartType);
+    }
+
     chart.priceScale('right').applyOptions({
       scaleMargins: {
         top: 0.1,
         bottom: 0.3,
       },
     });
-
-    // We'll configure oscillators scale only when needed to avoid "incorrect ID" error
 
     const handleResize = () => {
       if (chartContainerRef.current) {
@@ -488,7 +501,6 @@ export const TradingChart: React.FC<TradingChartProps> = ({
 
     window.addEventListener('resize', handleResize);
 
-    // Update trade coordinates on scroll/zoom
     chart.timeScale().subscribeVisibleLogicalRangeChange(() => {
         updateTradeCoordsRef.current();
         updateLatestCoordsRef.current();
@@ -522,19 +534,16 @@ export const TradingChart: React.FC<TradingChartProps> = ({
       window.removeEventListener('resize', handleResize);
       observer.disconnect();
       chart.remove();
+      chartRef.current = null;
+      seriesRef.current = null;
       isInitializedRef.current = false;
       indicatorsRef.current = {};
     };
-  }, [chartType]); // Recreate chart when type changes
+  }, [assetName, chartType]); // Recreate chart when asset or type changes
 
-  // Update data when it changes
-  useEffect(() => {
-    if (!seriesRef.current || data.length === 0) return;
-    
-    console.log('TradingChart: Updating data', data.length);
-    
+  const updateChartData = useCallback((series: ISeriesApi<any>, chartData: OHLCData[], type: string) => {
     let prevHA: any = null;
-    const formattedData = data.map(d => {
+    const formattedData = chartData.map(d => {
       const base = {
         time: (d.time / 1000) as Time,
         open: d.open,
@@ -543,9 +552,9 @@ export const TradingChart: React.FC<TradingChartProps> = ({
         close: d.close,
       };
       
-      if (chartType === 'Area') return { time: base.time, value: base.close };
+      if (type === 'Area') return { time: base.time, value: base.close };
       
-      if (chartType === 'Heikin Ashi') {
+      if (type === 'Heikin Ashi') {
         const haClose = (base.open + base.high + base.low + base.close) / 4;
         const haOpen = prevHA ? (prevHA.open + prevHA.close) / 2 : (base.open + base.close) / 2;
         const haHigh = Math.max(base.high, haOpen, haClose);
@@ -557,8 +566,16 @@ export const TradingChart: React.FC<TradingChartProps> = ({
       
       return base;
     });
-    seriesRef.current.setData(formattedData);
-  }, [data, chartType]);
+    series.setData(formattedData);
+  }, []);
+
+  // Update data when it changes
+  useEffect(() => {
+    if (!seriesRef.current || data.length === 0) return;
+    
+    console.log('TradingChart: Updating data', data.length);
+    updateChartData(seriesRef.current, data, chartType);
+  }, [data, chartType, updateChartData]);
 
   // Keep refs updated
   useEffect(() => {

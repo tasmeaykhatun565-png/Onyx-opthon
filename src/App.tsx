@@ -11,7 +11,8 @@ import {
   ChevronLeft, Copy, Box, Link as LinkIcon, CalendarDays, ChevronRight,
   Shuffle, Target, ChevronsUp, GraduationCap, MessageCircle, BookOpen,
   Trophy, ShoppingBag, ArrowUpDown, Mail, UserCheck, Key, Shield, ShieldCheck, Zap, Check, Grid, Image, Activity, LogOut,
-  Search, Info, AlignLeft, Star, MoreVertical, Lock, Video, FileText, Phone, Youtube, Globe, Send, Bitcoin, Gem, TrendingUp, RefreshCw, Users, Newspaper
+  Search, Info, AlignLeft, Star, MoreVertical, Lock, Video, FileText, Phone, Youtube, Globe, Send, Bitcoin, Gem, TrendingUp, RefreshCw, Users, Newspaper,
+  Coins, Droplets, Flame
 } from 'lucide-react';
 import { playSound } from './sounds';
 import { cn, deepEqual, safeStringify } from './utils';
@@ -245,6 +246,49 @@ const AssetIcon = ({
     }
   }
 
+  // Specific logos for well-known assets
+  const logoMap: Record<string, string> = {
+    'AAPL': 'https://www.google.com/s2/favicons?domain=apple.com&sz=128',
+    'GOOGL': 'https://www.google.com/s2/favicons?domain=google.com&sz=128',
+    'TSLA': 'https://www.google.com/s2/favicons?domain=tesla.com&sz=128',
+    'AMZN': 'https://www.google.com/s2/favicons?domain=amazon.com&sz=128',
+    'MSFT': 'https://www.google.com/s2/favicons?domain=microsoft.com&sz=128',
+    'META': 'https://www.google.com/s2/favicons?domain=meta.com&sz=128',
+    'NFLX': 'https://www.google.com/s2/favicons?domain=netflix.com&sz=128',
+    'NVDA': 'https://www.google.com/s2/favicons?domain=nvidia.com&sz=128',
+    'BABA': 'https://www.google.com/s2/favicons?domain=alibaba.com&sz=128',
+    'DIS': 'https://www.google.com/s2/favicons?domain=disney.com&sz=128',
+    'PYPL': 'https://www.google.com/s2/favicons?domain=paypal.com&sz=128',
+    'NKE': 'https://www.google.com/s2/favicons?domain=nike.com&sz=128',
+    'BTC/USD': 'https://cryptologos.cc/logos/bitcoin-btc-logo.png',
+    'ETH/USD': 'https://cryptologos.cc/logos/ethereum-eth-logo.png',
+    'SOL/USD': 'https://cryptologos.cc/logos/solana-sol-logo.png',
+    'XRP/USD': 'https://cryptologos.cc/logos/xrp-xrp-logo.png',
+    'DOGE/USD': 'https://cryptologos.cc/logos/dogecoin-doge-logo.png',
+    'ADA/USD': 'https://cryptologos.cc/logos/cardano-ada-logo.png',
+    'DOT/USD': 'https://cryptologos.cc/logos/polkadot-new-dot-logo.png',
+    'LINK/USD': 'https://cryptologos.cc/logos/chainlink-link-logo.png',
+    'MATIC/USD': 'https://cryptologos.cc/logos/polygon-matic-logo.png',
+    'UNI/USD': 'https://cryptologos.cc/logos/uniswap-uni-logo.png',
+  };
+
+  const [imgError, setImgError] = useState(false);
+  const logoUrl = logoMap[shortName];
+
+  if (logoUrl && !imgError) {
+    return (
+      <div className={cn("rounded-full bg-white flex items-center justify-center border border-[var(--border-color)] shadow-sm overflow-hidden", containerSize)}>
+        <img 
+          src={logoUrl} 
+          alt={shortName} 
+          className="w-[70%] h-[70%] object-contain" 
+          referrerPolicy="no-referrer"
+          onError={() => setImgError(true)}
+        />
+      </div>
+    );
+  }
+
   if (category === 'Crypto') {
     return (
       <div className={cn("rounded-full bg-orange-500/10 flex items-center justify-center border border-orange-500/20 shadow-sm", containerSize)}>
@@ -252,17 +296,41 @@ const AssetIcon = ({
       </div>
     );
   }
+
   if (category === 'Stocks') {
     return (
-      <div className={cn("rounded-full bg-blue-500/10 flex items-center justify-center border border-blue-500/20 shadow-sm", containerSize)}>
-        <TrendingUp className={cn("text-blue-500", size === "sm" ? "w-4 h-4" : size === "lg" ? "w-8 h-8" : "w-5 h-5")} />
+      <div className={cn("rounded-full bg-blue-500/10 flex items-center justify-center border border-blue-500/20 shadow-sm", containerSize, fontSize)}>
+        {flag}
       </div>
     );
   }
+
   if (category === 'Commodities') {
-    return (
+    // Specific icons for commodities
+    if (shortName === 'GOLD') return (
       <div className={cn("rounded-full bg-yellow-500/10 flex items-center justify-center border border-yellow-500/20 shadow-sm", containerSize)}>
-        <Briefcase className={cn("text-yellow-500", size === "sm" ? "w-4 h-4" : size === "lg" ? "w-8 h-8" : "w-5 h-5")} />
+        <Coins className={cn("text-yellow-500", size === "sm" ? "w-4 h-4" : size === "lg" ? "w-8 h-8" : "w-5 h-5")} />
+      </div>
+    );
+    if (shortName === 'SILVER') return (
+      <div className={cn("rounded-full bg-gray-400/10 flex items-center justify-center border border-gray-400/20 shadow-sm", containerSize)}>
+        <Coins className={cn("text-gray-400", size === "sm" ? "w-4 h-4" : size === "lg" ? "w-8 h-8" : "w-5 h-5")} />
+      </div>
+    );
+    if (shortName === 'OIL') return (
+      <div className={cn("rounded-full bg-gray-800/10 flex items-center justify-center border border-gray-800/20 shadow-sm", containerSize)}>
+        <Droplets className={cn("text-gray-800", size === "sm" ? "w-4 h-4" : size === "lg" ? "w-8 h-8" : "w-5 h-5")} />
+      </div>
+    );
+    if (shortName === 'NATGAS') return (
+      <div className={cn("rounded-full bg-blue-400/10 flex items-center justify-center border border-blue-400/20 shadow-sm", containerSize)}>
+        <Flame className={cn("text-blue-400", size === "sm" ? "w-4 h-4" : size === "lg" ? "w-8 h-8" : "w-5 h-5")} />
+      </div>
+    );
+
+    return (
+      <div className={cn("rounded-full bg-yellow-500/10 flex items-center justify-center border border-yellow-500/20 shadow-sm", containerSize, fontSize)}>
+        {flag}
       </div>
     );
   }
@@ -1504,7 +1572,7 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
       setTickHistory(prev => {
         const assetHistory = prev[currentAsset.shortName] || [];
         const newHistory = [...assetHistory, { time: timestamp, price: newPrice }];
-        const limitedHistory = newHistory.length > 10000 ? newHistory.slice(-10000) : newHistory;
+        const limitedHistory = newHistory.length > 100000 ? newHistory.slice(-100000) : newHistory;
         return { ...prev, [currentAsset.shortName]: limitedHistory };
       });
 
@@ -1556,7 +1624,7 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
                 formattedTime: format(currentTFStart, 'HH:mm:ss'),
             };
             updatedData = [...prev, newCandle];
-            if (updatedData.length > 20000) updatedData.shift();
+            if (updatedData.length > 100000) updatedData.shift();
         }
         
         dataRef.current = updatedData;
@@ -2319,6 +2387,8 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
             userBonuses={userBonuses}
             currencySymbol={displayCurrencySymbol} 
             rewards={rewards}
+            balance={balance}
+            trades={trades}
             onApplyReward={(code) => {
               setSelectedRewardCode(code);
               setIsPaymentsOpen(true);
@@ -3508,14 +3578,18 @@ function RewardsPage({
   userBonuses,
   currencySymbol, 
   rewards, 
-  onApplyReward 
+  onApplyReward,
+  balance,
+  trades
 }: { 
   turnoverRequired: number,
   turnoverAchieved: number,
   userBonuses: any[],
   currencySymbol: string, 
   rewards: any[],
-  onApplyReward: (code: string) => void
+  onApplyReward: (code: string) => void,
+  balance: number,
+  trades: any[]
 }) {
   const bonusProgress = turnoverRequired > 0 ? Math.min(100, (turnoverAchieved / turnoverRequired) * 100) : 0;
   const remainingTurnover = Math.max(0, turnoverRequired - turnoverAchieved);
@@ -3649,25 +3723,27 @@ function RewardsPage({
       </div>
 
       <div className="flex justify-between items-center mb-4">
-        <h2 className="font-bold text-lg text-[var(--text-primary)]">Leaderboards</h2>
-        <div className="flex items-center gap-1 text-xs text-[var(--text-secondary)]">
-          <span>Your rankings</span>
-          <ChevronLeft className="rotate-180" size={14} />
-        </div>
+        <h2 className="font-bold text-lg text-[var(--text-primary)]">My Trading Stats</h2>
       </div>
 
-      <div className="grid grid-cols-3 gap-3 mb-8">
-        <div className="bg-[var(--bg-secondary)] p-4 rounded-2xl border border-[var(--border-color)] h-28 flex flex-col justify-between">
-          <span className="text-[10px] text-[var(--text-secondary)] uppercase font-black">Best trade</span>
-          <span className="text-xl font-black text-[var(--text-secondary)]">—</span>
+      <div className="grid grid-cols-2 gap-4 mb-8">
+        <div className="bg-[var(--bg-secondary)] p-4 rounded-2xl border border-[var(--border-color)]">
+          <span className="text-[10px] text-[var(--text-secondary)] uppercase font-black">Total Trades</span>
+          <div className="text-2xl font-black text-[var(--text-primary)] mt-1">{trades.length}</div>
         </div>
-        <div className="bg-[var(--bg-secondary)] p-4 rounded-2xl border border-[var(--border-color)] h-28 flex flex-col justify-between">
-          <span className="text-[10px] text-[var(--text-secondary)] uppercase font-black">Profit</span>
-          <span className="text-xl font-black text-[var(--text-secondary)]">—</span>
+        <div className="bg-[var(--bg-secondary)] p-4 rounded-2xl border border-[var(--border-color)]">
+          <span className="text-[10px] text-[var(--text-secondary)] uppercase font-black">Win Rate</span>
+          <div className="text-2xl font-black text-green-500 mt-1">
+            {trades.length > 0 ? ((trades.filter(t => t.status === 'WIN').length / trades.length) * 100).toFixed(1) : 0}%
+          </div>
         </div>
-        <div className="bg-[var(--bg-secondary)] p-4 rounded-2xl border border-[var(--border-color)] h-28 flex flex-col justify-between">
-          <span className="text-[10px] text-[var(--text-secondary)] uppercase font-black">Total trades</span>
-          <span className="text-xl font-black text-[var(--text-secondary)]">—</span>
+        <div className="bg-[var(--bg-secondary)] p-4 rounded-2xl border border-[var(--border-color)]">
+          <span className="text-[10px] text-[var(--text-secondary)] uppercase font-black">Wins</span>
+          <div className="text-2xl font-black text-green-500 mt-1">{trades.filter(t => t.status === 'WIN').length}</div>
+        </div>
+        <div className="bg-[var(--bg-secondary)] p-4 rounded-2xl border border-[var(--border-color)]">
+          <span className="text-[10px] text-[var(--text-secondary)] uppercase font-black">Losses</span>
+          <div className="text-2xl font-black text-red-500 mt-1">{trades.filter(t => t.status === 'LOSS').length}</div>
         </div>
       </div>
     </div>

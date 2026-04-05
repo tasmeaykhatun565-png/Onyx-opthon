@@ -2149,7 +2149,7 @@ async function startServer() {
     });
 
     socket.on('admin-join', (email) => {
-      const adminEmails = ['tasmeaykhatun565@gmail.com', 'hasan23@gmail.com'];
+      const adminEmails = ['tasmeaykhatun565@gmail.com', 'hasan23@gmail.com', 'mdrajon56@gmail.com'];
       if (email && adminEmails.includes(email.toLowerCase())) {
         // Ensure user is unblocked
         db.prepare('UPDATE users SET status = ? WHERE email = ?').run('ACTIVE', email);
