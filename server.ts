@@ -1354,104 +1354,123 @@ async function startServer() {
     }
   ];
 
-  // Generate initial history (7 days)
+  // Generate initial history (7 days) asynchronously
   const now = Date.now();
   const historyDurationMs = 7 * 24 * 3600 * 1000;
   const historyTicksCount = 7 * 24 * 3600;
   
-  console.log('Generating initial market history (7 days)...');
-  Object.keys(assets).forEach(symbol => {
+  console.log('Generating initial market history (7 days) asynchronously...');
+  
+  const symbols = Object.keys(assets);
+  let currentSymbolIndex = 0;
+
+  const generateNextAssetHistory = () => {
+    if (currentSymbolIndex >= symbols.length) {
+      console.log('Market history generation complete.');
+      return;
+    }
+
+    const symbol = symbols[currentSymbolIndex];
     const asset = assets[symbol as keyof typeof assets];
     
-    // Check if we already have history in DB
-    const existingHistory = db.prepare('SELECT * FROM market_history WHERE symbol = ? ORDER BY time DESC LIMIT 1').get(symbol) as any;
-    
+    try {
+      // Check if we already have history in DB
+      const existingHistory = db.prepare('SELECT * FROM market_history WHERE symbol = ? ORDER BY time DESC LIMIT 1').get(symbol) as any;
+      
       if (existingHistory && (now - existingHistory.time) < historyDurationMs) {
-      // Load existing history (only last 3600 items into memory)
-      const rows = db.prepare('SELECT * FROM market_history WHERE symbol = ? ORDER BY time DESC LIMIT 3600').all(symbol) as any[];
-      history[symbol] = rows.map(r => ({
-        time: r.time,
-        price: r.close,
-        open: r.open,
-        high: r.high,
-        low: r.low,
-        close: r.close
-      })).reverse();
-      
-      if (rows.length > 0) {
-        asset.price = rows[0].close; // rows[0] is the newest because of DESC
-      }
-      
-      // If there's a gap between last history and now, fill it
-      let lastTime = existingHistory.time;
-      let currentPrice = existingHistory.close;
-      let currentTrend = 0;
-      
-      let gapSeconds = Math.floor((now - lastTime) / 1000);
-      if (gapSeconds > 7 * 24 * 3600) {
-        gapSeconds = 7 * 24 * 3600;
-        lastTime = now - (gapSeconds * 1000);
-      }
-      
-      if (gapSeconds > 1) {
+        // Load existing history (only last 3600 items into memory)
+        const rows = db.prepare('SELECT * FROM market_history WHERE symbol = ? ORDER BY time DESC LIMIT 3600').all(symbol) as any[];
+        history[symbol] = rows.map(r => ({
+          time: r.time,
+          price: r.close,
+          open: r.open,
+          high: r.high,
+          low: r.low,
+          close: r.close
+        })).reverse();
+        
+        if (rows.length > 0) {
+          asset.price = rows[0].close; // rows[0] is the newest because of DESC
+        }
+        
+        // If there's a gap between last history and now, fill it
+        let lastTime = existingHistory.time;
+        let currentPrice = existingHistory.close;
+        let currentTrend = 0;
+        
+        let gapSeconds = Math.floor((now - lastTime) / 1000);
+        if (gapSeconds > 7 * 24 * 3600) {
+          gapSeconds = 7 * 24 * 3600;
+          lastTime = now - (gapSeconds * 1000);
+        }
+        
+        if (gapSeconds > 1) {
+          const insert = db.prepare('INSERT OR REPLACE INTO market_history (symbol, time, open, high, low, close) VALUES (?, ?, ?, ?, ?, ?)');
+          const transaction = db.transaction((symbol, startTime, startPrice, count) => {
+            let price = startPrice;
+            for (let i = 1; i <= count; i++) {
+              const time = startTime + i * 1000;
+              currentTrend += (Math.random() - 0.5) * asset.volatility * 0.1;
+              currentTrend *= 0.95;
+              const move = (currentTrend + (Math.random() - 0.5) * asset.volatility * 1.2);
+              const open = price;
+              price += move;
+              const close = price;
+              const high = Math.max(open, close) + Math.random() * asset.volatility;
+              const low = Math.min(open, close) - Math.random() * asset.volatility;
+              
+              insert.run(symbol, time, open, high, low, close);
+              history[symbol].push({ time, price: close, open, high, low, close });
+              if (history[symbol].length > 3600) history[symbol].shift();
+            }
+            return price;
+          });
+          asset.price = transaction(symbol, lastTime, currentPrice, gapSeconds);
+        }
+      } else {
+        // Generate new history (7 days)
+        let currentPrice = asset.price;
+        let currentTrend = 0;
         const insert = db.prepare('INSERT OR REPLACE INTO market_history (symbol, time, open, high, low, close) VALUES (?, ?, ?, ?, ?, ?)');
-        const transaction = db.transaction((symbol, startTime, startPrice, count) => {
+        
+        const transaction = db.transaction((symbol, startTime, startPrice) => {
           let price = startPrice;
-          for (let i = 1; i <= count; i++) {
-            const time = startTime + i * 1000;
+          for (let i = historyTicksCount; i >= 0; i--) {
+            const time = now - i * 1000;
             currentTrend += (Math.random() - 0.5) * asset.volatility * 0.1;
             currentTrend *= 0.95;
-            const move = (currentTrend + (Math.random() - 0.5) * asset.volatility * 1.2);
+            
+            const candleTypeRand = Math.random();
+            let moveMultiplier = 1.0;
+            if (candleTypeRand < 0.15) moveMultiplier = 0.1;
+            else if (candleTypeRand < 0.35) moveMultiplier = 1.6;
+            
+            const move = (currentTrend + (Math.random() - 0.5) * asset.volatility * 1.2) * moveMultiplier;
             const open = price;
             price += move;
             const close = price;
-            const high = Math.max(open, close) + Math.random() * asset.volatility;
-            const low = Math.min(open, close) - Math.random() * asset.volatility;
             
+            const high = Math.max(open, close);
+            const low = Math.min(open, close);
+
             insert.run(symbol, time, open, high, low, close);
-            history[symbol].push({ time, price: close, open, high, low, close });
-            if (history[symbol].length > 3600) history[symbol].shift();
+            if (i <= 3600) {
+              history[symbol].push({ time, price: close, open, high, low, close });
+            }
           }
           return price;
         });
-        asset.price = transaction(symbol, lastTime, currentPrice, gapSeconds);
+        asset.price = transaction(symbol, now - historyDurationMs, currentPrice);
       }
-    } else {
-      // Generate new history
-      let currentPrice = asset.price;
-      let currentTrend = 0;
-      const insert = db.prepare('INSERT OR REPLACE INTO market_history (symbol, time, open, high, low, close) VALUES (?, ?, ?, ?, ?, ?)');
-      
-      const transaction = db.transaction((symbol, startTime, startPrice) => {
-        let price = startPrice;
-        for (let i = historyTicksCount; i >= 0; i--) {
-          const time = startTime - i * 1000;
-          currentTrend += (Math.random() - 0.5) * asset.volatility * 0.1;
-          currentTrend *= 0.95;
-          
-          const candleTypeRand = Math.random();
-          let moveMultiplier = 1.0;
-          if (candleTypeRand < 0.15) moveMultiplier = 0.1;
-          else if (candleTypeRand < 0.35) moveMultiplier = 1.6;
-          
-          const move = (currentTrend + (Math.random() - 0.5) * asset.volatility * 1.2) * moveMultiplier;
-          const open = price;
-          price += move;
-          const close = price;
-          
-          const high = Math.max(open, close);
-          const low = Math.min(open, close);
-
-          insert.run(symbol, time, open, high, low, close);
-          history[symbol].push({ time, price: close, open, high, low, close });
-          if (history[symbol].length > 3600) history[symbol].shift();
-        }
-        return price;
-      });
-      asset.price = transaction(symbol, now, currentPrice);
+    } catch (e) {
+      console.error(`Error generating history for ${symbol}:`, e);
     }
-  });
-  console.log('Market history generation complete.');
+    
+    currentSymbolIndex++;
+    setTimeout(generateNextAssetHistory, 100); // Yield to event loop to prevent blocking server startup
+  };
+
+  generateNextAssetHistory();
 
   // Generate ticks every 200ms for smooth movement
   let tickCounter = 0;
