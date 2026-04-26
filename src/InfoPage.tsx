@@ -1,5 +1,5 @@
 import React from 'react';
-import { ChevronLeft, Shield, Lock, FileText, AlertTriangle, CheckCircle2, Globe, CreditCard, Star, Users, Activity, Target, BookOpen, HeadphonesIcon } from 'lucide-react';
+import { ChevronLeft, Shield, Lock, FileText, AlertTriangle, CheckCircle2, Globe, CreditCard, Star, Users, Activity, Target, BookOpen, HeadphonesIcon, HelpCircle, Info, GraduationCap, Image } from 'lucide-react';
 
 interface InfoPageProps {
   title: string;
@@ -9,6 +9,40 @@ interface InfoPageProps {
 export default function InfoPage({ title, onBack }: InfoPageProps) {
   const renderContent = () => {
     switch (title) {
+      case 'Help':
+      case 'Support':
+        return (
+          <div className="grid grid-cols-2 gap-4">
+            <div className="p-8 bg-neutral-900 rounded-3xl border border-white/5 shadow-2xl flex flex-col items-start gap-4">
+              <HelpCircle className="text-white" size={32} strokeWidth={1.5} />
+              <div>
+                <h3 className="text-xl font-bold text-white mb-1">Support</h3>
+                <p className="text-neutral-500 text-sm leading-snug">We're here for you 24/7</p>
+              </div>
+            </div>
+            <div className="p-8 bg-neutral-900 rounded-3xl border border-white/5 shadow-2xl flex flex-col items-start gap-4">
+              <Info className="text-white" size={32} strokeWidth={1.5} />
+              <div>
+                <h3 className="text-xl font-bold text-white mb-1">Help Center</h3>
+                <p className="text-neutral-500 text-sm leading-snug">Get to know the platform</p>
+              </div>
+            </div>
+            <div className="p-8 bg-neutral-900 rounded-3xl border border-white/5 shadow-2xl flex flex-col items-start gap-4">
+              <GraduationCap className="text-white" size={32} strokeWidth={1.5} />
+              <div>
+                <h3 className="text-xl font-bold text-white mb-1">Education</h3>
+                <p className="text-neutral-500 text-sm leading-snug">Expand your knowledge</p>
+              </div>
+            </div>
+            <div className="p-8 bg-neutral-900 rounded-3xl border border-white/5 shadow-2xl flex flex-col items-start gap-4">
+              <Image className="text-white" size={32} strokeWidth={1.5} />
+              <div>
+                <h3 className="text-xl font-bold text-white mb-1">Trading Tutorials</h3>
+                <p className="text-neutral-500 text-sm leading-snug">Learn how to open a trade</p>
+              </div>
+            </div>
+          </div>
+        );
       case 'Help Center':
         return (
           <div className="space-y-8">

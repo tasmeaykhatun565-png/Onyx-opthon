@@ -2,12 +2,14 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Lock, Delete, ShieldCheck, Fingerprint } from 'lucide-react';
 import { cn } from './utils';
+import { useToast } from './Toast';
 
 interface LockScreenProps {
   onUnlock: () => void;
 }
 
 export const LockScreen: React.FC<LockScreenProps> = ({ onUnlock }) => {
+  const { showToast } = useToast();
   const [pin, setPin] = useState('');
   const [error, setError] = useState(false);
   const [attempts, setAttempts] = useState(0);
@@ -113,7 +115,7 @@ export const LockScreen: React.FC<LockScreenProps> = ({ onUnlock }) => {
           <button 
             onClick={() => {
               // In a real app, this would trigger a reset flow
-              alert("Please contact support to reset your PIN.");
+              showToast("Please contact support to reset your PIN.", "info");
             }}
             className="text-xs font-bold text-blue-500 hover:underline uppercase tracking-widest"
           >

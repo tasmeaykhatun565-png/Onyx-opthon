@@ -28,6 +28,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from './utils';
+import { useToast } from './Toast';
 
 import { doc, setDoc } from 'firebase/firestore';
 import { db } from './firebase';
@@ -1215,6 +1216,7 @@ const Confirmation = ({ onClose, transactionId, selectedMethod, amount, currency
 
 
 export default function DepositFlow({ isOpen, onClose, currencySymbol, currencyCode, initialPromoCode, socket, userEmail, rawBalance, userId }: DepositFlowProps) {
+  const { showToast } = useToast();
   const [step, setStep] = useState<Step>('SUMMARY');
   const [isLoading, setIsLoading] = useState(true);
   const [selectedMethod, setSelectedMethod] = useState<PaymentMethod>(PAYMENT_METHODS[0]);
@@ -1364,7 +1366,7 @@ export default function DepositFlow({ isOpen, onClose, currencySymbol, currencyC
       });
 
       socket.on('deposit-error', (error: string) => {
-        alert(error);
+        showToast(error, "error");
         setIsProcessing(false);
       });
     }
@@ -1445,7 +1447,7 @@ export default function DepositFlow({ isOpen, onClose, currencySymbol, currencyC
       } else {
         setIsProcessing(false);
         setDepositStatus('ERROR');
-        alert("Connection lost or user not authenticated. Please try again.");
+        showToast("Connection lost or user not authenticated. Please try again.", "error");
       }
     }, 10000);
   };

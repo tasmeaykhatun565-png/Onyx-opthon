@@ -1,335 +1,311 @@
 import React, { useState } from 'react';
-import { Search, Lock, Compass, BarChart2, Pencil, Percent, Menu, Minus, Equal, ArrowUpRight, Square, TrendingUp, HelpCircle } from 'lucide-react';
+import { Search, Compass, BarChart2, Pencil, X, TrendingUp, ChevronDown } from 'lucide-react';
 import BottomSheet from './BottomSheet';
 import { cn } from './utils';
+import { motion, AnimatePresence } from 'motion/react';
 
 import { IndicatorConfig } from './types';
+import { INDICATORS_LIST } from './constants';
 
 interface IndicatorSheetProps {
   isOpen: boolean;
   onClose: () => void;
   onSelectIndicator: (indicator: IndicatorConfig) => void;
   activeIndicators: IndicatorConfig[];
+  initialTab?: string;
 }
 
-const INDICATORS_LIST = [
-  { id: 'BollingerBands', name: 'Bollinger Bands' },
-  { id: 'EMA', name: 'EMA' },
-  { id: 'ParabolicSAR', name: 'Parabolic SAR' },
+const TREND_INDICATORS = [
   { id: 'SMA', name: 'SMA' },
-  { id: 'Volumes', name: 'Volumes' },
+  { id: 'EMA', name: 'EMA' },
   { id: 'WMA', name: 'WMA' },
-  { id: 'BillWilliams', name: "Bill Williams' fractals", locked: true },
-  { id: 'PivotPoints', name: 'Pivot Points', locked: true },
+  { id: 'BollingerBands', name: 'Bollinger Bands' },
+  { id: 'ParabolicSAR', name: 'Parabolic SAR' },
+  { id: 'Volumes', name: 'Volumes' },
 ];
 
-const OSCILLATORS_LIST = [
-  { id: 'AverageDirectionalIndex', name: 'Average Directional Index (ADX)' },
-  { id: 'AwesomeOscillator', name: 'Awesome Oscillator' },
-  { id: 'CCI', name: 'CCI' },
-  { id: 'MACD', name: 'MACD' },
+const OSCILLATORS = [
   { id: 'RSI', name: 'RSI' },
-  { id: 'RateOfChange', name: 'Rate of Change (ROC)' },
-  { id: 'Stochastic', name: 'Stochastic Oscillator' },
+  { id: 'MACD', name: 'MACD' },
+  { id: 'Stochastic', name: 'Stochastic' },
+  { id: 'CCI', name: 'CCI' },
+  { id: 'ATR', name: 'ATR' },
   { id: 'WilliamsR', name: 'Williams %R' },
-  { id: 'ATR', name: 'Average True Range (ATR)' },
+  { id: 'AverageDirectionalIndex', name: 'ADX' },
+  { id: 'Momentum', name: 'Momentum' },
+  { id: 'AwesomeOscillator', name: 'Awesome Oscillator' },
+  { id: 'RateOfChange', name: 'Rate Of Change' },
 ];
 
-const DRAWING_LIST = [
-  { id: 'FibonacciFan', name: 'Fibonacci Fan', icon: TrendingUp },
-  { id: 'FibonacciLevels', name: 'Fibonacci Levels', icon: Menu },
-  { id: 'HorizontalLine', name: 'Horizontal Line', icon: Minus },
-  { id: 'ParallelChannel', name: 'Parallel channel', icon: Equal },
-  { id: 'Ray', name: 'Ray', icon: ArrowUpRight },
-  { id: 'Rectangle', name: 'Rectangle', icon: Square },
-  { id: 'TrendLine', name: 'Trend Line', icon: TrendingUp },
-  { id: 'VerticalLine', name: 'Vertical Line', icon: Minus, iconClass: "rotate-90" },
+const STRATEGIES = [
+  { id: 'JapanesePearl', name: 'Japanese Pearl' },
+  { id: 'JapaneseTrend', name: 'Japanese Trend' },
+  { id: 'Reflection', name: 'Reflection' },
+  { id: 'RelativeStrengthLaw', name: 'Relative Strength Law' },
+  { id: 'SlidingOnAverages', name: 'Sliding On Averages' },
+  { id: 'AverageIntersection', name: 'Average Intersection' },
+  { id: 'ChasingTheTrend', name: 'Chasing The Trend' },
+  { id: 'SmartRSI15', name: 'Smart RSI 15' },
+  { id: 'SmartRSI30', name: 'Smart RSI 30' },
+  { id: 'SmartRSI60', name: 'Smart RSI 60' },
 ];
 
-const STRATEGIES_LIST = [
-  {
-    category: 'AI-POWERED',
-    count: 3,
-    items: [
-      { id: 'SmartRSI15', name: 'Smart RSI 15', type: 'FT', color: 'bg-purple-500' },
-      { id: 'SmartRSI30', name: 'Smart RSI 30', type: 'FT', color: 'bg-purple-500' },
-      { id: 'SmartRSI60', name: 'Smart RSI 60', type: 'FT', color: 'bg-purple-500' },
-    ]
-  },
-  {
-    category: 'BASIC',
-    count: 42,
-    items: [
-      { id: 'JapanesePearl', name: 'Japanese Pearl', type: 'FT', color: 'bg-blue-500' },
-      { id: 'JapaneseTrend', name: 'Japanese Trend', type: 'FT', color: 'bg-blue-500' },
-      { id: 'Reflection', name: 'Reflection', type: 'FT', color: 'bg-blue-500' },
-      { id: 'RelativeStrengthLaw', name: 'Relative Strength Law', type: 'FT', color: 'bg-blue-500' },
-      { id: 'SlidingOnAverages', name: 'Sliding on Averages', type: 'FT', color: 'bg-blue-500' },
-      { id: 'AverageIntersection', name: 'Average Intersection', type: 'FX', color: 'bg-blue-500' },
-      { id: 'ChasingTheTrend', name: 'Chasing the Trend', type: 'FX', color: 'bg-blue-500' },
-    ]
-  }
-];
-
-export default function IndicatorSheet({ isOpen, onClose, onSelectIndicator, activeIndicators }: IndicatorSheetProps) {
+export default function IndicatorSheet({ isOpen, onClose, onSelectIndicator, activeIndicators, initialTab = 'Indicators' }: IndicatorSheetProps) {
   const [searchQuery, setSearchQuery] = useState('');
-  const [activeTab, setActiveTab] = useState('Indicators');
+  const [expandedSection, setExpandedSection] = useState<string | null>('Indicators');
+  const [editingIndicator, setEditingIndicator] = useState<IndicatorConfig | null>(null);
 
-  const renderContent = () => {
-    if (activeTab === 'Indicators') {
-      const filtered = INDICATORS_LIST.filter(item => 
-        item.name.toLowerCase().includes(searchQuery.toLowerCase())
-      );
-      return (
-        <div className="flex flex-col">
-          {filtered.map((indicator) => (
-            <button
-              key={indicator.id}
-              onClick={() => {
-                if (!indicator.locked) {
-                  onSelectIndicator({
-                    id: indicator.id,
-                    name: indicator.name,
-                    params: {}, // Default params
-                    color: '#2962FF', // Default color
-                    visible: true
-                  });
-                }
-              }}
-              disabled={indicator.locked}
-              className="w-full flex items-center justify-between py-5 text-left border-b border-transparent hover:bg-white/5 transition-colors px-2 rounded-lg"
-            >
-              <span className={cn(
-                "text-[17px] font-medium tracking-wide",
-                indicator.locked ? "text-[#666666]" : "text-[#e0e0e0]"
-              )}>
-                {indicator.name}
-              </span>
-              {indicator.locked ? (
-                <Lock size={20} className="text-[#666666]" />
-              ) : (
-                <div className={cn(
-                  "w-5 h-5 rounded-full border flex items-center justify-center",
-                  activeIndicators.some(i => i.id === indicator.id) ? "bg-blue-500 border-blue-500" : "border-[#666666]"
-                )}>
-                  {activeIndicators.some(i => i.id === indicator.id) && <div className="w-2 h-2 bg-white rounded-full" />}
-                </div>
-              )}
-            </button>
-          ))}
-        </div>
-      );
-    }
-
-    if (activeTab === 'Oscillators') {
-      const filtered = OSCILLATORS_LIST.filter(item => 
-        item.name.toLowerCase().includes(searchQuery.toLowerCase())
-      );
-      return (
-        <div className="flex flex-col">
-          {filtered.map((oscillator) => (
-            <button
-              key={oscillator.id}
-              onClick={() => {
-                onSelectIndicator({
-                  id: oscillator.id,
-                  name: oscillator.name,
-                  params: {}, // Default params
-                  color: '#2962FF', // Default color
-                  visible: true
-                });
-              }}
-              className="w-full flex items-center justify-between py-5 text-left border-b border-transparent hover:bg-white/5 transition-colors px-2 rounded-lg"
-            >
-              <span className="text-[17px] font-medium tracking-wide text-[#e0e0e0]">
-                {oscillator.name}
-              </span>
-              <div className={cn(
-                "w-5 h-5 rounded-full border flex items-center justify-center",
-                activeIndicators.some(i => i.id === oscillator.id) ? "bg-blue-500 border-blue-500" : "border-[#666666]"
-              )}>
-                {activeIndicators.some(i => i.id === oscillator.id) && <div className="w-2 h-2 bg-white rounded-full" />}
-              </div>
-            </button>
-          ))}
-        </div>
-      );
-    }
-
-    if (activeTab === 'Drawing') {
-      const filtered = DRAWING_LIST.filter(item => 
-        item.name.toLowerCase().includes(searchQuery.toLowerCase())
-      );
-      return (
-        <div className="flex flex-col">
-          {filtered.map((drawing) => {
-            const Icon = drawing.icon;
-            return (
-              <button
-                key={drawing.id}
-                onClick={() => {
-                  onSelectIndicator({
-                    id: drawing.id,
-                    name: drawing.name,
-                    params: {}, // Default params
-                    color: '#FFFFFF', // Default color
-                    visible: true
-                  });
-                }}
-                className="w-full flex items-center justify-between py-5 text-left border-b border-transparent hover:bg-white/5 transition-colors px-2 rounded-lg"
-              >
-                <div className="flex items-center gap-4">
-                  <Icon size={24} className={cn("text-white", drawing.iconClass)} />
-                  <span className="text-[17px] font-medium tracking-wide text-[#e0e0e0]">
-                    {drawing.name}
-                  </span>
-                </div>
-                <div className={cn(
-                  "w-5 h-5 rounded-full border flex items-center justify-center",
-                  activeIndicators.some(i => i.id === drawing.id) ? "bg-blue-500 border-blue-500" : "border-[#666666]"
-                )}>
-                  {activeIndicators.some(i => i.id === drawing.id) && <div className="w-2 h-2 bg-white rounded-full" />}
-                </div>
-              </button>
-            );
-          })}
-        </div>
-      );
-    }
-
-    if (activeTab === 'Strategies') {
-      return (
-        <div className="flex flex-col space-y-6">
-          <p className="text-[#888888] text-[15px] leading-relaxed px-2">
-            Sets of indicators and oscillators that help you find the right moments to open and close trades
-          </p>
-          
-          {STRATEGIES_LIST.map((group) => (
-            <div key={group.category} className="flex flex-col">
-              <div className="flex items-center justify-between px-2 mb-2">
-                <div className="flex items-center gap-2">
-                  <h3 className="text-[#888888] text-[13px] font-bold tracking-widest">{group.category}</h3>
-                  {group.category === 'AI-POWERED' && (
-                    <HelpCircle size={14} className="text-[#888888]" />
-                  )}
-                </div>
-                <span className="text-[#888888] text-[13px] font-bold">{group.count}</span>
-              </div>
-              
-              <div className="flex flex-col">
-                {group.items.map((strategy) => (
-                  <button
-                    key={strategy.id}
-                    onClick={() => {
-                      onSelectIndicator({
-                        id: strategy.id,
-                        name: strategy.name,
-                        params: {}, // Default params
-                        color: strategy.color || '#2962FF', // Default color
-                        visible: true
-                      });
-                    }}
-                    className="w-full flex items-center justify-between py-5 text-left border-b border-transparent hover:bg-white/5 transition-colors px-2 rounded-lg"
-                  >
-                    <div className="flex items-center gap-4">
-                      <div className="relative flex items-center justify-center w-6 h-6">
-                        <div className={cn("absolute inset-0 rounded-full opacity-20", strategy.color)} />
-                        <div className={cn("w-3 h-3 rounded-full", strategy.color)} />
-                        <div className="absolute inset-0 bg-gradient-to-tr from-white/20 to-transparent rounded-full mix-blend-overlay" />
-                      </div>
-                      <span className="text-[17px] font-medium tracking-wide text-[#e0e0e0]">
-                        {strategy.name}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-4">
-                      <span className="text-[#e0e0e0] font-bold text-[15px]">
-                        {strategy.type}
-                      </span>
-                      <div className={cn(
-                        "w-5 h-5 rounded-full border flex items-center justify-center",
-                        activeIndicators.some(i => i.id === strategy.id) ? "bg-blue-500 border-blue-500" : "border-[#666666]"
-                      )}>
-                        {activeIndicators.some(i => i.id === strategy.id) && <div className="w-2 h-2 bg-white rounded-full" />}
-                      </div>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
-      );
-    }
-
-    return null;
+  const toggleSection = (section: string) => {
+    setExpandedSection(expandedSection === section ? null : section);
   };
 
-  return (
-    <BottomSheet isOpen={isOpen} onClose={onClose} className="h-[92vh] bg-[#121212]">
-      <div className="flex flex-col flex-1 min-h-0 bg-[#121212] text-white">
-        {/* Search Bar */}
-        <div className="px-4 pt-2 pb-4 shrink-0">
-          <div className="bg-[#1e1e1e] rounded-full flex items-center gap-3 px-4 py-3 border border-transparent">
-            <Search size={20} className="text-[#888888]" />
-            <input 
-              type="text"
-              placeholder="Search"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="bg-transparent text-white text-[16px] focus:outline-none w-full placeholder:text-[#888888]"
-            />
-          </div>
-        </div>
-        
-        {/* Content Area */}
-        <div className="flex-1 px-4 pb-20 overflow-y-auto custom-scrollbar">
-          {renderContent()}
-        </div>
+  const handleApplySettings = () => {
+    if (editingIndicator) {
+      onSelectIndicator(editingIndicator);
+      setEditingIndicator(null);
+    }
+  };
 
-        {/* Bottom Navigation */}
-        <div className="sticky bottom-0 left-0 right-0 flex items-center justify-between px-6 py-3 bg-[#121212] border-t border-[#1e1e1e] pb-safe mt-auto">
-          <button 
-            onClick={() => setActiveTab('Indicators')}
-            className={cn(
-              "flex flex-col items-center gap-1.5 transition-colors",
-              activeTab === 'Indicators' ? "text-white" : "text-[#888888]"
-            )}
+  const renderSection = (title: string, icon: React.ReactNode, items: { id: string, name: string }[]) => {
+    const isExpanded = expandedSection === title;
+    return (
+      <div className="border-b border-white/5 last:border-0">
+        <button
+          onClick={() => toggleSection(title)}
+          className="w-full flex items-center justify-between py-5 px-4 hover:bg-white/[0.02] transition-colors"
+        >
+          <div className="flex items-center gap-3">
+            <div className="text-white/40">{icon}</div>
+            <span className="text-[17px] font-bold text-white tracking-tight">{title}</span>
+          </div>
+          <ChevronDown size={18} className={cn("text-white/20 transition-transform duration-300", isExpanded && "rotate-180")} />
+        </button>
+        <AnimatePresence initial={false}>
+          {isExpanded && (
+            <motion.div 
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="overflow-hidden"
+            >
+              <div className="pb-6 grid grid-cols-1 gap-2 px-4">
+                {items.filter(i => i.name.toLowerCase().includes(searchQuery.toLowerCase())).map((item, idx) => {
+                  const existing = activeIndicators.find(i => i.id === item.id);
+                  const isActive = !!existing;
+                  
+                  // Professional Color Palette for indicators
+                  const colors = [
+                    'border-blue-500/20 text-blue-400 bg-blue-500/5',
+                    'border-orange-500/20 text-orange-400 bg-orange-500/5',
+                    'border-green-500/20 text-green-400 bg-green-500/5',
+                    'border-purple-500/20 text-purple-400 bg-purple-500/5',
+                    'border-cyan-500/20 text-cyan-400 bg-cyan-500/5',
+                    'border-red-500/20 text-red-400 bg-red-500/5',
+                  ];
+                  const style = colors[idx % colors.length];
+
+                  return (
+                    <button
+                      key={item.id}
+                      onClick={() => {
+                        if (isActive) {
+                          setEditingIndicator(existing);
+                        } else {
+                          const config: IndicatorConfig = {
+                            id: item.id,
+                            instanceId: `${item.id}_${Date.now()}`,
+                            name: item.name,
+                            params: item.id === 'SMA' || item.id === 'EMA' || item.id === 'RSI' ? { period: 10 } : 
+                                    item.id === 'BollingerBands' ? { period: 20, stdDev: 2 } : {},
+                            color: '#22c55e',
+                            visible: true
+                          };
+                          setEditingIndicator(config);
+                        }
+                      }}
+                      className={cn(
+                        "w-full flex items-center justify-between p-4 rounded-xl border transition-all active:scale-[0.98] text-left",
+                        isActive ? "bg-blue-600 border-blue-500 text-white" : cn("border-white/[0.03] bg-white/[0.02]", "hover:border-white/10 hover:bg-white/5")
+                      )}
+                    >
+                      <div className="flex items-center gap-3">
+                         <div className={cn("w-2 h-2 rounded-full", isActive ? "bg-white" : "bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.5)]")} />
+                         <span className="text-[15px] font-bold">{item.name}</span>
+                      </div>
+                      {isActive ? (
+                         <div className="bg-white/20 p-1.5 rounded-lg">
+                           <X size={14} className="text-white" />
+                         </div>
+                      ) : (
+                         <div className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                            <ChevronDown size={14} className="-rotate-90 text-white/40" />
+                         </div>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+    );
+  };
+
+  const content = (
+    <div className="flex flex-col h-full bg-[#1c1c1e] text-white border-r border-white/5 shadow-2xl relative overflow-hidden">
+      {/* Settings Overlay */}
+      <AnimatePresence>
+        {editingIndicator && (
+          <motion.div 
+            initial={{ x: '100%' }}
+            animate={{ x: 0 }}
+            exit={{ x: '100%' }}
+            transition={{ type: "spring", damping: 25, stiffness: 200 }}
+            className="absolute inset-0 z-50 bg-[#1c1c1e] flex flex-col"
           >
-            <Compass size={24} strokeWidth={1.5} />
-            <span className="text-[11px] font-medium">Indicators</span>
-          </button>
-          <button 
-            onClick={() => setActiveTab('Oscillators')}
-            className={cn(
-              "flex flex-col items-center gap-1.5 transition-colors",
-              activeTab === 'Oscillators' ? "text-white" : "text-[#888888]"
-            )}
-          >
-            <BarChart2 size={24} strokeWidth={1.5} />
-            <span className="text-[11px] font-medium">Oscillators</span>
-          </button>
-          <button 
-            onClick={() => setActiveTab('Drawing')}
-            className={cn(
-              "flex flex-col items-center gap-1.5 transition-colors",
-              activeTab === 'Drawing' ? "text-white" : "text-[#888888]"
-            )}
-          >
-            <Pencil size={24} strokeWidth={1.5} />
-            <span className="text-[11px] font-medium">Drawing</span>
-          </button>
-          <button 
-            onClick={() => setActiveTab('Strategies')}
-            className={cn(
-              "flex flex-col items-center gap-1.5 transition-colors",
-              activeTab === 'Strategies' ? "text-white" : "text-[#888888]"
-            )}
-          >
-            <Percent size={24} strokeWidth={1.5} />
-            <span className="text-[11px] font-medium">Strategies</span>
-          </button>
+            <div className="flex items-center justify-between px-6 py-5 border-b border-white/5">
+              <h3 className="text-lg font-bold">{editingIndicator.name} Settings</h3>
+              <button onClick={() => setEditingIndicator(null)} className="text-white/40 hover:text-white"><X size={20} /></button>
+            </div>
+            
+            <div className="flex-1 p-6 space-y-6">
+              {/* Parameters Rendering */}
+              {Object.keys(editingIndicator.params).length > 0 ? (
+                <div className="space-y-4">
+                  {Object.entries(editingIndicator.params).map(([key, value]) => (
+                    <div key={key} className="space-y-2">
+                      <label className="text-xs font-bold text-white/50 uppercase tracking-wider">{key}</label>
+                      <input 
+                        type="number"
+                        value={value}
+                        onChange={(e) => setEditingIndicator({
+                          ...editingIndicator,
+                          params: { ...editingIndicator.params, [key]: parseFloat(e.target.value) }
+                        })}
+                        className="w-full bg-[#2c2c2e] border border-white/5 rounded-lg px-4 py-3 focus:outline-none focus:border-blue-500 transition-colors"
+                      />
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-10 text-white/30 text-sm">No adjustable parameters for this tool.</div>
+              )}
+
+              {/* Color Picker (Simplified) */}
+              <div className="space-y-3">
+                <label className="text-xs font-bold text-white/50 uppercase tracking-wider">Line Color</label>
+                <div className="flex flex-wrap gap-3">
+                  {['#3b82f6', '#ef4444', '#22c55e', '#f59e0b', '#9C27B0', '#ffffff'].map(c => (
+                    <button 
+                      key={c}
+                      onClick={() => setEditingIndicator({ ...editingIndicator, color: c })}
+                      className={cn(
+                        "w-8 h-8 rounded-full border-2 transition-transform active:scale-95",
+                        editingIndicator.color === c ? "border-white scale-110 shadow-lg" : "border-transparent"
+                      )}
+                      style={{ backgroundColor: c }}
+                    />
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="p-6 border-t border-white/5 flex gap-3">
+              <button 
+                onClick={() => {
+                  onSelectIndicator(editingIndicator); // This usually toggles but in settings context we can make it "Replace" or "Add"
+                  setEditingIndicator(null);
+                }}
+                className="flex-1 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl transition-colors shadow-lg active:scale-95"
+              >
+                Apply
+              </button>
+              {activeIndicators.some(i => i.id === editingIndicator.id) && (
+                <button 
+                  onClick={() => {
+                    onSelectIndicator(editingIndicator); // Toggle off
+                    setEditingIndicator(null);
+                  }}
+                  className="px-4 py-3 bg-red-500/10 hover:bg-red-500/20 text-red-500 font-bold rounded-xl transition-colors active:scale-95"
+                >
+                  Remove
+                </button>
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Main List */}
+      <div className="flex items-center justify-between px-6 py-5 border-b border-white/5">
+        <h2 className="text-xl font-bold tracking-tight">Technical Analysis</h2>
+        <button 
+          onClick={onClose}
+          className="text-white/40 hover:text-white transition-colors p-1"
+        >
+          <X size={20} />
+        </button>
+      </div>
+
+      <div className="px-6 py-4">
+        <div className="bg-[#2c2c2e] rounded-lg flex items-center gap-3 px-4 py-2.5 border border-white/5 focus-within:border-white/20 transition-all">
+          <Search size={18} className="text-white/40" />
+          <input 
+            type="text"
+            placeholder="Search"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="bg-transparent text-white text-[14px] focus:outline-none w-full placeholder:text-white/30"
+          />
         </div>
       </div>
-    </BottomSheet>
+      
+      <div className="flex-1 px-4 overflow-y-auto custom-scrollbar">
+        {renderSection('Indicators', <Compass size={18} />, TREND_INDICATORS)}
+        {renderSection('Oscillators', <BarChart2 size={18} />, OSCILLATORS)}
+        {renderSection('Drawing', <Pencil size={18} />, [
+          { id: 'TrendLine', name: 'Trend Line' }, 
+          { id: 'Ray', name: 'Ray' }, 
+          { id: 'HorizontalLine', name: 'Horizontal Line' },
+          { id: 'VerticalLine', name: 'Vertical Line' },
+          { id: 'FibonacciLevels', name: 'Fibonacci Retracement' },
+          { id: 'Rectangle', name: 'Rectangle' },
+          { id: 'ParallelChannel', name: 'Parallel Channel' },
+        ])}
+        {renderSection('Strategies', <TrendingUp size={18} />, STRATEGIES)}
+        
+        <div className="px-2 py-8 text-white/30 text-[12px] leading-relaxed font-medium">
+          All the features offered by the platform can be used for technical analysis. Traders make all trading decisions independently.
+        </div>
+      </div>
+    </div>
+  );
+
+  return (
+    <>
+      {/* Mobile Mode (Bottom Sheet) */}
+      <div className="md:hidden">
+        <BottomSheet isOpen={isOpen} onClose={onClose} className="h-[85vh] bg-[#1c1c1e]">
+           {content}
+        </BottomSheet>
+      </div>
+
+      {/* Desktop Mode (Sidebar) */}
+      <AnimatePresence>
+        {isOpen && (
+          <motion.aside 
+            initial={{ width: 0, opacity: 0 }}
+            animate={{ width: 320, opacity: 1 }}
+            exit={{ width: 0, opacity: 0 }}
+            transition={{ type: "spring", damping: 30, stiffness: 300 }}
+            className="hidden md:block h-full relative z-30"
+          >
+            {content}
+          </motion.aside>
+        )}
+      </AnimatePresence>
+    </>
   );
 }

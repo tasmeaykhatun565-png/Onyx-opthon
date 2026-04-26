@@ -10,6 +10,7 @@ import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import fs from 'fs';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import WebSocket from 'ws';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'trading-platform-secret-key';
 
@@ -22,6 +23,9 @@ process.on('unhandledRejection', (reason: any, promise) => {
   if (reason && (reason.code === 7 || (reason.message && reason.message.includes('PERMISSION_DENIED')))) {
     firestoreDisabledDueToError = true;
     console.warn('Firestore sync disabled globally due to PERMISSION_DENIED. Please provide a service account key or use the default AI Studio Firebase project.');
+  } else if (reason && (reason.code === 5 || (reason.message && reason.message.includes('NOT_FOUND')))) {
+    firestoreDisabledDueToError = true;
+    console.warn('Firestore sync disabled globally due to NOT_FOUND database. Please verify your Firestore Database ID.');
   } else {
     console.error('Unhandled Rejection at:', promise, 'reason:', reason);
   }
@@ -29,6 +33,18 @@ process.on('unhandledRejection', (reason: any, promise) => {
 
 const canSyncFirestore = () => {
   return firestore !== null && !firestoreDisabledDueToError;
+};
+
+const handleFirestoreError = (e: any, context: string) => {
+  if (e.code === 7 || (e.message && e.message.includes('PERMISSION_DENIED'))) {
+    firestoreDisabledDueToError = true;
+    console.warn(`Firestore sync disabled globally due to PERMISSION_DENIED during ${context}.`);
+  } else if (e.code === 5 || (e.message && e.message.includes('NOT_FOUND'))) {
+    firestoreDisabledDueToError = true;
+    console.warn(`Firestore sync disabled globally due to NOT_FOUND database during ${context}. Please verify your Firestore Database ID.`);
+  } else {
+    console.error(`Firestore ${context} error:`, e);
+  }
 };
 
 const EXCHANGE_RATES: Record<string, number> = {
@@ -80,7 +96,13 @@ async function startServer() {
       
       const app = getApps()[0];
       const dbId = firebaseConfig.firestoreDatabaseId;
-      firestore = dbId && dbId !== '(default)' ? getFirestore(app, dbId) : getFirestore(app);
+      const firestoreDb = dbId && dbId !== '(default)' ? getFirestore(app, dbId) : getFirestore(app);
+      try {
+        firestoreDb.settings({ ignoreUndefinedProperties: true });
+      } catch (e) {
+        console.warn('Could not set firestore settings:', e);
+      }
+      firestore = firestoreDb;
     }
   } catch (error) {
     console.error('Firebase Admin init error:', error);
@@ -287,6 +309,31 @@ async function startServer() {
         timestamp INTEGER,
         status TEXT DEFAULT 'COMPLETED'
       );
+
+      CREATE TABLE IF NOT EXISTS tournaments (
+        id TEXT PRIMARY KEY,
+        title TEXT,
+        description TEXT,
+        prizeFund REAL,
+        startTime INTEGER,
+        endTime INTEGER,
+        imageUrl TEXT,
+        status TEXT,
+        isLocked INTEGER DEFAULT 0,
+        rules TEXT,
+        participants INTEGER DEFAULT 0,
+        createdAt INTEGER
+      );
+
+      CREATE TABLE IF NOT EXISTS ads (
+        id TEXT PRIMARY KEY,
+        title TEXT,
+        imageUrl TEXT,
+        linkUrl TEXT,
+        displayOrder INTEGER DEFAULT 0,
+        status TEXT DEFAULT 'active',
+        createdAt INTEGER
+      );
     `);
     
     // Add columns if they don't exist (for existing databases)
@@ -364,12 +411,22 @@ async function startServer() {
   app.use(cors());
   app.use(express.json());
 
+  // Debug request logger
+  app.use((req, res, next) => {
+    console.log(`${req.method} ${req.url}`);
+    next();
+  });
+
   // Helper to sync user from Firestore to SQLite
   const syncUserFromFirestore = async (email: string, uid: string, defaultName: string, defaultPhoto: string) => {
     if (!canSyncFirestore() || !uid) return null;
     try {
-      const doc = await firestore.collection('users').doc(uid).get();
-      if (doc.exists) {
+      const doc = await firestore.collection('users').doc(uid).get().catch((e: any) => {
+        if (e.code === 5) return null; // NOT_FOUND
+        throw e;
+      });
+      
+      if (doc && doc.exists) {
         const data = doc.data();
         const existingUser = db.prepare('SELECT * FROM users WHERE email = ?').get(email);
         const now = Date.now();
@@ -457,12 +514,7 @@ async function startServer() {
         return db.prepare('SELECT * FROM users WHERE email = ?').get(email);
       }
     } catch (error: any) {
-      if (error.code === 7 || (error.message && error.message.includes('PERMISSION_DENIED'))) {
-        firestoreDisabledDueToError = true;
-        console.warn('Firestore sync disabled due to PERMISSION_DENIED. Please provide a service account key or use the default AI Studio Firebase project.');
-      } else {
-        console.error('Error syncing user from Firestore:', error);
-      }
+      handleFirestoreError(error, 'user sync from Firestore');
     }
     return null;
   };
@@ -477,21 +529,16 @@ async function startServer() {
       
       // Try to fetch from Firestore if not found in SQLite
       if (!user && canSyncFirestore()) {
-         try {
-           const snapshot = await firestore.collection('users').where('email', '==', email).limit(1).get();
-           if (!snapshot.empty) {
-             const doc = snapshot.docs[0];
-             const uid = doc.id;
-             user = await syncUserFromFirestore(email as string, uid, '', '');
-           }
-         } catch (e: any) {
-           if (e.code === 7 || (e.message && e.message.includes('PERMISSION_DENIED'))) {
-             firestoreDisabledDueToError = true;
-             console.warn('Firestore sync disabled globally due to PERMISSION_DENIED during user fetch.');
-           } else {
-             console.error('Error fetching user from Firestore by email:', e);
-           }
-         }
+        try {
+          const snapshot = await firestore.collection('users').where('email', '==', email).limit(1).get();
+          if (!snapshot.empty) {
+            const doc = snapshot.docs[0];
+            const uid = doc.id;
+            user = await syncUserFromFirestore(email as string, uid, '', '');
+          }
+        } catch (e: any) {
+          handleFirestoreError(e, 'user fetch by email');
+        }
       }
       
       if (!user) return res.status(404).json({ error: 'User not found' });
@@ -526,14 +573,7 @@ async function startServer() {
           const user = db.prepare('SELECT uid FROM users WHERE email = ?').get(email) as any;
           if (user && user.uid) {
             firestore.collection('users').doc(user.uid).set(firestoreUpdates, { merge: true })
-              .catch((error: any) => {
-                if (error.code === 7 || (error.message && error.message.includes('PERMISSION_DENIED'))) {
-                  firestoreDisabledDueToError = true;
-                  console.warn('Firestore sync disabled globally due to PERMISSION_DENIED.');
-                } else {
-                  console.error('Firestore preferences sync error:', error);
-                }
-              });
+              .catch((error: any) => handleFirestoreError(error, 'preferences sync'));
           }
         }
         
@@ -683,24 +723,11 @@ async function startServer() {
       // Sync with Firestore
       if (canSyncFirestore() && user.uid) {
         firestore.collection('users').doc(user.uid).set({ trades: tradesJson }, { merge: true })
-          .catch((e: any) => {
-             if (e.code === 7 || (e.message && e.message.includes('PERMISSION_DENIED'))) {
-                firestoreDisabledDueToError = true;
-                console.warn('Firestore sync disabled globally due to PERMISSION_DENIED.');
-             } else {
-                console.error('Firestore user trades update error:', e);
-             }
-          });
+          .catch((e: any) => handleFirestoreError(e, 'user trades update'));
           
         // Also save directly to a subcollection for easier viewing
         firestore.collection('users').doc(user.uid).collection('trades').doc(trade.id).set(trade, { merge: true })
-          .catch((e: any) => {
-             if (e.code === 7 || (e.message && e.message.includes('PERMISSION_DENIED'))) {
-                firestoreDisabledDueToError = true;
-             } else {
-                console.error('Firestore trade document update error:', e);
-             }
-          });
+          .catch((e: any) => handleFirestoreError(e, 'trade document update'));
       }
     }
   };
@@ -776,6 +803,9 @@ async function startServer() {
             if (error.code === 7 || (error.message && error.message.includes('PERMISSION_DENIED'))) {
               firestoreDisabledDueToError = true;
               console.warn('Firestore sync disabled due to PERMISSION_DENIED. Please provide a service account key or use the default AI Studio Firebase project.');
+            } else if (error.code === 5 || (error.message && error.message.includes('NOT_FOUND'))) {
+              firestoreDisabledDueToError = true;
+              console.warn('Firestore sync disabled due to NOT_FOUND database. Please verify your Firestore Database ID.');
             } else {
               console.error('Firestore user sync error:', error);
             }
@@ -805,7 +835,17 @@ async function startServer() {
   });
 
   // --- Market Simulation Engine (Server-Side) ---
-  const assets: Record<string, { price: number, volatility: number, trend: number, isFrozen?: boolean, targetPrice?: number | null, winPercentage?: number, payout?: number }> = {
+  const assets: Record<string, { 
+    price: number, 
+    volatility: number, 
+    trend: number, 
+    isFrozen?: boolean, 
+    targetPrice?: number | null, 
+    winPercentage?: number, 
+    payout?: number,
+    isRealMarket?: boolean,
+    isOTC?: boolean
+  }> = {
     'AUD/CHF': { price: 0.5720, volatility: 0.0002, trend: 0, winPercentage: 50, payout: 90 },
     'AUD/JPY': { price: 97.50, volatility: 0.02, trend: 0, winPercentage: 50, payout: 90 },
     'AUD/USD': { price: 0.6550, volatility: 0.0002, trend: 0, winPercentage: 50, payout: 90 },
@@ -838,6 +878,7 @@ async function startServer() {
     'USD/ZAR': { price: 19.10, volatility: 0.02, trend: 0, winPercentage: 50, payout: 90 },
     'BTC/USD': { price: 51241.67, volatility: 15.5, trend: 0, winPercentage: 50, payout: 90 },
     'ETH/USD': { price: 2950.12, volatility: 2.5, trend: 0, winPercentage: 50, payout: 90 },
+    'BNB/USD': { price: 380.50, volatility: 0.5, trend: 0, winPercentage: 50, payout: 90 },
     'SOL/USD': { price: 105.45, volatility: 0.8, trend: 0, winPercentage: 50, payout: 90 },
     'XRP/USD': { price: 0.54, volatility: 0.005, trend: 0, winPercentage: 50, payout: 90 },
     'GOLD': { price: 2035.50, volatility: 0.5, trend: 0, winPercentage: 50, payout: 90 },
@@ -867,10 +908,28 @@ async function startServer() {
     'NKE': { price: 105.40, volatility: 0.3, trend: 0, winPercentage: 50, payout: 90 },
   };
 
+  // --- Binance WebSocket Integration ---
+  const binanceCryptoPairs = [
+    { symbol: 'BTC/USD', binanceSymbol: 'btcusdt' },
+    { symbol: 'ETH/USD', binanceSymbol: 'ethusdt' },
+    { symbol: 'BNB/USD', binanceSymbol: 'bnbusdt' },
+    { symbol: 'SOL/USD', binanceSymbol: 'solusdt' },
+    { symbol: 'XRP/USD', binanceSymbol: 'xrpusdt' },
+    { symbol: 'DOGE/USD', binanceSymbol: 'dogeusdt' },
+    { symbol: 'ADA/USD', binanceSymbol: 'adausdt' },
+    { symbol: 'DOT/USD', binanceSymbol: 'dotusdt' },
+    { symbol: 'LINK/USD', binanceSymbol: 'linkusdt' },
+    { symbol: 'MATIC/USD', binanceSymbol: 'maticusdt' },
+    { symbol: 'UNI/USD', binanceSymbol: 'uniusdt' }
+  ];
+
   // Store historical ticks (last 1 hour = 3600 ticks)
   const history: Record<string, any[]> = {};
   Object.keys(assets).forEach(symbol => {
     history[symbol] = [];
+    if (binanceCryptoPairs.some(p => p.symbol === symbol)) {
+      assets[symbol as keyof typeof assets].isRealMarket = true;
+    }
   });
 
   // Track active trades for admin panel
@@ -878,6 +937,61 @@ async function startServer() {
   
   // Track connected users for admin panel
   const connectedUsers: Record<string, any> = {};
+
+  const initBinanceWS = () => {
+    console.log('Initializing Binance WebSocket...');
+    const streams = binanceCryptoPairs.map(p => `${p.binanceSymbol}@ticker`).join('/');
+    const ws = new WebSocket(`wss://stream.binance.com:9443/ws/${streams}`);
+
+    ws.on('open', () => {
+      console.log('Connected to Binance WebSocket');
+    });
+
+    ws.on('message', (data: any) => {
+      try {
+        const msg = JSON.parse(data);
+        
+        const pair = binanceCryptoPairs.find(p => p.binanceSymbol === msg.s.toLowerCase());
+        if (pair && assets[pair.symbol as keyof typeof assets]) {
+          const asset = assets[pair.symbol as keyof typeof assets];
+          const newPrice = parseFloat(msg.c);
+          
+          if (!asset.isFrozen) {
+            const now = Date.now();
+            const tick = {
+              time: now,
+              price: newPrice,
+              open: asset.price,
+              high: Math.max(asset.price, newPrice),
+              low: Math.min(asset.price, newPrice),
+              close: newPrice,
+              isFrozen: false
+            };
+            
+            // Update asset price immediately
+            asset.price = newPrice;
+            
+            // Instantly sync the chart
+            io.emit('market-tick', { [pair.symbol]: tick });
+          }
+        }
+      } catch (e) {
+        // Silent error
+      }
+    });
+
+    ws.on('error', (e) => {
+      console.error('Binance WS Error:', e);
+    });
+
+    ws.on('close', () => {
+      console.log('Binance WS closed. Reconnecting in 5s...');
+      setTimeout(initBinanceWS, 5000);
+    });
+  };
+
+  initBinanceWS();
+  // --- End Binance Integration ---
 
   // Global Trade Automation Settings
   let globalTradeSettings = {
@@ -1354,12 +1468,12 @@ async function startServer() {
     }
   ];
 
-  // Generate initial history (7 days) asynchronously
+  // Generate initial history (30 days) asynchronously
   const now = Date.now();
-  const historyDurationMs = 7 * 24 * 3600 * 1000;
-  const historyTicksCount = 7 * 24 * 3600;
+  const historyDurationMs = 30 * 24 * 3600 * 1000;
+  const historyTicksCount = 30 * 24 * 3600;
   
-  console.log('Generating initial market history (7 days) asynchronously...');
+  console.log('Generating initial market history (30 days) asynchronously...');
   
   const symbols = Object.keys(assets);
   let currentSymbolIndex = 0;
@@ -1428,7 +1542,7 @@ async function startServer() {
           asset.price = transaction(symbol, lastTime, currentPrice, gapSeconds);
         }
       } else {
-        // Generate new history (7 days)
+        // Generate new history (30 days)
         let currentPrice = asset.price;
         let currentTrend = 0;
         const insert = db.prepare('INSERT OR REPLACE INTO market_history (symbol, time, open, high, low, close) VALUES (?, ?, ?, ?, ?, ?)');
@@ -1495,6 +1609,11 @@ async function startServer() {
     Object.values(activeTrades).forEach((trade: any) => {
       if (trade.status === 'ACTIVE' && trade.accountType === 'REAL') {
         const assetKey = trade.assetShortName || trade.asset;
+        const assetObj = assets[assetKey as keyof typeof assets];
+        
+        // Ensure no market control for real markets
+        if (assetObj && assetObj.isRealMarket) return;
+
         if (!assetExposure[assetKey]) {
            assetExposure[assetKey] = { upAmount: 0, downAmount: 0, upPayout: 0, downPayout: 0, upTrades: [], downTrades: [] };
         }
@@ -1625,39 +1744,41 @@ async function startServer() {
       if (isNaN(asset.trend)) asset.trend = 0;
       
       if (!asset.isFrozen) {
-        // --- Professional Smoother Movement Logic (ALWAYS RUNS) ---
-        // Trend persistence: trends last longer and change more gradually
-        asset.trend += (Math.random() - 0.5) * asset.volatility * 0.01; 
-        asset.trend *= 0.97; // High decay to keep it stable but persistent
-        
-        const candleTypeRand = Math.random();
-        let moveMultiplier = 1.0;
-        
-        // Occasional slightly larger moves, but much rarer than before
-        if (candleTypeRand < 0.05) moveMultiplier = 1.3;  
-        else if (candleTypeRand < 0.10) moveMultiplier = 0.6; 
-        
-        // Noise is significantly reduced for a professional "fluid" feel
-        // We use a smaller factor (0.12) to ensure the price doesn't "jump"
-        const noise = (Math.random() - 0.5) * asset.volatility * 0.12; 
-        
-        let move = (asset.trend + noise) * moveMultiplier + drift;
-        
-        // Hard limit on per-tick movement to prevent "teleporting" prices
-        const maxMovePerTick = asset.volatility * 0.08;
-        if (move > maxMovePerTick) move = maxMovePerTick;
-        if (move < -maxMovePerTick) move = -maxMovePerTick;
-        
-        newPrice += move;
+        if (asset.isRealMarket) {
+          // STRICTLY follow Binance price. No market manipulation.
+          newPrice = asset.price;
+        } else {
+          // --- Professional Smoother Movement Logic (ALWAYS RUNS for internal assets) ---
+          // Trend persistence: trends last longer and change more gradually
+          asset.trend += (Math.random() - 0.5) * asset.volatility * 0.01; 
+          asset.trend *= 0.97; // High decay to keep it stable but persistent
+          
+          const candleTypeRand = Math.random();
+          let moveMultiplier = 1.0;
+          
+          // Occasional slightly larger moves, but much rarer than before
+          if (candleTypeRand < 0.05) moveMultiplier = 1.3;  
+          else if (candleTypeRand < 0.10) moveMultiplier = 0.6; 
+          
+          // Noise is increased for a more dynamic feel as requested by user
+          // We use a slightly larger factor (0.25) to ensure the price feels "alive"
+          const noise = (Math.random() - 0.5) * asset.volatility * 0.25; 
+          
+          let move = (asset.trend + noise) * moveMultiplier + drift;
+          
+          // Limit on per-tick movement to prevent "teleporting" prices while allowing dynamic movement
+          const maxMovePerTick = asset.volatility * 0.15;
+          if (move > maxMovePerTick) move = maxMovePerTick;
+          if (move < -maxMovePerTick) move = -maxMovePerTick;
+          
+          newPrice += move;
 
-        // --- Minimal Jitter removed for professional look ---
-        // (Removed the previous jitter line)
-
-        // --- Gap Up / Gap Down Logic ---
-        if (isFullSecond && Math.random() < 0.01) { 
-          const gapDirection = Math.random() > 0.5 ? 1 : -1;
-          const gapSize = (Math.random() * 1.0 + 0.2) * asset.volatility; 
-          newPrice += gapDirection * gapSize;
+          // --- Gap Up / Gap Down Logic ---
+          if (isFullSecond && Math.random() < 0.01) { 
+            const gapDirection = Math.random() > 0.5 ? 1 : -1;
+            const gapSize = (Math.random() * 1.0 + 0.2) * asset.volatility; 
+            newPrice += gapDirection * gapSize;
+          }
         }
       }
       
@@ -1683,10 +1804,10 @@ async function startServer() {
           history[symbol].shift(); 
         }
 
-        // Prune DB history every 1000 ticks (approx 16 mins) to keep last 7 days
+        // Prune DB history every 1000 ticks (approx 16 mins) to keep last 30 days
         if (tickCounter % 1000 === 0) {
-          const sevenDaysAgo = now - (7 * 24 * 3600 * 1000);
-          db.prepare('DELETE FROM market_history WHERE time < ?').run(sevenDaysAgo);
+          const thirtyDaysAgo = now - (30 * 24 * 3600 * 1000);
+          db.prepare('DELETE FROM market_history WHERE time < ?').run(thirtyDaysAgo);
         }
       }
       
@@ -1694,7 +1815,6 @@ async function startServer() {
     });
 
     // Broadcast to all connected clients
-    console.log('Server: Broadcasting market-tick', Object.keys(ticks).length, 'assets');
     io.emit('market-tick', ticks);
     
     // --- Resolve Expired Trades ---
@@ -1736,7 +1856,7 @@ async function startServer() {
     console.log('Trade received:', trade);
     
     // Apply Global Automation Rules
-    let forcedResult = undefined;
+    let forcedResult = null;
     
     if (trade.accountType === 'REAL') {
       if (globalTradeSettings.mode === 'FORCE_LOSS') {
@@ -1845,10 +1965,20 @@ async function startServer() {
     }
 
     // Store active trade
-    // Calculate endTime on server to avoid clock desync issues
+    // Use the exact endTime provided by the synced client for minute-boundary precision.
+    // If trade.endTime is somehow missing or in the past, fallback to a minimum duration.
     const serverNow = Date.now();
-    const durationSeconds = trade.duration || Math.max(1, Math.floor((trade.endTime - trade.startTime) / 1000));
-    const serverEndTime = serverNow + (durationSeconds * 1000);
+    let serverEndTime = trade.endTime;
+    if (!serverEndTime || serverEndTime <= serverNow) {
+       const durationSeconds = trade.duration || 60;
+       serverEndTime = serverNow + (durationSeconds * 1000);
+    }
+    
+    // Similarly, trust the synced client's startTime if it's within a reasonable window, else use serverNow
+    let serverStartTime = trade.startTime;
+    if (!serverStartTime || Math.abs(serverStartTime - serverNow) > 5000) {
+        serverStartTime = serverNow;
+    }
     
     const tradeToStore = { 
       ...trade, 
@@ -1857,7 +1987,7 @@ async function startServer() {
       forcedResult, 
       realAmount, 
       bonusAmount,
-      startTime: serverNow,
+      startTime: serverStartTime,
       endTime: serverEndTime
     };
     
@@ -2011,14 +2141,7 @@ async function startServer() {
              // We omit balance here to prevent overwriting with 0 if syncFromFirestore failed
              
              firestore.collection('users').doc(userData.uid).set(firestoreSyncData, { merge: true })
-               .catch((e: any) => {
-                 if (e.code === 7 || (e.message && e.message.includes('PERMISSION_DENIED'))) {
-                   firestoreDisabledDueToError = true;
-                   console.warn('Firestore sync disabled globally due to PERMISSION_DENIED during new user sync.');
-                 } else {
-                   console.error('Firestore new user sync error:', e);
-                 }
-               });
+               .catch((e: any) => handleFirestoreError(e, 'new user sync'));
           }
         } else {
           const fallbackReferralCode = existingUser.uid ? existingUser.uid.slice(0, 8).toUpperCase() : Math.random().toString(36).substring(2, 8).toUpperCase();
@@ -2084,26 +2207,79 @@ async function startServer() {
     socket.emit('initial-prices', initialPrices);
 
     // Handle history request
-    socket.on('request-history', (requestData) => {
+    socket.on('request-history', async (requestData) => {
       let assetShortName = typeof requestData === 'string' ? requestData : requestData.asset;
       let beforeTime = typeof requestData === 'object' ? requestData.beforeTime : null;
       let limit = typeof requestData === 'object' ? requestData.limit : 1000; // Default to 1000 candles
       let timeframe = typeof requestData === 'object' ? requestData.timeframe : '1m';
 
       let tfMs = 60000;
-      if (timeframe === '1s') tfMs = 1000;
-      else if (timeframe === '1m') tfMs = 60000;
-      else if (timeframe === '5m') tfMs = 300000;
-      else if (timeframe === '15m') tfMs = 900000;
-      else if (timeframe === '1h') tfMs = 3600000;
-      else if (timeframe === '4h') tfMs = 14400000;
-      else if (timeframe === '1d') tfMs = 86400000;
+      const tfValue = parseInt(timeframe);
+      const tfUnit = timeframe.replace(String(tfValue), '');
+      if (tfUnit === 's') tfMs = tfValue * 1000;
+      else if (tfUnit === 'm') tfMs = tfValue * 60000;
+      else if (tfUnit === 'h') tfMs = tfValue * 3600000;
+      else if (tfUnit === 'd') tfMs = tfValue * 86400000;
+      else tfMs = 60000;
 
-      let data: any[] = [];
       let candles: any[] = [];
+      let data: any[] = [];
+
+      // Binance integration: Try to fetch from Binance for crypto assets
+      const cryptoAssets = ['BTC', 'ETH', 'BNB', 'SOL', 'ADA', 'XRP', 'DOT', 'DOGE', 'LTC', 'MATIC', 'AVAX'];
+      const binancePair = binanceCryptoPairs.find(p => p.symbol === assetShortName);
+      if (binancePair || cryptoAssets.includes(assetShortName.split('/')[0])) {
+        try {
+          const bSymbol = binancePair ? binancePair.binanceSymbol.toUpperCase() : (assetShortName.replace('/', '').toUpperCase() + 'USDT');
+          const intervalMap: Record<string, string> = { '1m': '1m', '5m': '5m', '15m': '15m', '1h': '1h', '4h': '4h', '1d': '1d' };
+          const interval = intervalMap[timeframe] || '1m';
+          const url = `https://api.binance.com/api/v3/klines?symbol=${bSymbol}&interval=${interval}&limit=${Math.min(limit, 1000)}`;
+          
+          const response = await fetch(url);
+          const data = await response.json();
+          
+          if (Array.isArray(data)) {
+            candles = data.map((d: any) => ({
+              time: d[0],
+              open: parseFloat(d[1]),
+              high: parseFloat(d[2]),
+              low: parseFloat(d[3]),
+              close: parseFloat(d[4])
+            }));
+            
+            let recentTicks: any[] = [];
+            if (!beforeTime) {
+                try {
+                    const tickRows = db.prepare('SELECT * FROM market_history WHERE symbol = ? ORDER BY time DESC LIMIT 1000').all(assetShortName) as any[];
+                    recentTicks = tickRows.map(r => ({
+                        time: r.time,
+                        price: r.close,
+                        open: r.open,
+                        high: r.high,
+                        low: r.low,
+                        close: r.close
+                    })).reverse();
+                } catch(e) {
+                    // Ignore DB errors
+                }
+            }
+
+            socket.emit('asset-history', { 
+               asset: assetShortName, 
+               timeframe, 
+               data: recentTicks, 
+               candles: candles,
+               isOlder: !!beforeTime
+            });
+            return;
+          }
+        } catch (e) {
+          console.error(`Binance API error for ${assetShortName}:`, e);
+        }
+      }
       
       try {
-        let timeRangeMs = limit * tfMs;
+        let timeRangeMs = tfMs * 30000; // Hardcoded to 30000 candles worth of time if no limit provided
         let endTime = beforeTime ? beforeTime : Date.now();
         let startTime = endTime - timeRangeMs;
 
@@ -2152,6 +2328,7 @@ async function startServer() {
 
       socket.emit('asset-history', {
         asset: assetShortName,
+        timeframe: timeframe,
         data: data,
         candles: candles,
         isOlder: !!beforeTime
@@ -2253,7 +2430,7 @@ async function startServer() {
         const allDeposits = db.prepare('SELECT * FROM deposits ORDER BY submittedAt DESC').all();
         socket.emit('admin-deposits', allDeposits);
         
-        const allUsers = db.prepare('SELECT * FROM users LIMIT 1000').all();
+        const allUsers = db.prepare('SELECT * FROM users').all();
         socket.emit('admin-all-users', allUsers);
         
         const allWithdrawals = db.prepare('SELECT * FROM withdrawals ORDER BY submittedAt DESC').all();
@@ -2309,6 +2486,134 @@ async function startServer() {
         io.to('admin-room').emit('admin-promo-codes', allPromoCodes);
       } catch (error) {
         console.error('Error deleting promo code:', error);
+      }
+    });
+
+    socket.on('admin-get-tournaments', () => {
+      try {
+        const tournaments = db.prepare('SELECT * FROM tournaments ORDER BY createdAt DESC').all();
+        socket.emit('admin-tournaments', tournaments);
+      } catch (error) {
+        console.error('Error fetching tournaments:', error);
+      }
+    });
+
+    socket.on('admin-create-tournament', (tournamentData) => {
+      try {
+        const id = Math.random().toString(36).substring(2, 11);
+        const { title, description, prizeFund, startTime, endTime, imageUrl, status, isLocked, rules, participants } = tournamentData;
+        db.prepare(`
+          INSERT INTO tournaments (id, title, description, prizeFund, startTime, endTime, imageUrl, status, isLocked, rules, participants, createdAt)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).run(id, title, description, prizeFund, startTime, endTime, imageUrl, status || 'upcoming', isLocked ? 1 : 0, rules, participants || 0, Date.now());
+        
+        const tournaments = db.prepare('SELECT * FROM tournaments ORDER BY createdAt DESC').all();
+        io.emit('tournaments-updated', tournaments);
+        io.to('admin-room').emit('admin-tournaments', tournaments);
+      } catch (error) {
+        console.error('Error creating tournament:', error);
+      }
+    });
+
+    socket.on('admin-update-tournament', (tournamentData) => {
+      try {
+        const { id, title, description, prizeFund, startTime, endTime, imageUrl, status, isLocked, rules, participants } = tournamentData;
+        db.prepare(`
+          UPDATE tournaments 
+          SET title = ?, description = ?, prizeFund = ?, startTime = ?, endTime = ?, imageUrl = ?, status = ?, isLocked = ?, rules = ?, participants = ?
+          WHERE id = ?
+        `).run(title, description, prizeFund, startTime, endTime, imageUrl, status, isLocked ? 1 : 0, rules, participants, id);
+        
+        const tournaments = db.prepare('SELECT * FROM tournaments ORDER BY createdAt DESC').all();
+        io.emit('tournaments-updated', tournaments);
+        io.to('admin-room').emit('admin-tournaments', tournaments);
+      } catch (error) {
+        console.error('Error updating tournament:', error);
+      }
+    });
+
+    socket.on('admin-delete-tournament', (id) => {
+      try {
+        db.prepare('DELETE FROM tournaments WHERE id = ?').run(id);
+        const tournaments = db.prepare('SELECT * FROM tournaments ORDER BY createdAt DESC').all();
+        io.emit('tournaments-updated', tournaments);
+        io.to('admin-room').emit('admin-tournaments', tournaments);
+      } catch (error) {
+        console.error('Error deleting tournament:', error);
+      }
+    });
+
+    socket.on('get-tournaments', () => {
+      try {
+        const tournaments = db.prepare('SELECT * FROM tournaments ORDER BY createdAt DESC').all();
+        socket.emit('tournaments-list', tournaments);
+      } catch (error) {
+        console.error('Error fetching tournaments for user:', error);
+      }
+    });
+
+    socket.on('admin-get-ads', () => {
+      try {
+        const ads = db.prepare('SELECT * FROM ads ORDER BY displayOrder ASC, createdAt DESC').all();
+        socket.emit('admin-ads', ads);
+        // Also emit to client so they initialize
+        socket.emit('client-ads', ads);
+      } catch (error) {
+        console.error('Error fetching ads:', error);
+      }
+    });
+
+    socket.on('admin-add-ad', (adData) => {
+      try {
+        const id = Math.random().toString(36).substring(2, 11);
+        const { title, imageUrl, linkUrl, displayOrder, status } = adData;
+        db.prepare(`
+          INSERT INTO ads (id, title, imageUrl, linkUrl, displayOrder, status, createdAt)
+          VALUES (?, ?, ?, ?, ?, ?, ?)
+        `).run(id, title, imageUrl, linkUrl, displayOrder || 0, status || 'active', Date.now());
+        
+        const allAds = db.prepare('SELECT * FROM ads ORDER BY displayOrder ASC, createdAt DESC').all();
+        io.to('admin-room').emit('admin-ads', allAds);
+        io.emit('client-ads', allAds);
+      } catch (error) {
+        console.error('Error adding ad:', error);
+      }
+    });
+
+    socket.on('admin-update-ad', (adData) => {
+      try {
+        const { id, title, imageUrl, linkUrl, displayOrder, status } = adData;
+        db.prepare(`
+          UPDATE ads 
+          SET title = ?, imageUrl = ?, linkUrl = ?, displayOrder = ?, status = ?
+          WHERE id = ?
+        `).run(title, imageUrl, linkUrl, displayOrder, status, id);
+        
+        const allAds = db.prepare('SELECT * FROM ads ORDER BY displayOrder ASC, createdAt DESC').all();
+        io.to('admin-room').emit('admin-ads', allAds);
+        io.emit('client-ads', allAds);
+      } catch (error) {
+        console.error('Error updating ad:', error);
+      }
+    });
+
+    socket.on('admin-delete-ad', (id) => {
+      try {
+        db.prepare('DELETE FROM ads WHERE id = ?').run(id);
+        const allAds = db.prepare('SELECT * FROM ads ORDER BY displayOrder ASC, createdAt DESC').all();
+        io.to('admin-room').emit('admin-ads', allAds);
+        io.emit('client-ads', allAds);
+      } catch (error) {
+        console.error('Error deleting ad:', error);
+      }
+    });
+
+    socket.on('get-client-ads', () => {
+      try {
+        const ads = db.prepare("SELECT * FROM ads WHERE status = 'active' ORDER BY displayOrder ASC, createdAt DESC").all();
+        socket.emit('client-ads', ads);
+      } catch (error) {
+        console.error('Error fetching client ads:', error);
       }
     });
 
@@ -2717,7 +3022,7 @@ async function startServer() {
     });
 
     socket.on('admin-get-all-users', () => {
-      const allUsers = db.prepare('SELECT * FROM users LIMIT 1000').all();
+      const allUsers = db.prepare('SELECT * FROM users').all();
       socket.emit('admin-all-users', allUsers);
     });
 
@@ -3069,7 +3374,7 @@ async function startServer() {
         emitToUser(email, 'force-logout');
         
         // Refresh admin user list
-        const allUsers = db.prepare('SELECT * FROM users LIMIT 1000').all();
+        const allUsers = db.prepare('SELECT * FROM users').all();
         io.to('admin-room').emit('admin-all-users', allUsers);
         io.to('admin-room').emit('admin-users', Object.values(connectedUsers));
       } catch (error) {
@@ -3549,66 +3854,7 @@ async function startServer() {
     });
 
     socket.on('cancel-withdrawal', ({ id, email }) => {
-      try {
-        const withdrawal = db.prepare('SELECT * FROM withdrawals WHERE id = ? AND email = ? AND status = \'PENDING\'').get(id, email) as any;
-        if (!withdrawal) {
-          socket.emit('withdraw-error', 'Withdrawal not found or already processed.');
-          return;
-        }
-
-        // Update status to CANCELLED
-        db.prepare('UPDATE withdrawals SET status = \'CANCELLED\', updatedAt = ? WHERE id = ?').run(Date.now(), id);
-
-        // Return balance to user
-        const user = db.prepare('SELECT balance, bonus_balance, extraAccounts FROM users WHERE email = ?').get(email) as any;
-        if (user) {
-          let newBalance = user.balance;
-          let newBonusBalance = user.bonus_balance || 0;
-          let currency = withdrawal.currency || 'USD';
-
-          if (currency === 'BDT') {
-            const extraAccounts = JSON.parse(user.extraAccounts || '[]');
-            const bdtAccount = extraAccounts.find((a: any) => a.currency === 'BDT');
-            if (bdtAccount) {
-              bdtAccount.balance += withdrawal.amount;
-              db.prepare('UPDATE users SET extraAccounts = ? WHERE email = ?').run(JSON.stringify(extraAccounts), email);
-            }
-          } else {
-            newBalance = user.balance + (withdrawal.realAmount || 0);
-            newBonusBalance = (user.bonus_balance || 0) + (withdrawal.bonusAmount || 0);
-            db.prepare('UPDATE users SET balance = ?, bonus_balance = ? WHERE email = ?').run(newBalance, newBonusBalance, email);
-          }
-          
-          // Update Firestore for User
-          if (canSyncFirestore()) {
-            const userFromDb = db.prepare('SELECT uid FROM users WHERE email = ?').get(email) as any;
-            if (userFromDb && userFromDb.uid) {
-              const updateData = currency === 'BDT' 
-                ? { extraAccounts: userFromDb.extraAccounts } 
-                : { balance: newBalance, bonus_balance: newBonusBalance };
-              firestore.collection('users').doc(userFromDb.uid).set(updateData, { merge: true })
-                .catch((e: any) => {
-                   if (e.code === 7 || (e.message && e.message.includes('PERMISSION_DENIED'))) {
-                      firestoreDisabledDueToError = true;
-                   } else {
-                      console.error('Firestore user balance update error (withdrawal cancel):', e);
-                   }
-                });
-            }
-          }
-          
-          emitUserUpdate(email);
-          emitToUser(email, 'balance-updated', { balance: currency === 'BDT' ? withdrawal.amount : newBalance, type: currency === 'BDT' ? 'BDT' : 'REAL' });
-          emitToUser(email, 'withdrawal-cancelled', { id, newBalance: withdrawal.amount, currency });
-        }
-
-        // Refresh admin list
-        const allWithdrawals = db.prepare('SELECT * FROM withdrawals ORDER BY submittedAt DESC').all();
-        io.to('admin-room').emit('admin-withdrawals', allWithdrawals);
-      } catch (error) {
-        console.error('Cancel Withdrawal Error:', error);
-        socket.emit('withdraw-error', 'Failed to cancel withdrawal.');
-      }
+      socket.emit('withdraw-error', 'Withdrawal cancellation is disabled. Please contact support.');
     });
 
     socket.on('admin-update-withdraw-status', ({ id, status, reason }) => {
@@ -3720,7 +3966,7 @@ async function startServer() {
             status: 'PENDING',
             submittedAt: now, 
             updatedAt: now
-          }).catch((e: any) => console.error('Firestore KYC submission sync error:', e));
+          }).catch((e: any) => handleFirestoreError(e, 'KYC submission sync'));
         }
         
         // Update user status in memory
@@ -3801,7 +4047,7 @@ async function startServer() {
             status,
             rejectionReason: reason || null,
             updatedAt: now
-          }, { merge: true }).catch((e: any) => console.error('Firestore KYC submission status update error:', e));
+          }, { merge: true }).catch((e: any) => handleFirestoreError(e, 'KYC submission status update'));
         }
 
         const kyc = db.prepare('SELECT email FROM kyc_submissions WHERE id = ?').get(id) as any;

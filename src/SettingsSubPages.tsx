@@ -925,10 +925,16 @@ export const VerificationSettings: React.FC<SubPageProps & { socket: any, userEm
 
 export const NotificationSettings: React.FC<SubPageProps> = ({ onBack }) => {
   const { showToast } = useToast();
-  const [emailNotifs, setEmailNotifs] = useState(() => localStorage.getItem('notif-email') !== 'false');
-  const [pushNotifs, setPushNotifs] = useState(() => localStorage.getItem('notif-push') !== 'false');
-  const [promoNotifs, setPromoNotifs] = useState(() => localStorage.getItem('notif-promo') !== 'false');
-  const [tradeNotifs, setTradeNotifs] = useState(() => localStorage.getItem('notif-trade') !== 'false');
+  
+  // Notification states matching the image
+  const [terminal, setTerminal] = useState(() => localStorage.getItem('notif-terminal') !== 'false');
+  const [signals, setSignals] = useState(() => localStorage.getItem('notif-signals') !== 'false');
+  const [activities, setActivities] = useState(() => localStorage.getItem('notif-activities') !== 'false');
+  const [rewards, setRewards] = useState(() => localStorage.getItem('notif-rewards') !== 'false');
+  const [platform, setPlatform] = useState(() => localStorage.getItem('notif-platform') !== 'false');
+  const [education, setEducation] = useState(() => localStorage.getItem('notif-education') !== 'false');
+  const [tradingNews, setTradingNews] = useState(() => localStorage.getItem('notif-trading-news') !== 'false');
+  const [pushNotifs, setPushNotifs] = useState(() => localStorage.getItem('notif-push') === 'true');
 
   const handleToggle = (key: string, value: boolean, setter: (v: boolean) => void) => {
     setter(value);
@@ -943,42 +949,73 @@ export const NotificationSettings: React.FC<SubPageProps> = ({ onBack }) => {
       exit={{ x: '100%' }}
       className="fixed inset-0 bg-[var(--bg-primary)] z-[60] flex flex-col"
     >
-      <div className="flex items-center gap-4 p-4 border-b border-[var(--border-color)]">
+      <div className="flex items-center justify-between p-4 border-b border-[var(--border-color)]">
+        <div className="flex items-center gap-4">
+          <button onClick={onBack} className="text-[var(--text-primary)] hover:bg-white/10 p-1 rounded-full transition">
+            <ChevronLeft size={28} />
+          </button>
+          <h1 className="text-2xl font-bold text-[var(--text-primary)]">Notifications</h1>
+        </div>
         <button onClick={onBack} className="text-[var(--text-primary)] hover:bg-white/10 p-1 rounded-full transition">
-          <ChevronLeft size={28} />
+          <X size={28} />
         </button>
-        <h1 className="text-xl font-bold text-[var(--text-primary)]">Notifications</h1>
       </div>
 
       <div className="flex-1 overflow-y-auto p-4 space-y-6">
-        <div className="bg-[var(--bg-secondary)] rounded-xl overflow-hidden border border-[var(--border-color)] divide-y divide-[var(--border-color)]">
+        {/* Main Notifications Card */}
+        <div className="bg-[#16191e] rounded-2xl overflow-hidden border border-[var(--border-color)]">
           <ToggleItem 
-            icon={<Mail size={20} className="text-blue-500" />}
-            label="Email Notifications"
-            description="Receive updates and alerts via email"
-            enabled={emailNotifs}
-            onToggle={() => handleToggle('notif-email', !emailNotifs, setEmailNotifs)}
+            label="Terminal"
+            description="Price alerts and trade results"
+            enabled={terminal}
+            onToggle={() => handleToggle('notif-terminal', !terminal, setTerminal)}
           />
           <ToggleItem 
-            icon={<Bell size={20} className="text-purple-500" />}
+            label="Signals"
+            description="Alerts from Intraday or Swing signal subscriptions"
+            enabled={signals}
+            onToggle={() => handleToggle('notif-signals', !signals, setSignals)}
+          />
+          <ToggleItem 
+            label="Activities"
+            description="Events you can participate in"
+            enabled={activities}
+            onToggle={() => handleToggle('notif-activities', !activities, setActivities)}
+          />
+          <ToggleItem 
+            label="Rewards"
+            description="Rewards, progress alerts and new tasks"
+            enabled={rewards}
+            onToggle={() => handleToggle('notif-rewards', !rewards, setRewards)}
+          />
+          <ToggleItem 
+            label="Platform"
+            description="News and useful trading tips and information"
+            enabled={platform}
+            onToggle={() => handleToggle('notif-platform', !platform, setPlatform)}
+          />
+          <ToggleItem 
+            label="Education"
+            description="Webinars from our trading experts"
+            enabled={education}
+            onToggle={() => handleToggle('notif-education', !education, setEducation)}
+          />
+          <ToggleItem 
+            label="Trading News"
+            description="Economic and market news"
+            enabled={tradingNews}
+            onToggle={() => handleToggle('notif-trading-news', !tradingNews, setTradingNews)}
+            isLast
+          />
+        </div>
+
+        {/* Push Notifications Card */}
+        <div className="bg-[#16191e] rounded-2xl overflow-hidden border border-[var(--border-color)]">
+          <ToggleItem 
             label="Push Notifications"
-            description="Receive real-time alerts on your device"
+            description="Receive push notifications directly in your browser"
             enabled={pushNotifs}
             onToggle={() => handleToggle('notif-push', !pushNotifs, setPushNotifs)}
-          />
-          <ToggleItem 
-            icon={<Gift size={20} className="text-pink-500" />}
-            label="Promotions & Offers"
-            description="Get notified about bonuses and special events"
-            enabled={promoNotifs}
-            onToggle={() => handleToggle('notif-promo', !promoNotifs, setPromoNotifs)}
-          />
-          <ToggleItem 
-            icon={<Activity size={20} className="text-green-500" />}
-            label="Trade Alerts"
-            description="Notifications for trade results and signals"
-            enabled={tradeNotifs}
-            onToggle={() => handleToggle('notif-trade', !tradeNotifs, setTradeNotifs)}
             isLast
           />
         </div>
@@ -1954,30 +1991,32 @@ export const AppearanceSettings: React.FC<SubPageProps & {
 const ToggleItem = ({ 
   icon, label, description, enabled, onToggle, isLast 
 }: { 
-  icon: React.ReactNode, label: string, description: string, enabled: boolean, onToggle: () => void, isLast?: boolean 
+  icon?: React.ReactNode, label: string, description: string, enabled: boolean, onToggle: () => void, isLast?: boolean 
 }) => (
   <div className={cn(
-    "p-4 flex items-center justify-between",
-    !isLast && "border-b border-[var(--border-color)]"
+    "p-5 flex items-center justify-between",
+    !isLast && "border-b border-[var(--border-color)]/50"
   )}>
     <div className="flex items-center gap-3">
-      <div className="w-10 h-10 rounded-lg bg-white/5 flex items-center justify-center">
-        {icon}
-      </div>
+      {icon && (
+        <div className="w-10 h-10 rounded-lg bg-white/5 flex items-center justify-center">
+          {icon}
+        </div>
+      )}
       <div>
-        <h3 className="text-sm font-bold text-[var(--text-primary)]">{label}</h3>
-        <p className="text-[10px] text-[var(--text-secondary)]">{description}</p>
+        <h3 className="text-base font-medium text-[var(--text-primary)]">{label}</h3>
+        <p className="text-xs text-[var(--text-secondary)] mt-0.5">{description}</p>
       </div>
     </div>
     <button 
       onClick={onToggle}
       className={cn(
-        "w-10 h-5 rounded-full relative transition-colors duration-200",
-        enabled ? "bg-blue-500" : "bg-gray-700"
+        "w-11 h-6 rounded-full relative transition-colors duration-200 shrink-0",
+        enabled ? "bg-[#4ade80]" : "bg-[#374151]"
       )}
     >
       <div className={cn(
-        "absolute top-1 w-3 h-3 bg-white rounded-full transition-all duration-200",
+        "absolute top-1 w-4 h-4 bg-white rounded-full transition-all duration-200 shadow-sm",
         enabled ? "left-6" : "left-1"
       )} />
     </button>

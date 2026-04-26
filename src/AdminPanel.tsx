@@ -96,68 +96,76 @@ const AssetControl: React.FC<{ symbol: string, asset: any, socket: Socket | null
       
       <div className="p-4 space-y-4">
         {/* Trend Control */}
-        <div>
-          <div className="flex justify-between items-center mb-2">
-            <label className="text-[10px] text-[var(--text-secondary)] font-black uppercase tracking-wider">Trend Control</label>
-            <span className="text-[10px] font-mono text-blue-400">{asset.trend?.toFixed(6)}</span>
+        {!asset.isRealMarket && (
+          <div>
+            <div className="flex justify-between items-center mb-2">
+              <label className="text-[10px] text-[var(--text-secondary)] font-black uppercase tracking-wider">Trend Control</label>
+              <span className="text-[10px] font-mono text-blue-400">{asset.trend?.toFixed(6)}</span>
+            </div>
+            <div className="flex gap-1">
+              <button onClick={() => handleSetTrend((asset.trend || 0) + 0.001)} className="flex-1 bg-green-500/10 text-green-500 py-2 rounded-xl flex justify-center items-center hover:bg-green-500/20 transition active:scale-95 border border-green-500/10"><TrendingUp size={16} /></button>
+              <button onClick={() => handleSetTrend(0)} className="px-4 bg-[var(--bg-primary)] text-[var(--text-secondary)] py-2 rounded-xl text-[10px] font-black uppercase hover:text-[var(--text-primary)] transition active:scale-95 border border-[var(--border-color)]">Reset</button>
+              <button onClick={() => handleSetTrend((asset.trend || 0) - 0.001)} className="flex-1 bg-red-500/10 text-red-500 py-2 rounded-xl flex justify-center items-center hover:bg-red-500/20 transition active:scale-95 border border-red-500/10"><TrendingDown size={16} /></button>
+            </div>
           </div>
-          <div className="flex gap-1">
-            <button onClick={() => handleSetTrend((asset.trend || 0) + 0.001)} className="flex-1 bg-green-500/10 text-green-500 py-2 rounded-xl flex justify-center items-center hover:bg-green-500/20 transition active:scale-95 border border-green-500/10"><TrendingUp size={16} /></button>
-            <button onClick={() => handleSetTrend(0)} className="px-4 bg-[var(--bg-primary)] text-[var(--text-secondary)] py-2 rounded-xl text-[10px] font-black uppercase hover:text-[var(--text-primary)] transition active:scale-95 border border-[var(--border-color)]">Reset</button>
-            <button onClick={() => handleSetTrend((asset.trend || 0) - 0.001)} className="flex-1 bg-red-500/10 text-red-500 py-2 rounded-xl flex justify-center items-center hover:bg-red-500/20 transition active:scale-95 border border-red-500/10"><TrendingDown size={16} /></button>
-          </div>
-        </div>
+        )}
 
         {/* Quick Actions */}
-        <div className="grid grid-cols-2 gap-2">
-          <button onClick={() => handlePumpDump(1)} className="bg-green-600/10 text-green-500 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-1.5 hover:bg-green-600/20 transition active:scale-95 border border-green-600/20"><Zap size={14} /> Pump</button>
-          <button onClick={() => handlePumpDump(-1)} className="bg-red-600/10 text-red-500 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-1.5 hover:bg-red-600/20 transition active:scale-95 border border-red-600/20"><Zap size={14} /> Dump</button>
-          <button onClick={handleToggleFreeze} className={`col-span-2 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-1.5 transition active:scale-95 ${asset.isFrozen ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20' : 'bg-blue-500/10 text-blue-500 border border-blue-500/20 hover:bg-blue-500/20'}`}>
-            {asset.isFrozen ? <Play size={14} /> : <Pause size={14} />} 
-            {asset.isFrozen ? 'Unfreeze Market' : 'Freeze Market'}
-          </button>
-        </div>
+        {!asset.isRealMarket && (
+          <div className="grid grid-cols-2 gap-2">
+            <button onClick={() => handlePumpDump(1)} className="bg-green-600/10 text-green-500 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-1.5 hover:bg-green-600/20 transition active:scale-95 border border-green-600/20"><Zap size={14} /> Pump</button>
+            <button onClick={() => handlePumpDump(-1)} className="bg-red-600/10 text-red-500 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-1.5 hover:bg-red-600/20 transition active:scale-95 border border-red-600/20"><Zap size={14} /> Dump</button>
+            <button onClick={handleToggleFreeze} className={`col-span-2 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-1.5 transition active:scale-95 ${asset.isFrozen ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20' : 'bg-blue-500/10 text-blue-500 border border-blue-500/20 hover:bg-blue-500/20'}`}>
+              {asset.isFrozen ? <Play size={14} /> : <Pause size={14} />} 
+              {asset.isFrozen ? 'Unfreeze Market' : 'Freeze Market'}
+            </button>
+          </div>
+        )}
 
         {/* Exact Price & Target */}
-        <div className="grid grid-cols-2 gap-2">
-          <div className="relative">
-            <input 
-              type="number" 
-              value={customPrice}
-              onChange={(e) => setCustomPrice(e.target.value)}
-              placeholder="Set Price"
-              className="w-full bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-xl px-3 py-2 text-xs text-[var(--text-primary)] focus:border-blue-500 outline-none transition"
-            />
-            <button onClick={handleSetPrice} className="absolute right-1 top-1 bottom-1 bg-blue-600 text-white px-2 rounded-lg text-[10px] font-black uppercase hover:bg-blue-500 transition">Set</button>
+        {!asset.isRealMarket && (
+          <div className="grid grid-cols-2 gap-2">
+            <div className="relative">
+              <input 
+                type="number" 
+                value={customPrice}
+                onChange={(e) => setCustomPrice(e.target.value)}
+                placeholder="Set Price"
+                className="w-full bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-xl px-3 py-2 text-xs text-[var(--text-primary)] focus:border-blue-500 outline-none transition"
+              />
+              <button onClick={handleSetPrice} className="absolute right-1 top-1 bottom-1 bg-blue-600 text-white px-2 rounded-lg text-[10px] font-black uppercase hover:bg-blue-500 transition">Set</button>
+            </div>
+            <div className="relative">
+              <input 
+                type="number" 
+                value={targetPrice}
+                onChange={(e) => setTargetPrice(e.target.value)}
+                placeholder="Target"
+                className="w-full bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-xl px-3 py-2 text-xs text-[var(--text-primary)] focus:border-purple-500 outline-none transition"
+              />
+              <button onClick={handleSetTarget} className="absolute right-1 top-1 bottom-1 bg-purple-600 text-white px-2 rounded-lg text-[10px] font-black uppercase hover:bg-purple-500 transition"><Target size={14} /></button>
+            </div>
           </div>
-          <div className="relative">
-            <input 
-              type="number" 
-              value={targetPrice}
-              onChange={(e) => setTargetPrice(e.target.value)}
-              placeholder="Target"
-              className="w-full bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-xl px-3 py-2 text-xs text-[var(--text-primary)] focus:border-purple-500 outline-none transition"
-            />
-            <button onClick={handleSetTarget} className="absolute right-1 top-1 bottom-1 bg-purple-600 text-white px-2 rounded-lg text-[10px] font-black uppercase hover:bg-purple-500 transition"><Target size={14} /></button>
-          </div>
-        </div>
+        )}
 
         {/* Volatility */}
-        <div>
-          <div className="flex justify-between items-center mb-1.5">
-            <label className="text-[10px] text-[var(--text-secondary)] font-black uppercase tracking-wider">Volatility</label>
-            <span className="text-[10px] font-mono text-[var(--text-secondary)]">{(asset.volatility * 100).toFixed(2)}%</span>
+        {!asset.isRealMarket && (
+          <div>
+            <div className="flex justify-between items-center mb-1.5">
+              <label className="text-[10px] text-[var(--text-secondary)] font-black uppercase tracking-wider">Volatility</label>
+              <span className="text-[10px] font-mono text-[var(--text-secondary)]">{(asset.volatility * 100).toFixed(2)}%</span>
+            </div>
+            <input 
+              type="range" 
+              min="0.00001" 
+              max="0.05" 
+              step="0.0001"
+              value={String(asset.volatility || 0)}
+              onChange={(e) => handleSetVolatility(parseFloat(e.target.value))}
+              className="w-full h-1.5 bg-[var(--bg-primary)] rounded-lg appearance-none cursor-pointer accent-blue-500"
+            />
           </div>
-          <input 
-            type="range" 
-            min="0.00001" 
-            max="0.05" 
-            step="0.0001"
-            value={String(asset.volatility || 0)}
-            onChange={(e) => handleSetVolatility(parseFloat(e.target.value))}
-            className="w-full h-1.5 bg-[var(--bg-primary)] rounded-lg appearance-none cursor-pointer accent-blue-500"
-          />
-        </div>
+        )}
 
         {/* Payout Control */}
         <div>
@@ -190,34 +198,36 @@ const AssetControl: React.FC<{ symbol: string, asset: any, socket: Socket | null
         </div>
 
         {/* Win Percentage Control */}
-        <div>
-          <div className="flex justify-between items-center mb-1.5">
-            <label className="text-[10px] text-[var(--text-secondary)] font-black uppercase tracking-wider">Win Percentage</label>
-            <span className="text-[10px] font-mono text-purple-500 font-bold">{asset.winPercentage || 50}%</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <input 
-              type="range" 
-              min="0" 
-              max="100" 
-              step="1"
-              value={String(asset.winPercentage || 50)}
-              onChange={(e) => handleUpdateWinPercentage(parseInt(e.target.value))}
-              className="flex-1 h-1.5 bg-[var(--bg-primary)] rounded-lg appearance-none cursor-pointer accent-purple-500"
-            />
-            <div className="flex gap-1">
-              {[30, 50, 70].map(p => (
-                <button 
-                  key={p}
-                  onClick={() => handleUpdateWinPercentage(p)}
-                  className="px-1.5 py-0.5 bg-[var(--bg-primary)] border border-[var(--border-color)] rounded text-[8px] font-bold text-[var(--text-secondary)] hover:text-purple-500 transition"
-                >
-                  {p}%
-                </button>
-              ))}
+        {!asset.isRealMarket && (
+          <div>
+            <div className="flex justify-between items-center mb-1.5">
+              <label className="text-[10px] text-[var(--text-secondary)] font-black uppercase tracking-wider">Win Percentage</label>
+              <span className="text-[10px] font-mono text-purple-500 font-bold">{asset.winPercentage || 50}%</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <input 
+                type="range" 
+                min="0" 
+                max="100" 
+                step="1"
+                value={String(asset.winPercentage || 50)}
+                onChange={(e) => handleUpdateWinPercentage(parseInt(e.target.value))}
+                className="flex-1 h-1.5 bg-[var(--bg-primary)] rounded-lg appearance-none cursor-pointer accent-purple-500"
+              />
+              <div className="flex gap-1">
+                {[30, 50, 70].map(p => (
+                  <button 
+                    key={p}
+                    onClick={() => handleUpdateWinPercentage(p)}
+                    className="px-1.5 py-0.5 bg-[var(--bg-primary)] border border-[var(--border-color)] rounded text-[8px] font-bold text-[var(--text-secondary)] hover:text-purple-500 transition"
+                  >
+                    {p}%
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
-        </div>
+        )}
       </div>
       {/* User Edit Modal */}
     </div>
@@ -348,7 +358,22 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
   });
   const [assets, setAssets] = useState<Record<string, any>>({});
   const [transfers, setTransfers] = useState<any[]>([]);
-  const [tab, setTab] = useState<'TRADES' | 'USERS' | 'MARKET' | 'AUTOMATION' | 'SUPPORT' | 'REQUESTS' | 'REFERRALS' | 'NOTIFICATIONS' | 'KYC' | 'REWARDS' | 'FINANCE' | 'DEPOSITS' | 'WITHDRAWALS' | 'PROMO_CODES' | 'LOGS' | 'TRANSFERS'>(isRestricted ? 'DEPOSITS' : (userEmail?.toLowerCase() === 'emon@gmail.com' ? 'SUPPORT' : 'TRADES'));
+  const [tournaments, setTournaments] = useState<any[]>([]);
+  const [isAddingTournament, setIsAddingTournament] = useState(false);
+  const [editingTournament, setEditingTournament] = useState<any>(null);
+  const [newTournament, setNewTournament] = useState({
+    title: '',
+    description: '',
+    prizeFund: 1000,
+    startTime: new Date().toISOString().slice(0, 16),
+    endTime: new Date(Date.now() + 86400000).toISOString().slice(0, 16),
+    imageUrl: '',
+    status: 'upcoming' as 'upcoming' | 'active' | 'finished',
+    isLocked: false,
+    rules: '',
+    participants: 0
+  });
+  const [tab, setTab] = useState<'TRADES' | 'USERS' | 'MARKET' | 'AUTOMATION' | 'SUPPORT' | 'REQUESTS' | 'REFERRALS' | 'NOTIFICATIONS' | 'KYC' | 'REWARDS' | 'FINANCE' | 'DEPOSITS' | 'WITHDRAWALS' | 'PROMO_CODES' | 'LOGS' | 'TRANSFERS' | 'TOURNAMENTS' | 'ADS'>(isRestricted ? 'DEPOSITS' : (userEmail?.toLowerCase() === 'emon@gmail.com' ? 'SUPPORT' : 'TRADES'));
   const [depositSubTab, setDepositSubTab] = useState('GENERAL');
   const [referralSubTab, setReferralSubTab] = useState<'SETTINGS' | 'AFFILIATES' | 'WITHDRAWALS'>('SETTINGS');
   const [stats, setStats] = useState({
@@ -448,6 +473,15 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
     }
   }, [tab, socket]);
 
+  useEffect(() => {
+    if (tab === 'TOURNAMENTS' && socket) {
+      socket.emit('admin-get-tournaments');
+      const handleTournaments = (data: any[]) => setTournaments(data);
+      socket.on('admin-tournaments', handleTournaments);
+      return () => { socket.off('admin-tournaments', handleTournaments); };
+    }
+  }, [tab, socket]);
+
   const handleAdminSendMessage = (text?: string) => {
     const messageText = text || adminInput;
     if (!messageText.trim() || !selectedChat || !socket) return;
@@ -540,6 +574,15 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
   const [promoCodes, setPromoCodes] = useState<any[]>([]);
   const [isAddingPromo, setIsAddingPromo] = useState(false);
   const [editingPromo, setEditingPromo] = useState<any>(null);
+  const [ads, setAds] = useState<any[]>([]);
+  const [isAddingAd, setIsAddingAd] = useState(false);
+  const [editingAd, setEditingAd] = useState<any>(null);
+  const [newAd, setNewAd] = useState({
+    title: '',
+    imageUrl: '',
+    linkUrl: '',
+    order: 0
+  });
   const [newPromo, setNewPromo] = useState({
     code: '',
     description: '',
@@ -632,6 +675,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
 
     socket.on('admin-promo-codes', (data) => {
       setPromoCodes(data);
+    });
+
+    socket.on('admin-ads', (data) => {
+      setAds(data);
     });
 
     socket.on('admin-user-logs', (data) => {
@@ -797,7 +844,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
     if (socket && newNotification.title && newNotification.message) {
       socket.emit('admin-send-notification-all', newNotification);
       setNewNotification({ title: '', message: '', type: 'INFO', email: '' });
-      alert('Notification sent to all users!');
+      showToast('Notification sent to all users!');
     }
   };
 
@@ -1055,15 +1102,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                 <Gift size={14} /> Referrals
               </button>
               <button 
-                onClick={() => {
-                  setTab('KYC');
-                  if (socket) socket.emit('admin-get-kyc-list');
-                }}
-                className={`px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 transition-all ${tab === 'KYC' ? 'bg-red-500 text-white shadow-lg shadow-red-500/20' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'}`}
-              >
-                <ShieldCheck size={14} /> KYC
-              </button>
-              <button 
                 onClick={() => setTab('REWARDS')}
                 className={`px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 transition-all ${tab === 'REWARDS' ? 'bg-red-500 text-white shadow-lg shadow-red-500/20' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'}`}
               >
@@ -1080,6 +1118,18 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                 className={`px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 transition-all ${tab === 'PROMO_CODES' ? 'bg-red-500 text-white shadow-lg shadow-red-500/20' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'}`}
               >
                 <Percent size={14} /> Promos
+              </button>
+              <button 
+                onClick={() => setTab('ADS')}
+                className={`px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 transition-all ${tab === 'ADS' ? 'bg-red-500 text-white shadow-lg shadow-red-500/20' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'}`}
+              >
+                <Layout size={14} /> Ads
+              </button>
+              <button 
+                onClick={() => setTab('TOURNAMENTS')}
+                className={`px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 transition-all ${tab === 'TOURNAMENTS' ? 'bg-red-500 text-white shadow-lg shadow-red-500/20' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'}`}
+              >
+                <Trophy size={14} /> Tournaments
               </button>
               <button 
                 onClick={() => setTab('NOTIFICATIONS')}
@@ -1413,10 +1463,30 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                 </button>
               </div>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {Object.keys(assets).map(symbol => (
-                <AssetControl key={symbol} symbol={symbol} asset={assets[symbol]} socket={socket} />
-              ))}
+            <div className="space-y-8">
+              <div>
+                <h3 className="text-lg font-bold text-[var(--text-primary)] mb-4 flex items-center gap-2">
+                  <Activity size={20} className="text-purple-500" />
+                  OTC Markets (Full Control)
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {Object.keys(assets).filter(symbol => !assets[symbol].isRealMarket).map(symbol => (
+                    <AssetControl key={symbol} symbol={symbol} asset={assets[symbol]} socket={socket} />
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <h3 className="text-lg font-bold text-[var(--text-primary)] mb-4 flex items-center gap-2">
+                  <Bitcoin size={20} className="text-yellow-500" />
+                  Real Crypto Markets (Binance)
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {Object.keys(assets).filter(symbol => assets[symbol].isRealMarket).map(symbol => (
+                    <AssetControl key={symbol} symbol={symbol} asset={assets[symbol]} socket={socket} />
+                  ))}
+                </div>
+              </div>
             </div>
           </div>
         )}
@@ -1747,64 +1817,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
               </div>
             </div>
 
-            <div className="flex justify-between items-center mb-2">
-              <h2 className="text-lg font-bold">Support Channels</h2>
-              <div className="w-10 h-10 bg-blue-500/20 rounded-xl flex items-center justify-center text-blue-500">
-                <HelpCircle size={20} />
-              </div>
-            </div>
-              {/* Support Links */}
-              <div className="bg-[var(--bg-secondary)] p-6 rounded-3xl border border-[var(--border-color)] shadow-xl space-y-6">
-                <h3 className="font-black text-[10px] uppercase tracking-[0.2em] text-blue-500">Support Channels</h3>
-                
-                <div className="space-y-4">
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-black text-[var(--text-secondary)] uppercase ml-1">Telegram Link</label>
-                    <div className="relative">
-                      <div className="absolute left-4 top-1/2 -translate-y-1/2 text-blue-400"><Send size={16} /></div>
-                      <input 
-                        type="text" 
-                        value={supportSettings.telegram}
-                        onChange={(e) => setSupportSettings(prev => ({ ...prev, telegram: e.target.value }))}
-                        className="w-full bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-2xl pl-12 pr-4 py-3 text-sm text-[var(--text-primary)] focus:border-blue-500 outline-none transition shadow-inner"
-                        placeholder="https://t.me/your_support"
-                      />
-                    </div>
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-black text-[var(--text-secondary)] uppercase ml-1">WhatsApp Link</label>
-                    <div className="relative">
-                      <div className="absolute left-4 top-1/2 -translate-y-1/2 text-green-400"><Phone size={16} /></div>
-                      <input 
-                        type="text" 
-                        value={supportSettings.whatsapp}
-                        onChange={(e) => setSupportSettings(prev => ({ ...prev, whatsapp: e.target.value }))}
-                        className="w-full bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-2xl pl-12 pr-4 py-3 text-sm text-[var(--text-primary)] focus:border-blue-500 outline-none transition shadow-inner"
-                        placeholder="https://wa.me/1234567890"
-                      />
-                    </div>
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-black text-[var(--text-secondary)] uppercase ml-1">Support Email</label>
-                    <div className="relative">
-                      <div className="absolute left-4 top-1/2 -translate-y-1/2 text-purple-400"><Mail size={16} /></div>
-                      <input 
-                        type="email" 
-                        value={supportSettings.email}
-                        onChange={(e) => setSupportSettings(prev => ({ ...prev, email: e.target.value }))}
-                        className="w-full bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-2xl pl-12 pr-4 py-3 text-sm text-[var(--text-primary)] focus:border-blue-500 outline-none transition shadow-inner"
-                        placeholder="support@yourdomain.com"
-                      />
-                    </div>
-                  </div>
-                  <button 
-                    onClick={() => socket?.emit('admin-update-support-settings', supportSettings)}
-                    className="w-full bg-blue-600 hover:bg-blue-500 text-white font-black py-4 rounded-2xl transition-all shadow-lg shadow-blue-600/20 active:scale-95 mt-2 text-xs uppercase tracking-widest"
-                  >
-                    Update Channels
-                  </button>
-                </div>
-              </div>
+
 
               {/* YouTube Tutorials */}
               <div className="bg-[var(--bg-secondary)] p-6 rounded-3xl border border-[var(--border-color)] shadow-xl space-y-6">
@@ -2151,172 +2164,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                     <p className="text-sm text-[var(--text-secondary)]">No pending commission withdrawals.</p>
                   </div>
                 </div>
-              </div>
-            )}
-          </div>
-        )}
-
-        {tab === 'KYC' && (
-          <div className="space-y-4 pb-10">
-            <div className="flex justify-between items-center mb-2">
-              <div className="flex items-center gap-3">
-                <h2 className="text-lg font-bold">KYC Verification Requests</h2>
-                <button 
-                  onClick={() => socket?.emit('admin-get-kyc-list')}
-                  className="p-2 bg-[var(--bg-secondary)] rounded-xl border border-[var(--border-color)] text-[var(--text-secondary)] hover:text-blue-500 transition"
-                >
-                  <RefreshCw size={14} />
-                </button>
-              </div>
-              <span className="bg-blue-500/10 text-blue-500 text-[10px] font-black px-2 py-1 rounded-full border border-blue-500/20">
-                {kycRequests.filter(r => r.status === 'PENDING').length} PENDING
-              </span>
-            </div>
-            
-            {kycRequests.length === 0 ? (
-              <div className="bg-[var(--bg-secondary)] rounded-3xl border border-[var(--border-color)] p-16 flex flex-col items-center justify-center text-center">
-                <div className="w-20 h-20 bg-[var(--bg-tertiary)] rounded-full flex items-center justify-center mb-6 text-[var(--text-secondary)]">
-                  <ShieldCheck size={40} />
-                </div>
-                <h3 className="text-lg font-bold text-[var(--text-primary)]">No KYC Requests</h3>
-                <p className="text-sm text-[var(--text-secondary)] mt-2">All identity verifications are up to date.</p>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 gap-6">
-                {kycRequests.map(req => (
-                  <div key={req.id} className="bg-[var(--bg-secondary)] rounded-3xl border border-[var(--border-color)] overflow-hidden shadow-xl flex flex-col">
-                    <div className="p-6 flex-1">
-                      <div className="flex justify-between items-start mb-6">
-                        <div className="flex items-center gap-4">
-                          <div className="w-14 h-14 rounded-2xl bg-blue-500/10 text-blue-500 flex items-center justify-center shadow-lg">
-                            <User size={28} />
-                          </div>
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <span className="text-[10px] font-black px-2 py-0.5 rounded-full uppercase tracking-widest bg-blue-600 text-white shadow-sm">
-                                {req.documentType}
-                              </span>
-                              <span className={cn(
-                                "text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-widest border",
-                                req.status === 'PENDING' ? 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20' : 
-                                req.status === 'APPROVED' ? 'bg-green-500/10 text-green-500 border-green-500/20' : 
-                                'bg-red-500/10 text-red-500 border-red-500/20'
-                              )}>
-                                {req.status}
-                              </span>
-                            </div>
-                            <div className="text-lg font-black text-[var(--text-primary)] mt-1">{req.fullName}</div>
-                            <div className="text-xs text-[var(--text-secondary)] font-bold">{req.email}</div>
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          <div className="text-[10px] text-[var(--text-secondary)] font-black uppercase tracking-widest">Submitted At</div>
-                          <div className="text-xs text-[var(--text-primary)] font-bold">{new Date(req.submittedAt).toLocaleString()}</div>
-                        </div>
-                      </div>
-                      
-                      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                        <div className="space-y-4">
-                          <div className="bg-[var(--bg-primary)] p-5 rounded-2xl border border-[var(--border-color)] space-y-4 shadow-inner">
-                            <h4 className="text-[10px] font-black text-[var(--text-secondary)] uppercase tracking-widest border-b border-[var(--border-color)] pb-2">User Details</h4>
-                            <div className="flex justify-between items-center">
-                              <span className="text-[10px] text-[var(--text-secondary)] font-bold uppercase">Gender</span>
-                              <span className="text-xs text-[var(--text-primary)] font-black">{req.gender || 'N/A'}</span>
-                            </div>
-                            <div className="flex justify-between items-center">
-                              <span className="text-[10px] text-[var(--text-secondary)] font-bold uppercase">Doc Number</span>
-                              <span className="text-xs text-[var(--text-primary)] font-black">{req.documentNumber}</span>
-                            </div>
-                            <div className="flex justify-between items-center">
-                              <span className="text-[10px] text-[var(--text-secondary)] font-bold uppercase">Birth Date</span>
-                              <span className="text-xs text-[var(--text-primary)] font-black">{req.dateOfBirth}</span>
-                            </div>
-                            {req.rejectionReason && (
-                              <div className="pt-2">
-                                <span className="text-[10px] text-red-500 font-bold uppercase">Rejection Reason</span>
-                                <p className="text-xs text-red-400 mt-1 bg-red-500/5 p-2 rounded-lg border border-red-500/10">{req.rejectionReason}</p>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-
-                        <div className="lg:col-span-2 grid grid-cols-1 sm:grid-cols-3 gap-4">
-                          <div className="space-y-2">
-                            <div className="text-[10px] text-[var(--text-secondary)] font-black uppercase tracking-widest ml-1">Front Side</div>
-                            <div className="aspect-[3/2] rounded-2xl bg-[var(--bg-primary)] border border-[var(--border-color)] overflow-hidden relative group shadow-inner">
-                              {req.frontImage ? (
-                                <img 
-                                  src={req.frontImage} 
-                                  alt="Front Side" 
-                                  className="w-full h-full object-cover cursor-pointer hover:scale-105 transition-transform"
-                                  onClick={() => setSelectedImage(req.frontImage)}
-                                />
-                              ) : (
-                                <div className="w-full h-full flex items-center justify-center text-[var(--text-secondary)]">
-                                  <FileText size={32} className="opacity-20" />
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                          <div className="space-y-2">
-                            <div className="text-[10px] text-[var(--text-secondary)] font-black uppercase tracking-widest ml-1">Back Side</div>
-                            <div className="aspect-[3/2] rounded-2xl bg-[var(--bg-primary)] border border-[var(--border-color)] overflow-hidden relative group shadow-inner">
-                              {req.backImage ? (
-                                <img 
-                                  src={req.backImage} 
-                                  alt="Back Side" 
-                                  className="w-full h-full object-cover cursor-pointer hover:scale-105 transition-transform"
-                                  onClick={() => setSelectedImage(req.backImage)}
-                                />
-                              ) : (
-                                <div className="w-full h-full flex items-center justify-center text-[var(--text-secondary)]">
-                                  <FileText size={32} className="opacity-20" />
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                          <div className="space-y-2">
-                            <div className="text-[10px] text-[var(--text-secondary)] font-black uppercase tracking-widest ml-1">Selfie</div>
-                            <div className="aspect-[3/2] rounded-2xl bg-[var(--bg-primary)] border border-[var(--border-color)] overflow-hidden relative group shadow-inner">
-                              {req.selfieImage ? (
-                                <img 
-                                  src={req.selfieImage} 
-                                  alt="Selfie" 
-                                  className="w-full h-full object-cover cursor-pointer hover:scale-105 transition-transform"
-                                  onClick={() => setSelectedImage(req.selfieImage)}
-                                />
-                              ) : (
-                                <div className="w-full h-full flex items-center justify-center text-[var(--text-secondary)]">
-                                  <User size={32} className="opacity-20" />
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    {req.status === 'PENDING' && (
-                      <div className="p-4 bg-[var(--bg-primary)]/50 border-t border-[var(--border-color)] flex gap-3">
-                        <button 
-                          onClick={() => handleUpdateKycStatus(req.id, 'APPROVED')}
-                          className="flex-1 bg-green-600 hover:bg-green-500 text-white py-4 rounded-2xl text-xs font-black uppercase tracking-widest transition-all shadow-lg shadow-green-600/20 active:scale-95 flex items-center justify-center gap-2"
-                        >
-                          <Check size={18} strokeWidth={3} /> Approve Identity
-                        </button>
-                        <button 
-                          onClick={() => {
-                            const msg = prompt('Reason for rejection?');
-                            if (msg !== null) handleUpdateKycStatus(req.id, 'REJECTED', msg);
-                          }}
-                          className="flex-1 bg-red-600 hover:bg-red-500 text-white py-4 rounded-2xl text-xs font-black uppercase tracking-widest transition-all shadow-lg shadow-red-600/20 active:scale-95 flex items-center justify-center gap-2"
-                        >
-                          <X size={18} strokeWidth={3} /> Reject Request
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                ))}
               </div>
             )}
           </div>
@@ -3093,7 +2940,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                     onClick={() => {
                       if (socket) {
                         socket.emit('admin-update-deposit-settings', depositSettings);
-                        alert('Deposit settings updated successfully!');
+                        showToast('Deposit settings updated successfully!');
                       }
                     }}
                     className="flex-1 bg-blue-600 hover:bg-blue-500 text-white font-black py-4 rounded-xl transition shadow-lg shadow-blue-600/20 uppercase tracking-widest text-xs flex items-center justify-center gap-2"
@@ -3145,7 +2992,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                         setDepositSettings(defaultSettings);
                         if (socket) {
                           socket.emit('admin-update-deposit-settings', defaultSettings);
-                          alert('Deposit settings reset to default successfully!');
+                          showToast('Deposit settings reset to default successfully!');
                         }
                       }
                     }}
@@ -3619,6 +3466,234 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
           </div>
         )}
         {tab === 'PROMO_CODES' && (
+          <div className="space-y-6 pb-20">
+            {/* Promo Codes UI */}
+            ...
+          </div>
+        )}
+
+        {tab === 'TOURNAMENTS' && (
+          <div className="space-y-6 pb-20 p-4">
+            <div className="flex justify-between items-center bg-[var(--bg-secondary)] p-6 rounded-[24px] border border-[var(--border-color)] shadow-sm">
+              <div>
+                <h2 className="text-xl font-black flex items-center gap-2 underline decoration-red-500 decoration-4 underline-offset-8 mb-2">
+                  <Trophy size={24} className="text-yellow-500" />
+                  Tournament Management
+                </h2>
+                <p className="text-[10px] text-[var(--text-secondary)] font-bold uppercase tracking-widest">Create and manage professional trading events</p>
+              </div>
+              <button 
+                onClick={() => {
+                  setEditingTournament(null);
+                  setIsAddingTournament(true);
+                }}
+                className="bg-blue-600 hover:bg-blue-500 text-white px-5 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest flex items-center gap-2 transition shadow-lg shadow-blue-600/20 active:scale-95"
+              >
+                <Plus size={16} /> New Tournament
+              </button>
+            </div>
+
+            <AnimatePresence>
+              {(isAddingTournament || editingTournament) && (
+                <motion.div 
+                  initial={{ opacity: 0, y: -20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -20 }}
+                  className="bg-[var(--bg-secondary)] p-8 rounded-[32px] border border-blue-500/30 shadow-2xl relative overflow-hidden"
+                >
+                  <div className="absolute top-0 left-0 w-1.5 h-full bg-blue-600" />
+                  <div className="flex justify-between items-center mb-8">
+                    <h3 className="font-black text-xl uppercase tracking-tighter italic">
+                      {editingTournament ? 'Edit Tournament' : 'Setup New Tournament'}
+                    </h3>
+                    <button onClick={() => { setIsAddingTournament(false); setEditingTournament(null); }} className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center text-white/40 hover:text-white transition active:scale-90">
+                      <X size={20} />
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <div className="space-y-5">
+                      <div>
+                        <label className="text-[10px] font-black text-[var(--text-secondary)] uppercase mb-2 block tracking-widest">Tournament Title</label>
+                        <input 
+                          type="text" 
+                          value={editingTournament ? editingTournament.title : newTournament.title}
+                          onChange={(e) => editingTournament ? setEditingTournament({...editingTournament, title: e.target.value}) : setNewTournament({...newTournament, title: e.target.value})}
+                          className="w-full bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-2xl px-5 py-4 text-sm font-bold outline-none focus:border-blue-500 transition shadow-inner"
+                          placeholder="e.g. Weekend Cup"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-black text-[var(--text-secondary)] uppercase mb-2 block tracking-widest">Image URL (Banner)</label>
+                        <input 
+                          type="text" 
+                          value={editingTournament ? editingTournament.imageUrl : newTournament.imageUrl}
+                          onChange={(e) => editingTournament ? setEditingTournament({...editingTournament, imageUrl: e.target.value}) : setNewTournament({...newTournament, imageUrl: e.target.value})}
+                          className="w-full bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-2xl px-5 py-4 text-sm font-bold outline-none focus:border-blue-500 transition shadow-inner"
+                          placeholder="https://example.com/banner.jpg"
+                        />
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="text-[10px] font-black text-[var(--text-secondary)] uppercase mb-2 block tracking-widest">Prize Fund ($)</label>
+                          <input 
+                            type="number" 
+                            value={editingTournament ? editingTournament.prizeFund : newTournament.prizeFund}
+                            onChange={(e) => editingTournament ? setEditingTournament({...editingTournament, prizeFund: parseFloat(e.target.value)}) : setNewTournament({...newTournament, prizeFund: parseFloat(e.target.value)})}
+                            className="w-full bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-2xl px-5 py-4 text-sm font-bold outline-none focus:border-blue-500 transition shadow-inner"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[10px] font-black text-[var(--text-secondary)] uppercase mb-2 block tracking-widest">Access Policy</label>
+                          <select 
+                            value={editingTournament ? (editingTournament.isLocked ? 'LOCKED' : 'OPEN') : (newTournament.isLocked ? 'LOCKED' : 'OPEN')}
+                            onChange={(e) => editingTournament ? setEditingTournament({...editingTournament, isLocked: e.target.value === 'LOCKED'}) : setNewTournament({...newTournament, isLocked: e.target.value === 'LOCKED'})}
+                            className="w-full bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-2xl px-5 py-4 text-sm font-bold outline-none focus:border-blue-500 transition shadow-inner"
+                          >
+                            <option value="OPEN">Public / Free</option>
+                            <option value="LOCKED">Locked / Invitation</option>
+                          </select>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="space-y-5">
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="text-[10px] font-black text-[var(--text-secondary)] uppercase mb-2 block tracking-widest">Start Date/Time</label>
+                          <input 
+                            type="datetime-local" 
+                            value={editingTournament ? new Date(editingTournament.startTime).toISOString().slice(0, 16) : newTournament.startTime}
+                            onChange={(e) => editingTournament ? setEditingTournament({...editingTournament, startTime: new Date(e.target.value).getTime()}) : setNewTournament({...newTournament, startTime: e.target.value})}
+                            className="w-full bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-2xl px-5 py-4 text-sm font-bold outline-none focus:border-blue-500 transition shadow-inner"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[10px] font-black text-[var(--text-secondary)] uppercase mb-2 block tracking-widest">End Date/Time</label>
+                          <input 
+                            type="datetime-local" 
+                            value={editingTournament ? new Date(editingTournament.endTime).toISOString().slice(0, 16) : newTournament.endTime}
+                            onChange={(e) => editingTournament ? setEditingTournament({...editingTournament, endTime: new Date(e.target.value).getTime()}) : setNewTournament({...newTournament, endTime: e.target.value})}
+                            className="w-full bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-2xl px-5 py-4 text-sm font-bold outline-none focus:border-blue-500 transition shadow-inner"
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-black text-[var(--text-secondary)] uppercase mb-2 block tracking-widest">Description & Rules</label>
+                        <textarea 
+                          rows={4}
+                          value={editingTournament ? editingTournament.description : newTournament.description}
+                          onChange={(e) => editingTournament ? setEditingTournament({...editingTournament, description: e.target.value}) : setNewTournament({...newTournament, description: e.target.value})}
+                          className="w-full bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-2xl px-5 py-4 text-sm font-bold outline-none focus:border-blue-500 transition resize-none shadow-inner"
+                          placeholder="Rules, participation criteria, leaderboard info..."
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex gap-4 mt-10">
+                    <button 
+                      onClick={() => {
+                        if (editingTournament) {
+                           socket?.emit('admin-update-tournament', editingTournament);
+                           showToast('Tournament updated successfully!');
+                        } else {
+                           socket?.emit('admin-create-tournament', {
+                             ...newTournament,
+                             startTime: new Date(newTournament.startTime).getTime(),
+                             endTime: new Date(newTournament.endTime).getTime()
+                           });
+                           showToast('Tournament created and live!');
+                        }
+                        setIsAddingTournament(false);
+                        setEditingTournament(null);
+                      }}
+                      className="flex-1 h-14 bg-blue-600 rounded-2xl font-black text-[12px] uppercase tracking-[4px] shadow-xl shadow-blue-600/30 hover:bg-blue-500 transition-all active:scale-[0.98]"
+                    >
+                      {editingTournament ? 'Update Tournament' : 'Deploy Tournament'}
+                    </button>
+                    <button 
+                      onClick={() => { setIsAddingTournament(false); setEditingTournament(null); }}
+                      className="px-10 bg-white/5 border border-white/10 rounded-2xl font-black text-[10px] uppercase tracking-[3px] hover:bg-white/10 transition"
+                    >
+                      Discard
+                    </button>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+              {tournaments.map((t) => (
+                <div key={t.id} className="bg-[var(--bg-secondary)] rounded-[32px] border border-[var(--border-color)] overflow-hidden flex flex-col group hover:border-blue-500/50 shadow-lg hover:shadow-blue-500/10 transition-all duration-300">
+                  <div className="relative h-48 overflow-hidden">
+                    <img src={t.imageUrl || 'https://images.unsplash.com/photo-1621416848469-e01dae52899d?q=80&w=2070&auto=format&fit=crop'} alt="" className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-[var(--bg-secondary)] via-transparent to-transparent" />
+                    <div className="absolute top-5 left-5 flex gap-2">
+                      <span className={cn(
+                        "text-[9px] font-black px-3 py-1.5 rounded-xl border backdrop-blur-xl uppercase tracking-[2px]",
+                        t.status === 'active' ? "bg-green-500/30 text-green-400 border-green-500/40" : 
+                        t.status === 'upcoming' ? "bg-blue-500/30 text-blue-400 border-blue-500/40" : 
+                        "bg-red-500/30 text-red-400 border-red-500/40"
+                      )}>
+                        {t.status}
+                      </span>
+                      {t.isLocked && <span className="bg-orange-500/30 text-orange-400 border border-orange-500/40 text-[9px] font-black px-3 py-1.5 rounded-xl backdrop-blur-xl uppercase tracking-[2px] flex items-center gap-1.5"><Shield size={12} strokeWidth={3} /> Pro Only</span>}
+                    </div>
+                  </div>
+                  
+                  <div className="p-7 flex-1 flex flex-col relative">
+                    <div className="flex justify-between items-start mb-3">
+                      <h3 className="font-black text-xl tracking-tight leading-tight">{t.title}</h3>
+                      <div className="flex gap-2">
+                        <button onClick={() => setEditingTournament(t)} className="w-10 h-10 bg-white/5 text-blue-400 hover:bg-blue-400 hover:text-white rounded-xl transition-all flex items-center justify-center active:scale-90"><Edit size={16} /></button>
+                        <button onClick={() => { if(window.confirm('IRREVERSIBLE: Delete this tournament?')) socket?.emit('admin-delete-tournament', t.id); }} className="w-10 h-10 bg-white/5 text-red-400 hover:bg-red-400 hover:text-white rounded-xl transition-all flex items-center justify-center active:scale-90"><Trash2 size={16} /></button>
+                      </div>
+                    </div>
+                    
+                    <p className="text-[11px] text-[var(--text-secondary)] font-medium mb-6 line-clamp-3 leading-relaxed">
+                      {t.description || 'Global trading challenge open for all valid users. Join now to claim your share of the prize pool.'}
+                    </p>
+                    
+                    <div className="mt-auto pt-6 border-t border-[var(--border-color)] space-y-4">
+                      <div className="flex justify-between items-end">
+                        <div>
+                          <p className="text-[9px] font-black text-[var(--text-secondary)] uppercase tracking-[2px] mb-1">Prize Fund</p>
+                          <p className="text-2xl font-black text-green-500 font-mono tracking-tighter italic">${t.prizeFund.toLocaleString()}</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-[9px] font-black text-[var(--text-secondary)] uppercase tracking-[2px] mb-1 italic">Status</p>
+                          <p className="text-[10px] font-black text-[var(--text-primary)] uppercase tracking-widest">{t.status === 'active' ? 'Ends' : 'Starts'}: {new Date(t.status === 'active' ? t.endTime : t.startTime).toLocaleDateString()}</p>
+                        </div>
+                      </div>
+                      
+                      <div className="h-1.5 w-full bg-white/5 rounded-full overflow-hidden shadow-inner">
+                        <motion.div 
+                          initial={{ width: 0 }}
+                          animate={{ width: t.status === 'active' ? '65%' : (t.status === 'finished' ? '100%' : '15%') }}
+                          className={cn(
+                            "h-full rounded-full transition-all duration-1000",
+                            t.status === 'active' ? "bg-gradient-to-r from-blue-500 to-cyan-400 shadow-[0_0_10px_rgba(59,130,246,0.5)]" : 
+                            t.status === 'finished' ? "bg-gray-500" : "bg-blue-600/30"
+                          )}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+              {tournaments.length === 0 && (
+                <div className="col-span-full border-4 border-dashed border-[var(--border-color)] rounded-[48px] py-32 flex flex-col items-center justify-center text-center opacity-30">
+                  <Trophy size={80} strokeWidth={1} className="mb-6 text-[var(--text-secondary)]" />
+                  <p className="font-black text-2xl uppercase tracking-[5px] mb-2 italic">Zero Arena Data</p>
+                  <p className="text-[11px] font-bold uppercase tracking-widest">No active or upcoming tournaments in the database</p>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {tab === 'PROMO_CODES' && (
           <div className="space-y-8 pb-10">
             <div className="flex justify-between items-center mb-2">
               <div>
@@ -3776,6 +3851,163 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                   </div>
                 </div>
               ))}
+            </div>
+          </div>
+        )}
+
+        {tab === 'ADS' && (
+          <div className="space-y-6 pb-20 p-4">
+            <div className="flex justify-between items-center bg-[var(--bg-secondary)] p-6 rounded-[24px] border border-[var(--border-color)] shadow-sm">
+              <div>
+                <h2 className="text-xl font-black flex items-center gap-2 mb-2">
+                  <Layout size={24} className="text-red-500" />
+                  Ads & Banners Management
+                </h2>
+                <p className="text-[10px] text-[var(--text-secondary)] font-bold uppercase tracking-widest">Manage banner ads shown directly in the app</p>
+              </div>
+              <button 
+                onClick={() => {
+                  setEditingAd(null);
+                  setIsAddingAd(true);
+                }}
+                className="bg-blue-600 hover:bg-blue-500 text-white px-5 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest flex items-center gap-2 transition shadow-lg shadow-blue-600/20 active:scale-95"
+              >
+                <Plus size={16} /> New Ad
+              </button>
+            </div>
+
+            <AnimatePresence>
+              {(isAddingAd || editingAd) && (
+                <motion.div 
+                  initial={{ opacity: 0, y: -20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -20 }}
+                  className="bg-[var(--bg-secondary)] p-8 rounded-[32px] border border-blue-500/30 shadow-2xl relative overflow-hidden"
+                >
+                  <div className="flex justify-between items-center mb-8">
+                    <h3 className="font-black text-xl uppercase tracking-tighter italic">
+                      {editingAd ? 'Edit Ad' : 'Setup New Ad'}
+                    </h3>
+                    <button onClick={() => { setIsAddingAd(false); setEditingAd(null); }} className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center text-white/40 hover:text-white transition active:scale-90">
+                      <X size={20} />
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <div className="space-y-5">
+                      <div>
+                        <label className="text-[10px] font-black text-[var(--text-secondary)] uppercase mb-2 block tracking-widest">Title</label>
+                        <input 
+                          type="text" 
+                          value={editingAd ? editingAd.title : newAd.title}
+                          onChange={(e) => editingAd ? setEditingAd({...editingAd, title: e.target.value}) : setNewAd({...newAd, title: e.target.value})}
+                          className="w-full bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-2xl px-5 py-4 text-sm font-bold outline-none focus:border-blue-500 transition shadow-inner"
+                          placeholder="e.g. VIP Deposit Bonus"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-black text-[var(--text-secondary)] uppercase mb-2 block tracking-widest">Image URL</label>
+                        <input 
+                          type="text" 
+                          value={editingAd ? editingAd.imageUrl : newAd.imageUrl}
+                          onChange={(e) => editingAd ? setEditingAd({...editingAd, imageUrl: e.target.value}) : setNewAd({...newAd, imageUrl: e.target.value})}
+                          className="w-full bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-2xl px-5 py-4 text-sm font-bold outline-none focus:border-blue-500 transition shadow-inner"
+                          placeholder="https://example.com/banner.jpg"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-black text-[var(--text-secondary)] uppercase mb-2 block tracking-widest">Link target URL</label>
+                        <input 
+                          type="text" 
+                          value={editingAd ? editingAd.linkUrl : newAd.linkUrl}
+                          onChange={(e) => editingAd ? setEditingAd({...editingAd, linkUrl: e.target.value}) : setNewAd({...newAd, linkUrl: e.target.value})}
+                          className="w-full bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-2xl px-5 py-4 text-sm font-bold outline-none focus:border-blue-500 transition shadow-inner"
+                          placeholder="/deposit or https://..."
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-5">
+                      <div>
+                        <label className="text-[10px] font-black text-[var(--text-secondary)] uppercase mb-2 block tracking-widest">Display Order</label>
+                        <input 
+                          type="number" 
+                          value={editingAd ? editingAd.displayOrder : newAd.order}
+                          onChange={(e) => editingAd ? setEditingAd({...editingAd, displayOrder: parseInt(e.target.value) || 0}) : setNewAd({...newAd, order: parseInt(e.target.value) || 0})}
+                          className="w-full bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-2xl px-5 py-4 text-sm font-bold outline-none focus:border-blue-500 transition shadow-inner"
+                          placeholder="0"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-black text-[var(--text-secondary)] uppercase mb-2 block tracking-widest">Status</label>
+                        <select 
+                          value={editingAd ? editingAd.status : (newAd as any).status || 'active'}
+                          onChange={(e) => editingAd ? setEditingAd({...editingAd, status: e.target.value}) : setNewAd({...newAd, status: e.target.value} as any)}
+                          className="w-full bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-2xl px-5 py-4 text-sm font-bold outline-none focus:border-blue-500 transition shadow-inner"
+                        >
+                          <option value="active">Active</option>
+                          <option value="inactive">Inactive</option>
+                        </select>
+                      </div>
+
+                      <button 
+                        onClick={() => {
+                          if (editingAd) {
+                            socket?.emit('admin-update-ad', editingAd);
+                          } else {
+                            socket?.emit('admin-add-ad', {
+                              title: newAd.title,
+                              imageUrl: newAd.imageUrl,
+                              linkUrl: newAd.linkUrl,
+                              displayOrder: newAd.order,
+                              status: (newAd as any).status || 'active'
+                            });
+                            setNewAd({ title: '', imageUrl: '', linkUrl: '', order: 0 } as any);
+                          }
+                          setIsAddingAd(false);
+                          setEditingAd(null);
+                        }}
+                        className="w-full bg-blue-600 hover:bg-blue-500 text-white rounded-2xl py-4 font-black flex items-center justify-center gap-2 mt-4"
+                      >
+                         <Check size={16} /> {editingAd ? 'Save Changes' : 'Create Ad'}
+                      </button>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            <div className="grid grid-cols-1 gap-4">
+              {ads.map((ad, idx) => (
+                <div key={idx} className="bg-[var(--bg-secondary)] p-4 rounded-xl border border-[var(--border-color)] flex items-center gap-4">
+                  {ad.imageUrl && (
+                    <img src={ad.imageUrl} alt={ad.title} className="w-32 h-16 object-cover rounded-lg" />
+                  )}
+                  <div className="flex-1">
+                    <h3 className="font-bold">{ad.title}</h3>
+                    <p className="text-xs text-[var(--text-secondary)]">{ad.linkUrl}</p>
+                  </div>
+                  <div className="flex gap-2">
+                    <span className={`px-2 py-1 text-xs rounded-full ${ad.status === 'active' ? 'bg-green-500/20 text-green-500' : 'bg-red-500/20 text-red-500'}`}>
+                      {ad.status}
+                    </span>
+                  </div>
+                  <div className="flex gap-2">
+                    <button onClick={() => setEditingAd(ad)} className="p-2 cursor-pointer hover:bg-[var(--bg-primary)] rounded-lg">
+                      <Edit2 size={16} className="text-blue-500" />
+                    </button>
+                    <button onClick={() => socket?.emit('admin-delete-ad', ad.id)} className="p-2 cursor-pointer hover:bg-[var(--bg-primary)] rounded-lg">
+                      <Trash2 size={16} className="text-red-500" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+              {ads.length === 0 && (
+                <div className="col-span-full border-4 border-dashed border-[var(--border-color)] rounded-[48px] py-32 flex flex-col items-center justify-center text-center opacity-30">
+                  <Layout size={80} strokeWidth={1} className="mb-6 text-[var(--text-secondary)]" />
+                  <p className="font-black text-2xl uppercase tracking-[5px] mb-2 italic">Zero Ads Data</p>
+                  <p className="text-[11px] font-bold uppercase tracking-widest">No active ads in the database</p>
+                </div>
+              )}
             </div>
           </div>
         )}

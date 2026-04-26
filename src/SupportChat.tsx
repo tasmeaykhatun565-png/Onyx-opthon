@@ -116,7 +116,7 @@ export default function SupportChat({ onClose, supportSettings, socket, userEmai
   }, [messages, isTyping, chatStep]);
 
   useEffect(() => {
-    console.log('SupportChat mounted, socket:', socket, 'userEmail:', userEmail, 'chatStep:', chatStep);
+    // SupportChat mounted
     if (chatStep === 'chat' && socket && userEmail) {
       socket.emit('join-chat', userEmail);
       
@@ -208,290 +208,233 @@ export default function SupportChat({ onClose, supportSettings, socket, userEmai
   };
 
   return (
-    <motion.div 
-      initial={{ opacity: 0, y: '100%' }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: '100%' }}
-      transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-      className="fixed inset-0 z-50 bg-[var(--bg-primary)] flex flex-col h-full w-full md:max-w-md md:right-0 md:left-auto md:border-l md:border-[var(--border-color)] shadow-2xl"
-    >
-      {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--border-color)] bg-[var(--bg-secondary)]">
-        <div className="flex items-center gap-3">
-          <div className="relative">
-            <div className="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center text-white">
-              <MessageCircle size={20} />
-            </div>
-            <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-[var(--bg-secondary)] rounded-full"></div>
-          </div>
-          <div>
-            <h3 className="font-bold text-[var(--text-primary)]">Onyx Support</h3>
-            <div className="flex items-center gap-1.5">
-              <div className={cn(
-                "w-1.5 h-1.5 rounded-full",
-                supportStatus === 'online' ? "bg-green-500 animate-pulse" : "bg-red-500"
-              )}></div>
-              <p className={cn(
-                "text-[10px] font-bold uppercase tracking-wider",
-                supportStatus === 'online' ? "text-green-400" : "text-red-400"
-              )}>
-                {supportStatus === 'online' ? 'Online' : 'Offline'}
-              </p>
-            </div>
-          </div>
-        </div>
-        <div className="flex gap-2">
-          <button 
-            onClick={() => window.location.hash = '#help-center'}
-            className="p-2 text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--text-primary)]/5 rounded-full transition"
-            title="Help Center"
-          >
-            <BookOpen size={20} />
-          </button>
-          <button 
-            onClick={onClose}
-            className="p-2 text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--text-primary)]/5 rounded-full transition"
-          >
-            <X size={24} />
-          </button>
-        </div>
-      </div>
-
-      {/* Content Area */}
-      <div 
-        className="flex-1 overflow-y-auto bg-[var(--bg-primary)] touch-pan-y select-none relative"
-        style={{ 
-          WebkitTapHighlightColor: 'transparent',
-          backgroundImage: chatBackground ? `url(${chatBackground})` : 'none',
-          backgroundSize: 'cover',
-          backgroundPosition: 'center',
-          backgroundRepeat: 'no-repeat'
-        }}
+    <div className="fixed inset-0 z-50 flex items-end justify-end sm:p-4 pointer-events-none">
+      <motion.div 
+        initial={{ opacity: 0, y: 20, scale: 0.95 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        exit={{ opacity: 0, y: 20, scale: 0.95 }}
+        transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+        className="w-full h-full sm:w-[400px] sm:h-[650px] sm:max-h-[calc(100vh-2rem)] flex flex-col bg-[var(--bg-primary)] sm:rounded-2xl shadow-2xl overflow-hidden border border-[#2a2b30] pointer-events-auto shrink-0 relative"
       >
-        {chatBackground && (
-          <div className="absolute inset-0 bg-black/40 pointer-events-none" />
-        )}
-        {connectionError && (
-          <div className="absolute inset-0 z-10 bg-[var(--bg-primary)]/90 flex flex-col items-center justify-center p-6 text-center">
-            <AlertCircle size={48} className="text-rose-500 mb-4" />
-            <h3 className="text-lg font-bold text-[var(--text-primary)] mb-2">Connection Issue</h3>
-            <p className="text-sm text-[var(--text-secondary)] mb-6">We're having trouble connecting to the chat. Please check your internet or try again.</p>
+        {/* Header - Advanced Zendesk/Intercom style */}
+        <div className="bg-gradient-to-r from-[#1a1b20] to-[#25262c] text-white px-5 py-6 sm:rounded-t-2xl shadow-md border-b border-[#333] relative overflow-hidden">
+          {/* Subtle bg glow */}
+          <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/10 rounded-full blur-3xl" />
+          <div className="absolute -bottom-10 -left-10 w-24 h-24 bg-green-500/10 rounded-full blur-2xl" />
+
+          <div className="flex justify-between items-start relative z-10">
+            <div>
+              <div className="flex items-center gap-2 mb-2">
+                <h2 className="text-xl font-black tracking-tight text-white/90">OnyxTrade Support</h2>
+                <div className="bg-blue-500/20 text-blue-400 text-[10px] uppercase font-black tracking-widest px-1.5 py-0.5 rounded-sm">Premium</div>
+              </div>
+              <p className="text-sm font-medium text-white/60 mb-4">We usually reply in under 2 minutes.</p>
+              
+              {/* Agent avatars */}
+              <div className="flex items-center gap-3">
+                <div className="flex -space-x-3">
+                  <div className="w-8 h-8 rounded-full border-2 border-[#1a1b20] bg-blue-600 flex items-center justify-center text-[10px] font-bold shadow-md">OS</div>
+                  <div className="w-8 h-8 rounded-full border-2 border-[#1a1b20] bg-emerald-600 flex items-center justify-center text-[10px] font-bold shadow-md z-10">JM</div>
+                  <div className="w-8 h-8 rounded-full border-2 border-[#1a1b20] bg-rose-600 flex items-center justify-center text-[10px] font-bold shadow-md z-20">AT</div>
+                </div>
+                <div className="flex items-center gap-1.5 bg-black/20 rounded-full px-2.5 py-1 backdrop-blur-md border border-white/5">
+                   <div className={cn("w-2 h-2 rounded-full", supportStatus === 'online' ? "bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.8)]" : "bg-red-500")} />
+                   <span className="text-[11px] font-bold text-white/80">{supportStatus === 'online' ? 'Online' : 'Offline'}</span>
+                </div>
+              </div>
+            </div>
             <button 
-              onClick={handleRetry}
-              className="bg-blue-600 hover:bg-blue-500 text-white px-6 py-3 rounded-xl font-bold transition-all active:scale-95"
+              onClick={onClose}
+              className="text-white/50 hover:text-white bg-black/20 hover:bg-black/40 p-2 rounded-full transition-colors backdrop-blur-sm"
             >
-              Retry Connection
+              <X size={18} />
             </button>
           </div>
-        )}
-        {chatStep === 'country' ? (
-          <div className="p-6 space-y-6">
-            <div className="text-center space-y-3 mb-8">
-              <div className="w-16 h-16 bg-blue-500/10 rounded-full flex items-center justify-center mx-auto text-blue-500 mb-4">
-                <Globe size={32} />
-              </div>
-              <h2 className="text-xl font-bold text-[var(--text-primary)]">Welcome to OnyxTrade</h2>
-              <p className="text-[var(--text-secondary)] text-sm leading-relaxed">
-                The world's most trusted trading platform. Experience fast withdrawals and 24/7 premium support.
-              </p>
-              <p className="text-[var(--text-primary)] font-medium pt-2">Please select your country to continue:</p>
-            </div>
-            
-            <div className="space-y-3">
-              {COUNTRIES.map((country) => (
-                <motion.button
-                  key={country.id}
-                  onClick={() => handleCountrySelect(country)}
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                  className="w-full flex items-center justify-between p-4 bg-[var(--bg-secondary)] hover:bg-[var(--bg-secondary)]/80 border border-[var(--border-color)] hover:border-blue-500/30 rounded-xl transition-all group"
-                >
-                  <div className="flex items-center gap-4">
-                    <span className="text-2xl">{country.flag}</span>
-                    <div className="text-left">
-                      <div className="text-[var(--text-primary)] font-medium">{country.name}</div>
-                      <div className="text-xs text-[var(--text-secondary)] group-hover:text-[var(--text-secondary)]/80 transition-colors">{country.language}</div>
-                    </div>
-                  </div>
-                  <ChevronRight size={18} className="text-[var(--text-secondary)] group-hover:text-[var(--text-primary)] transition-colors" />
-                </motion.button>
-              ))}
-            </div>
+        </div>
 
-            <div className="pt-4 border-t border-[var(--border-color)]">
-              <p className="text-xs font-bold text-[var(--text-secondary)] uppercase tracking-widest mb-4 text-center">Commitment & Support</p>
-              <div className="space-y-3">
-                <button 
-                  onClick={() => {
-                    if (supportStatus === 'online') {
-                      // Just a placeholder for "commitment" - maybe a special message
-                      handleCountrySelect(COUNTRIES.find(c => c.id === 'global')!);
-                    } else {
-                      // Leave a message
-                      handleCountrySelect(COUNTRIES.find(c => c.id === 'global')!);
-                    }
-                  }}
-                  className={cn(
-                    "w-full flex items-center justify-center gap-3 p-4 rounded-2xl border transition-all active:scale-95",
-                    supportStatus === 'online' 
-                      ? "bg-blue-600 text-white border-blue-500 shadow-lg shadow-blue-600/20" 
-                      : "bg-[var(--bg-secondary)] text-[var(--text-primary)] border-[var(--border-color)]"
-                  )}
-                >
-                  {supportStatus === 'online' ? (
-                    <>
-                      <MessageCircle size={20} />
-                      <span className="font-bold">Start Priority Conversation</span>
-                    </>
-                  ) : (
-                    <>
-                      <Send size={20} />
-                      <span className="font-bold">Leave a Message (Offline)</span>
-                    </>
-                  )}
-                </button>
-                
-                <div className="grid grid-cols-2 gap-3">
-                  <a 
-                    href={supportSettings.telegram} 
-                    target="_blank" 
-                    rel="noopener noreferrer"
-                    className="flex flex-col items-center gap-2 p-4 bg-[var(--bg-secondary)] rounded-2xl border border-[var(--border-color)] hover:bg-[var(--bg-secondary)]/80 transition group"
-                  >
-                    <div className="w-10 h-10 bg-blue-500/10 rounded-full flex items-center justify-center text-blue-500 group-hover:scale-110 transition">
-                      <Send size={20} />
-                    </div>
-                    <span className="text-xs font-bold text-[var(--text-primary)]">Telegram</span>
-                  </a>
-                  <a 
-                    href={supportSettings.whatsapp} 
-                    target="_blank" 
-                    rel="noopener noreferrer"
-                    className="flex flex-col items-center gap-2 p-4 bg-[var(--bg-secondary)] rounded-2xl border border-[var(--border-color)] hover:bg-[var(--bg-secondary)]/80 transition group"
-                  >
-                    <div className="w-10 h-10 bg-green-500/10 rounded-full flex items-center justify-center text-green-500 group-hover:scale-110 transition">
-                      <Phone size={20} />
-                    </div>
-                    <span className="text-xs font-bold text-[var(--text-primary)]">WhatsApp</span>
-                  </a>
-                </div>
-              </div>
-            </div>
-          </div>
-        ) : (
-          <div className="p-4 space-y-4 min-h-full flex flex-col justify-end">
-             {/* Messages */}
-            {messages.map((msg) => (
-              <div 
-                key={msg.id} 
-                className={cn(
-                  "flex w-full",
-                  msg.sender === 'user' ? "justify-end" : msg.sender === 'system' ? "justify-center" : "justify-start"
-                )}
-              >
-                {msg.sender === 'system' ? (
-                  <div className="bg-[var(--bg-secondary)]/50 border border-[var(--border-color)] px-4 py-1.5 rounded-full text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-widest my-2">
-                    {msg.text}
-                  </div>
-                ) : (
-                  <div 
-                    className={cn(
-                      "max-w-[80%] rounded-2xl px-4 py-3 leading-relaxed transition-all duration-75 ease-out shadow-sm",
-                      msg.sender === 'user' 
-                        ? "bg-blue-600 text-white rounded-br-none" 
-                        : "bg-[var(--bg-secondary)] text-[var(--text-primary)] rounded-bl-none border border-[var(--border-color)]"
-                    )}
-                  >
-                    {msg.text}
-                    <div 
-                      className={cn(
-                        "mt-1 opacity-50 transition-all duration-75 ease-out",
-                        msg.sender === 'user' ? "text-blue-100" : "text-[var(--text-secondary)]"
-                      )}
-                    >
-                      {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                    </div>
-                  </div>
-                )}
-              </div>
-            ))}
-            
-            {isTyping && (
-              <div className="flex justify-start w-full">
-                <div className="bg-[var(--bg-secondary)] rounded-2xl rounded-bl-none px-4 py-2 border border-[var(--border-color)] flex items-center gap-2 text-[var(--text-secondary)]">
-                  <Loader2 size={16} className="animate-spin text-blue-500" />
-                  <span className="text-xs font-medium">
-                    {selectedCountry?.id === 'bd' ? 'সাপোর্ট টাইপ করছে...' : 
-                     selectedCountry?.id === 'in' ? 'सपोर्ट टाइप कर रहा है...' :
-                     selectedCountry?.id === 'pk' ? 'سپورٹ ٹائپ کر رہا ہے...' :
-                     selectedCountry?.id === 'id' ? 'Dukungan sedang mengetik...' :
-                     selectedCountry?.id === 'vn' ? 'Hỗ trợ đang soạn tin...' :
-                     selectedCountry?.id === 'br' ? 'Suporte está digitando...' :
-                     'Support is typing...'}
-                  </span>
-                </div>
-              </div>
-            )}
-            {/* Quick Replies */}
-            {!isTyping && messages.length > 0 && messages[messages.length - 1].sender === 'support' && (
-              <div className="flex flex-wrap gap-2 pt-2">
-                {QUICK_REPLIES.map((reply) => (
-                  <button
-                    key={reply.id}
-                    onClick={() => handleQuickReply(reply.text)}
-                    className="text-xs bg-blue-500/10 text-blue-400 border border-blue-500/20 px-3 py-1.5 rounded-full hover:bg-blue-500/20 transition active:scale-95"
-                  >
-                    {reply.text}
-                  </button>
-                ))}
-              </div>
-            )}
-            <div ref={messagesEndRef} />
-          </div>
-        )}
-      </div>
-
-      {/* Input Area - Only show in chat mode */}
-      {chatStep === 'chat' && (
-        <div className="p-4 bg-[var(--bg-secondary)] border-t border-[var(--border-color)]">
-          {chatStatus === 'closed' ? (
-            <div className="text-center py-2">
-              <p className="text-xs font-bold text-[var(--text-secondary)] uppercase tracking-widest mb-3">This session has ended</p>
+        {/* Content Area */}
+        <div 
+          className="flex-1 overflow-y-auto bg-[#0f1117] touch-pan-y relative"
+          style={{ 
+            backgroundImage: chatBackground ? `url(${chatBackground})` : 'none',
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
+          }}
+        >
+          {chatBackground && <div className="absolute inset-0 bg-[#0f1117]/80 backdrop-blur-sm pointer-events-none" />}
+          
+          {connectionError && (
+            <div className="absolute inset-0 z-50 bg-[#0f1117]/90 backdrop-blur-sm flex flex-col items-center justify-center p-6 text-center">
+              <AlertCircle size={48} className="text-rose-500 mb-4" />
+              <h3 className="text-lg font-bold text-white mb-2">Connection Issue</h3>
+              <p className="text-sm text-gray-400 mb-6">We're having trouble connecting to the chat. Please check your internet or try again.</p>
               <button 
-                onClick={() => {
-                  setChatStep('country');
-                  setMessages([]);
-                  setChatStatus('active');
-                  if (socket && userEmail) {
-                    socket.emit('start-new-chat', userEmail);
-                  }
-                }}
-                className="w-full bg-blue-600 hover:bg-blue-500 text-white py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all active:scale-95"
+                onClick={handleRetry}
+                className="bg-blue-600 hover:bg-blue-500 text-white px-6 py-3 rounded-xl font-bold transition-all active:scale-95"
               >
-                Start New Chat
-              </button>
-            </div>
-          ) : (
-            <div className="flex items-center gap-2 bg-[var(--bg-primary)] rounded-xl px-4 py-2 border border-[var(--border-color)] focus-within:border-blue-500/50 transition">
-              <input
-                type="text"
-                value={inputText}
-                onChange={(e) => setInputText(e.target.value)}
-                onKeyDown={handleKeyDown}
-                placeholder="Type your message..."
-                className="flex-1 bg-transparent text-[var(--text-primary)] placeholder-[var(--text-secondary)] focus:outline-none text-sm"
-              />
-              <button 
-                onClick={() => handleSendMessage()}
-                disabled={!inputText.trim() || isTyping}
-                className="p-2 text-blue-500 hover:text-blue-400 disabled:opacity-50 disabled:cursor-not-allowed transition"
-              >
-                {isTyping ? <Loader2 size={20} className="animate-spin" /> : <Send size={20} />}
+                Retry Connection
               </button>
             </div>
           )}
+
+          <div className="relative z-10 min-h-full flex flex-col justify-end">
+            {chatStep === 'country' ? (
+              <div className="p-6 space-y-6">
+                <div className="text-center">
+                  <h3 className="text-lg font-bold text-white/90 mb-1">Select your region</h3>
+                  <p className="text-xs text-white/50">To connect you with the right support team</p>
+                </div>
+                <div className="grid gap-2">
+                  {COUNTRIES.map((country) => (
+                    <motion.button
+                      key={country.id}
+                      onClick={() => handleCountrySelect(country)}
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      className="flex border items-center justify-between p-3.5 bg-[#1a1b20] hover:bg-[#20222a] border-[#2a2b30] hover:border-blue-500/50 rounded-xl transition-all group shadow-sm"
+                    >
+                      <div className="flex items-center gap-3">
+                        <span className="text-2xl drop-shadow-md">{country.flag}</span>
+                        <div className="text-left">
+                          <div className="text-white/90 font-semibold text-sm">{country.name}</div>
+                          <div className="text-[11px] text-white/40">{country.language}</div>
+                        </div>
+                      </div>
+                      <ChevronRight size={16} className="text-white/20 group-hover:text-blue-500 transition-colors" />
+                    </motion.button>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div className="p-5 space-y-5">
+                {/* Messages */}
+                {messages.map((msg, idx) => {
+                  const isSupport = msg.sender === 'support' || msg.sender === 'admin';
+                  const showAvatar = isSupport && (idx === 0 || messages[idx - 1].sender === 'user');
+                  
+                  return (
+                    <div 
+                      key={msg.id} 
+                      className={cn(
+                        "flex w-full gap-2",
+                        msg.sender === 'user' ? "justify-end" : msg.sender === 'system' ? "justify-center" : "justify-start"
+                      )}
+                    >
+                      {msg.sender === 'system' ? (
+                        <div className="bg-[#1a1b20] border border-[#2a2b30] px-4 py-1 rounded-full text-[10px] font-black tracking-widest text-white/40 uppercase shadow-sm">
+                          {msg.text}
+                        </div>
+                      ) : (
+                        <>
+                          {isSupport && (
+                            <div className="w-7 shrink-0 flex items-end">
+                              {showAvatar ? (
+                                <div className="w-7 h-7 rounded-full bg-blue-600 flex flex-col items-center justify-center text-white shadow-md shadow-blue-900/20">
+                                  <span className="text-[10px] font-bold">OS</span>
+                                </div>
+                              ) : <div className="w-7 h-7" />}
+                            </div>
+                          )}
+                          <div 
+                            className={cn(
+                              "max-w-[80%] rounded-[18px] px-4 py-3 leading-relaxed shadow-sm relative text-[13px] md:text-sm font-medium",
+                              msg.sender === 'user' 
+                                ? "bg-blue-600 text-white rounded-br-sm shadow-blue-600/20" 
+                                : "bg-[#1a1b20] text-gray-200 rounded-bl-sm border border-[#2a2b30]"
+                            )}
+                          >
+                            {msg.text}
+                            <div 
+                              className={cn(
+                                "mt-1 opacity-60 text-[9px] font-bold text-right",
+                                msg.sender === 'user' ? "text-blue-200" : "text-gray-500"
+                              )}
+                            >
+                              {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            </div>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  );
+                })}
+                
+                {isTyping && (
+                  <div className="flex w-full gap-2 justify-start">
+                    <div className="w-7 shrink-0 flex items-end">
+                       <div className="w-7 h-7 rounded-full bg-blue-600 flex flex-col items-center justify-center text-white shadow-md"><span className="text-[10px] font-bold">OS</span></div>
+                    </div>
+                    <div className="bg-[#1a1b20] rounded-[18px] rounded-bl-sm px-4 py-3 border border-[#2a2b30] text-gray-400">
+                      <Loader2 size={16} className="animate-spin text-blue-500" />
+                    </div>
+                  </div>
+                )}
+                
+                {/* Quick Replies */}
+                {!isTyping && messages.length > 0 && messages[messages.length - 1].sender === 'support' && (
+                  <div className="flex flex-wrap gap-2 pt-2 ml-9">
+                    {QUICK_REPLIES.map((reply) => (
+                      <button
+                        key={reply.id}
+                        onClick={() => handleQuickReply(reply.text)}
+                        className="text-[11px] font-semibold bg-transparent text-blue-400 border border-blue-500/30 px-3 py-1.5 rounded-full hover:bg-blue-500/10 hover:border-blue-500 transition active:scale-95 shadow-sm"
+                      >
+                        {reply.text}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                <div ref={messagesEndRef} />
+              </div>
+            )}
+          </div>
         </div>
-      )}
-    </motion.div>
+
+        {/* Input Area */}
+        {chatStep === 'chat' && (
+          <div className="bg-[#1a1b20] p-4 border-t border-[#2a2b30] z-20">
+            {chatStatus === 'closed' ? (
+              <div className="text-center py-2">
+                <button 
+                  onClick={() => {
+                    setChatStep('country');
+                    setMessages([]);
+                    setChatStatus('active');
+                    if (socket && userEmail) socket.emit('start-new-chat', userEmail);
+                  }}
+                  className="w-full bg-[#2a2b30] hover:bg-[#32343a] text-white py-3 rounded-xl text-xs font-bold transition-all active:scale-95"
+                >
+                  Start New Chat
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center bg-[#0f1117] rounded-full p-1.5 pr-2 border border-[#2a2b30] focus-within:border-blue-500/50 transition">
+                <button className="p-2 text-gray-500 hover:text-gray-300 transition shrink-0"><Globe size={18} /></button>
+                <input
+                  type="text"
+                  value={inputText}
+                  onChange={(e) => setInputText(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  placeholder="Write a message..."
+                  className="flex-1 bg-transparent text-white placeholder-gray-600 focus:outline-none text-[13px] px-2 font-medium"
+                />
+                <button 
+                  onClick={() => handleSendMessage()}
+                  disabled={!inputText.trim() || isTyping}
+                  className="p-2 bg-blue-600 text-white rounded-full hover:bg-blue-500 disabled:opacity-50 disabled:bg-[#2a2b30] disabled:text-gray-500 transition shrink-0 shadow-sm"
+                >
+                  {isTyping ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} className="relative left-[1px]" />}
+                </button>
+              </div>
+            )}
+            
+            <div className="text-center mt-3 flex justify-center items-center gap-1">
+              <Phone size={10} className="text-gray-600" />
+              <span className="text-[9px] font-black text-gray-600 uppercase tracking-widest">Secured by OnyxGuard 256-bit</span>
+            </div>
+          </div>
+        )}
+      </motion.div>
+    </div>
   );
 }

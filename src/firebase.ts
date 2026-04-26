@@ -1,6 +1,6 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore';
+import { getFirestore, doc, getDocFromServer } from 'firebase/firestore';
 import firebaseConfig from '../firebase-applet-config.json';
 import { safeStringify } from './utils';
 
@@ -8,6 +8,22 @@ const app = initializeApp(firebaseConfig);
 const dbId = (firebaseConfig as any).firestoreDatabaseId;
 export const db = dbId && dbId !== '(default)' ? getFirestore(app, dbId) : getFirestore(app);
 export const auth = getAuth(app);
+
+// Test connection to Firestore
+async function testConnection() {
+  try {
+    // Attempt to fetch a non-existent document from the server to test connectivity
+    await getDocFromServer(doc(db, '_internal_', 'connection_test'));
+    // Connection successful
+  } catch (error) {
+    if (error instanceof Error && (error.message.includes('the client is offline') || error.message.includes('network-request-failed'))) {
+      console.warn("Firestore connection check failed: the client is offline or network error. The app will continue in degraded mode.");
+    } else {
+      console.warn("Firestore connection test warning:", error);
+    }
+  }
+}
+testConnection();
 
 export enum OperationType {
   CREATE = 'create',

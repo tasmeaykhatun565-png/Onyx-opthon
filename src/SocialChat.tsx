@@ -100,7 +100,7 @@ export default function SocialChat({ onClose, userEmail, chatBackground, socket 
       animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0, x: '100%' }}
       transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-      className="fixed inset-0 z-50 bg-[var(--bg-primary)] flex flex-col h-full w-full md:max-w-md md:right-0 md:left-auto md:border-l md:border-[var(--border-color)] shadow-2xl"
+      className="fixed inset-0 z-50 bg-[var(--bg-primary)] flex flex-col h-full w-full md:max-w-md md:left-20 md:right-auto md:border-r md:border-[var(--border-color)] shadow-2xl"
     >
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--border-color)] bg-[var(--bg-secondary)]">
@@ -129,7 +129,7 @@ export default function SocialChat({ onClose, userEmail, chatBackground, socket 
 
       {/* Content Area */}
       <div 
-        className="flex-1 overflow-y-auto bg-[var(--bg-primary)] touch-pan-y select-none relative"
+        className="flex-1 overflow-y-auto bg-white dark:bg-[#0f1117] touch-pan-y select-none relative"
         style={{ 
           WebkitTapHighlightColor: 'transparent',
           backgroundImage: chatBackground ? `url(${chatBackground})` : 'none',
@@ -139,10 +139,10 @@ export default function SocialChat({ onClose, userEmail, chatBackground, socket 
         }}
       >
         {chatBackground && (
-          <div className="absolute inset-0 bg-black/40 pointer-events-none" />
+          <div className="absolute inset-0 bg-black/10 dark:bg-black/40 pointer-events-none" />
         )}
         
-        <div className="p-4 space-y-4 min-h-full flex flex-col justify-end">
+        <div className="p-4 space-y-4 min-h-full flex flex-col justify-end bg-transparent">
           {messages.map((msg) => {
             const isMe = msg.senderEmail === auth.currentUser?.email;
             return (
@@ -160,16 +160,16 @@ export default function SocialChat({ onClose, userEmail, chatBackground, socket 
                 )}
                 <div 
                   className={cn(
-                    "max-w-[85%] rounded-2xl px-4 py-2.5 leading-relaxed shadow-sm relative",
+                    "max-w-[85%] rounded-2xl px-4 py-2.5 leading-relaxed shadow-sm relative transition-all",
                     isMe 
-                      ? "bg-indigo-600 text-white rounded-br-none" 
-                      : "bg-[var(--bg-secondary)] text-[var(--text-primary)] rounded-bl-none border border-[var(--border-color)]"
+                      ? "bg-indigo-600 text-white rounded-br-none shadow-md" 
+                      : "bg-[var(--bg-secondary)] text-[var(--text-primary)] rounded-bl-none border border-[var(--border-color)] shadow-sm dark:shadow-none"
                   )}
                 >
-                  <p className="text-sm">{msg.text}</p>
+                  <p className="text-sm font-medium tracking-tight">{msg.text}</p>
                   <div 
                     className={cn(
-                      "text-[9px] mt-1 opacity-50 text-right",
+                      "text-[9px] mt-1 opacity-70 text-right font-bold",
                       isMe ? "text-indigo-100" : "text-[var(--text-secondary)]"
                     )}
                   >

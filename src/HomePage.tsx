@@ -71,6 +71,7 @@ export default function HomePage({ onStartTrading, onLogin, onNavigate, tutorial
               <button onClick={() => onNavigate('Features')} className="hover:text-[var(--text-primary)] transition-colors">Features</button>
               <button onClick={() => onNavigate('How it works')} className="hover:text-[var(--text-primary)] transition-colors">How it works</button>
               <button onClick={() => onNavigate('Live Trades')} className="hover:text-[var(--text-primary)] transition-colors">Live Trades</button>
+              <button onClick={() => onNavigate('Help')} className="hover:text-[var(--text-primary)] transition-colors">Help</button>
               <button onClick={() => setIsEditing(!isEditing)} className={cn("transition-colors flex items-center gap-2", isEditing ? "text-blue-500" : "hover:text-[var(--text-primary)]")}>
                 <Upload size={16} /> {isEditing ? 'Done Editing' : 'Customize'}
               </button>

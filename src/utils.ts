@@ -63,3 +63,19 @@ export function safeStringify(obj: any): string {
     return '[Unstringifiable Object]';
   }
 }
+
+export const getTimeFrameInMs = (tf: string): number => {
+  const numMatches = tf.match(/\d+/);
+  const letterMatches = tf.match(/[a-zA-Z]+/);
+  if (!numMatches || !letterMatches) return 60000;
+  const value = parseInt(numMatches[0]);
+  const unit = letterMatches[0].toUpperCase();
+  
+  switch (unit) {
+    case 'S': return value * 1000;
+    case 'M': return value * 60 * 1000;
+    case 'H': return value * 60 * 60 * 1000;
+    case 'D': return value * 24 * 60 * 60 * 1000;
+    default: return 60000;
+  }
+};

@@ -67,22 +67,8 @@ export default function AccountsSheet({
                 <h2 className="text-[#22c55e] font-bold text-sm uppercase tracking-wider">Islamic Account</h2>
               </div>
 
-              <div className="px-4 pb-8 space-y-3">
-                <div className="bg-[#333] rounded-xl p-4 flex items-center justify-between border border-[var(--border-color)]">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-yellow-500/20 flex items-center justify-center text-xl">
-                      🪙
-                    </div>
-                    <div className="flex flex-col">
-                      <span className="text-[var(--text-primary)] font-medium text-sm">Binocoins 0</span>
-                      <span className="text-[var(--text-secondary)] text-xs">Convert your trading success into benefits!</span>
-                    </div>
-                  </div>
-                  <div className="text-[var(--text-secondary)]">
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
-                  </div>
-                </div>
 
+              <div className="px-4 pb-8 space-y-3">
                 {accounts.map((account) => (
                   <div 
                     key={account.id}

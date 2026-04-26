@@ -74,24 +74,64 @@
         "icon": { "type": "string" }
       },
       "required": ["code", "bonusPercentage", "minDeposit", "turnoverMultiplier"]
-    }
-  },
-  "firestore": {
-    "/users/{userId}": {
-      "schema": "User",
-      "description": "User documents"
     },
-    "/users/{userId}/referrals/{referralId}": {
-      "schema": "Referral",
-      "description": "Referrals made by this user"
+    "Tournament": {
+        "title": "Tournament",
+        "description": "Trading tournament details",
+        "type": "object",
+        "properties": {
+          "title": { "type": "string" },
+          "imageUrl": { "type": "string" },
+          "prizeFund": { "type": "number" },
+          "startTime": { "type": "number" },
+          "endTime": { "type": "number" },
+          "status": { "type": "string", "enum": ["upcoming", "active", "finished"], "description": "calculated status or manually set" },
+          "isLocked": { "type": "boolean" },
+          "description": { "type": "string" },
+          "rules": { "type": "string" },
+          "participants": { "type": "number" },
+          "createdAt": { "type": "number" }
+        },
+        "required": ["title", "prizeFund", "startTime", "endTime"]
+      },
+      "Ad": {
+        "title": "Ad",
+        "description": "Advertisement banner with link",
+        "type": "object",
+        "properties": {
+          "title": { "type": "string" },
+          "imageUrl": { "type": "string" },
+          "linkUrl": { "type": "string" },
+          "order": { "type": "number", "description": "Display order" }
+        },
+        "required": ["title", "imageUrl", "linkUrl"]
+      }
     },
-    "/chats/{chatId}": {
-      "schema": "Chat",
-      "description": "Support chat sessions"
-    },
-    "/chats/{chatId}/messages/{messageId}": {
-      "schema": "Message",
-      "description": "Chat messages"
+    "firestore": {
+      "/users/{userId}": {
+        "schema": "User",
+        "description": "User documents"
+      },
+      "/users/{userId}/referrals/{referralId}": {
+        "schema": "Referral",
+        "description": "Referrals made by this user"
+      },
+      "/chats/{chatId}": {
+        "schema": "Chat",
+        "description": "Support chat sessions"
+      },
+      "/chats/{chatId}/messages/{messageId}": {
+        "schema": "Message",
+        "description": "Chat messages"
+      },
+      "/tournaments/{tournamentId}": {
+        "schema": "Tournament",
+        "description": "Trading tournaments"
+      },
+      "/ads/{adId}": {
+        "schema": "Ad",
+        "description": "Advertisement banners"
+      }
     }
   }
 }

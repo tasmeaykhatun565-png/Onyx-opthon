@@ -17,6 +17,7 @@ interface TradeInputSheetProps {
   onInvestmentChange: (amount: number) => void;
   currentPrice: number;
   currencySymbol: string;
+  timezoneOffset?: number;
 }
 
 type Tab = 'DURATION' | 'AMOUNT' | 'STRIKE_PRICES';
@@ -160,7 +161,7 @@ export default function TradeInputSheet({
               )}
 
               {tradeMode === 'CLOCK' && (
-                <div className="w-full grid grid-cols-2 gap-3 py-2 max-h-[320px] overflow-y-auto scrollbar-hide">
+                <div className="w-full grid grid-cols-3 gap-2.5 py-2 max-h-[320px] overflow-y-auto scrollbar-hide">
                   {(() => {
                     const now = currentTime;
                     const msToNextMinute = 60000 - (now % 60000);
@@ -171,9 +172,6 @@ export default function TradeInputSheet({
                     return offsets.map(offset => {
                       const expTime = nextClose + (offset - 1) * 60000;
                       const isSelected = expirationTime === expTime;
-                      const remaining = Math.max(0, expTime - now);
-                      const m = Math.floor(remaining / 60000);
-                      const s = Math.floor((remaining % 60000) / 1000);
                       
                       return (
                         <button
@@ -183,24 +181,13 @@ export default function TradeInputSheet({
                             onClose();
                           }}
                           className={cn(
-                            "flex flex-col items-center justify-center py-4 rounded-2xl border transition-all duration-200 relative overflow-hidden group",
+                            "flex flex-col items-center justify-center py-3 rounded-xl border transition-all duration-200 group",
                             isSelected 
-                              ? "bg-[#22c55e]/10 border-[#22c55e] text-[#22c55e] shadow-[0_0_20px_rgba(34,197,94,0.1)]" 
+                              ? "bg-[#22c55e]/10 border-[#22c55e] text-[#22c55e] shadow-[0_0_15px_rgba(34,197,94,0.1)]" 
                               : "bg-[var(--bg-secondary)] border-[var(--border-color)] text-[var(--text-primary)] hover:border-[var(--text-primary)]/30"
                           )}
                         >
-                          {isSelected && (
-                            <div className="absolute top-0 right-0 w-6 h-6 bg-[#22c55e] rounded-bl-xl flex items-center justify-center">
-                              <div className="w-1.5 h-3 border-r-2 border-b-2 border-white rotate-45 -mt-0.5" />
-                            </div>
-                          )}
-                          <span className="font-bold text-base tracking-tight">{format(expTime, 'HH:mm:ss')}</span>
-                          <span className={cn(
-                            "text-[10px] mt-1 font-medium tracking-wider", 
-                            isSelected ? "text-[#22c55e]/80" : "text-[var(--text-secondary)]"
-                          )}>
-                            {m.toString().padStart(2, '0')}:{s.toString().padStart(2, '0')}
-                          </span>
+                          <span className="font-bold text-xs tracking-tight">{format(expTime, 'HH:mm')}</span>
                         </button>
                       );
                     });

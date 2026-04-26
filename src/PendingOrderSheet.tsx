@@ -24,25 +24,32 @@ export default function PendingOrderSheet({
   onPlaceOrder 
 }: PendingOrderSheetProps) {
   const [tab, setTab] = useState<'PRICE' | 'TIME'>('PRICE');
-  const [profitability, setProfitability] = useState(70);
+  const [profitability, setProfitability] = useState(0);
   const [inputValue, setInputValue] = useState(currentPrice.toFixed(5));
   const [direction, setDirection] = useState<'UP' | 'DOWN'>('UP');
 
   const handleNumberClick = (num: string) => {
-    if (num === '.') {
-      if (!inputValue.includes('.')) {
-        setInputValue(prev => prev + '.');
-      }
-    } else {
-      setInputValue(prev => {
-        if (prev === '0') return num;
-        return prev + num;
-      });
-    }
+    setInputValue(prev => {
+      if (prev === '0' && num !== '.') return num;
+      if (num === '.' && prev.includes('.')) return prev;
+      return prev + num;
+    });
   };
 
   const handleDelete = () => {
     setInputValue(prev => prev.slice(0, -1) || '0');
+  };
+
+  const handleTabChange = (newTab: 'PRICE' | 'TIME') => {
+    setTab(newTab);
+    if (newTab === 'PRICE') {
+      setInputValue(currentPrice.toFixed(5));
+    } else {
+      const now = new Date();
+      const hours = now.getHours().toString().padStart(2, '0');
+      const minutes = now.getMinutes().toString().padStart(2, '0');
+      setInputValue(`${hours}:${minutes}`);
+    }
   };
 
   const profitabilityOptions = [
@@ -55,67 +62,72 @@ export default function PendingOrderSheet({
   return (
     <AnimatePresence>
       {isOpen && (
-        <>
+        <div className="fixed inset-0 z-[1000] flex flex-col justify-end">
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={onClose}
-            className="fixed inset-0 bg-black/60 z-[60] backdrop-blur-sm"
+            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
           />
           
           <motion.div
             initial={{ y: "100%" }}
             animate={{ y: 0 }}
             exit={{ y: "100%" }}
-            transition={{ type: "spring", damping: 25, stiffness: 300 }}
-            className="fixed bottom-0 left-0 right-0 z-[70] bg-[#151515] rounded-t-[24px] overflow-hidden border-t border-white/10 pb-safe"
+            transition={{ type: "spring", damping: 30, stiffness: 300 }}
+            className="relative bg-[#111214] rounded-t-[32px] overflow-hidden border-t border-white/5 pb-safe max-h-[90vh]"
           >
-            <div className="flex justify-center pt-3 pb-2">
-              <div className="w-10 h-1 bg-white/20 rounded-full" />
+            <div className="flex justify-center pt-3">
+              <div className="w-10 h-1 bg-white/10 rounded-full" />
             </div>
 
-            <div className="px-6 pb-4 flex items-center justify-between">
-              <h2 className="text-white font-bold text-lg">Place an Order on {assetName}</h2>
-              <HelpCircle size={20} className="text-white/40" />
+            <div className="p-5 flex items-center justify-between">
+              <h2 className="text-white font-bold text-base">Place an Order on {assetName}</h2>
+              <button 
+                onClick={onClose}
+                className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-white/40"
+              >
+                <HelpCircle size={18} />
+              </button>
             </div>
 
-            <div className="px-6 pb-6">
+            <div className="px-5 pb-6">
               {/* Tabs */}
-              <div className="flex border-b border-white/10 mb-6">
+              <div className="flex border-b border-white/5 mb-5">
                 <button 
-                  onClick={() => setTab('PRICE')}
+                  onClick={() => handleTabChange('PRICE')}
                   className={cn(
-                    "flex-1 py-3 text-sm font-bold transition relative",
-                    tab === 'PRICE' ? "text-[#22c55e]" : "text-white/40"
+                    "flex-1 py-3 text-[15px] font-bold transition relative",
+                    tab === 'PRICE' ? "text-[#a3ff12]" : "text-white/40"
                   )}
                 >
                   By Price
-                  {tab === 'PRICE' && <motion.div layoutId="tab-underline" className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#22c55e]" />}
+                  {tab === 'PRICE' && <motion.div layoutId="tab-underline" className="absolute bottom-[-1px] left-0 right-0 h-[2px] bg-[#a3ff12]" />}
                 </button>
                 <button 
-                  onClick={() => setTab('TIME')}
+                  onClick={() => handleTabChange('TIME')}
                   className={cn(
-                    "flex-1 py-3 text-sm font-bold transition relative",
-                    tab === 'TIME' ? "text-[#22c55e]" : "text-white/40"
+                    "flex-1 py-3 text-[15px] font-bold transition relative",
+                    tab === 'TIME' ? "text-[#a3ff12]" : "text-white/40"
                   )}
                 >
                   By Time
-                  {tab === 'TIME' && <motion.div layoutId="tab-underline" className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#22c55e]" />}
+                  {tab === 'TIME' && <motion.div layoutId="tab-underline" className="absolute bottom-[-1px] left-0 right-0 h-[2px] bg-[#a3ff12]" />}
                 </button>
               </div>
 
-              {/* Profitability */}
-              <div className="flex gap-2 overflow-x-auto pb-4 scrollbar-hide mb-4">
+              {/* Profitability Scroll */}
+              <div className="flex gap-2 overflow-x-auto pb-4 scrollbar-hide">
                 {profitabilityOptions.map((opt) => (
                   <button
                     key={opt.value}
                     onClick={() => setProfitability(opt.value)}
                     className={cn(
-                      "px-4 py-2 rounded-full text-xs font-bold whitespace-nowrap transition",
+                      "px-4 py-2 rounded-full text-[13px] font-bold whitespace-nowrap transition-all",
                       profitability === opt.value 
-                        ? "bg-[#22c55e] text-black" 
-                        : "bg-white/5 text-white/60 hover:bg-white/10"
+                        ? "bg-[#a3ff12] text-black" 
+                        : "bg-white/5 text-white/60 hover:bg-white/10 border border-white/5"
                     )}
                   >
                     {opt.label}
@@ -123,76 +135,81 @@ export default function PendingOrderSheet({
                 ))}
               </div>
 
-              {/* Input Field */}
-              <div className="bg-white/5 border border-[#22c55e] rounded-2xl p-4 mb-4">
-                <div className="text-[10px] text-white/40 font-bold uppercase tracking-wider mb-1">
+              {/* Input Field Display */}
+              <div className="mt-2 bg-white/[0.02] border border-[#a3ff12] rounded-2xl p-4 mb-4 shadow-[0_0_20px_rgba(163,255,18,0.05)]">
+                <div className="text-[10px] text-white/40 font-black uppercase tracking-widest mb-1">
                   {tab === 'PRICE' ? 'Opening Price' : 'Opening Time'}
                 </div>
-                <div className="text-2xl font-bold text-white">
+                <div className="text-2xl font-bold text-white font-mono">
                   {inputValue}
                 </div>
               </div>
 
-              <p className="text-[10px] text-white/40 mb-6 leading-relaxed">
-                Your trade will be opened if the asset {tab === 'PRICE' ? 'price reaches' : 'time matches'} {inputValue} and the profitability is {profitability}% or higher
+              <p className="text-[11px] text-white/40 mb-5 leading-tight px-1">
+                Your trade will be opened if the asset {tab === 'PRICE' ? 'price reaches' : 'time matches'} <span className="text-white font-bold">{inputValue}</span>
               </p>
 
-              {/* Direction Selection */}
-              <div className="flex gap-4 mb-6">
-                <button 
-                  onClick={() => setDirection('UP')}
-                  className={cn(
-                    "flex-1 py-3 rounded-xl font-bold transition flex items-center justify-center gap-2",
-                    direction === 'UP' ? "bg-[#22c55e] text-black" : "bg-white/5 text-white/60"
-                  )}
-                >
-                  <ArrowUp size={18} />
-                  Up
-                </button>
-                <button 
-                  onClick={() => setDirection('DOWN')}
-                  className={cn(
-                    "flex-1 py-3 rounded-xl font-bold transition flex items-center justify-center gap-2",
-                    direction === 'DOWN' ? "bg-[#ef4444] text-white" : "bg-white/5 text-white/60"
-                  )}
-                >
-                  <ArrowDown size={18} />
-                  Down
-                </button>
-              </div>
-
-              {/* Numeric Keypad */}
-              <div className="grid grid-cols-3 gap-4 mb-8">
+              {/* Numeric Keypad Grid */}
+              <div className="grid grid-cols-3 gap-y-2 gap-x-6 mb-6">
                 {[1, 2, 3, 4, 5, 6, 7, 8, 9, '.', 0].map((num) => (
                   <button
                     key={num}
                     onClick={() => handleNumberClick(num.toString())}
-                    className="h-12 flex items-center justify-center text-2xl font-medium text-white hover:bg-white/5 rounded-xl transition active:scale-90"
+                    className="h-12 flex items-center justify-center text-2xl font-medium text-white/90 active:scale-75 transition-all"
                   >
                     {num}
                   </button>
                 ))}
                 <button
                   onClick={handleDelete}
-                  className="h-12 flex items-center justify-center text-white hover:bg-white/5 rounded-xl transition active:scale-90"
+                  className="h-12 flex items-center justify-center text-white/60 active:scale-75 transition-all"
                 >
-                  <Delete size={24} />
+                  <Delete size={24} strokeWidth={1.5} />
                 </button>
               </div>
 
-              {/* Continue Button */}
+              {/* Action Buttons */}
+              <div className="flex gap-3 mb-6">
+                <button 
+                  onClick={() => setDirection('UP')}
+                  className={cn(
+                    "flex-1 h-14 rounded-2xl font-black text-sm uppercase tracking-widest transition-all flex items-center justify-center gap-2",
+                    direction === 'UP' ? "bg-[#22c55e] text-white shadow-[0_4px_15px_rgba(34,197,94,0.3)]" : "bg-white/5 text-white/40 border border-white/5"
+                  )}
+                >
+                  <ArrowUp size={18} strokeWidth={3} />
+                  Up
+                </button>
+                <button 
+                  onClick={() => setDirection('DOWN')}
+                  className={cn(
+                    "flex-1 h-14 rounded-2xl font-black text-sm uppercase tracking-widest transition-all flex items-center justify-center gap-2",
+                    direction === 'DOWN' ? "bg-[#ff4d4d] text-white shadow-[0_4px_15px_rgba(255,77,77,0.3)]" : "bg-white/5 text-white/40 border border-white/5"
+                  )}
+                >
+                  <ArrowDown size={18} strokeWidth={3} />
+                  Down
+                </button>
+              </div>
+
+              {/* Save Button */}
               <button
                 onClick={() => {
-                  onPlaceOrder({ type: tab, value: inputValue, minProfitability: profitability, direction });
+                  onPlaceOrder({ 
+                    type: tab, 
+                    value: inputValue, 
+                    minProfitability: profitability, 
+                    direction 
+                  });
                   onClose();
                 }}
-                className="w-full bg-[#22c55e] text-black font-black py-4 rounded-2xl text-lg hover:bg-[#1eb054] transition active:scale-[0.98] shadow-lg shadow-[#22c55e]/20"
+                className="w-full bg-[#a3ff12] text-black font-black py-4 rounded-2xl text-lg hover:bg-[#92e610] transition-all active:scale-[0.98] shadow-lg shadow-[#a3ff12]/20"
               >
-                Continue
+                Save
               </button>
             </div>
           </motion.div>
-        </>
+        </div>
       )}
     </AnimatePresence>
   );

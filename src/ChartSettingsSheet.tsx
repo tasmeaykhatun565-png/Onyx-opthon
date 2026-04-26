@@ -1,5 +1,6 @@
 import React from 'react';
 import { Activity, BarChart2, CandlestickChart, LineChart } from 'lucide-react';
+import { TIME_FRAMES, CHART_TYPES } from './constants';
 import BottomSheet from './BottomSheet';
 import { cn } from './utils';
 
@@ -11,17 +12,6 @@ interface ChartSettingsSheetProps {
   currentChartType: string;
   onChartTypeChange: (type: string) => void;
 }
-
-const TIME_FRAMES = [
-  '5s', '10s', '15s', '30s', '1m', '2m', '5m', '10m'
-];
-
-const CHART_TYPES = [
-  { id: 'Area', icon: Activity, label: 'Area' },
-  { id: 'Candlestick', icon: CandlestickChart, label: 'Candlestick' },
-  { id: 'Heikin Ashi', icon: BarChart2, label: 'Heikin Ashi' },
-  { id: 'Bar', icon: BarChart2, label: 'Bar' },
-];
 
 export default function ChartSettingsSheet({ 
   isOpen, 

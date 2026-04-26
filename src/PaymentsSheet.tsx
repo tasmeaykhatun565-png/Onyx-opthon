@@ -67,45 +67,49 @@ export default function PaymentsSheet({ isOpen, onClose, balance, rawBalance, us
             <h2 className="text-[var(--text-primary)] font-bold text-lg pb-2">Payments</h2>
           </div>
           
-          <div className="space-y-3">
+          <div className="space-y-1">
             <button 
               onClick={() => setIsDepositOpen(true)}
-              className="w-full bg-[#34ff34] hover:bg-[#2ce62c] active:scale-[0.98] transition-all rounded-2xl py-4 px-6 flex items-center gap-4 text-black font-bold text-lg shadow-lg shadow-green-500/20"
+              className="w-full bg-[#1e1e1e] hover:bg-[#2a2a2a] transition-all rounded-xl py-3 px-4 flex items-center gap-4 text-[var(--text-primary)] font-medium text-base border border-transparent hover:border-[#333]"
             >
-              <div className="w-10 h-10 flex items-center justify-center">
-                <Wallet size={24} strokeWidth={2.5} />
+              <div className="w-8 h-8 flex items-center justify-center bg-[#22c55e]/10 rounded-lg text-[#22c55e]">
+                <Wallet size={18} />
               </div>
-              <span className="flex-1 text-center mr-10">Deposit</span>
+              <span className="flex-1 text-left">Deposit</span>
+              <ChevronRight size={18} className="text-[#666]" />
             </button>
             
             <button 
               onClick={() => setIsWithdrawOpen(true)}
-              className="w-full bg-[var(--bg-primary)] hover:bg-[var(--bg-tertiary)] active:scale-[0.98] transition-all rounded-2xl py-4 px-6 flex items-center gap-4 text-[var(--text-primary)] font-bold text-lg border border-[var(--border-color)] shadow-sm"
+              className="w-full bg-[#1e1e1e] hover:bg-[#2a2a2a] transition-all rounded-xl py-3 px-4 flex items-center gap-4 text-[var(--text-primary)] font-medium text-base border border-transparent hover:border-[#333]"
             >
-              <div className="w-10 h-10 flex items-center justify-center">
-                <ArrowDown size={24} />
+              <div className="w-8 h-8 flex items-center justify-center bg-[#f59e0b]/10 rounded-lg text-[#f59e0b]">
+                <ArrowDown size={18} />
               </div>
-              <span className="flex-1 text-center mr-10">Withdraw</span>
+              <span className="flex-1 text-left">Withdraw</span>
+              <ChevronRight size={18} className="text-[#666]" />
             </button>
 
             <button 
               onClick={() => setIsTransferOpen(true)}
-              className="w-full bg-[var(--bg-primary)] hover:bg-[var(--bg-tertiary)] active:scale-[0.98] transition-all rounded-2xl py-4 px-6 flex items-center gap-4 text-[var(--text-primary)] font-bold text-lg border border-[var(--border-color)] shadow-sm"
+              className="w-full bg-[#1e1e1e] hover:bg-[#2a2a2a] transition-all rounded-xl py-3 px-4 flex items-center gap-4 text-[var(--text-primary)] font-medium text-base border border-transparent hover:border-[#333]"
             >
-              <div className="w-10 h-10 flex items-center justify-center">
-                <ArrowLeftRight size={24} />
+              <div className="w-8 h-8 flex items-center justify-center bg-[#3b82f6]/10 rounded-lg text-[#3b82f6]">
+                <ArrowLeftRight size={18} />
               </div>
-              <span className="flex-1 text-center mr-10">Internal Transfer</span>
+              <span className="flex-1 text-left">Transfer</span>
+              <ChevronRight size={18} className="text-[#666]" />
             </button>
 
             <button 
               onClick={() => setIsHistoryOpen(true)}
-              className="w-full bg-[var(--bg-primary)] hover:bg-[var(--bg-tertiary)] active:scale-[0.98] transition-all rounded-2xl py-4 px-6 flex items-center gap-4 text-[var(--text-primary)] font-bold text-lg border border-[var(--border-color)] shadow-sm"
+              className="w-full bg-[#1e1e1e] hover:bg-[#2a2a2a] transition-all rounded-xl py-3 px-4 flex items-center gap-4 text-[var(--text-primary)] font-medium text-base border border-transparent hover:border-[#333]"
             >
-              <div className="w-10 h-10 flex items-center justify-center">
-                <History size={24} />
+              <div className="w-8 h-8 flex items-center justify-center bg-[#94a3b8]/10 rounded-lg text-[#94a3b8]">
+                <History size={18} />
               </div>
-              <span className="flex-1 text-center mr-10">Transactions</span>
+              <span className="flex-1 text-left">Transactions</span>
+              <ChevronRight size={18} className="text-[#666]" />
             </button>
           </div>
         </div>

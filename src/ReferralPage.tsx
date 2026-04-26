@@ -105,105 +105,115 @@ export const ReferralPage: React.FC<ReferralPageProps> = ({ user, referralSettin
   };
 
   return (
-    <div className="h-full overflow-y-auto bg-[var(--bg-secondary)] text-[var(--text-primary)] pb-24">
+    <div className="h-full overflow-y-auto bg-[var(--bg-secondary)] text-[var(--text-primary)] pb-24 font-sans">
       {/* Header */}
-      <div className="sticky top-0 z-50 bg-[var(--bg-secondary)]/80 backdrop-blur-xl border-b border-[var(--border-color)] p-4 flex items-center gap-4">
-        <button onClick={onBack} className="p-2 -ml-2 hover:bg-[var(--text-primary)]/5 rounded-full transition">
-          <ChevronLeft size={28} />
-        </button>
-        <h1 className="text-xl font-black tracking-tight">Affiliate Hub</h1>
+      <div className="sticky top-0 z-50 bg-[var(--bg-secondary)]/90 backdrop-blur-3xl border-b border-[var(--border-color)] px-4 py-5 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <button onClick={onBack} className="p-2 -ml-2 text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-primary)] rounded-full transition-colors">
+            <ChevronLeft size={24} strokeWidth={2.5} />
+          </button>
+          <h1 className="text-xl font-bold tracking-tight">Referral Program</h1>
+        </div>
+        <div className="bg-[var(--bg-primary)] border border-[var(--border-color)] px-3 py-1.5 rounded-full flex items-center gap-2">
+           <Award size={14} className="text-blue-500" />
+           <span className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-wider">Level 1</span>
+        </div>
       </div>
 
-      <div className="p-4 space-y-6">
-        {/* Hero Banner */}
+      <div className="p-4 md:p-6 space-y-8 max-w-4xl mx-auto">
+        {/* Modern Hero Section */}
         <motion.div 
-          initial={{ opacity: 0, y: 20 }}
+          initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
-          className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-blue-600 via-indigo-600 to-purple-700 p-8 text-white shadow-2xl border border-white/10"
+          className="relative overflow-hidden rounded-[2rem] bg-gradient-to-b from-[#1E293B] to-[#0F172A] p-8 md:p-10 text-white shadow-xl border border-white/5"
         >
-          <div className="absolute top-0 right-0 w-80 h-80 bg-white/10 rounded-full blur-3xl -mr-20 -mt-20 pointer-events-none" />
-          <div className="absolute bottom-0 left-0 w-64 h-64 bg-blue-400/20 rounded-full blur-2xl -ml-10 -mb-10 pointer-events-none" />
+          <div className="absolute top-0 right-0 w-[40rem] h-[40rem] bg-blue-500/10 rounded-full blur-[100px] -mr-40 -mt-20 pointer-events-none" />
           
-          <div className="relative z-10">
-            <div className="flex items-center justify-between mb-6">
-              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/20 backdrop-blur-md text-[10px] font-black uppercase tracking-widest border border-white/10">
-                <Award size={14} className="text-yellow-300" /> Affiliate Program
+          <div className="relative z-10 flex flex-col md:flex-row gap-8 justify-between items-start md:items-center">
+            <div className="max-w-xl">
+              <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-blue-500/10 text-blue-400 text-xs font-semibold mb-6 border border-blue-500/20">
+                <Sparkles size={14} /> Earn up to {referralSettings.referralPercentage}% Commission
               </div>
-              <div className="flex -space-x-2">
-                {[1, 2, 3, 4].map(i => (
-                  <div key={i} className="w-8 h-8 rounded-full border-2 border-blue-600 bg-blue-500 overflow-hidden">
-                    <img src={`https://i.pravatar.cc/100?u=${i}`} alt="User" className="w-full h-full object-cover" />
-                  </div>
-                ))}
-                <div className="w-8 h-8 rounded-full border-2 border-blue-600 bg-blue-400 flex items-center justify-center text-[10px] font-bold">
-                  +1k
+
+              <h2 className="text-4xl md:text-5xl font-medium tracking-tight mb-4 text-white">
+                Invite friends.<br />
+                <span className="text-gray-400">Earn together.</span>
+              </h2>
+              
+              <p className="text-gray-400 text-sm md:text-base mb-8 leading-relaxed max-w-md">
+                Build your network and earn ongoing commissions on every trade your referrals make. Fast payouts straight to your main wallet.
+              </p>
+
+              {/* Share Box */}
+              <div className="bg-white/5 backdrop-blur-xl rounded-2xl p-2 flex items-center gap-2 border border-white/10 w-full max-w-md">
+                <div className="flex-1 px-4 py-3 bg-black/20 rounded-xl overflow-hidden">
+                  <div className="text-[10px] text-gray-500 font-semibold uppercase tracking-wider mb-1">Your Unique Link</div>
+                  <div className="font-mono text-sm truncate text-gray-200">{referralLink}</div>
                 </div>
+                <button 
+                  onClick={handleCopy}
+                  className="h-full aspect-square flex items-center justify-center bg-blue-600 text-white rounded-xl hover:bg-blue-500 transition-colors shadow-lg shadow-blue-900/20"
+                >
+                  {copied ? <Check size={20} strokeWidth={2.5} /> : <Copy size={20} strokeWidth={2.5} />}
+                </button>
               </div>
             </div>
 
-            <h2 className="text-4xl font-black leading-tight mb-3 tracking-tight">
-              Invite Friends,<br/>
-              <span className="text-transparent bg-clip-text bg-gradient-to-r from-yellow-200 to-yellow-500">Earn {referralSettings.referralPercentage}% Commission</span>
-            </h2>
-            <p className="text-blue-100 text-sm mb-8 max-w-sm leading-relaxed font-medium opacity-90">
-              Join our elite affiliate network. Earn high commissions on every deposit your referrals make. Your success is our priority.
-            </p>
-
-            <div className="bg-black/30 backdrop-blur-2xl rounded-2xl p-3 flex items-center gap-3 border border-white/10 shadow-2xl">
-              <div className="flex-1 px-4 py-3 bg-black/40 rounded-xl overflow-hidden border border-white/5">
-                <div className="text-[9px] text-blue-300 font-black uppercase tracking-[0.2em] mb-1.5 opacity-70">Your Referral Link</div>
-                <div className="font-mono text-xs truncate text-white font-bold">{referralLink}</div>
+            {/* Quick Stats on Desktop / Below on Mobile */}
+            <div className="w-full md:w-auto flex flex-row md:flex-col gap-4">
+              <div className="flex-1 bg-white/5 backdrop-blur-lg border border-white/10 p-5 rounded-2xl">
+                 <div className="text-gray-400 text-xs font-medium mb-1">Total Earned</div>
+                 <div className="text-2xl font-semibold text-white">{currencySymbol}{affiliateStats.totalEarnings.toFixed(2)}</div>
               </div>
-              <div className="flex gap-2">
-                <button 
-                  onClick={handleCopy}
-                  className="w-12 h-12 flex items-center justify-center bg-white text-blue-600 rounded-xl hover:bg-blue-50 transition active:scale-90 shrink-0 shadow-lg"
-                >
-                  {copied ? <Check size={20} strokeWidth={3} /> : <Copy size={20} strokeWidth={2.5} />}
-                </button>
-                <button 
-                  onClick={handleShare}
-                  className="w-12 h-12 flex items-center justify-center bg-blue-500 text-white rounded-xl hover:bg-blue-400 transition active:scale-90 shrink-0 shadow-lg border border-white/20"
-                >
-                  <Share2 size={20} strokeWidth={2.5} />
-                </button>
+              <div className="flex-1 bg-white/5 backdrop-blur-lg border border-white/10 p-5 rounded-2xl">
+                 <div className="text-gray-400 text-xs font-medium mb-1">Active Network</div>
+                 <div className="text-2xl font-semibold text-white">{affiliateStats.registrations} <span className="text-sm font-normal text-gray-500">Users</span></div>
               </div>
             </div>
           </div>
         </motion.div>
 
-        {/* Quick Share */}
-        <div className="flex items-center gap-3">
-          <button onClick={() => shareVia('whatsapp')} className="flex-1 py-3 bg-[#25D366]/10 text-[#25D366] rounded-2xl font-bold text-sm flex items-center justify-center gap-2 border border-[#25D366]/20 hover:bg-[#25D366]/20 transition">
-            WhatsApp
+        {/* Action Buttons */}
+        <div className="grid grid-cols-3 gap-3">
+          <button onClick={() => shareVia('whatsapp')} className="flex flex-col items-center justify-center gap-2 py-4 bg-[var(--bg-primary)] rounded-2xl border border-[var(--border-color)] hover:border-[#25D366]/50 hover:bg-[#25D366]/5 text-[var(--text-secondary)] hover:text-[#25D366] transition-all group">
+            <div className="w-10 h-10 rounded-full bg-[var(--bg-secondary)] flex items-center justify-center group-hover:bg-[#25D366]/10">
+               <Share2 size={18} />
+            </div>
+            <span className="text-xs font-medium">WhatsApp</span>
           </button>
-          <button onClick={() => shareVia('telegram')} className="flex-1 py-3 bg-[#0088cc]/10 text-[#0088cc] rounded-2xl font-bold text-sm flex items-center justify-center gap-2 border border-[#0088cc]/20 hover:bg-[#0088cc]/20 transition">
-            Telegram
+          <button onClick={() => shareVia('telegram')} className="flex flex-col items-center justify-center gap-2 py-4 bg-[var(--bg-primary)] rounded-2xl border border-[var(--border-color)] hover:border-[#0088cc]/50 hover:bg-[#0088cc]/5 text-[var(--text-secondary)] hover:text-[#0088cc] transition-all group">
+            <div className="w-10 h-10 rounded-full bg-[var(--bg-secondary)] flex items-center justify-center group-hover:bg-[#0088cc]/10">
+               <Share2 size={18} />
+            </div>
+            <span className="text-xs font-medium">Telegram</span>
           </button>
-          <button onClick={() => shareVia('twitter')} className="flex-1 py-3 bg-[#1DA1F2]/10 text-[#1DA1F2] rounded-2xl font-bold text-sm flex items-center justify-center gap-2 border border-[#1DA1F2]/20 hover:bg-[#1DA1F2]/20 transition">
-            Twitter
+          <button onClick={() => shareVia('twitter')} className="flex flex-col items-center justify-center gap-2 py-4 bg-[var(--bg-primary)] rounded-2xl border border-[var(--border-color)] hover:border-[#1DA1F2]/50 hover:bg-[#1DA1F2]/5 text-[var(--text-secondary)] hover:text-[#1DA1F2] transition-all group">
+             <div className="w-10 h-10 rounded-full bg-[var(--bg-secondary)] flex items-center justify-center group-hover:bg-[#1DA1F2]/10">
+               <Share2 size={18} />
+            </div>
+            <span className="text-xs font-medium">Twitter</span>
           </button>
         </div>
 
-        {/* Tabs */}
-        <div className="flex p-1 bg-[var(--bg-primary)] rounded-2xl border border-[var(--border-color)] overflow-x-auto">
+        {/* Custom Tabs */}
+        <div className="border-b border-[var(--border-color)] flex gap-6 px-2">
           <button 
             onClick={() => setActiveTab('OVERVIEW')}
-            className={cn("flex-1 min-w-[100px] py-2 text-sm font-bold rounded-xl transition", activeTab === 'OVERVIEW' ? "bg-[var(--bg-secondary)] text-[var(--text-primary)] shadow-sm" : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]")}
+            className={cn("pb-4 text-sm font-medium transition-colors relative", activeTab === 'OVERVIEW' ? "text-blue-500" : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]")}
           >
-            Overview
+            Dashboard
+            {activeTab === 'OVERVIEW' && (
+              <motion.div layoutId="tab-indicator" className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-500 rounded-t-full" />
+            )}
           </button>
           <button 
             onClick={() => setActiveTab('NETWORK')}
-            className={cn("flex-1 min-w-[100px] py-2 text-sm font-bold rounded-xl transition", activeTab === 'NETWORK' ? "bg-[var(--bg-secondary)] text-[var(--text-primary)] shadow-sm" : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]")}
+            className={cn("pb-4 text-sm font-medium transition-colors relative", activeTab === 'NETWORK' ? "text-blue-500" : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]")}
           >
-            Network
-          </button>
-          <button 
-            onClick={() => setActiveTab('MARKETING')}
-            className={cn("flex-1 min-w-[100px] py-2 text-sm font-bold rounded-xl transition", activeTab === 'MARKETING' ? "bg-[var(--bg-secondary)] text-[var(--text-primary)] shadow-sm" : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]")}
-          >
-            Marketing
+            Network Details
+            {activeTab === 'NETWORK' && (
+              <motion.div layoutId="tab-indicator" className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-500 rounded-t-full" />
+            )}
           </button>
         </div>
 
@@ -211,270 +221,159 @@ export const ReferralPage: React.FC<ReferralPageProps> = ({ user, referralSettin
           {activeTab === 'OVERVIEW' ? (
             <motion.div 
               key="overview"
-              initial={{ opacity: 0, x: -20 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: 20 }}
-              className="space-y-6"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              className="space-y-8"
             >
-              {/* Earnings Card */}
-              <div className="bg-gradient-to-br from-[var(--bg-primary)] to-[var(--bg-secondary)] rounded-3xl p-6 border border-[var(--border-color)] shadow-xl relative overflow-hidden">
-                <div className="absolute top-0 right-0 p-6 opacity-10">
-                  <Wallet size={80} />
-                </div>
-                <div className="relative z-10">
-                  <div className="text-xs font-black text-[var(--text-secondary)] uppercase tracking-widest mb-1">Referral Balance</div>
-                  <div className="text-4xl font-black text-[var(--text-primary)] mb-4">{currencySymbol}{affiliateStats.referralBalance.toFixed(2)}</div>
-                  
-                  <div className="flex items-center gap-4 mb-6">
-                    <div className="flex-1">
-                      <div className="text-[10px] text-[var(--text-secondary)] uppercase font-bold">Total Earned</div>
-                      <div className="text-sm font-bold text-green-500">{currencySymbol}{affiliateStats.totalEarnings.toFixed(2)}</div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Available Balance Card */}
+                <div className="bg-[var(--bg-primary)] rounded-[2rem] p-6 border border-[var(--border-color)] flex flex-col justify-between">
+                  <div>
+                    <div className="text-sm font-medium text-[var(--text-secondary)] mb-2">Available for Transfer</div>
+                    <div className="text-4xl font-semibold text-[var(--text-primary)] mb-6">{currencySymbol}{affiliateStats.referralBalance.toFixed(2)}</div>
+                    
+                    <div className="space-y-4 mb-6">
+                      <div className="flex justify-between items-center text-sm">
+                        <span className="text-[var(--text-secondary)]">Minimum transfer</span>
+                        <span className="font-medium">{currencySymbol}10.00</span>
+                      </div>
+                      
+                      <div className="w-full h-1.5 bg-[var(--bg-secondary)] rounded-full overflow-hidden">
+                        <motion.div 
+                          initial={{ width: 0 }}
+                          animate={{ width: `${Math.min(100, (affiliateStats.referralBalance / 10) * 100)}%` }}
+                          className="h-full bg-blue-500 rounded-full"
+                        />
+                      </div>
                     </div>
-                    <div className="flex-1">
-                      <div className="text-[10px] text-[var(--text-secondary)] uppercase font-bold">Transfer Threshold</div>
-                      <div className="text-sm font-bold text-blue-500">{currencySymbol}10.00</div>
-                    </div>
-                  </div>
-
-                  <div className="w-full h-2 bg-[var(--bg-primary)] rounded-full mb-4 overflow-hidden">
-                    <motion.div 
-                      initial={{ width: 0 }}
-                      animate={{ width: `${Math.min(100, (affiliateStats.referralBalance / 10) * 100)}%` }}
-                      className="h-full bg-blue-500 rounded-full"
-                    />
                   </div>
 
                   <button 
-                    disabled
-                    className="w-full py-4 bg-white/10 text-[var(--text-primary)] rounded-2xl font-black text-sm uppercase tracking-widest border border-white/10 flex items-center justify-center gap-2"
+                    disabled={affiliateStats.referralBalance < 10}
+                    className="w-full py-4 bg-[var(--bg-secondary)] text-[var(--text-primary)] rounded-full font-medium text-sm border border-[var(--border-color)] disabled:opacity-50 transition-colors hover:bg-[var(--border-color)]"
                   >
-                    {affiliateStats.referralBalance >= 10 ? 'Transferring to Main Balance...' : `Need ${currencySymbol}${(10 - affiliateStats.referralBalance).toFixed(2)} more to transfer`}
+                    {affiliateStats.referralBalance >= 10 ? 'Transfer to Wallet' : `Current balance too low`}
                   </button>
-                  <p className="text-[10px] text-center text-[var(--text-secondary)] mt-3">Balance auto-transfers to main wallet at {currencySymbol}10.00</p>
+                </div>
+
+                {/* Tier Progress */}
+                <div className="bg-[var(--bg-primary)] rounded-[2rem] p-6 border border-[var(--border-color)]">
+                   <div className="flex items-center justify-between mb-8">
+                     <div>
+                       <div className="text-sm font-medium text-[var(--text-secondary)] mb-1">Current Tier</div>
+                       <div className="text-2xl font-semibold text-blue-500">{affiliateStats.currentTier}</div>
+                     </div>
+                     <ShieldCheck size={32} className="text-[var(--border-color)]" />
+                   </div>
+
+                   <div className="bg-[var(--bg-secondary)] rounded-2xl p-4 border border-[var(--border-color)] mb-6">
+                     <div className="flex justify-between items-center mb-2">
+                       <span className="text-sm font-medium text-[var(--text-secondary)]">Progress to {affiliateStats.nextTier}</span>
+                       <span className="text-sm font-semibold">{affiliateStats.progress.toFixed(0)}%</span>
+                     </div>
+                     <div className="w-full h-1.5 bg-[var(--bg-primary)] rounded-full overflow-hidden mb-2">
+                        <motion.div 
+                          initial={{ width: 0 }}
+                          animate={{ width: `${affiliateStats.progress}%` }}
+                          className="h-full bg-blue-500 rounded-full"
+                        />
+                     </div>
+                     <div className="text-xs text-[var(--text-secondary)] text-right">
+                       Need {affiliateStats.refsToNextTier} more users
+                     </div>
+                   </div>
+
+                   <div className="flex justify-between items-center">
+                     <span className="text-sm text-[var(--text-secondary)]">Current Rate</span>
+                     <span className="text-sm font-semibold">{referralSettings.referralPercentage}% Commission</span>
+                   </div>
                 </div>
               </div>
 
-              {/* Stats Grid */}
-              <div className="grid grid-cols-2 gap-4">
-                <div className="bg-[var(--bg-primary)] p-5 rounded-3xl border border-[var(--border-color)]">
-                  <div className="w-10 h-10 bg-blue-500/10 rounded-xl flex items-center justify-center text-blue-500 mb-3">
-                    <Users size={20} />
+              {/* Performance Metrics */}
+              <div>
+                <h3 className="text-sm font-medium text-[var(--text-secondary)] mb-4">Performance Metrics</h3>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="bg-[var(--bg-primary)] p-5 rounded-2xl border border-[var(--border-color)]">
+                    <div className="text-2xl font-semibold text-[var(--text-primary)] mb-1">{affiliateStats.registrations}</div>
+                    <div className="text-xs text-[var(--text-secondary)]">Total Signups</div>
                   </div>
-                  <div className="text-2xl font-black">{affiliateStats.registrations}</div>
-                  <div className="text-[10px] text-[var(--text-secondary)] uppercase font-bold">Registrations</div>
-                </div>
-                <div className="bg-[var(--bg-primary)] p-5 rounded-3xl border border-[var(--border-color)]">
-                  <div className="w-10 h-10 bg-green-500/10 rounded-xl flex items-center justify-center text-green-500 mb-3">
-                    <TrendingUp size={20} />
+                  <div className="bg-[var(--bg-primary)] p-5 rounded-2xl border border-[var(--border-color)]">
+                    <div className="text-2xl font-semibold text-[var(--text-primary)] mb-1">{affiliateStats.activeTraders}</div>
+                    <div className="text-xs text-[var(--text-secondary)]">Active Traders</div>
                   </div>
-                  <div className="text-2xl font-black">{affiliateStats.conversionRate}%</div>
-                  <div className="text-[10px] text-[var(--text-secondary)] uppercase font-bold">Conv. Rate</div>
-                </div>
-                <div className="bg-[var(--bg-primary)] p-5 rounded-3xl border border-[var(--border-color)]">
-                  <div className="w-10 h-10 bg-purple-500/10 rounded-xl flex items-center justify-center text-purple-500 mb-3">
-                    <Zap size={20} />
+                  <div className="bg-[var(--bg-primary)] p-5 rounded-2xl border border-[var(--border-color)]">
+                    <div className="text-2xl font-semibold text-[var(--text-primary)] mb-1">{affiliateStats.conversionRate}%</div>
+                    <div className="text-xs text-[var(--text-secondary)]">Conversion Rate</div>
                   </div>
-                  <div className="text-2xl font-black">{affiliateStats.activeTraders}</div>
-                  <div className="text-[10px] text-[var(--text-secondary)] uppercase font-bold">Active Traders</div>
-                </div>
-                <div className="bg-[var(--bg-primary)] p-5 rounded-3xl border border-[var(--border-color)]">
-                  <div className="w-10 h-10 bg-orange-500/10 rounded-xl flex items-center justify-center text-orange-500 mb-3">
-                    <Compass size={20} />
+                  <div className="bg-[var(--bg-primary)] p-5 rounded-2xl border border-[var(--border-color)]">
+                    <div className="text-2xl font-semibold text-[var(--text-primary)] mb-1">{affiliateStats.totalClicks}</div>
+                    <div className="text-xs text-[var(--text-secondary)]">Link Clicks</div>
                   </div>
-                  <div className="text-2xl font-black">{affiliateStats.totalClicks}</div>
-                  <div className="text-[10px] text-[var(--text-secondary)] uppercase font-bold">Total Clicks</div>
-                </div>
-              </div>
-              
-              {/* Tiers / Progress */}
-              <div className="bg-[var(--bg-primary)] rounded-3xl p-6 border border-[var(--border-color)]">
-                <div className="flex items-center justify-between mb-6">
-                  <h3 className="font-black text-lg">Your Tier: {affiliateStats.currentTier}</h3>
-                  <div className="px-3 py-1 rounded-full bg-[var(--text-primary)]/5 text-xs font-bold">
-                    Level 1
-                  </div>
-                </div>
-                
-                <div className="relative h-2 bg-[var(--bg-secondary)] rounded-full mb-2 overflow-hidden">
-                  <div 
-                    className="absolute top-0 left-0 h-full bg-gradient-to-r from-blue-500 to-indigo-500 rounded-full transition-all duration-1000" 
-                    style={{ width: `${affiliateStats.progress}%` }}
-                  />
-                </div>
-                <div className="flex justify-between text-xs text-[var(--text-secondary)] font-medium mb-6">
-                  <span>{affiliateStats.registrations} Refs</span>
-                  <span>Next Tier: {affiliateStats.nextTier} ({affiliateStats.refsToNextTier} more)</span>
-                </div>
-
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between p-3 rounded-2xl bg-[var(--bg-secondary)] border border-blue-500/30 relative overflow-hidden">
-                    <div className="absolute left-0 top-0 bottom-0 w-1 bg-blue-500" />
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-full bg-blue-500/20 flex items-center justify-center">
-                        <ShieldCheck size={16} className="text-blue-500" />
-                      </div>
-                      <div>
-                        <div className="font-bold text-sm">Bronze (Current)</div>
-                        <div className="text-xs text-[var(--text-secondary)]">{referralSettings.referralPercentage}% Commission</div>
-                      </div>
-                    </div>
-                    <Check size={20} className="text-blue-500" />
-                  </div>
-                  
-                  <div className="flex items-center justify-between p-3 rounded-2xl bg-[var(--bg-secondary)] border border-[var(--border-color)] opacity-60">
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-full bg-[var(--text-primary)]/10 flex items-center justify-center">
-                        <Zap size={16} className="text-[var(--text-secondary)]" />
-                      </div>
-                      <div>
-                        <div className="font-bold text-sm">Silver</div>
-                        <div className="text-xs text-[var(--text-secondary)]">{referralSettings.referralPercentage + 2}% Commission</div>
-                      </div>
-                    </div>
-                    <div className="text-xs font-bold text-[var(--text-secondary)]">10 Refs</div>
-                  </div>
-                </div>
-              </div>
-
-              {/* How it works */}
-              <div className="bg-[var(--bg-primary)] rounded-3xl p-6 border border-[var(--border-color)]">
-                <h3 className="font-black text-lg mb-6">How it works</h3>
-                <div className="space-y-6 relative before:absolute before:inset-0 before:ml-5 before:-translate-x-px md:before:mx-auto md:before:translate-x-0 before:h-full before:w-0.5 before:bg-gradient-to-b before:from-transparent before:via-[var(--border-color)] before:to-transparent">
-                  
-                  <div className="relative flex items-center justify-between md:justify-normal md:odd:flex-row-reverse group is-active">
-                    <div className="flex items-center justify-center w-10 h-10 rounded-full border-4 border-[var(--bg-primary)] bg-blue-500 text-white shadow shrink-0 md:order-1 md:group-odd:-translate-x-1/2 md:group-even:translate-x-1/2 z-10">
-                      1
-                    </div>
-                    <div className="w-[calc(100%-4rem)] md:w-[calc(50%-2.5rem)] p-4 rounded-2xl bg-[var(--bg-secondary)] border border-[var(--border-color)] shadow-sm">
-                      <h4 className="font-bold text-sm mb-1">Share Link</h4>
-                      <p className="text-xs text-[var(--text-secondary)]">Send your unique invite link to friends.</p>
-                    </div>
-                  </div>
-
-                  <div className="relative flex items-center justify-between md:justify-normal md:odd:flex-row-reverse group is-active">
-                    <div className="flex items-center justify-center w-10 h-10 rounded-full border-4 border-[var(--bg-primary)] bg-indigo-500 text-white shadow shrink-0 md:order-1 md:group-odd:-translate-x-1/2 md:group-even:translate-x-1/2 z-10">
-                      2
-                    </div>
-                    <div className="w-[calc(100%-4rem)] md:w-[calc(50%-2.5rem)] p-4 rounded-2xl bg-[var(--bg-secondary)] border border-[var(--border-color)] shadow-sm">
-                      <h4 className="font-bold text-sm mb-1">Friends Join</h4>
-                      <p className="text-xs text-[var(--text-secondary)]">They sign up and deposit {currencySymbol}{referralSettings.minDepositForBonus}+.</p>
-                    </div>
-                  </div>
-
-                  <div className="relative flex items-center justify-between md:justify-normal md:odd:flex-row-reverse group is-active">
-                    <div className="flex items-center justify-center w-10 h-10 rounded-full border-4 border-[var(--bg-primary)] bg-purple-500 text-white shadow shrink-0 md:order-1 md:group-odd:-translate-x-1/2 md:group-even:translate-x-1/2 z-10">
-                      3
-                    </div>
-                    <div className="w-[calc(100%-4rem)] md:w-[calc(50%-2.5rem)] p-4 rounded-2xl bg-[var(--bg-secondary)] border border-[var(--border-color)] shadow-sm">
-                      <h4 className="font-bold text-sm mb-1">Earn Rewards</h4>
-                      <p className="text-xs text-[var(--text-secondary)]">You earn 20% commission on their deposits. When your referral balance hits {currencySymbol}10, it's added to your main wallet!</p>
-                    </div>
-                  </div>
-
-                </div>
-              </div>
-            </motion.div>
-          ) : activeTab === 'NETWORK' ? (
-            <motion.div 
-              key="network"
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -20 }}
-              className="space-y-4"
-            >
-              <div className="bg-[var(--bg-primary)] rounded-3xl p-6 border border-[var(--border-color)]">
-                <h3 className="font-black text-lg mb-4">Recent Referrals</h3>
-                <div className="space-y-3">
-                  {recentReferrals.map((ref) => (
-                    <div key={ref.id} className="flex items-center justify-between p-3 rounded-2xl bg-[var(--bg-secondary)] border border-[var(--border-color)]">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-[var(--text-primary)]/5 flex items-center justify-center">
-                          <User size={18} className="text-[var(--text-secondary)]" />
-                        </div>
-                        <div>
-                          <div className="font-bold text-sm">{ref.email}</div>
-                          <div className="text-[10px] text-[var(--text-secondary)] uppercase font-bold">{ref.date}</div>
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <div className={cn("text-[10px] font-black uppercase px-2 py-0.5 rounded-full mb-1 inline-block", ref.status === 'Active' ? "bg-green-500/10 text-green-500" : "bg-yellow-500/10 text-yellow-500")}>
-                          {ref.status}
-                        </div>
-                        <div className="text-xs font-bold text-[var(--text-primary)]">
-                          {ref.earnings > 0 ? `+${currencySymbol}${ref.earnings.toFixed(2)}` : '—'}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="bg-[var(--bg-primary)] rounded-3xl p-6 border border-[var(--border-color)]">
-                <h3 className="font-black text-lg mb-4">Commission History</h3>
-                <div className="space-y-3">
-                  {commissionHistory.map((item) => (
-                    <div key={item.id} className="flex items-center justify-between p-3 rounded-2xl bg-[var(--bg-secondary)] border border-[var(--border-color)]">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-blue-500/10 flex items-center justify-center text-blue-500">
-                          <TrendingUp size={18} />
-                        </div>
-                        <div>
-                          <div className="font-bold text-sm">{item.type}</div>
-                          <div className="text-[10px] text-[var(--text-secondary)] uppercase font-bold">{item.date} • {item.asset}</div>
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <div className="text-sm font-black text-green-500">+{currencySymbol}{item.amount.toFixed(2)}</div>
-                      </div>
-                    </div>
-                  ))}
                 </div>
               </div>
             </motion.div>
           ) : (
             <motion.div 
-              key="marketing"
-              initial={{ opacity: 0, y: 20 }}
+              key="network"
+              initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
-              className="space-y-4"
+              exit={{ opacity: 0, y: -10 }}
+              className="space-y-8"
             >
-              <div className="grid grid-cols-1 gap-4">
-                {marketingMaterials.map((item, idx) => (
-                  <div key={idx} className="bg-[var(--bg-primary)] rounded-3xl border border-[var(--border-color)] overflow-hidden group">
-                    <div className="aspect-video relative overflow-hidden bg-[var(--bg-secondary)]">
-                      <img 
-                        src={item.preview} 
-                        alt={item.title} 
-                        className="w-full h-full object-cover opacity-50 group-hover:opacity-80 transition duration-500 group-hover:scale-110"
-                        referrerPolicy="no-referrer"
-                      />
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent" />
-                      <div className="absolute bottom-4 left-4">
-                        <div className="text-[10px] text-blue-400 font-black uppercase tracking-widest mb-1">{item.type}</div>
-                        <h4 className="font-bold text-white text-sm">{item.title}</h4>
+              {/* Similar redesign for network tab... cleaner borders, less gradient noise */}
+              <div>
+                <h3 className="text-sm font-medium text-[var(--text-secondary)] mb-4">Recent Signups</h3>
+                <div className="bg-[var(--bg-primary)] rounded-[2rem] border border-[var(--border-color)] overflow-hidden">
+                  <div className="divide-y divide-[var(--border-color)]">
+                    {recentReferrals.map((ref) => (
+                      <div key={ref.id} className="flex items-center justify-between p-5 hover:bg-[var(--bg-secondary)] transition-colors">
+                        <div className="flex items-center gap-4">
+                          <div className="w-10 h-10 rounded-full bg-[var(--bg-secondary)] flex items-center justify-center border border-[var(--border-color)]">
+                            <User size={18} className="text-[var(--text-secondary)]" />
+                          </div>
+                          <div>
+                            <div className="font-medium text-[var(--text-primary)] mb-0.5">{ref.email}</div>
+                            <div className="text-xs text-[var(--text-secondary)]">{ref.date}</div>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-sm font-semibold text-[var(--text-primary)] mb-1">
+                            {ref.earnings > 0 ? `+${currencySymbol}${ref.earnings.toFixed(2)}` : '—'}
+                          </div>
+                          <div className={cn("text-[10px] font-medium px-2 py-0.5 rounded-full inline-block", ref.status === 'Active' ? "bg-green-500/10 text-green-500" : "bg-[var(--bg-secondary)] text-[var(--text-secondary)]")}>
+                            {ref.status}
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                    <div className="p-4 flex items-center justify-between bg-[var(--bg-secondary)]">
-                      <div className="text-[10px] text-[var(--text-secondary)] font-bold uppercase tracking-widest">
-                        Size: {item.size}
-                      </div>
-                      <button className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold transition active:scale-95">
-                        Download <ArrowRight size={14} />
-                      </button>
-                    </div>
+                    ))}
                   </div>
-                ))}
+                </div>
               </div>
-              
-              <div className="p-8 bg-gradient-to-br from-blue-600/20 to-indigo-600/10 rounded-3xl border border-blue-500/20 text-center relative overflow-hidden">
-                <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/10 rounded-full blur-3xl -mr-16 -mt-16" />
-                <Info size={32} className="text-blue-500 mx-auto mb-4" />
-                <h4 className="font-black text-xl text-white mb-2">Need Custom Assets?</h4>
-                <p className="text-sm text-blue-200/60 mb-6">Our design team can create personalized landing pages and banners for your specific audience.</p>
-                <button className="w-full py-4 bg-blue-600 hover:bg-blue-500 text-white rounded-2xl text-xs font-black uppercase tracking-widest transition active:scale-95 shadow-lg shadow-blue-600/20">
-                  Contact Affiliate Manager
-                </button>
+
+              <div>
+                <h3 className="text-sm font-medium text-[var(--text-secondary)] mb-4">Commission Log</h3>
+                <div className="bg-[var(--bg-primary)] rounded-[2rem] border border-[var(--border-color)] overflow-hidden">
+                  <div className="divide-y divide-[var(--border-color)]">
+                    {commissionHistory.map((item) => (
+                      <div key={item.id} className="flex items-center justify-between p-5">
+                        <div className="flex items-center gap-4">
+                          <div className="w-10 h-10 rounded-full bg-blue-500/10 flex items-center justify-center text-blue-500 border border-blue-500/20">
+                            <TrendingUp size={18} />
+                          </div>
+                          <div>
+                            <div className="font-medium text-[var(--text-primary)] mb-0.5">{item.type}</div>
+                            <div className="text-xs text-[var(--text-secondary)]">{item.date} • {item.asset}</div>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-sm font-medium text-green-500">+{currencySymbol}{item.amount.toFixed(2)}</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               </div>
             </motion.div>
           )}
