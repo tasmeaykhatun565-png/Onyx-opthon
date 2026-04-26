@@ -14,7 +14,7 @@ export const DRAWING_TOOLS = [
 
 export const TIME_FRAMES = [
   '5s', '10s', '15s', '20s', '30s', 
-  '1m', '2m', '5m', '10m', '15m', 
+  '1m', '2m', '5m', '10m', '15m',
   '30m', '1h', '4h', '1d', '7d', '1M'
 ];
 

@@ -213,7 +213,7 @@ export function LeaderboardPage({ onBack, currencySymbol = '$', currentUser }: {
                    
                    <div className="flex flex-col items-end">
                       <span className={cn("text-[15px] font-bold tabular-nums", entry.isCurrentUser ? "text-emerald-400" : "text-gray-100")}>
-                        {currencySymbol}{entry.profit.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                        ${entry.profit.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                         {entry.profit >= 2000 && "+"}
                       </span>
                    </div>

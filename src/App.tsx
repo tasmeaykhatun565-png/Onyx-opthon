@@ -2781,6 +2781,10 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
                         setIsActivitiesOpen(false);
                         setIsWhatsNewOpen(true);
                       }}
+                      onOpenReferral={() => {
+                        setIsActivitiesOpen(false);
+                        setView('REFERRAL');
+                      }}
                       inSidebar={true}
                    />
                 </aside>
@@ -2838,6 +2842,10 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
                 onOpenWhatsNew={() => {
                   setIsActivitiesOpen(false);
                   setIsWhatsNewOpen(true);
+                }}
+                onOpenReferral={() => {
+                  setIsActivitiesOpen(false);
+                  setView('REFERRAL');
                 }}
               />
 

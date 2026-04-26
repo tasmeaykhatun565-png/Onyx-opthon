@@ -732,18 +732,6 @@ const PaymentDetails = ({ handleBack, selectedMethod, amount, currencyCode, curr
       return () => clearInterval(timer);
     }, [loading]);
 
-    if (loading) {
-        return (
-            <div className="flex-1 flex flex-col items-center justify-center bg-white space-y-6">
-                <div className="relative w-20 h-20">
-                    <div className="absolute inset-0 border-4 border-gray-200 rounded-full"></div>
-                    <div className="absolute inset-0 border-4 border-[#D12053] rounded-full border-t-transparent animate-spin"></div>
-                </div>
-                <p className="text-xl font-bold text-[#D12053] animate-pulse">Verifying Payment Gateway...</p>
-            </div>
-        );
-    }
-
     const formatTime = (seconds: number) => {
       const mins = Math.floor(seconds / 60);
       const secs = seconds % 60;

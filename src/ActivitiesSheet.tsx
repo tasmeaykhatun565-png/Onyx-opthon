@@ -10,12 +10,13 @@ interface ActivitiesSheetProps {
   onOpenRewards: () => void;
   onOpenTournaments: () => void;
   onOpenWhatsNew: () => void;
+  onOpenReferral: () => void;
   inSidebar?: boolean;
   unreadAnnouncementsCount?: number;
   clientAds?: any[];
 }
 
-const ActivitiesSheet: React.FC<ActivitiesSheetProps> = ({ isOpen, onClose, onOpenLeaderboard, onOpenRewards, onOpenTournaments, onOpenWhatsNew, inSidebar = false, unreadAnnouncementsCount = 0, clientAds = [] }) => {
+const ActivitiesSheet: React.FC<ActivitiesSheetProps> = ({ isOpen, onClose, onOpenLeaderboard, onOpenRewards, onOpenTournaments, onOpenWhatsNew, onOpenReferral, inSidebar = false, unreadAnnouncementsCount = 0, clientAds = [] }) => {
   const content = (
     <div className={cn(
       "h-full w-full bg-[#121418] flex flex-col pt-safe scrollbar-hide",
@@ -129,7 +130,7 @@ const ActivitiesSheet: React.FC<ActivitiesSheetProps> = ({ isOpen, onClose, onOp
           </div>
 
           {/* Invite Friends */}
-          <div className="bg-[#1e1e1e] rounded-2xl p-4 flex items-center justify-between cursor-pointer hover:bg-white/[0.03] transition-all active:scale-[0.98] group">
+          <div onClick={onOpenReferral} className="bg-[#1e1e1e] rounded-2xl p-4 flex items-center justify-between cursor-pointer hover:bg-white/[0.03] transition-all active:scale-[0.98] group">
             <div className="flex items-center gap-4">
                <div className="w-12 h-12 bg-white/5 rounded-2xl flex items-center justify-center text-gray-400">
                  <UserPlus size={22} strokeWidth={1.5} />

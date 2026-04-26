@@ -5,7 +5,7 @@ import {
   Anchor, Play, Pause, Target, HelpCircle, X, Gift, Bell, CreditCard, 
   Check, Trash2, ShieldCheck, ShieldAlert, User, ArrowUp, ArrowDown, 
   Percent, Info, Send, Phone, Mail, Video, Trophy, FileText, Plus, BarChart2, Wallet, RefreshCw, CheckCircle2, XCircle, Search,
-  ArrowUpCircle, ArrowDownCircle, MessageSquare, Edit, Smartphone, Globe, Shield, DollarSign, Layout, Bitcoin, ExternalLink
+  ArrowUpCircle, ArrowDownCircle, MessageSquare, Edit, Smartphone, Globe, Shield, DollarSign, Layout, Bitcoin, ExternalLink, Megaphone
 } from 'lucide-react';
 import { cn, safeStringify } from './utils';
 import { motion, AnimatePresence } from 'framer-motion';
