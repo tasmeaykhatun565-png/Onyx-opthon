@@ -45,6 +45,7 @@ import WhatsNewSheet from './WhatsNewSheet';
 import IndicatorSheet from './IndicatorSheet';
 import ServiceAgreementSheet from './ServiceAgreementSheet';
 import ActivitiesSheet from './ActivitiesSheet';
+import { EconomicCalendar } from './EconomicCalendar';
 import TournamentsPage from './TournamentsPage';
 import OnboardingModal from './OnboardingModal';
 import PendingOrderSheet from './PendingOrderSheet';
@@ -1014,7 +1015,7 @@ export default function TradingPlatform() {
       setLanguage(preferences.language as any);
     }
   }, [preferences.language, setLanguage, language]);
-  const [view, setView] = useState<'HOME' | 'TRADING' | 'PROFILE' | 'MARKET' | 'REWARDS' | 'REFERRAL' | 'HELP' | 'TRADES' | 'SETTINGS' | 'ADMIN' | 'INFO_PAGE' | 'NEWS' | 'LEADERBOARD'>('HOME');
+  const [view, setView] = useState<'HOME' | 'TRADING' | 'PROFILE' | 'MARKET' | 'REWARDS' | 'REFERRAL' | 'HELP' | 'TRADES' | 'SETTINGS' | 'ADMIN' | 'INFO_PAGE' | 'NEWS' | 'LEADERBOARD' | 'CALENDAR'>('HOME');
   const [infoPageTitle, setInfoPageTitle] = useState<string>('');
   const [data, setData] = useState<OHLCData[]>([]);
   const [tickHistory, setTickHistory] = useState<Record<string, TickData[]>>({});
@@ -1459,7 +1460,8 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
           email: user.email,
           name: user.displayName,
           photoURL: user.photoURL,
-          uid: user.uid
+          uid: user.uid,
+          referredBy: localStorage.getItem('onyx_referral_code')
         });
         socket.emit('get-notifications', user.email);
       };
@@ -1482,6 +1484,12 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
     }
   }, [socket, user, view]);
   const [isPaymentsOpen, setIsPaymentsOpen] = useState(false);
+  const [paymentsInitialView, setPaymentsInitialView] = useState<'DEPOSIT' | 'WITHDRAW' | 'TRANSFER' | 'HISTORY' | null>(null);
+
+  const handleOpenPayments = useCallback((view: 'DEPOSIT' | 'WITHDRAW' | 'TRANSFER' | 'HISTORY' | null = null) => {
+    setPaymentsInitialView(view);
+    setIsPaymentsOpen(true);
+  }, []);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [isMarketOpen, setIsMarketOpen] = useState(false);
@@ -1489,6 +1497,7 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
   const [isTournamentsOpen, setIsTournamentsOpen] = useState(false);
   const [isActivitiesOpen, setIsActivitiesOpen] = useState(false);
   const [isLeaderboardOpen, setIsLeaderboardOpen] = useState(false);
+  const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const [isWhatsNewOpen, setIsWhatsNewOpen] = useState(false);
   const [isHelpOpen, setIsHelpOpen] = useState(false);
   const [isChartSettingsOpen, setIsChartSettingsOpen] = useState(false);
@@ -2544,10 +2553,10 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
 
         {/* --- Multi-Asset Selection Bar (Mobile) --- */}
         {view === 'TRADING' && (
-          <div className="flex md:hidden items-center px-2 bg-[#0a0b0d] gap-1 overflow-x-auto scrollbar-hide border-b border-white/5 h-11">
+          <div className="flex items-center px-2 bg-[#0a0b0d] gap-1 overflow-x-auto scrollbar-hide border-b border-white/5 h-11">
              <div 
                onClick={() => setIsAssetSelectorOpen(true)}
-               className="flex items-center gap-2 px-2.5 h-8 bg-white/[0.03] rounded-lg border border-white/5 active:scale-95 transition shrink-0"
+               className="flex items-center gap-2 px-2.5 h-8 bg-white/[0.03] rounded-lg border border-white/5 active:scale-95 transition shrink-0 cursor-pointer"
              >
                 <div className="w-5 h-5 rounded-md overflow-hidden shrink-0">
                   <AssetIcon shortName={selectedAsset.shortName} category={selectedAsset.category} flag={selectedAsset.flag} size="sm" />
@@ -2695,6 +2704,7 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
                   userEmail={user?.email}
                   turnoverRequired={turnoverRequired}
                   turnoverAchieved={turnoverAchieved}
+                  initialView={paymentsInitialView}
                 />
               )}
               {isHistoryOpen && (
@@ -2723,8 +2733,8 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
                    }}
                    onClose={() => setIsAccountsSheetOpen(false)}
                    onAddAccount={() => { setIsAccountsSheetOpen(false); }}
-                   onDeposit={() => setIsPaymentsOpen(true)}
-                   onWithdraw={() => setIsPaymentsOpen(true)}
+                   onDeposit={() => handleOpenPayments('DEPOSIT')}
+                   onWithdraw={() => handleOpenPayments('WITHDRAW')}
                    onRefill={refillDemoBalance}
                    accounts={[
                      { id: 'DEMO', name: 'Demo account', currency: currency.code, symbol: currency.symbol, balance: demoBalance * (EXCHANGE_RATES[currency.code] || 1), type: 'DEMO', flag: currency.flag },
@@ -2751,7 +2761,7 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
                     trades={trades}
                     onApplyReward={(code) => {
                       setSelectedRewardCode(code);
-                      setIsPaymentsOpen(true);
+                      handleOpenPayments('DEPOSIT');
                       setIsRewardsOpen(false);
                     }}
                   />
@@ -2784,6 +2794,10 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
                       onOpenReferral={() => {
                         setIsActivitiesOpen(false);
                         setView('REFERRAL');
+                      }}
+                      onOpenCalendar={() => {
+                        setIsActivitiesOpen(false);
+                        setIsCalendarOpen(true);
                       }}
                       inSidebar={true}
                    />
@@ -2847,6 +2861,10 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
                   setIsActivitiesOpen(false);
                   setView('REFERRAL');
                 }}
+                onOpenCalendar={() => {
+                  setIsActivitiesOpen(false);
+                  setIsCalendarOpen(true);
+                }}
               />
 
               <TournamentsPage 
@@ -2857,16 +2875,6 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
               />
 
             <div className="flex-1 h-full relative">
-              {/* Sentiment Bar (Left) */}
-              <div className="absolute left-1 top-4 bottom-16 w-1 bg-[var(--bg-tertiary)]/30 mx-1 rounded-full overflow-hidden flex flex-col z-10 pointer-events-none">
-                <div className="bg-red-500 w-full relative transition-all duration-200" style={{ height: `${100 - sentiment}%` }}>
-                   <span className="absolute top-0 left-2 text-[10px] text-red-500 font-bold">{Math.round(100 - sentiment)}%</span>
-                </div>
-                <div className="flex-1 bg-green-500 w-full relative transition-all duration-200">
-                   <span className="absolute bottom-0 left-2 text-[10px] text-green-500 font-bold">{Math.round(sentiment)}%</span>
-                </div>
-              </div>
-
               <TradingChart 
                 key={`${selectedAsset.id}-${chartTimeFrame}`}
                 data={data}
@@ -3220,6 +3228,7 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
           />
         )}
         {view === 'REFERRAL' && <ReferralPage user={user} referralSettings={referralSettings} currencySymbol={displayCurrencySymbol} onBack={() => setView('PROFILE')} referralStats={referralStats} />}
+        {view === 'CALENDAR' && <EconomicCalendar onBack={() => setView('HOME')} />}
         {/* Removed LEADERBOARD view as it's now in ActivitiesSheet */}
         {view === 'PROFILE' && (
           <ProfilePage 
@@ -3432,6 +3441,7 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
         onClose={() => {
           setIsPaymentsOpen(false);
           setSelectedRewardCode(null);
+          setPaymentsInitialView(null);
         }} 
         balance={displayBalance}
         rawBalance={balance}
@@ -3444,6 +3454,7 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
         userEmail={user?.email || ''}
         turnoverRequired={turnoverRequired}
         turnoverAchieved={turnoverAchieved}
+        initialView={paymentsInitialView}
       />
       
       <ChartSettingsSheet 
@@ -3510,6 +3521,35 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
         currentPrice={currentPrice}
         onPlaceOrder={handlePlacePendingOrder}
       />
+
+      <AnimatePresence>
+        {isCalendarOpen && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[110] flex justify-end"
+          >
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsCalendarOpen(false)}
+              className="absolute inset-0 bg-black/80 backdrop-blur-sm md:hidden"
+            />
+            
+            <motion.div 
+              initial={{ x: '100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '100%' }}
+              transition={{ type: "spring", damping: 30, stiffness: 300, mass: 0.8 }}
+              className="relative h-full w-full md:w-[420px] bg-[#0a0b0d] shadow-2xl flex flex-col border-l border-white/5"
+            >
+              <EconomicCalendar onBack={() => setIsCalendarOpen(false)} />
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* --- Leaderboard Overlay --- */}
       <AnimatePresence>

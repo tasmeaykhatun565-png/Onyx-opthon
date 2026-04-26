@@ -63,13 +63,12 @@ const ChartSkeleton = () => (
       exit={{ opacity: 0, scale: 0.8 }}
       className="flex flex-col items-center gap-6"
     >
-      <div className="relative w-16 h-16">
+      <div className="relative w-16 h-16 flex items-center justify-center">
         <motion.div
           animate={{ rotate: 360 }}
           transition={{ duration: 1.5, repeat: Infinity, ease: "linear" }}
           className="w-full h-full border-4 border-[#22c55e]/20 border-t-[#22c55e] rounded-full"
         />
-        <div className="absolute inset-2 border-4 border-[#22c55e]/10 border-b-[#22c55e]/50 rounded-full animate-pulse" />
       </div>
     </motion.div>
   </div>
@@ -756,7 +755,7 @@ export const TradingChart: React.FC<TradingChartProps> = ({
       for (let i = startIndex; i < chartData.length; i++) {
         const d = chartData[i];
         const base = {
-          time: (d.time / 1000) as Time,
+          time: (Number(d.time) / 1000) as Time,
           open: d.open,
           high: d.high,
           low: d.low,
@@ -786,7 +785,7 @@ export const TradingChart: React.FC<TradingChartProps> = ({
       haDataRef.current = [];
       const formattedData = chartData.map((d, i) => {
         const base = {
-          time: (d.time / 1000) as Time,
+          time: (Number(d.time) / 1000) as Time,
           open: d.open,
           high: d.high,
           low: d.low,
@@ -810,6 +809,12 @@ export const TradingChart: React.FC<TradingChartProps> = ({
       });
       if (formattedData.length > 0) {
         latestChartCandleRef.current = formattedData[formattedData.length - 1];
+        
+        console.log('DEBUG: TradingChart set data', {
+            firstTime: formattedData[0].time,
+            lastTime: formattedData[formattedData.length - 1].time,
+            dataLength: formattedData.length
+        });
         
         // Save current logical range before setData
         const timeScale = chartRef.current?.timeScale();

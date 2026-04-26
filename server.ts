@@ -470,7 +470,7 @@ async function startServer() {
               data.timeframe || '1m',
               data.chartType || 'candles',
               data.referredBy || null,
-              data.referralCode || null,
+              data.referralCode || Math.random().toString(36).substring(2, 8).toUpperCase(),
               data.referralCount || 0,
               data.extraAccounts || '[]'
             );
@@ -801,6 +801,8 @@ async function startServer() {
           referralBalance: user.referralBalance,
           totalReferralEarnings: user.totalReferralEarnings,
           referralCount: user.referralCount,
+          recentReferrals,
+          commissionHistory,
           trades: trades,
           extraAccounts: extraAccounts,
           kycStatus: user.kycStatus,
@@ -987,7 +989,7 @@ async function startServer() {
           }
         }
       } catch (e) {
-        // Silent error
+        console.error('Binance WS Message Parsing Error:', e, 'Data:', data);
       }
     });
 
@@ -1373,6 +1375,26 @@ async function startServer() {
       profit: profit, 
       closePrice: finalClosePrice 
     });
+
+    // --- Referral Commission on Trade Loss ---
+    if (!isWin && !isDraw && activeTrade.accountType === 'REAL') {
+       const tradeUser = db.prepare('SELECT referredBy, uid FROM users WHERE email = ?').get(email) as any;
+       if (tradeUser && tradeUser.referredBy) {
+          const referrer = db.prepare('SELECT * FROM users WHERE referralCode = ? OR uid = ? OR email = ?').get(tradeUser.referredBy, tradeUser.referredBy, tradeUser.referredBy) as any;
+          if (referrer) {
+             const tradeCommissionRate = (globalReferralSettings.referralPercentage || 5) / 100;
+             const commission = Math.abs(activeTrade.amount) * tradeCommissionRate;
+             
+             db.prepare('UPDATE users SET referralBalance = referralBalance + ?, totalReferralEarnings = totalReferralEarnings + ? WHERE email = ?')
+               .run(commission, commission, referrer.email);
+               
+             db.prepare('INSERT INTO referrals (referrerUid, referredUid, referredEmail, amount, type, timestamp) VALUES (?, ?, ?, ?, ?, ?)')
+               .run(referrer.uid, tradeUser.uid, email, commission, 'TRADE_LOSS', Date.now());
+               
+             emitUserUpdate(referrer.email);
+          }
+       }
+    }
 
     emitUserUpdate(email);
 
@@ -2113,11 +2135,11 @@ async function startServer() {
         
         if (!existingUser) {
           db.prepare('INSERT INTO users (email, name, photoURL, uid, balance, demoBalance, createdAt, lastLogin, kycStatus, referredBy, referralCode) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
-            .run(userData.email, userData.name || userData.displayName || '', userData.photoURL || '', userData.uid || '', userData.balance || 0, userData.demoBalance || 10000, now, now, userData.kycStatus || (kyc ? kyc.status : 'NONE'), userData.referredBy || null, userData.referralCode || null);
+            .run(userData.email, userData.name || userData.displayName || '', userData.photoURL || '', userData.uid || '', userData.balance || 0, userData.demoBalance || 10000, now, now, userData.kycStatus || (kyc ? kyc.status : 'NONE'), userData.referredBy || null, userData.referralCode || Math.random().toString(36).substring(2, 8).toUpperCase());
           
           // Increment referralCount for referrer
           if (userData.referredBy) {
-            const referrer = db.prepare('SELECT * FROM users WHERE referralCode = ? OR UPPER(substr(uid, 1, 8)) = UPPER(?)').get(userData.referredBy, userData.referredBy) as any;
+            const referrer = db.prepare('SELECT * FROM users WHERE referralCode = ? OR UPPER(substr(uid, 1, 8)) = UPPER(?) OR email = ?').get(userData.referredBy, userData.referredBy, userData.referredBy) as any;
             if (referrer) {
               db.prepare('UPDATE users SET referralCount = referralCount + 1 WHERE email = ?').run(referrer.email);
               if (canSyncFirestore() && referrer.uid) {

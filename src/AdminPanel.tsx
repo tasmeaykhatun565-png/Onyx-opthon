@@ -4009,7 +4009,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                         }}
                         className="p-2 hover:bg-[var(--bg-primary)] rounded-full transition text-[var(--text-secondary)] hover:text-blue-400"
                       >
-                        <Edit2 size={16} />
+                        <Edit size={16} />
                       </button>
                       <button 
                         onClick={() => {

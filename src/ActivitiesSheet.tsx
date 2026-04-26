@@ -11,12 +11,17 @@ interface ActivitiesSheetProps {
   onOpenTournaments: () => void;
   onOpenWhatsNew: () => void;
   onOpenReferral: () => void;
+  onOpenCalendar: () => void;
   inSidebar?: boolean;
   unreadAnnouncementsCount?: number;
   clientAds?: any[];
 }
 
-const ActivitiesSheet: React.FC<ActivitiesSheetProps> = ({ isOpen, onClose, onOpenLeaderboard, onOpenRewards, onOpenTournaments, onOpenWhatsNew, onOpenReferral, inSidebar = false, unreadAnnouncementsCount = 0, clientAds = [] }) => {
+const ActivitiesSheet: React.FC<ActivitiesSheetProps> = ({ 
+  isOpen, onClose, onOpenLeaderboard, onOpenRewards, onOpenTournaments, 
+  onOpenWhatsNew, onOpenReferral, onOpenCalendar, inSidebar = false, 
+  unreadAnnouncementsCount = 0, clientAds = [] 
+}) => {
   const content = (
     <div className={cn(
       "h-full w-full bg-[#121418] flex flex-col pt-safe scrollbar-hide",
@@ -86,7 +91,10 @@ const ActivitiesSheet: React.FC<ActivitiesSheetProps> = ({ isOpen, onClose, onOp
           </div>
 
           {/* Calendar */}
-          <div className="aspect-square rounded-2xl bg-[#1e1e1e] p-3 flex flex-col items-center justify-center gap-3 cursor-pointer hover:bg-white/[0.03] transition-all active:scale-[0.95] group">
+          <div 
+            onClick={onOpenCalendar}
+            className="aspect-square rounded-2xl bg-[#1e1e1e] p-3 flex flex-col items-center justify-center gap-3 cursor-pointer hover:bg-white/[0.03] transition-all active:scale-[0.95] group"
+          >
             <div className="w-10 h-10 bg-[#a855f7]/10 rounded-xl flex items-center justify-center text-[#a855f7]">
               <Calendar size={20} />
             </div>

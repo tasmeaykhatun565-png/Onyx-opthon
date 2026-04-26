@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Search, Compass, BarChart2, Pencil, X, TrendingUp, ChevronDown } from 'lucide-react';
+import { Search, Compass, BarChart2, X, TrendingUp, ChevronDown } from 'lucide-react';
 import BottomSheet from './BottomSheet';
 import { cn } from './utils';
 import { motion, AnimatePresence } from 'motion/react';
@@ -265,15 +265,6 @@ export default function IndicatorSheet({ isOpen, onClose, onSelectIndicator, act
       <div className="flex-1 px-4 overflow-y-auto custom-scrollbar">
         {renderSection('Indicators', <Compass size={18} />, TREND_INDICATORS)}
         {renderSection('Oscillators', <BarChart2 size={18} />, OSCILLATORS)}
-        {renderSection('Drawing', <Pencil size={18} />, [
-          { id: 'TrendLine', name: 'Trend Line' }, 
-          { id: 'Ray', name: 'Ray' }, 
-          { id: 'HorizontalLine', name: 'Horizontal Line' },
-          { id: 'VerticalLine', name: 'Vertical Line' },
-          { id: 'FibonacciLevels', name: 'Fibonacci Retracement' },
-          { id: 'Rectangle', name: 'Rectangle' },
-          { id: 'ParallelChannel', name: 'Parallel Channel' },
-        ])}
         {renderSection('Strategies', <TrendingUp size={18} />, STRATEGIES)}
         
         <div className="px-2 py-8 text-white/30 text-[12px] leading-relaxed font-medium">

@@ -177,7 +177,7 @@ export default function Auth({ onSuccess }: AuthProps) {
             balance: 0,
             demoBalance: 10000,
             referralCode: newUserReferralCode,
-            referredBy: referralCode || '',
+            referredBy: referralCode || null,
             createdAt: Date.now(),
             country: country,
             currency: selectedCountryData.currency,

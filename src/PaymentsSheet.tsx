@@ -33,6 +33,7 @@ interface PaymentsSheetProps {
   userEmail?: string;
   turnoverRequired?: number;
   turnoverAchieved?: number;
+  initialView?: 'DEPOSIT' | 'WITHDRAW' | 'TRANSFER' | 'HISTORY' | null;
 }
 
 const RECENT_TRANSACTIONS = [
@@ -41,12 +42,21 @@ const RECENT_TRANSACTIONS = [
   { id: 3, type: 'DEPOSIT', method: 'BinancePay', amount: 12000, date: 'Feb 25, 2026', status: 'SUCCESS' },
 ];
 
-export default function PaymentsSheet({ isOpen, onClose, balance, rawBalance, userId, activeAccount, currencySymbol, currencyCode, initialPromoCode, socket, userEmail, turnoverRequired, turnoverAchieved }: PaymentsSheetProps) {
+export default function PaymentsSheet({ isOpen, onClose, balance, rawBalance, userId, activeAccount, currencySymbol, currencyCode, initialPromoCode, socket, userEmail, turnoverRequired, turnoverAchieved, initialView }: PaymentsSheetProps) {
   const [isDepositOpen, setIsDepositOpen] = useState(false);
   const [isWithdrawOpen, setIsWithdrawOpen] = useState(false);
   const [isTransferOpen, setIsTransferOpen] = useState(false);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [hasOpenedPromo, setHasOpenedPromo] = useState(false);
+
+  useEffect(() => {
+    if (initialView) {
+      if (initialView === 'DEPOSIT') setIsDepositOpen(true);
+      if (initialView === 'WITHDRAW') setIsWithdrawOpen(true);
+      if (initialView === 'TRANSFER') setIsTransferOpen(true);
+      if (initialView === 'HISTORY') setIsHistoryOpen(true);
+    }
+  }, [initialView]);
 
   useEffect(() => {
     if (initialPromoCode && !isDepositOpen && !hasOpenedPromo) {
