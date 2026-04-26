@@ -13,26 +13,26 @@ interface LeaderboardEntry {
 }
 
 const MOCK_LEADERBOARD: LeaderboardEntry[] = [
-  { id: '1', name: 'Sebas.Trader', profit: 25000.00, countryCode: 'CO' },
-  { id: '2', name: 'DANITRADER', profit: 25000.00, countryCode: 'CO' },
-  { id: '3', name: 'DULCE***', profit: 21345.50, countryCode: 'MX' },
-  { id: '4', name: 'ID82341***', profit: 18420.20, countryCode: 'ID' },
-  { id: '5', name: 'Yusuf_Trade', profit: 15420.15, countryCode: 'TR' },
-  { id: '6', name: 'Abdullah.K', profit: 12100.40, countryCode: 'AE' },
-  { id: '7', name: 'Binomo_Pro', profit: 10850.90, countryCode: 'IN' },
-  { id: '8', name: 'CharlyTrader17', profit: 5610.00, countryCode: 'CO' },
-  { id: '9', name: 'Dbs3nzii', profit: 4626.35, countryCode: 'KW' },
-  { id: '10', name: 'FTRADER2', profit: 4484.00, countryCode: 'AR' },
-  { id: '11', name: 'ID182137***', profit: 4300.53, countryCode: 'CO' },
-  { id: '12', name: 'Tradinghub9729', profit: 3532.88, countryCode: 'IN' },
-  { id: '13', name: 'Musongyesquare', profit: 3456.02, countryCode: 'ZA' },
-  { id: '14', name: 'Dehbalaji', profit: 1738.14, countryCode: 'IN' },
-  { id: '15', name: 'BINOMO_TAMIL', profit: 1688.13, countryCode: 'IN' },
-  { id: '16', name: 'ID58070***', profit: 1504.48, countryCode: 'ID' },
-  { id: '17', name: 'JDRG_842', profit: 1185.28, countryCode: 'MX' },
-  { id: '18', name: 'YEYOELTREMENDO', profit: 1165.71, countryCode: 'CO' },
-  { id: '19', name: 'Hz_SIGNAL', profit: 1070.00, countryCode: 'IN' },
-  { id: '20', name: 'JULIAN_TRADER', profit: 1048.00, countryCode: 'AR' },
+  { id: '1', name: 'Sebas.Trader', profit: 1985.50, countryCode: 'CO' },
+  { id: '2', name: 'DANITRADER', profit: 1850.25, countryCode: 'BR' },
+  { id: '3', name: 'DULCE***', profit: 1720.00, countryCode: 'MX' },
+  { id: '4', name: 'ID82341***', profit: 1650.75, countryCode: 'IN' },
+  { id: '5', name: 'Yusuf_Trade', profit: 1540.20, countryCode: 'TR' },
+  { id: '6', name: 'Abdullah.K', profit: 1420.60, countryCode: 'AE' },
+  { id: '7', name: 'Binomo_Pro', profit: 1350.90, countryCode: 'ID' },
+  { id: '8', name: 'CharlyTrader17', profit: 1210.00, countryCode: 'CO' },
+  { id: '9', name: 'Dbs3nzii', profit: 1150.35, countryCode: 'KW' },
+  { id: '10', name: 'FTRADER2', profit: 980.50, countryCode: 'AR' },
+  { id: '11', name: 'ID182137***', profit: 890.25, countryCode: 'NG' },
+  { id: '12', name: 'Tradinghub9729', profit: 820.88, countryCode: 'IN' },
+  { id: '13', name: 'Musongyesquare', profit: 740.02, countryCode: 'ZA' },
+  { id: '14', name: 'Dehbalaji', profit: 650.14, countryCode: 'IN' },
+  { id: '15', name: 'Crypto_King', profit: 580.13, countryCode: 'US' },
+  { id: '16', name: 'ID58070***', profit: 490.48, countryCode: 'ID' },
+  { id: '17', name: 'JDRG_842', profit: 420.28, countryCode: 'MX' },
+  { id: '18', name: 'YEYOELTREMENDO', profit: 380.71, countryCode: 'ES' },
+  { id: '19', name: 'Hz_SIGNAL', profit: 290.00, countryCode: 'IN' },
+  { id: '20', name: 'JULIAN_TRADER', profit: 215.00, countryCode: 'AR' },
 ];
 
 const FlagIcon = ({ code }: { code: string }) => {
@@ -45,9 +45,52 @@ const FlagIcon = ({ code }: { code: string }) => {
   );
 };
 
-export function LeaderboardPage({ onBack, currencySymbol = '$' }: { onBack: () => void, currencySymbol?: string }) {
+export function LeaderboardPage({ onBack, currencySymbol = '$', currentUser }: { onBack: () => void, currencySymbol?: string, currentUser?: { name?: string; profit?: number } }) {
   const [period, setPeriod] = useState('1 day');
   const [lastUpdate, setLastUpdate] = useState(format(new Date(), 'HH:mm:ss'));
+  const [userCountryCode, setUserCountryCode] = useState<string>('BD'); // Default country code
+  const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>(MOCK_LEADERBOARD);
+
+  useEffect(() => {
+    // Attempt to get user's actual country
+    fetch('https://ipapi.co/json/')
+      .then(res => res.json())
+      .then(data => {
+        if (data && data.country_code) {
+          setUserCountryCode(data.country_code);
+        }
+      })
+      .catch((err) => {
+        console.log('Could not fetch country flag', err);
+      });
+  }, []);
+
+  useEffect(() => {
+    // If a current user exists, we integrate them appropriately into the leaderboard
+    if (currentUser?.name) {
+      const userProfit = currentUser.profit || 450.50; // Use actual profit or a nice mock one that fits the ranking!
+      const userEntry: LeaderboardEntry = {
+        id: 'current-user',
+        name: currentUser.name,
+        profit: userProfit,
+        countryCode: userCountryCode,
+        isCurrentUser: true,
+      };
+
+      const updatedLeaderboard = [...MOCK_LEADERBOARD];
+      
+      // Remove last if it's 20, to keep it at 20 length
+      // Insert in correct sorted position
+      updatedLeaderboard.push(userEntry);
+      updatedLeaderboard.sort((a, b) => b.profit - a.profit);
+      
+      // Limit to 20 or if user is 21st, show 20 items + user item
+      
+      setLeaderboard(updatedLeaderboard.slice(0, 20));
+    } else {
+      setLeaderboard(MOCK_LEADERBOARD);
+    }
+  }, [currentUser, userCountryCode]);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -135,7 +178,7 @@ export function LeaderboardPage({ onBack, currencySymbol = '$' }: { onBack: () =
 
         {/* Ranking List */}
         <div className="space-y-4 mt-8 pb-10">
-           {MOCK_LEADERBOARD.map((entry, index) => {
+           {leaderboard.map((entry, index) => {
               const rank = index + 1;
               const isTop3 = rank <= 3;
               
@@ -144,7 +187,7 @@ export function LeaderboardPage({ onBack, currencySymbol = '$' }: { onBack: () =
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   key={entry.id}
-                  className="flex items-center justify-between px-1"
+                  className={cn("flex items-center justify-between px-1 rounded-lg py-2", entry.isCurrentUser ? "bg-white/10 ring-1 ring-white/20" : "")}
                 >
                    <div className="flex items-center gap-4">
                       <div className={cn(
@@ -160,17 +203,18 @@ export function LeaderboardPage({ onBack, currencySymbol = '$' }: { onBack: () =
                          <FlagIcon code={entry.countryCode} />
                          <span className={cn(
                            "text-[15px] font-bold tracking-tight",
-                           isTop3 ? "text-white" : "text-gray-300"
+                           isTop3 ? "text-white" : "text-gray-300",
+                           entry.isCurrentUser ? "text-emerald-400" : ""
                          )}>
-                           {entry.name}
+                           {entry.name} {entry.isCurrentUser && '(You)'}
                          </span>
                       </div>
                    </div>
                    
                    <div className="flex flex-col items-end">
-                      <span className="text-[15px] font-bold text-gray-100 tabular-nums">
+                      <span className={cn("text-[15px] font-bold tabular-nums", entry.isCurrentUser ? "text-emerald-400" : "text-gray-100")}>
                         {currencySymbol}{entry.profit.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                        {entry.profit >= 25000 && "+"}
+                        {entry.profit >= 2000 && "+"}
                       </span>
                    </div>
                 </motion.div>

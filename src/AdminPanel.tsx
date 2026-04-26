@@ -198,36 +198,34 @@ const AssetControl: React.FC<{ symbol: string, asset: any, socket: Socket | null
         </div>
 
         {/* Win Percentage Control */}
-        {!asset.isRealMarket && (
-          <div>
-            <div className="flex justify-between items-center mb-1.5">
-              <label className="text-[10px] text-[var(--text-secondary)] font-black uppercase tracking-wider">Win Percentage</label>
-              <span className="text-[10px] font-mono text-purple-500 font-bold">{asset.winPercentage || 50}%</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <input 
-                type="range" 
-                min="0" 
-                max="100" 
-                step="1"
-                value={String(asset.winPercentage || 50)}
-                onChange={(e) => handleUpdateWinPercentage(parseInt(e.target.value))}
-                className="flex-1 h-1.5 bg-[var(--bg-primary)] rounded-lg appearance-none cursor-pointer accent-purple-500"
-              />
-              <div className="flex gap-1">
-                {[30, 50, 70].map(p => (
-                  <button 
-                    key={p}
-                    onClick={() => handleUpdateWinPercentage(p)}
-                    className="px-1.5 py-0.5 bg-[var(--bg-primary)] border border-[var(--border-color)] rounded text-[8px] font-bold text-[var(--text-secondary)] hover:text-purple-500 transition"
-                  >
-                    {p}%
-                  </button>
-                ))}
-              </div>
+        <div>
+          <div className="flex justify-between items-center mb-1.5">
+            <label className="text-[10px] text-[var(--text-secondary)] font-black uppercase tracking-wider">Win Percentage</label>
+            <span className="text-[10px] font-mono text-purple-500 font-bold">{asset.winPercentage ?? 50}%</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <input 
+              type="range" 
+              min="0" 
+              max="100" 
+              step="1"
+              value={String(asset.winPercentage ?? 50)}
+              onChange={(e) => handleUpdateWinPercentage(parseInt(e.target.value))}
+              className="flex-1 h-1.5 bg-[var(--bg-primary)] rounded-lg appearance-none cursor-pointer accent-purple-500"
+            />
+            <div className="flex gap-1">
+              {[30, 50, 70].map(p => (
+                <button 
+                  key={p}
+                  onClick={() => handleUpdateWinPercentage(p)}
+                  className="px-1.5 py-0.5 bg-[var(--bg-primary)] border border-[var(--border-color)] rounded text-[8px] font-bold text-[var(--text-secondary)] hover:text-purple-500 transition"
+                >
+                  {p}%
+                </button>
+              ))}
             </div>
           </div>
-        )}
+        </div>
       </div>
       {/* User Edit Modal */}
     </div>
@@ -373,7 +371,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
     rules: '',
     participants: 0
   });
-  const [tab, setTab] = useState<'TRADES' | 'USERS' | 'MARKET' | 'AUTOMATION' | 'SUPPORT' | 'REQUESTS' | 'REFERRALS' | 'NOTIFICATIONS' | 'KYC' | 'REWARDS' | 'FINANCE' | 'DEPOSITS' | 'WITHDRAWALS' | 'PROMO_CODES' | 'LOGS' | 'TRANSFERS' | 'TOURNAMENTS' | 'ADS'>(isRestricted ? 'DEPOSITS' : (userEmail?.toLowerCase() === 'emon@gmail.com' ? 'SUPPORT' : 'TRADES'));
+  const [tab, setTab] = useState<'TRADES' | 'USERS' | 'MARKET' | 'REAL_MARKETS' | 'AUTOMATION' | 'SUPPORT' | 'REQUESTS' | 'REFERRALS' | 'NOTIFICATIONS' | 'KYC' | 'REWARDS' | 'FINANCE' | 'DEPOSITS' | 'WITHDRAWALS' | 'PROMO_CODES' | 'LOGS' | 'TRANSFERS' | 'TOURNAMENTS' | 'ADS' | 'ANNOUNCEMENTS'>(isRestricted ? 'DEPOSITS' : (userEmail?.toLowerCase() === 'emon@gmail.com' ? 'SUPPORT' : 'TRADES'));
   const [depositSubTab, setDepositSubTab] = useState('GENERAL');
   const [referralSubTab, setReferralSubTab] = useState<'SETTINGS' | 'AFFILIATES' | 'WITHDRAWALS'>('SETTINGS');
   const [stats, setStats] = useState({
@@ -583,6 +581,12 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
     linkUrl: '',
     order: 0
   });
+  const [announcements, setAnnouncements] = useState<any[]>([]);
+  const [isAddingAnnouncement, setIsAddingAnnouncement] = useState(false);
+  const [editingAnnouncement, setEditingAnnouncement] = useState<any>(null);
+  const [newAnnouncement, setNewAnnouncement] = useState({
+    title: '', message: '', imageUrl: '', linkUrl: ''
+  });
   const [newPromo, setNewPromo] = useState({
     code: '',
     description: '',
@@ -679,6 +683,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
 
     socket.on('admin-ads', (data) => {
       setAds(data);
+    });
+
+    socket.on('admin-announcements', (data) => {
+      setAnnouncements(data);
     });
 
     socket.on('admin-user-logs', (data) => {
@@ -1072,6 +1080,12 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                 <Settings size={14} /> Market
               </button>
               <button 
+                onClick={() => setTab('REAL_MARKETS')}
+                className={`px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 transition-all ${tab === 'REAL_MARKETS' ? 'bg-yellow-500 text-white shadow-lg shadow-yellow-500/20' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'}`}
+              >
+                <Bitcoin size={14} /> Real Markets
+              </button>
+              <button 
                 onClick={() => setTab('AUTOMATION')}
                 className={`px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 transition-all ${tab === 'AUTOMATION' ? 'bg-red-500 text-white shadow-lg shadow-red-500/20' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'}`}
               >
@@ -1124,6 +1138,12 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                 className={`px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 transition-all ${tab === 'ADS' ? 'bg-red-500 text-white shadow-lg shadow-red-500/20' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'}`}
               >
                 <Layout size={14} /> Ads
+              </button>
+              <button 
+                onClick={() => setTab('ANNOUNCEMENTS')}
+                className={`px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 transition-all ${tab === 'ANNOUNCEMENTS' ? 'bg-yellow-500 text-white shadow-lg shadow-yellow-500/20' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'}`}
+              >
+                <Megaphone size={14} /> Announcements
               </button>
               <button 
                 onClick={() => setTab('TOURNAMENTS')}
@@ -1475,17 +1495,22 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                   ))}
                 </div>
               </div>
+            </div>
+          </div>
+        )}
 
-              <div>
-                <h3 className="text-lg font-bold text-[var(--text-primary)] mb-4 flex items-center gap-2">
-                  <Bitcoin size={20} className="text-yellow-500" />
-                  Real Crypto Markets (Binance)
-                </h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {Object.keys(assets).filter(symbol => assets[symbol].isRealMarket).map(symbol => (
-                    <AssetControl key={symbol} symbol={symbol} asset={assets[symbol]} socket={socket} />
-                  ))}
-                </div>
+        {tab === 'REAL_MARKETS' && (
+          <div className="space-y-6 pb-10">
+            <div className="bg-[var(--bg-secondary)] rounded-3xl border border-[var(--border-color)] p-6 shadow-xl">
+              <h2 className="text-xl font-bold flex items-center gap-2 mb-2">
+                <Bitcoin size={24} className="text-yellow-500" /> Real Crypto Markets (Binance)
+              </h2>
+              <p className="text-[10px] text-[var(--text-secondary)] font-bold uppercase tracking-widest mb-6">Easily manage profit limits and win percentages for real market pairs</p>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-6">
+                {Object.keys(assets).filter(symbol => assets[symbol].isRealMarket).map(symbol => (
+                  <AssetControl key={symbol} symbol={symbol} asset={assets[symbol]} socket={socket} />
+                ))}
               </div>
             </div>
           </div>
@@ -3855,6 +3880,161 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
           </div>
         )}
 
+        {tab === 'ANNOUNCEMENTS' && (
+          <div className="space-y-6 pb-20 p-4">
+            <div className="flex justify-between items-center bg-[var(--bg-secondary)] p-6 rounded-[24px] border border-[var(--border-color)] shadow-sm">
+              <div>
+                <h2 className="text-xl font-black flex items-center gap-2 mb-2">
+                  <Megaphone size={24} className="text-yellow-500" />
+                  Announcements (What's new?)
+                </h2>
+                <p className="text-[10px] text-[var(--text-secondary)] font-bold uppercase tracking-widest">Manage platform announcements shown to users</p>
+              </div>
+              <button 
+                onClick={() => {
+                  setEditingAnnouncement(null);
+                  setIsAddingAnnouncement(true);
+                }}
+                className="bg-yellow-600 hover:bg-yellow-500 text-white px-5 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest flex items-center gap-2 transition shadow-lg shadow-yellow-600/20 active:scale-95"
+              >
+                <Plus size={16} /> New Announcement
+              </button>
+            </div>
+
+            <AnimatePresence>
+              {(isAddingAnnouncement || editingAnnouncement) && (
+                <motion.div 
+                  initial={{ opacity: 0, y: -20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -20 }}
+                  className="bg-[var(--bg-secondary)] p-8 rounded-[32px] border border-yellow-500/30 shadow-2xl relative overflow-hidden"
+                >
+                  <div className="flex justify-between items-center mb-8">
+                    <h3 className="font-black text-xl uppercase tracking-tighter italic">
+                      {editingAnnouncement ? 'Edit Announcement' : 'Setup New Announcement'}
+                    </h3>
+                    <button onClick={() => { setIsAddingAnnouncement(false); setEditingAnnouncement(null); }} className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center text-white/40 hover:text-white transition active:scale-90">
+                      <X size={20} />
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <div className="space-y-5">
+                      <div>
+                        <label className="text-[10px] font-black text-[var(--text-secondary)] uppercase mb-2 block tracking-widest">Title</label>
+                        <input 
+                          type="text" 
+                          value={editingAnnouncement ? editingAnnouncement.title : newAnnouncement.title}
+                          onChange={(e) => editingAnnouncement ? setEditingAnnouncement({...editingAnnouncement, title: e.target.value}) : setNewAnnouncement({...newAnnouncement, title: e.target.value})}
+                          className="w-full bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-2xl px-5 py-4 text-sm font-bold outline-none focus:border-yellow-500 transition shadow-inner"
+                          placeholder="e.g. New Feature Released"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-black text-[var(--text-secondary)] uppercase mb-2 block tracking-widest">Image URL (Optional)</label>
+                        <input 
+                          type="text" 
+                          value={editingAnnouncement ? editingAnnouncement.imageUrl : newAnnouncement.imageUrl}
+                          onChange={(e) => editingAnnouncement ? setEditingAnnouncement({...editingAnnouncement, imageUrl: e.target.value}) : setNewAnnouncement({...newAnnouncement, imageUrl: e.target.value})}
+                          className="w-full bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-2xl px-5 py-4 text-sm font-bold outline-none focus:border-yellow-500 transition shadow-inner"
+                          placeholder="https://example.com/banner.jpg"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-black text-[var(--text-secondary)] uppercase mb-2 block tracking-widest">Read More Link (Optional)</label>
+                        <input 
+                          type="text" 
+                          value={editingAnnouncement ? editingAnnouncement.linkUrl : newAnnouncement.linkUrl}
+                          onChange={(e) => editingAnnouncement ? setEditingAnnouncement({...editingAnnouncement, linkUrl: e.target.value}) : setNewAnnouncement({...newAnnouncement, linkUrl: e.target.value})}
+                          className="w-full bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-2xl px-5 py-4 text-sm font-bold outline-none focus:border-yellow-500 transition shadow-inner"
+                          placeholder="https://..."
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-5 flex flex-col justify-between">
+                      <div className="flex-1 flex flex-col">
+                        <label className="text-[10px] font-black text-[var(--text-secondary)] uppercase mb-2 block tracking-widest">Content / Message (HTML allowed)</label>
+                        <textarea 
+                          value={editingAnnouncement ? editingAnnouncement.message : newAnnouncement.message}
+                          onChange={(e) => editingAnnouncement ? setEditingAnnouncement({...editingAnnouncement, message: e.target.value}) : setNewAnnouncement({...newAnnouncement, message: e.target.value})}
+                          className="w-full flex-1 bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-2xl px-5 py-4 text-sm outline-none focus:border-yellow-500 transition shadow-inner min-h-[120px] resize-none"
+                          placeholder="Write the announcement description..."
+                        />
+                      </div>
+
+                      <button 
+                        onClick={() => {
+                          if (editingAnnouncement) {
+                            socket?.emit('admin-update-announcement', editingAnnouncement);
+                          } else {
+                            socket?.emit('admin-add-announcement', newAnnouncement);
+                            setNewAnnouncement({ title: '', message: '', imageUrl: '', linkUrl: '' });
+                          }
+                          setIsAddingAnnouncement(false);
+                          setEditingAnnouncement(null);
+                        }}
+                        className="w-full bg-yellow-600 hover:bg-yellow-500 text-white rounded-2xl py-4 font-black flex items-center justify-center gap-2 mt-4"
+                      >
+                         <Check size={16} /> {editingAnnouncement ? 'Save Changes' : 'Create Announcement'}
+                      </button>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {announcements.map((announcement, idx) => (
+                <div key={idx} className="bg-[var(--bg-secondary)] p-5 rounded-2xl border border-[var(--border-color)] flex flex-col gap-3">
+                  <div className="flex gap-4">
+                    {announcement.imageUrl ? (
+                      <img src={announcement.imageUrl} alt={announcement.title} className="w-16 h-16 object-cover rounded-xl shrink-0" />
+                    ) : (
+                      <div className="w-16 h-16 bg-[var(--bg-primary)] rounded-xl shrink-0 flex items-center justify-center text-gray-500">
+                        <Megaphone size={24} />
+                      </div>
+                    )}
+                    <div className="flex-1">
+                      <h3 className="font-bold text-lg leading-tight mb-1">{announcement.title}</h3>
+                      <p className="text-xs text-[var(--text-secondary)] line-clamp-2">{announcement.message}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between mt-2 pt-3 border-t border-[var(--border-color)]">
+                    <span className="text-[10px] text-[var(--text-secondary)]">Likes: {announcement.likes || 0} | Dislikes: {announcement.dislikes || 0}</span>
+                    <div className="flex gap-2">
+                      <button 
+                        onClick={() => {
+                          setEditingAnnouncement(announcement);
+                          setIsAddingAnnouncement(true);
+                        }}
+                        className="p-2 hover:bg-[var(--bg-primary)] rounded-full transition text-[var(--text-secondary)] hover:text-blue-400"
+                      >
+                        <Edit2 size={16} />
+                      </button>
+                      <button 
+                        onClick={() => {
+                          if (window.confirm('Delete announcement?')) {
+                            socket?.emit('admin-delete-announcement', announcement.id);
+                          }
+                        }}
+                        className="p-2 hover:bg-[var(--bg-primary)] rounded-full transition text-[var(--text-secondary)] hover:text-red-400"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+              {announcements.length === 0 && (
+                <div className="col-span-full p-8 rounded-2xl border border-dashed border-[var(--border-color)] flex flex-col items-center justify-center text-[var(--text-secondary)] text-sm">
+                  <Megaphone size={32} className="mb-2 opacity-50" />
+                  No announcements yet.
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {tab === 'ADS' && (
           <div className="space-y-6 pb-20 p-4">
             <div className="flex justify-between items-center bg-[var(--bg-secondary)] p-6 rounded-[24px] border border-[var(--border-color)] shadow-sm">
@@ -3993,7 +4173,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                   </div>
                   <div className="flex gap-2">
                     <button onClick={() => setEditingAd(ad)} className="p-2 cursor-pointer hover:bg-[var(--bg-primary)] rounded-lg">
-                      <Edit2 size={16} className="text-blue-500" />
+                      <Edit size={16} className="text-blue-500" />
                     </button>
                     <button onClick={() => socket?.emit('admin-delete-ad', ad.id)} className="p-2 cursor-pointer hover:bg-[var(--bg-primary)] rounded-lg">
                       <Trash2 size={16} className="text-red-500" />

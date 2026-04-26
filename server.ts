@@ -334,6 +334,17 @@ async function startServer() {
         status TEXT DEFAULT 'active',
         createdAt INTEGER
       );
+
+      CREATE TABLE IF NOT EXISTS announcements (
+        id TEXT PRIMARY KEY,
+        title TEXT,
+        message TEXT,
+        imageUrl TEXT,
+        linkUrl TEXT,
+        likes INTEGER DEFAULT 0,
+        dislikes INTEGER DEFAULT 0,
+        createdAt INTEGER
+      );
     `);
     
     // Add columns if they don't exist (for existing databases)
@@ -2427,6 +2438,13 @@ async function startServer() {
         socket.emit('admin-stats', platformStats);
         socket.emit('admin-platform-settings', globalPlatformSettings);
         
+        try {
+          const allAnnouncements = db.prepare('SELECT * FROM announcements ORDER BY createdAt DESC').all();
+          socket.emit('admin-announcements', allAnnouncements);
+        } catch (error) {
+          console.error("Error fetching admin announcements:", error);
+        }
+
         const allDeposits = db.prepare('SELECT * FROM deposits ORDER BY submittedAt DESC').all();
         socket.emit('admin-deposits', allDeposits);
         
@@ -2608,12 +2626,89 @@ async function startServer() {
       }
     });
 
+    socket.on('admin-get-announcements', () => {
+      try {
+        const announcements = db.prepare('SELECT * FROM announcements ORDER BY createdAt DESC').all();
+        socket.emit('admin-announcements', announcements);
+      } catch (error) {
+        console.error('Error getting announcements:', error);
+      }
+    });
+
+    socket.on('admin-add-announcement', (data) => {
+      try {
+        const id = Math.random().toString(36).substring(2, 11);
+        const { title, message, imageUrl, linkUrl } = data;
+        db.prepare(`
+          INSERT INTO announcements (id, title, message, imageUrl, linkUrl, createdAt)
+          VALUES (?, ?, ?, ?, ?, ?)
+        `).run(id, title, message, imageUrl, linkUrl, Date.now());
+        
+        const allAnnouncements = db.prepare('SELECT * FROM announcements ORDER BY createdAt DESC').all();
+        io.to('admin-room').emit('admin-announcements', allAnnouncements);
+        io.emit('client-announcements', allAnnouncements);
+      } catch (error) {
+        console.error('Error adding announcement:', error);
+      }
+    });
+
+    socket.on('admin-update-announcement', (data) => {
+      try {
+        const { id, title, message, imageUrl, linkUrl } = data;
+        db.prepare(`
+          UPDATE announcements SET title = ?, message = ?, imageUrl = ?, linkUrl = ?
+          WHERE id = ?
+        `).run(title, message, imageUrl, linkUrl, id);
+        
+        const allAnnouncements = db.prepare('SELECT * FROM announcements ORDER BY createdAt DESC').all();
+        io.to('admin-room').emit('admin-announcements', allAnnouncements);
+        io.emit('client-announcements', allAnnouncements);
+      } catch (error) {
+        console.error('Error updating announcement:', error);
+      }
+    });
+
+    socket.on('admin-delete-announcement', (id) => {
+      try {
+        db.prepare('DELETE FROM announcements WHERE id = ?').run(id);
+        const allAnnouncements = db.prepare('SELECT * FROM announcements ORDER BY createdAt DESC').all();
+        io.to('admin-room').emit('admin-announcements', allAnnouncements);
+        io.emit('client-announcements', allAnnouncements);
+      } catch (error) {
+        console.error('Error deleting announcement:', error);
+      }
+    });
+
+    socket.on('announcement-vote', ({ id, voteType }) => {
+      try {
+        if (voteType === 'like') {
+          db.prepare('UPDATE announcements SET likes = likes + 1 WHERE id = ?').run(id);
+        } else if (voteType === 'dislike') {
+          db.prepare('UPDATE announcements SET dislikes = dislikes + 1 WHERE id = ?').run(id);
+        }
+        
+        const allAnnouncements = db.prepare('SELECT * FROM announcements ORDER BY createdAt DESC').all();
+        io.emit('client-announcements', allAnnouncements);
+      } catch (error) {
+        console.error('Error voting on announcement:', error);
+      }
+    });
+
     socket.on('get-client-ads', () => {
       try {
         const ads = db.prepare("SELECT * FROM ads WHERE status = 'active' ORDER BY displayOrder ASC, createdAt DESC").all();
         socket.emit('client-ads', ads);
       } catch (error) {
         console.error('Error fetching client ads:', error);
+      }
+    });
+
+    socket.on('get-client-announcements', () => {
+      try {
+        const announcements = db.prepare('SELECT * FROM announcements ORDER BY createdAt DESC').all();
+        socket.emit('client-announcements', announcements);
+      } catch (error) {
+        console.error('Error fetching client announcements:', error);
       }
     });
 

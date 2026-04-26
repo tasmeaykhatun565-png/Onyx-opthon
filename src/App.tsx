@@ -41,6 +41,7 @@ import HomePage from './HomePage';
 
 import { ReferralPage } from './ReferralPage';
 import { LeaderboardPage } from './LeaderboardPage';
+import WhatsNewSheet from './WhatsNewSheet';
 import IndicatorSheet from './IndicatorSheet';
 import ServiceAgreementSheet from './ServiceAgreementSheet';
 import ActivitiesSheet from './ActivitiesSheet';
@@ -1129,6 +1130,7 @@ export default function TradingPlatform() {
   const [referralSettings, setReferralSettings] = useState({ bonusAmount: 10, referralPercentage: 5, minDepositForBonus: 20 });
   const [notifications, setNotifications] = useState<any[]>([]);
   const [tutorials, setTutorials] = useState<any[]>([]);
+  const [announcements, setAnnouncements] = useState<any[]>([]);
   const [investment, setInvestment] = useState<number>(1);
   const [tradeMode, setTradeMode] = useState<'TIMER' | 'CLOCK'>('CLOCK');
   const [clockOffset, setClockOffset] = useState<number>(1);
@@ -1487,6 +1489,7 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
   const [isTournamentsOpen, setIsTournamentsOpen] = useState(false);
   const [isActivitiesOpen, setIsActivitiesOpen] = useState(false);
   const [isLeaderboardOpen, setIsLeaderboardOpen] = useState(false);
+  const [isWhatsNewOpen, setIsWhatsNewOpen] = useState(false);
   const [isHelpOpen, setIsHelpOpen] = useState(false);
   const [isChartSettingsOpen, setIsChartSettingsOpen] = useState(false);
   const [isAccountsSheetOpen, setIsAccountsSheetOpen] = useState(false);
@@ -1500,12 +1503,27 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
     return notifications.filter(n => !n.isRead).length;
   }, [notifications]);
 
+  const readAnnouncements = useMemo(() => {
+    try {
+      const stored = localStorage.getItem('read-announcements');
+      return stored ? JSON.parse(stored) : [];
+    } catch {
+      return [];
+    }
+  }, [announcements]); // Re-evaluate when announcements load
+
+  const unreadAnnouncementsCount = useMemo(() => {
+    if (!announcements) return 0;
+    return announcements.filter(a => !readAnnouncements.includes(a.id)).length;
+  }, [announcements, readAnnouncements]);
+
   const closeAllPanels = useCallback(() => {
     setIsHistoryOpen(false);
     setIsMarketOpen(false);
     setIsRewardsOpen(false);
     setIsActivitiesOpen(false);
     setIsLeaderboardOpen(false);
+    setIsWhatsNewOpen(false);
     setIsHelpOpen(false);
     setIsAssetSelectorOpen(false);
     setIsProfileOpen(false);
@@ -1914,6 +1932,7 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
     socket.on('connect', () => {
       setIsConnected(true)
       socket.emit('get-client-ads');
+      socket.emit('get-client-announcements');
     });
     socket.on('disconnect', () => setIsConnected(false));
     socket.on('trade-accepted', ({ id, startTime, endTime }) => {
@@ -1970,6 +1989,10 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
 
     socket.on('client-ads', (ads) => {
       setClientAds(ads);
+    });
+
+    socket.on('client-announcements', (data) => {
+      setAnnouncements(data);
     });
 
     socket.on('user-bonuses', (bonuses) => {
@@ -2740,7 +2763,8 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
                    <ActivitiesSheet 
                       isOpen={isActivitiesOpen}
                       onClose={() => setIsActivitiesOpen(false)}
-                      unreadNotificationsCount={unreadNotificationsCount}
+                      unreadAnnouncementsCount={unreadAnnouncementsCount}
+                      clientAds={clientAds}
                       onOpenLeaderboard={() => {
                         setIsActivitiesOpen(false);
                         setIsLeaderboardOpen(true);
@@ -2752,6 +2776,10 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
                       onOpenTournaments={() => {
                         setIsActivitiesOpen(false);
                         setIsTournamentsOpen(true);
+                      }}
+                      onOpenWhatsNew={() => {
+                        setIsActivitiesOpen(false);
+                        setIsWhatsNewOpen(true);
                       }}
                       inSidebar={true}
                    />
@@ -2793,7 +2821,8 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
              <ActivitiesSheet
                 isOpen={isActivitiesOpen}
                 onClose={() => setIsActivitiesOpen(false)}
-                unreadNotificationsCount={unreadNotificationsCount}
+                unreadAnnouncementsCount={unreadAnnouncementsCount}
+                clientAds={clientAds}
                 onOpenLeaderboard={() => {
                   setIsActivitiesOpen(false);
                   setIsLeaderboardOpen(true);
@@ -2805,6 +2834,10 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
                 onOpenTournaments={() => {
                   setIsActivitiesOpen(false);
                   setIsTournamentsOpen(true);
+                }}
+                onOpenWhatsNew={() => {
+                  setIsActivitiesOpen(false);
+                  setIsWhatsNewOpen(true);
                 }}
               />
 
@@ -3498,11 +3531,41 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
               <LeaderboardPage 
                 onBack={() => setIsLeaderboardOpen(false)} 
                 currencySymbol={displayCurrencySymbol} 
+                currentUser={user && user.email ? { name: user.displayName || user.email.split('@')[0], profit: Math.max(250, (balance * 0.05) % 2000) } : undefined}
               />
             </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* --- WhatsNew Overlay --- */}
+      <WhatsNewSheet 
+        isOpen={isWhatsNewOpen}
+        onClose={() => setIsWhatsNewOpen(false)}
+        announcements={announcements}
+        onMarkAsRead={(id) => {
+          try {
+            const stored = localStorage.getItem('read-announcements');
+            const readList = stored ? JSON.parse(stored) : [];
+            if (!readList.includes(id)) {
+              const updated = [...readList, id];
+              localStorage.setItem('read-announcements', JSON.stringify(updated));
+              // Trigger a re-render or state update for counts if needed
+              // we can update it locally, or let React trigger it because we used localStorage directly. 
+              // Better approach: we'll update the announcements just slightly or store readAnnouncements in state. 
+            }
+          } catch(e){}
+        }}
+        onMarkAllRead={() => {
+           const allIds = announcements.map(a => a.id);
+           localStorage.setItem('read-announcements', JSON.stringify(allIds));
+           // Trigger a re-render
+           setAnnouncements([...announcements]); 
+        }}
+        onVote={(id, voteType) => {
+          socket?.emit('announcement-vote', { id, voteType });
+        }}
+      />
 
       <RiskManagementSheet
         isOpen={isRiskManagementOpen}

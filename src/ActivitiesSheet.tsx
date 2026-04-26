@@ -9,11 +9,13 @@ interface ActivitiesSheetProps {
   onOpenLeaderboard: () => void;
   onOpenRewards: () => void;
   onOpenTournaments: () => void;
+  onOpenWhatsNew: () => void;
   inSidebar?: boolean;
-  unreadNotificationsCount?: number;
+  unreadAnnouncementsCount?: number;
+  clientAds?: any[];
 }
 
-const ActivitiesSheet: React.FC<ActivitiesSheetProps> = ({ isOpen, onClose, onOpenLeaderboard, onOpenRewards, onOpenTournaments, inSidebar = false, unreadNotificationsCount = 0 }) => {
+const ActivitiesSheet: React.FC<ActivitiesSheetProps> = ({ isOpen, onClose, onOpenLeaderboard, onOpenRewards, onOpenTournaments, onOpenWhatsNew, inSidebar = false, unreadAnnouncementsCount = 0, clientAds = [] }) => {
   const content = (
     <div className={cn(
       "h-full w-full bg-[#121418] flex flex-col pt-safe scrollbar-hide",
@@ -30,32 +32,30 @@ const ActivitiesSheet: React.FC<ActivitiesSheetProps> = ({ isOpen, onClose, onOp
       {/* Content */}
       <div className="flex-1 px-5 space-y-4 overflow-y-auto scrollbar-hide pb-10">
         {/* Horizontal Scroll Section (Cards) */}
-        <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide -mx-1 px-1">
-          {/* Copy Trading */}
-          <div className="min-w-[130px] h-36 rounded-2xl bg-gradient-to-br from-[#8a4d1a] to-[#4d2b0e] p-4 flex flex-col justify-end relative overflow-hidden group cursor-pointer transition-transform active:scale-95">
-             <div className="absolute -right-2 -top-2 text-white/5 rotate-12">
-               <User size={80} />
-             </div>
-             <span className="text-[14px] font-bold text-white leading-tight">Copy trading</span>
+        {clientAds && clientAds.length > 0 && (
+          <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide -mx-1 px-1">
+            {clientAds.map((ad, idx) => (
+              <a 
+                key={ad.id || idx}
+                href={ad.linkUrl || '#'} 
+                target={ad.linkUrl ? "_blank" : undefined}
+                rel="noreferrer"
+                className="min-w-[130px] h-36 rounded-2xl p-4 flex flex-col justify-end relative overflow-hidden group cursor-pointer transition-transform active:scale-95 bg-[#1e1e1e]"
+                style={{
+                  backgroundImage: ad.imageUrl && (!ad.imageUrl.startsWith('bg-') && !ad.imageUrl.startsWith('#')) ? `url(${ad.imageUrl})` : 'none',
+                  backgroundColor: (!ad.imageUrl || ad.imageUrl.startsWith('#')) ? (ad.imageUrl || '#1e1e1e') : '',
+                  backgroundSize: 'cover',
+                  backgroundPosition: 'center'
+                }}
+              >
+                 {ad.imageUrl && !ad.imageUrl.startsWith('#') && (
+                   <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
+                 )}
+                 <span className="text-[13px] font-bold text-white leading-tight relative shadow-sm drop-shadow-md z-10">{ad.title}</span>
+              </a>
+            ))}
           </div>
-
-          {/* Copy trading education */}
-          <div className="min-w-[130px] h-36 rounded-2xl bg-[#1e1e1e] p-4 flex flex-col justify-center items-center gap-3 group cursor-pointer transition-transform active:scale-95 text-center">
-            <div className="w-12 h-12 bg-yellow-500/10 rounded-xl flex items-center justify-center text-yellow-500">
-              <GraduationCap size={28} />
-            </div>
-            <span className="text-[13px] font-bold text-[#fefefe] leading-tight">Copy trading<br/>education</span>
-          </div>
-
-          {/* Heikin Ashi */}
-          <div className="min-w-[130px] h-36 rounded-2xl bg-[#1e1e1e] p-4 flex flex-col justify-center items-center gap-3 group cursor-pointer transition-transform active:scale-95 text-center">
-            <div className="flex gap-1.5 items-end justify-center h-10 w-10">
-              <div className="w-2 h-6 bg-red-500/80 rounded-sm" />
-              <div className="w-2 h-10 bg-green-500/80 rounded-sm" />
-            </div>
-            <span className="text-[13px] font-bold text-[#fefefe] leading-tight">Heikin Ashi</span>
-          </div>
-        </div>
+        )}
 
         {/* Tournaments Row */}
         <div 
@@ -111,7 +111,7 @@ const ActivitiesSheet: React.FC<ActivitiesSheetProps> = ({ isOpen, onClose, onOp
         {/* List Section */}
         <div className="space-y-3 pt-2">
           {/* What's new? */}
-          <div className="bg-[#1e1e1e] rounded-2xl p-4 flex items-center justify-between cursor-pointer hover:bg-white/[0.03] transition-all active:scale-[0.98] group">
+          <div onClick={onOpenWhatsNew} className="bg-[#1e1e1e] rounded-2xl p-4 flex items-center justify-between cursor-pointer hover:bg-white/[0.03] transition-all active:scale-[0.98] group">
             <div className="flex items-center gap-4">
                <div className="w-12 h-12 bg-white/5 rounded-2xl flex items-center justify-center text-gray-400">
                  <Megaphone size={22} strokeWidth={1.5} />
@@ -119,9 +119,9 @@ const ActivitiesSheet: React.FC<ActivitiesSheetProps> = ({ isOpen, onClose, onOp
                <span className="text-[15px] font-bold text-white">What's new?</span>
             </div>
             <div className="flex items-center gap-3">
-              {unreadNotificationsCount > 0 && (
+              {unreadAnnouncementsCount > 0 && (
                 <div className="min-w-[20px] h-5 bg-red-500 text-white text-[10px] font-black flex items-center justify-center rounded-full px-1.5 shadow-lg shadow-red-500/20">
-                  {unreadNotificationsCount}
+                  {unreadAnnouncementsCount}
                 </div>
               )}
               <ChevronRight size={20} className="text-gray-600" />
