@@ -3584,9 +3584,17 @@ async function startServer() {
       }
     });
 
+    socket.on('admin-toggle-real-market', ({ asset, isRealMarket }) => {
+      if (assets[asset]) {
+        assets[asset].isRealMarket = isRealMarket;
+        io.emit('market-assets-updated', assets);
+      }
+    });
+
     socket.on('admin-toggle-freeze', ({ asset, isFrozen }) => {
       if (assets[asset]) {
         assets[asset].isFrozen = isFrozen;
+        io.emit('market-assets-updated', assets);
       }
     });
 

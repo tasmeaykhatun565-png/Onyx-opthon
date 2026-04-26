@@ -1848,22 +1848,16 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
 
       setTickHistory(prev => {
         const assetHistory = prev[currentAsset.shortName] || [];
+        const lastEntry = assetHistory[assetHistory.length - 1];
+        if (lastEntry && lastEntry.time === timestamp && lastEntry.price === newPrice) return prev;
+        
         const newHistory = [...assetHistory, { time: timestamp, price: newPrice }];
-        const limitedHistory = newHistory.length > 50000 ? newHistory.slice(-50000) : newHistory;
+        const limitedHistory = newHistory.length > 500 ? newHistory.slice(-500) : newHistory;
         return { ...prev, [currentAsset.shortName]: limitedHistory };
       });
 
       setData(prev => {
         const currentTFStart = Math.floor(timestamp / tfMs) * tfMs;
-        
-        console.log('DEBUG: tick update', {
-          timestamp,
-          tfMs,
-          currentTFStart,
-          lastCandleTime: prev.length > 0 ? prev[prev.length - 1].time : 'none',
-          newPrice,
-          timeFrame: chartTimeFrameRef.current
-        });
         
         if (prev.length === 0) {
             // Create first candle if empty
@@ -1895,8 +1889,14 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
                 close: newPrice,
                 high: Math.max(lastCandle.high, tick.high || newPrice),
                 low: Math.min(lastCandle.low, tick.low || newPrice),
-                volume: (lastCandle.volume || 0) + Math.floor(Math.random() * 10) + 1,
+                volume: (lastCandle.volume || 0) + 1,
             };
+            
+            // Critical guard: Only update if anything changed
+            if (lastCandle.close === updatedCandle.close && 
+                lastCandle.high === updatedCandle.high && 
+                lastCandle.low === updatedCandle.low) return prev;
+            
             updatedData = [...prev.slice(0, -1), updatedCandle];
         } else {
             // New candle started
@@ -1906,11 +1906,11 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
                 high: Math.max(lastCandle.close, tick.high || newPrice),
                 low: Math.min(lastCandle.close, tick.low || newPrice),
                 close: newPrice,
-                volume: Math.floor(Math.random() * 100) + 10,
+                volume: Math.floor(Math.random() * 10) + 1,
                 formattedTime: formatWithOffset(currentTFStart, 'HH:mm:ss', timezoneOffset),
             };
             updatedData = [...prev, newCandle];
-            if (updatedData.length > 100000) updatedData.shift();
+            if (updatedData.length > 5000) updatedData.shift();
         }
         
         dataRef.current = updatedData;

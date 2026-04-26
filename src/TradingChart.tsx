@@ -568,16 +568,16 @@ export const TradingChart: React.FC<TradingChartProps> = ({
       crosshair: {
         mode: CrosshairMode.Normal,
         vertLine: {
-          color: 'rgba(59, 130, 246, 0.4)',
+          color: 'rgba(255, 255, 255, 0.4)',
           width: 1 as any,
           style: 2,
-          labelBackgroundColor: '#3b82f6',
+          labelBackgroundColor: '#ffffff',
         },
         horzLine: {
-          color: 'rgba(59, 130, 246, 0.4)',
+          color: 'rgba(255, 255, 255, 0.4)',
           width: 1 as any,
           style: 2,
-          labelBackgroundColor: '#3b82f6',
+          labelBackgroundColor: '#ffffff',
         },
       },
       handleScroll: {
@@ -1971,24 +1971,24 @@ export const TradingChart: React.FC<TradingChartProps> = ({
                 {/* Horizontal Line to Price Scale - Thin and Professional (Candle to Right) */}
                 <div 
                     ref={horizontalLineRef}
-                    className="absolute right-0 h-[1px] bg-white pointer-events-none z-20 hidden"
+                    className="absolute right-0 h-[1.5px] bg-white pointer-events-none z-20 hidden"
                     style={{ 
-                        boxShadow: '0 0 5px rgba(255,255,255,0.7)',
-                        opacity: 0.6
+                        boxShadow: '0 0 8px rgba(255,255,255,0.9)',
+                        opacity: 0.8
                     }}
                 />
                 
                 {/* Vertical Line at current candle - Dotted line style */}
                 <div 
                     ref={verticalLineRef}
-                    className="absolute top-0 w-[1px] border-l border-white/40 border-dashed pointer-events-none z-20 hidden"
+                    className="absolute top-0 w-[1px] border-l-2 border-white/60 border-dashed pointer-events-none z-20 hidden"
                 />
                 
                 {/* Current Price Dot on Candle - Precise with Pulse */}
-                <div className="absolute z-40 bg-white rounded-full -translate-x-1/2 -translate-y-1/2 shadow-[0_0_10px_rgba(255,255,255,1)] pointer-events-none hidden"
+                <div className="absolute z-40 bg-white rounded-full -translate-x-1/2 -translate-y-1/2 shadow-[0_0_15px_rgba(255,255,255,1)] pointer-events-none hidden"
                         ref={priceDotRef}
-                        style={{ width: '6px', height: '6px' }}>
-                    <div className="absolute inset-0 rounded-full animate-ping bg-white opacity-60" />
+                        style={{ width: '8px', height: '8px' }}>
+                    <div className="absolute inset-0 rounded-full animate-ping bg-white opacity-80" />
                 </div>
 
                 {/* Timer and Price Bubbles - Always present in DOM, controlled via refs */}
