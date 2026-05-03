@@ -176,12 +176,22 @@ export default function Auth({ onSuccess }: AuthProps) {
             name: name || user.displayName || 'Operative',
             balance: 0,
             demoBalance: 10000,
+            bonusBalance: 0,
+            kycStatus: 'NOT_SUBMITTED',
             referralCode: newUserReferralCode,
             referredBy: referralCode || null,
             createdAt: Date.now(),
             country: country,
             currency: selectedCountryData.currency,
-            currencySymbol: selectedCountryData.symbol
+            currencySymbol: selectedCountryData.symbol,
+            role: 'user',
+            preferences: {
+              language: 'en',
+              theme: 'onyx',
+              chartType: 'candles',
+              timeframe: '1m'
+            },
+            extraAccounts: []
           });
         } catch (error) {
           handleFirestoreError(error, OperationType.WRITE, `users/${user.uid}`);
@@ -197,7 +207,16 @@ export default function Auth({ onSuccess }: AuthProps) {
       let message = err.message;
       if (err.code === 'auth/user-not-found') message = 'No account found with this email.';
       if (err.code === 'auth/wrong-password') message = 'Incorrect password.';
-      if (err.code === 'auth/email-already-in-use') message = 'An account already exists with this email.';
+      if (err.code === 'auth/email-already-in-use') {
+        message = 'An account already exists with this email. Please login instead.';
+        setView('login'); // Automatically switch to login view
+      }
+      if (err.code === 'auth/unauthorized-domain') {
+        message = 'This domain is not authorized for authentication. Please add it to your Firebase Console (Authentication > Settings > Authorized domains).';
+      }
+      if (err.code === 'auth/operation-not-allowed') {
+        message = 'Authentication provider (Google/Email) is not enabled in Firebase Console. Please enable it in Authentication > Sign-in method.';
+      }
       setError(message || 'An unexpected error occurred.');
     } finally {
       setLoading(false);
@@ -243,7 +262,14 @@ export default function Auth({ onSuccess }: AuthProps) {
       onSuccess();
     } catch (err: any) {
       console.error('Google Auth error:', err);
-      setError(err.message || 'Google Sign-In failed.');
+      let message = err.message;
+      if (err.code === 'auth/unauthorized-domain') {
+        message = 'This domain is not authorized for Google Sign-In. Please add it to your Firebase Console (Authentication > Settings > Authorized domains).';
+      }
+      if (err.code === 'auth/operation-not-allowed') {
+        message = 'Google Sign-In is not enabled in Firebase Console. Please enable Google in Authentication > Sign-in method.';
+      }
+      setError(message || 'Google Sign-In failed.');
     } finally {
       setLoading(false);
     }
@@ -287,7 +313,11 @@ export default function Auth({ onSuccess }: AuthProps) {
       onSuccess();
     } catch (err: any) {
       console.error('Facebook Auth error:', err);
-      setError(err.message || 'Facebook Sign-In failed.');
+      let message = err.message;
+      if (err.code === 'auth/unauthorized-domain') {
+        message = 'This domain is not authorized for Facebook Sign-In. Please add it to your Firebase Console (Authentication > Settings > Authorized domains).';
+      }
+      setError(message || 'Facebook Sign-In failed.');
     } finally {
       setLoading(false);
     }

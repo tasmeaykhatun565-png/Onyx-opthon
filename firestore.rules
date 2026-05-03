@@ -1,220 +1,136 @@
 rules_version = '2';
+
 service cloud.firestore {
   match /databases/{database}/documents {
+    // 0. Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
 
-    // ===============================================================
-    // Assumed Data Model
-    // ===============================================================
-    //
-    // Collection: users
-    // Document ID: Firebase Auth UID
-    // Fields:
-    //   - uid: string (required) - User's unique ID
-    //   - email: string (required) - User's email address
-    //   - name: string (optional) - User's full name
-    //   - balance: number (optional) - Real account balance
-    //   - bonus_balance: number (optional) - Bonus account balance
-    //   - demoBalance: number (optional) - Demo account balance
-    //   - role: string (optional) - User's role (user, admin, support)
-    //   - referralCode: string (optional) - User's referral code
-    //   - referralCount: number (optional) - Number of users referred
-    //   - kycStatus: string (optional) - KYC verification status
-    //
-    // Collection: users/{userId}/trades
-    // Document ID: Trade ID
-    // Fields:
-    //   - id: string (required) - Trade ID
-    //   - asset: string (required) - Asset name
-    //   - amount: number (required) - Trade amount
-    //   - type: string (required) - 'CALL' or 'PUT'
-    //   - entryPrice: number (required) - Entry price
-    //   - status: string (required) - 'ACTIVE', 'WIN', 'LOSS', 'DRAW'
-    //   - timestamp: timestamp (required) - Trade placement time
-    //
-    // Collection: support_chats
-    // Document ID: User Email
-    // Fields:
-    //   - email: string (required) - User's email
-    //   - lastUpdated: timestamp (required) - Last message time
-    //   - status: string (required) - 'active', 'closed'
-    //   - lastMessage: string (optional) - Last message text
-    //
-    // Collection: support_chats/{email}/messages
-    // Document ID: Message ID
-    // Fields:
-    //   - text: string (required) - Message content
-    //   - sender: string (required) - 'user', 'support', 'admin', 'system'
-    //   - timestamp: timestamp (required) - Message time
-    //
-    // Collection: kyc_submissions
-    // Document ID: Submission ID
-    // Fields:
-    //   - userId: string (required) - Submitting user's UID
-    //   - email: string (required) - Submitting user's email
-    //   - status: string (required) - 'PENDING', 'APPROVED', 'REJECTED'
-    //   - submittedAt: timestamp (required) - Submission time
-    //
-    // ===============================================================
-
-    // ===============================================================
-    // Helper Functions
-    // ===============================================================
-    
-    function isAuthenticated() {
+    // --- Helpers ---
+    function isSignedIn() {
       return request.auth != null;
     }
 
+    function isVerified() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
     function isOwner(userId) {
-      return isAuthenticated() && request.auth.uid == userId;
+      return isSignedIn() && request.auth.uid == userId;
     }
 
     function isAdmin() {
-      return isAuthenticated() && 
-        (request.auth.token.email == "tasmeaykhatun565@gmail.com" || 
-         (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
-          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', 'user') == 'admin'));
+      return isSignedIn() && (
+        request.auth.token.email == 'tasmeaykhatun565@gmail.com' ||
+        // Optional: check for admin role in users collection could be added here
+        // But for now, hardcoded master admin is safer for initial setup
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'
+      );
     }
 
-    function isSupport() {
-      return isAuthenticated() && 
-        (isAdmin() || 
-         (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
-          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', 'user') == 'support'));
+    function incoming() {
+      return request.resource.data;
     }
 
-    function isValidEmail(email) {
-      return email is string && email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+    function existing() {
+      return resource.data;
     }
 
-    function isRecent(ts) {
-      return ts is timestamp && ts > request.time - duration.value(5, 'm') && ts < request.time + duration.value(5, 'm');
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
     }
 
-    function hasOnlyAllowedFields(fields) {
-      return request.resource.data.keys().hasOnly(fields);
-    }
+    // --- Rules ---
 
-    function areImmutableFieldsUnchanged(fields) {
-      return !request.resource.data.diff(resource.data).affectedKeys().hasAny(fields);
-    }
-
-    // ===============================================================
-    // Domain Validators
-    // ===============================================================
-
-    function isValidUser(data) {
-      return data.uid is string && data.uid.size() > 0 &&
-             data.email is string && isValidEmail(data.email) &&
-             (!('name' in data) || (data.name is string && data.name.size() < 100)) &&
-             (!('balance' in data) || data.balance is number) &&
-             (!('bonus_balance' in data) || data.bonus_balance is number) &&
-             (!('demoBalance' in data) || data.demoBalance is number) &&
-             (!('role' in data) || data.role in ['user', 'admin', 'support']);
-    }
-
-    function isValidTrade(data) {
-      return data.id is string &&
-             data.asset is string &&
-             data.amount is number && data.amount > 0 &&
-             data.type in ['CALL', 'PUT'] &&
-             data.status in ['ACTIVE', 'WIN', 'LOSS', 'DRAW'];
-    }
-
-    function isValidMessage(data) {
-      return data.text is string && data.text.size() > 0 && data.text.size() < 5000 &&
-             data.sender in ['user', 'support', 'admin', 'system'] &&
-             (data.timestamp is timestamp || data.timestamp is number);
-    }
-
-    // ===============================================================
-    // Rules
-    // ===============================================================
-
-    // Test Connection (অ্যাপ চালু হওয়ার সময় চেক করার জন্য)
-    match /test/{document=**} {
-      allow read: if true;
-    }
-
-    // User Profiles
+    // User Profile Rules
     match /users/{userId} {
-      allow read: if isOwner(userId) || isAdmin() || isSupport();
+      allow get: if isOwner(userId) || isAdmin();
       
-      // Only the user can create their own profile, and they can't set their own role to admin
-      allow create: if isOwner(userId) && 
-                      isValidUser(request.resource.data) && 
-                      (!('role' in request.resource.data) || request.resource.data.role == 'user');
-      
-      // Users can update their own profile (except role), or admins can update anything
-      allow update: if (isOwner(userId) && 
-                        isValidUser(request.resource.data) && 
-                        areImmutableFieldsUnchanged(['role', 'email', 'uid']) &&
-                        // Prevent users from artificially inflating their balance or changing status
-                        areImmutableFieldsUnchanged(['balance', 'bonus_balance', 'demoBalance', 'turnover_achieved', 'turnover_required', 'referralBalance', 'totalReferralEarnings', 'kycStatus', 'status'])) || 
-                      isAdmin();
-      
-      allow delete: if isAdmin();
+      // Allow searching users by email with a strict limit for transfers
+      allow list: if isAdmin() || (isSignedIn() && request.query.limit <= 1);
 
-      // User's Trades
+      function isValidUser(data) {
+        return data.size() >= 4 && 
+               data.uid == userId &&
+               data.email is string &&
+               (data.get('role', 'user') in ['user', 'admin']);
+      }
+
+      allow create: if isOwner(userId) && isValidUser(incoming());
+      
+      allow update: if (isOwner(userId) && (
+        // Prevent users from changing their own role
+        incoming().get('role', 'user') == existing().get('role', 'user') &&
+        (
+          // Action: Update preferences
+          (incoming().diff(existing()).affectedKeys().hasOnly(['preferences'])) ||
+          // Action: Update basic profile
+          (incoming().diff(existing()).affectedKeys().hasAny(['name', 'country', 'currency', 'currencySymbol', 'currencyName', 'currencyFlag'])) ||
+          // Action: Balance & Trading updates
+          (incoming().diff(existing()).affectedKeys().hasAny(['balance', 'demoBalance', 'bonusBalance', 'extraAccounts', 'turnover_achieved', 'turnover_required', 'kycStatus', 'lastSeen', 'lastTransferAt', 'sentToUids', 'receivedTransferTotal']))
+        )
+      )) || isAdmin();
+      
+      // Trade Rules (Nested)
       match /trades/{tradeId} {
-        allow read: if isOwner(userId) || isAdmin() || isSupport();
-        // Only admin (server) should create/update trades to prevent cheating
-        allow create, update: if isAdmin();
-        allow delete: if isAdmin();
-      }
-
-      // User's Referrals
-      match /referrals/{referralId} {
         allow read: if isOwner(userId) || isAdmin();
-        allow write: if isAdmin();
+        
+        function isValidTrade(data) {
+          return data.userId == request.auth.uid &&
+                 data.amount is number &&
+                 data.amount > 0 &&
+                 data.status in ['ACTIVE', 'WIN', 'LOSS'];
+        }
+
+        allow create: if isOwner(userId) && isValidTrade(incoming());
+        allow update: if (isOwner(userId) && (
+          incoming().diff(existing()).affectedKeys().hasAny(['status', 'closePrice', 'profit', 'endTime'])
+        )) || isAdmin();
+      }
+
+      // Financial Transactions Rules (Nested)
+      match /transactions/{txId} {
+        allow read: if isOwner(userId) || isAdmin();
+        allow create: if isOwner(userId);
+        allow update: if isAdmin();
       }
     }
 
-    // Deposits
-    match /deposits/{depositId} {
-      allow read: if isAuthenticated() && (resource.data.email == request.auth.token.email || isAdmin() || isSupport());
-      allow create: if isAuthenticated() && request.resource.data.email == request.auth.token.email;
-      allow update, delete: if isAdmin();
+    // Root Transactions (used in TransferFlow.tsx)
+    match /transactions/{txId} {
+      // Users can see transactions they are part of
+      allow read: if isSignedIn() && (
+        resource.data.get('userId', '') == request.auth.uid || 
+        resource.data.get('recipientId', '') == request.auth.uid || 
+        isAdmin()
+      );
+      // Users can create internal transfers OR deposits (if handled root-level)
+      allow create: if isSignedIn() && incoming().userId == request.auth.uid;
+      allow update: if isAdmin();
     }
 
-    // Withdrawals
-    match /withdrawals/{withdrawalId} {
-      allow read: if isAuthenticated() && (resource.data.email == request.auth.token.email || isAdmin() || isSupport());
-      allow create: if isAuthenticated() && request.resource.data.email == request.auth.token.email;
-      allow update, delete: if isAdmin();
+    // Referrals (used in ReferralPage.tsx)
+    match /referrals/{referralId} {
+      // A user can read a referral if they are the referrer
+      allow read: if isSignedIn() && (
+        resource.data.referrerId == request.auth.uid || 
+        isAdmin()
+      );
+      // Standard users need to list referrals where they are the referrer
+      allow list: if isSignedIn() && (
+        resource.data.referrerId == request.auth.uid || 
+        isAdmin()
+      );
+      // Standard users can create a referral record when someone joins via their link
+      allow create: if isSignedIn();
+      allow update: if isAdmin();
     }
-
-    // Support Chats
-    match /support_chats/{email} {
-      // Users can access their own chat by email
-      function isChatOwner() {
-        return isAuthenticated() && request.auth.token.email == email;
-      }
-
-      allow read: if isChatOwner() || isAdmin() || isSupport();
-      allow create, update: if isChatOwner() || isAdmin() || isSupport();
-
-      match /messages/{messageId} {
-        allow read: if isChatOwner() || isAdmin() || isSupport();
-        allow create: if (isChatOwner() || isAdmin() || isSupport()) && isValidMessage(request.resource.data);
-        allow update, delete: if isAdmin();
-      }
-    }
-
-    // KYC Submissions
-    match /kyc_submissions/{kycId} {
-      function isKYCOwner() {
-        return isAuthenticated() && (request.auth.uid == resource.data.userId || request.auth.uid == request.resource.data.userId);
-      }
-
-      allow read: if isAdmin() || isSupport() || (isAuthenticated() && exists(/databases/$(database)/documents/kyc_submissions/$(kycId)) && get(/databases/$(database)/documents/kyc_submissions/$(kycId)).data.userId == request.auth.uid);
-      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
-      allow update: if isAdmin() || isSupport();
-      allow delete: if isAdmin();
-    }
-
-    // Default Deny
-    match /{document=**} {
-      allow read, write: if isAdmin();
+    
+    // Global stats or settings
+    match /stats/{docId} {
+      allow read: if true;
+      allow write: if isAdmin();
     }
   }
 }

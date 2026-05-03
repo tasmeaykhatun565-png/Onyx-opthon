@@ -1,137 +1,109 @@
 {
   "entities": {
     "User": {
-      "title": "User",
-      "description": "User profile and balance information",
+      "title": "User Profile",
+      "description": "Stores core user information and trading parameters",
       "type": "object",
       "properties": {
         "uid": { "type": "string" },
         "email": { "type": "string" },
         "name": { "type": "string" },
-        "balance": { "type": "number" },
-        "demoBalance": { "type": "number" },
-        "referredBy": { "type": "string", "description": "UID of the user who referred this user" },
-        "referralCode": { "type": "string", "description": "Unique referral code for this user" },
-        "referralCount": { "type": "number" },
-        "referralBalance": { "type": "number", "description": "Current referral earnings waiting to hit threshold" },
-        "totalReferralEarnings": { "type": "number", "description": "Total lifetime referral earnings" },
-        "lastTransferAt": { "type": "number", "description": "Timestamp of the last successful internal transfer" },
-        "sentToUids": { "type": "array", "items": { "type": "string" }, "description": "List of user UIDs this user has already sent money to" },
-        "receivedTransferTotal": { "type": "number", "description": "Total amount received via internal transfers (locked for re-transfer)" },
+        "balance": { "type": "number", "description": "Real account balance" },
+        "demoBalance": { "type": "number", "description": "Demo account balance" },
+        "referralCode": { "type": "string" },
+        "referredBy": { "type": "string" },
+        "country": { "type": "string" },
+        "currency": { "type": "string" },
+        "currencySymbol": { "type": "string" },
+        "bonusBalance": { "type": "number", "description": "Bonus account balance" },
+        "turnover_required": { "type": "number" },
+        "turnover_achieved": { "type": "number" },
+        "kycStatus": { "type": "string", "enum": ["NONE", "PENDING", "VERIFIED", "REJECTED"] },
+        "role": { "type": "string", "enum": ["user", "admin"] },
+        "createdAt": { "type": "number" },
+        "preferences": {
+          "type": "object",
+          "properties": {
+            "language": { "type": "string" },
+            "chartType": { "type": "string" },
+            "timeframe": { "type": "string" },
+            "theme": { "type": "string" }
+          }
+        }
+      },
+      "required": ["uid", "email", "balance", "demoBalance"]
+    },
+    "Trade": {
+      "title": "Trade Transaction",
+      "description": "Records every trade execution and its outcome",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "type": { "type": "string", "enum": ["UP", "DOWN"] },
+        "entryPrice": { "type": "number" },
+        "closePrice": { "type": "number" },
+        "amount": { "type": "number" },
+        "payout": { "type": "number" },
+        "profit": { "type": "number" },
+        "startTime": { "type": "number" },
+        "endTime": { "type": "number" },
+        "status": { "type": "string", "enum": ["ACTIVE", "WIN", "LOSS"] },
+        "asset": { "type": "string" },
+        "accountType": { "type": "string", "enum": ["DEMO", "REAL"] }
+      },
+      "required": ["userId", "amount", "startTime", "status", "asset"]
+    },
+    "Transaction": {
+      "title": "Financial Transaction",
+      "description": "Logs for deposits and withdrawals",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "amount": { "type": "number" },
+        "method": { "type": "string" },
+        "type": { "type": "string", "enum": ["DEPOSIT", "WITHDRAWAL", "INTERNAL_TRANSFER"] },
+        "status": { "type": "string", "enum": ["PENDING", "COMPLETED", "CANCELLED", "SUCCESS"] },
         "createdAt": { "type": "number" }
       },
-      "required": ["uid", "email"]
+      "required": ["userId", "amount", "type", "status"]
     },
     "Referral": {
-      "title": "Referral",
-      "description": "Record of a referral event or commission",
+      "title": "Referral Record",
+      "description": "Tracks a single referral and its status",
       "type": "object",
       "properties": {
-        "referrerUid": { "type": "string" },
-        "referredUid": { "type": "string" },
-        "referredEmail": { "type": "string" },
-        "amount": { "type": "number", "description": "Commission amount earned" },
-        "type": { "type": "string", "enum": ["SIGNUP", "DEPOSIT"] },
-        "timestamp": { "type": "number" }
-      },
-      "required": ["referrerUid", "referredUid", "amount", "type", "timestamp"]
-    },
-    "Chat": {
-      "title": "Chat",
-      "description": "Support chat session",
-      "type": "object",
-      "properties": {
+        "id": { "type": "string" },
+        "referrerId": { "type": "string" },
+        "referredUserId": { "type": "string" },
         "email": { "type": "string" },
-        "lastUpdated": { "type": "object" },
-        "status": { "type": "string", "enum": ["active", "closed"] },
-        "lastMessage": { "type": "string" }
+        "status": { "type": "string", "enum": ["CLICK", "REGISTERED", "DEPOSITOR", "ACTIVE"] },
+        "createdAt": { "type": "number" },
+        "earnings": { "type": "number" }
       },
-      "required": ["email", "lastUpdated", "status"]
+      "required": ["referrerId", "referredUserId", "status"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profile document"
     },
-    "Message": {
-      "title": "Message",
-      "description": "Individual chat message",
-      "type": "object",
-      "properties": {
-        "text": { "type": "string" },
-        "sender": { "type": "string", "enum": ["user", "support", "admin", "system"] },
-        "timestamp": { "type": "object" }
-      },
-      "required": ["text", "sender", "timestamp"]
+    "/users/{userId}/trades/{tradeId}": {
+      "schema": "Trade",
+      "description": "Individual trade records for a user"
     },
-    "PromoCode": {
-      "title": "PromoCode",
-      "description": "Promotional codes for deposit bonuses",
-      "type": "object",
-      "properties": {
-        "code": { "type": "string" },
-        "description": { "type": "string" },
-        "bonusPercentage": { "type": "number" },
-        "minDeposit": { "type": "number" },
-        "turnoverMultiplier": { "type": "number" },
-        "expiresAt": { "type": "number" },
-        "title": { "type": "string" },
-        "icon": { "type": "string" }
-      },
-      "required": ["code", "bonusPercentage", "minDeposit", "turnoverMultiplier"]
+    "/users/{userId}/transactions/{txId}": {
+      "schema": "Transaction",
+      "description": "Deposit and withdrawal history (Nested copies info)"
     },
-    "Tournament": {
-        "title": "Tournament",
-        "description": "Trading tournament details",
-        "type": "object",
-        "properties": {
-          "title": { "type": "string" },
-          "imageUrl": { "type": "string" },
-          "prizeFund": { "type": "number" },
-          "startTime": { "type": "number" },
-          "endTime": { "type": "number" },
-          "status": { "type": "string", "enum": ["upcoming", "active", "finished"], "description": "calculated status or manually set" },
-          "isLocked": { "type": "boolean" },
-          "description": { "type": "string" },
-          "rules": { "type": "string" },
-          "participants": { "type": "number" },
-          "createdAt": { "type": "number" }
-        },
-        "required": ["title", "prizeFund", "startTime", "endTime"]
-      },
-      "Ad": {
-        "title": "Ad",
-        "description": "Advertisement banner with link",
-        "type": "object",
-        "properties": {
-          "title": { "type": "string" },
-          "imageUrl": { "type": "string" },
-          "linkUrl": { "type": "string" },
-          "order": { "type": "number", "description": "Display order" }
-        },
-        "required": ["title", "imageUrl", "linkUrl"]
-      }
+    "/transactions/{txId}": {
+      "schema": "Transaction",
+      "description": "Global transactions history (Root level)"
     },
-    "firestore": {
-      "/users/{userId}": {
-        "schema": "User",
-        "description": "User documents"
-      },
-      "/users/{userId}/referrals/{referralId}": {
-        "schema": "Referral",
-        "description": "Referrals made by this user"
-      },
-      "/chats/{chatId}": {
-        "schema": "Chat",
-        "description": "Support chat sessions"
-      },
-      "/chats/{chatId}/messages/{messageId}": {
-        "schema": "Message",
-        "description": "Chat messages"
-      },
-      "/tournaments/{tournamentId}": {
-        "schema": "Tournament",
-        "description": "Trading tournaments"
-      },
-      "/ads/{adId}": {
-        "schema": "Ad",
-        "description": "Advertisement banners"
-      }
+    "/referrals/{referralId}": {
+      "schema": "Referral",
+      "description": "Tracks all referrals"
     }
   }
 }

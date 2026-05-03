@@ -1,0 +1,53 @@
+1109:  const [selectedAsset, setSelectedAsset] = useState<Asset>(() => {
+1111:      const saved = localStorage.getItem('selectedAsset');
+1123:    localStorage.setItem('selectedAsset', safeStringify(selectedAsset));
+1124:  }, [selectedAsset]);
+1289:  const selectedAssetRef = useRef(selectedAsset);
+1305:    selectedAssetRef.current = selectedAsset;
+1306:  }, [balance, demoBalance, trades, data, user, selectedAsset]);
+1650:  const lastCloseRef = useRef(selectedAsset.basePrice);
+1653:    if (!selectedAsset.isOTC && ['5s', '10s', '15s', '20s', '30s'].includes(chartTimeFrame)) {
+1658:  }, [selectedAsset.isOTC, chartTimeFrame]);
+1669:    if (!socket || !selectedAsset) return;
+1671:    const assetShortName = selectedAsset.shortName;
+1672:    const basePrice = selectedAsset.basePrice;
+1736:        const basePrice = selectedAssetRef.current?.basePrice || 100;
+1742:            const close = open + (Math.random() - 0.5) * (selectedAssetRef.current?.volatility || 1) * 2;
+1743:            const high = Math.max(open, close) + Math.random() * (selectedAssetRef.current?.volatility || 1);
+1744:            const low = Math.min(open, close) - Math.random() * (selectedAssetRef.current?.volatility || 1);
+1821:  }, [socket, selectedAsset.id, chartTimeFrame]);
+1824:    if (!socket || !selectedAsset || dataRef.current.length === 0) return;
+1828:      asset: selectedAsset.shortName,
+1833:  }, [socket, selectedAsset.id, chartTimeFrame]); // Removed data from deps, using dataRef instead
+1847:      const currentAsset = selectedAssetRef.current;
+2199:    if (selectedAsset.isFrozen) return showToast("Trading is currently closed for this asset.", "error");
+2318:      payout: selectedAsset.payout,
+2319:      asset: selectedAsset.name,
+2320:      assetShortName: selectedAsset.shortName,
+2321:      assetFlag: selectedAsset.flag,
+2322:      assetCategory: selectedAsset.category,
+2341:        assetId: selectedAsset.id,
+2342:        assetName: selectedAsset.name,
+2362:    return trades.filter(t => t.status === 'ACTIVE' && t.assetShortName === selectedAsset.shortName && t.accountType === activeAccount);
+2363:  }, [trades, selectedAsset.shortName, activeAccount]);
+2369:  const currentPayout = marketAssets[selectedAsset.shortName]?.payout || selectedAsset.payout;
+2377:        socket.emit('request-history', { asset: selectedAsset.shortName, timeframe: chartTimeFrame, limit: 50000 });
+2383:  }, [socket, selectedAsset.shortName, chartTimeFrame]); // Use shortName instead of full object
+2537:                      <AssetIcon shortName={selectedAsset.shortName} category={selectedAsset.category} flag={selectedAsset.flag} size="sm" />
+2540:                      <div className="text-white font-bold text-[12px] leading-none mb-0.5">{selectedAsset.name.split('(')[0].trim()}</div>
+2541:                      <div className="text-[10px] text-gray-500 font-medium leading-none">FT • <span className="text-white/80">{selectedAsset.payout}%</span></div>
+2687:                  <AssetIcon shortName={selectedAsset.shortName} category={selectedAsset.category} flag={selectedAsset.flag} size="sm" />
+2690:                   <span className="text-white font-bold text-[12px] truncate max-w-[80px]">{selectedAsset.name.split('(')[0].trim()}</span>
+2691:                   <span className="text-green-500 text-[11px] font-black">{selectedAsset.payout}%</span>
+2792:                  currentAssetId={selectedAsset.id}
+3006:                key={`${selectedAsset.id}-${chartTimeFrame}`}
+3009:                assetName={selectedAsset.name}
+3114:                              if (selectedAsset.isOTC) return true;
+3308:                  selectedAsset={selectedAsset}
+3309:                  isFrozen={selectedAsset.isFrozen}
+3326:            currentAssetShortName={selectedAsset.shortName}
+3428:          {selectedAsset.isFrozen ? (
+3602:        isOTC={!!selectedAsset.isOTC}
+3632:                currentAssetId={selectedAsset.id}
+3659:        assetName={selectedAsset.name}
+5443:  investment, setInvestment, currency, tradeMode, setTradeMode, timerDuration, setTimerDuration, clockOffset, setClockOffset, getExpirationTime, timezoneOffset, handleTrade, potentialProfit, displayCurrencySymbol, setIsPendingOrderSheetOpen, selectedAsset, isFrozen, isAssetSelectorOpen, setIsAssetSelectorOpen, closeAllPanels, isTradingEnabled

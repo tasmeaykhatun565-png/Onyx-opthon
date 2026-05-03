@@ -57,8 +57,8 @@ interface PaymentMethod {
 }
 
 const PAYMENT_METHODS: PaymentMethod[] = [
-  { id: 'bkash_p2c', name: 'bKash', icon: <div className="w-10 h-10 flex items-center justify-center bg-pink-600 text-white rounded-md font-bold text-xs">bKash</div>, category: 'E-PAY', minAmount: '$10.00', isPopular: true },
-  { id: 'binance_pay', name: 'BinancePay', icon: <div className="w-8 h-8 bg-[#f3ba2f] rounded-lg flex items-center justify-center text-[14px] font-bold text-black shadow-sm">B</div>, category: 'E-PAY', minAmount: '$10.00', isPopular: true },
+  { id: 'bkash_p2c', name: 'bKash', icon: <img src="https://raw.githubusercontent.com/t-asif/trading-assets/main/bkash.png" alt="bKash" className="w-10 h-10 object-contain" referrerPolicy="no-referrer" />, category: 'E-PAY', minAmount: '$10.00', isPopular: true },
+  { id: 'binance_pay', name: 'BinancePay', icon: <img src="https://raw.githubusercontent.com/t-asif/trading-assets/main/binance.png" alt="Binance Pay" className="w-8 h-8 object-contain" referrerPolicy="no-referrer" />, category: 'E-PAY', minAmount: '$10.00', isPopular: true },
   { id: 'usdt_bep20', name: 'USDT (BSC BEP-20)', icon: <div className="w-8 h-8 bg-[#26a17b] rounded-full flex items-center justify-center text-[14px] font-bold text-white shadow-sm">T</div>, category: 'CRYPTO', minAmount: '$10.00', isPopular: true },
   { id: 'bank_card', name: 'Bank card', icon: <div className="w-8 h-8 bg-[#00529b] rounded-lg flex items-center justify-center text-white shadow-sm"><CreditCard size={18} /></div>, category: 'E-PAY', minAmount: '$10.00', isPopular: true },
   { id: 'usdt_trc20', name: 'USDT (TRC20)', icon: <div className="w-8 h-8 bg-[#26a17b] rounded-full flex items-center justify-center text-[14px] font-bold text-white shadow-sm">T</div>, category: 'CRYPTO', minAmount: '$10.00', isPopular: true },
@@ -620,22 +620,6 @@ const PaymentDetails = ({ handleBack, selectedMethod, amount, currencyCode, curr
     const [timeLeft, setTimeLeft] = useState(3600); // 60 minutes as per image
     const [loading, setLoading] = useState(true);
     const [numberIndex, setNumberIndex] = useState(0);
-    const [screenshot, setScreenshot] = useState<File | null>(null);
-    const [screenshotPreview, setScreenshotPreview] = useState<string | null>(null);
-    const fileInputRef = React.useRef<HTMLInputElement>(null);
-
-    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-      const file = e.target.files?.[0];
-      if (file) {
-        setScreenshot(file);
-        const reader = new FileReader();
-        reader.onloadend = () => {
-          setScreenshotPreview(reader.result as string);
-        };
-        reader.readAsDataURL(file);
-      }
-    };
-
     const getNumbersArray = () => {
       if (selectedMethod.id.includes('bkash')) return depositSettings.bkashNumbers || [];
       if (selectedMethod.id.includes('nagad')) return depositSettings.nagadNumbers || [];
@@ -808,38 +792,6 @@ const PaymentDetails = ({ handleBack, selectedMethod, amount, currencyCode, curr
                     className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm font-bold text-white focus:outline-none focus:border-blue-500 transition"
                   />
                 </div>
-
-                <div className="space-y-2">
-                  <label className="text-xs font-bold text-gray-500 uppercase tracking-widest">Payment Screenshot</label>
-                  <div 
-                    onClick={() => fileInputRef.current?.click()}
-                    className="relative border-2 border-dashed border-white/10 rounded-2xl p-4 flex flex-col items-center justify-center gap-2 hover:border-blue-500 transition-colors cursor-pointer bg-black/20"
-                  >
-                    <input 
-                      type="file" 
-                      ref={fileInputRef}
-                      className="hidden" 
-                      accept="image/*"
-                      onChange={handleFileChange}
-                    />
-                    {screenshotPreview ? (
-                      <div className="relative w-full">
-                        <img src={screenshotPreview} alt="Preview" className="max-h-32 mx-auto rounded-lg" />
-                        <button 
-                          onClick={(e) => { e.stopPropagation(); setScreenshot(null); setScreenshotPreview(null); }}
-                          className="absolute -top-2 -right-2 bg-red-500 text-white p-1 rounded-full shadow-lg"
-                        >
-                          <X size={12} />
-                        </button>
-                      </div>
-                    ) : (
-                      <>
-                        <Upload size={20} className="text-gray-500" />
-                        <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest text-center">Upload Payment Proof</p>
-                      </>
-                    )}
-                  </div>
-                </div>
               </div>
 
               <div className="flex items-center justify-between px-2">
@@ -855,7 +807,7 @@ const PaymentDetails = ({ handleBack, selectedMethod, amount, currencyCode, curr
 
               <button 
                 disabled={!transactionId || isProcessing}
-                onClick={() => handleSubmitDeposit(screenshotPreview)}
+                onClick={() => handleSubmitDeposit()}
                 className={cn(
                   "w-full py-4 rounded-2xl font-black text-base transition-all shadow-xl mt-2 uppercase tracking-widest",
                   transactionId && !isProcessing ? "bg-blue-600 text-white active:scale-95 shadow-blue-500/20" : "bg-white/5 text-gray-600 cursor-not-allowed"
@@ -1081,45 +1033,13 @@ const PaymentDetails = ({ handleBack, selectedMethod, amount, currencyCode, curr
                         <span className="font-bold text-gray-400 text-sm">!</span>
                     </div>
                 </div>
-
-                <div className="space-y-2 mt-4">
-                  <p className="text-base font-bold text-[#1a1b1e]">Payment Screenshot</p>
-                  <div 
-                    onClick={() => fileInputRef.current?.click()}
-                    className="relative border-2 border-dashed border-gray-300 rounded-2xl p-4 flex flex-col items-center justify-center gap-2 hover:border-blue-500 transition-colors cursor-pointer bg-gray-50"
-                  >
-                    <input 
-                      type="file" 
-                      ref={fileInputRef}
-                      className="hidden" 
-                      accept="image/*"
-                      onChange={handleFileChange}
-                    />
-                    {screenshotPreview ? (
-                      <div className="relative w-full">
-                        <img src={screenshotPreview} alt="Preview" className="max-h-32 mx-auto rounded-lg" />
-                        <button 
-                          onClick={(e) => { e.stopPropagation(); setScreenshot(null); setScreenshotPreview(null); }}
-                          className="absolute -top-2 -right-2 bg-red-500 text-white p-1 rounded-full shadow-lg"
-                        >
-                          <X size={12} />
-                        </button>
-                      </div>
-                    ) : (
-                      <>
-                        <Upload size={24} className="text-gray-400" />
-                        <p className="text-xs text-gray-500 font-medium text-center">Click to upload payment screenshot</p>
-                      </>
-                    )}
-                  </div>
-                </div>
             </div>
           </div>
 
           {/* Submit Button - Compact */}
           <button 
             disabled={!transactionId || isProcessing}
-            onClick={() => handleSubmitDeposit(screenshotPreview)}
+            onClick={() => handleSubmitDeposit()}
             className={cn(
                 "w-full py-3 rounded-full font-bold text-base transition-all shadow-lg mt-2",
                 transactionId && !isProcessing ? "bg-[#D12053] text-white active:scale-95 shadow-pink-500/20" : "bg-gray-200 text-gray-400 cursor-not-allowed"
@@ -1410,7 +1330,7 @@ export default function DepositFlow({ isOpen, onClose, currencySymbol, currencyC
     else setStep('SUMMARY');
   };
 
-  const handleSubmitDeposit = (screenshot?: string) => {
+  const handleSubmitDeposit = () => {
     if (!transactionId) return;
     
     if (displayCurrencyCode === 'BDT' && amount < 500) {
@@ -1429,8 +1349,7 @@ export default function DepositFlow({ isOpen, onClose, currencySymbol, currencyC
           currency: displayCurrencyCode,
           method: selectedMethod.id,
           transactionId,
-          promoCode: selectedPromo ? promoInput : null,
-          screenshot
+          promoCode: selectedPromo ? promoInput : null
         });
       } else {
         setIsProcessing(false);

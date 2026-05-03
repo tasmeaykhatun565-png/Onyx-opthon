@@ -10,7 +10,7 @@ import { INDICATORS_LIST } from './constants';
 interface IndicatorSheetProps {
   isOpen: boolean;
   onClose: () => void;
-  onSelectIndicator: (indicator: IndicatorConfig) => void;
+  onSelectIndicator: (indicator: IndicatorConfig, forceRemove?: boolean) => void;
   activeIndicators: IndicatorConfig[];
   initialTab?: string;
 }
@@ -215,17 +215,17 @@ export default function IndicatorSheet({ isOpen, onClose, onSelectIndicator, act
             <div className="p-6 border-t border-white/5 flex gap-3">
               <button 
                 onClick={() => {
-                  onSelectIndicator(editingIndicator); // This usually toggles but in settings context we can make it "Replace" or "Add"
+                  onSelectIndicator(editingIndicator);
                   setEditingIndicator(null);
                 }}
                 className="flex-1 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl transition-colors shadow-lg active:scale-95"
               >
                 Apply
               </button>
-              {activeIndicators.some(i => i.id === editingIndicator.id) && (
+              {activeIndicators.some(i => i.instanceId === editingIndicator.instanceId) && (
                 <button 
                   onClick={() => {
-                    onSelectIndicator(editingIndicator); // Toggle off
+                    onSelectIndicator(editingIndicator, true); // Force remove
                     setEditingIndicator(null);
                   }}
                   className="px-4 py-3 bg-red-500/10 hover:bg-red-500/20 text-red-500 font-bold rounded-xl transition-colors active:scale-95"

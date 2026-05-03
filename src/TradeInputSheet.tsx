@@ -199,9 +199,29 @@ export default function TradeInputSheet({
 
           {activeTab === 'AMOUNT' && (
             <div className="flex flex-col items-center py-4">
-              <p className="text-[var(--text-secondary)] text-[11px] uppercase tracking-[0.1em] mb-6 font-bold opacity-60">
-                Select Investment Amount
+              <p className="text-[var(--text-secondary)] text-[11px] uppercase tracking-[0.1em] mb-4 font-bold opacity-60">
+                Investment Amount
               </p>
+              
+              <div className="w-full bg-[var(--bg-secondary)] rounded-2xl p-4 mb-8 border border-[var(--border-color)] flex items-center justify-between">
+                <span className="text-2xl font-black text-[#22c55e]">{currencySymbol}</span>
+                <input 
+                  type="number"
+                  inputMode="numeric"
+                  value={investment || ''}
+                  onChange={(e) => {
+                    const val = e.target.value === '' ? 0 : Number(e.target.value);
+                    onInvestmentChange(val);
+                  }}
+                  onBlur={() => {
+                    const min = currencySymbol === '৳' ? 20 : 1;
+                    if (investment < min) onInvestmentChange(min);
+                  }}
+                  className="flex-1 bg-transparent text-right font-black text-3xl text-white focus:outline-none"
+                  autoFocus
+                />
+              </div>
+
               <div className="grid grid-cols-3 gap-2.5 w-full">
                 {(currencySymbol === '৳' ? [20, 50, 100, 200, 500, 1000, 2000, 5000, 10000] : [1, 5, 10, 20, 50, 100, 200, 500, 1000]).map(amt => (
                   <button 

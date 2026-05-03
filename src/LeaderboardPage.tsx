@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Trophy, ChevronLeft, Medal, Users, TrendingUp, Globe, Zap, Target, X, Info, ChevronDown, Award, Star, ChevronRight, Calendar } from 'lucide-react';
 import { cn } from './utils';
@@ -12,29 +12,6 @@ interface LeaderboardEntry {
   isCurrentUser?: boolean;
 }
 
-const MOCK_LEADERBOARD: LeaderboardEntry[] = [
-  { id: '1', name: 'Sebas.Trader', profit: 1985.50, countryCode: 'CO' },
-  { id: '2', name: 'DANITRADER', profit: 1850.25, countryCode: 'BR' },
-  { id: '3', name: 'DULCE***', profit: 1720.00, countryCode: 'MX' },
-  { id: '4', name: 'ID82341***', profit: 1650.75, countryCode: 'IN' },
-  { id: '5', name: 'Yusuf_Trade', profit: 1540.20, countryCode: 'TR' },
-  { id: '6', name: 'Abdullah.K', profit: 1420.60, countryCode: 'AE' },
-  { id: '7', name: 'Binomo_Pro', profit: 1350.90, countryCode: 'ID' },
-  { id: '8', name: 'CharlyTrader17', profit: 1210.00, countryCode: 'CO' },
-  { id: '9', name: 'Dbs3nzii', profit: 1150.35, countryCode: 'KW' },
-  { id: '10', name: 'FTRADER2', profit: 980.50, countryCode: 'AR' },
-  { id: '11', name: 'ID182137***', profit: 890.25, countryCode: 'NG' },
-  { id: '12', name: 'Tradinghub9729', profit: 820.88, countryCode: 'IN' },
-  { id: '13', name: 'Musongyesquare', profit: 740.02, countryCode: 'ZA' },
-  { id: '14', name: 'Dehbalaji', profit: 650.14, countryCode: 'IN' },
-  { id: '15', name: 'Crypto_King', profit: 580.13, countryCode: 'US' },
-  { id: '16', name: 'ID58070***', profit: 490.48, countryCode: 'ID' },
-  { id: '17', name: 'JDRG_842', profit: 420.28, countryCode: 'MX' },
-  { id: '18', name: 'YEYOELTREMENDO', profit: 380.71, countryCode: 'ES' },
-  { id: '19', name: 'Hz_SIGNAL', profit: 290.00, countryCode: 'IN' },
-  { id: '20', name: 'JULIAN_TRADER', profit: 215.00, countryCode: 'AR' },
-];
-
 const FlagIcon = ({ code }: { code: string }) => {
   return (
     <img 
@@ -45,11 +22,13 @@ const FlagIcon = ({ code }: { code: string }) => {
   );
 };
 
-export function LeaderboardPage({ onBack, currencySymbol = '$', currentUser }: { onBack: () => void, currencySymbol?: string, currentUser?: { name?: string; profit?: number } }) {
+export function LeaderboardPage({ onBack, currencySymbol = '$', currentUser, socket }: { onBack: () => void, currencySymbol?: string, currentUser?: { name?: string; profit?: number }, socket?: any }) {
+
+
   const [period, setPeriod] = useState('1 day');
   const [lastUpdate, setLastUpdate] = useState(format(new Date(), 'HH:mm:ss'));
   const [userCountryCode, setUserCountryCode] = useState<string>('BD'); // Default country code
-  const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>(MOCK_LEADERBOARD);
+  const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
 
   useEffect(() => {
     // Attempt to get user's actual country
@@ -66,31 +45,46 @@ export function LeaderboardPage({ onBack, currencySymbol = '$', currentUser }: {
   }, []);
 
   useEffect(() => {
-    // If a current user exists, we integrate them appropriately into the leaderboard
-    if (currentUser?.name) {
-      const userProfit = currentUser.profit || 450.50; // Use actual profit or a nice mock one that fits the ranking!
-      const userEntry: LeaderboardEntry = {
-        id: 'current-user',
-        name: currentUser.name,
-        profit: userProfit,
-        countryCode: userCountryCode,
-        isCurrentUser: true,
-      };
+    if (!socket) return;
+    
+    // Request initial data
+    socket.emit('request-leaderboard');
 
-      const updatedLeaderboard = [...MOCK_LEADERBOARD];
-      
-      // Remove last if it's 20, to keep it at 20 length
-      // Insert in correct sorted position
-      updatedLeaderboard.push(userEntry);
-      updatedLeaderboard.sort((a, b) => b.profit - a.profit);
-      
-      // Limit to 20 or if user is 21st, show 20 items + user item
-      
-      setLeaderboard(updatedLeaderboard.slice(0, 20));
-    } else {
-      setLeaderboard(MOCK_LEADERBOARD);
-    }
-  }, [currentUser, userCountryCode]);
+    const handleLeaderboardUpdate = (data: any[]) => {
+       console.log('Received leaderboard update', data);
+       let updatedLeaderboard = [...data];
+       
+       if (currentUser?.name && currentUser?.profit !== undefined && currentUser.profit > 0) {
+          const userProfit = currentUser.profit; 
+          const userEntry: LeaderboardEntry = {
+            id: 'current-user',
+            name: currentUser.name,
+            profit: userProfit,
+            countryCode: userCountryCode,
+            isCurrentUser: true,
+          };
+          
+          updatedLeaderboard.push(userEntry);
+       }
+       // Sort descending and keep top 20
+       updatedLeaderboard.sort((a, b) => b.profit - a.profit);
+       
+       // Ensure we only slice if there's more than 20
+       if (updatedLeaderboard.length > 20) {
+           updatedLeaderboard = updatedLeaderboard.slice(0, 20);
+       }
+       
+       setLeaderboard(updatedLeaderboard);
+       setLastUpdate(format(new Date(), 'HH:mm:ss'));
+    };
+
+    socket.on('leaderboard-update', handleLeaderboardUpdate);
+    
+    return () => {
+        socket.off('leaderboard-update', handleLeaderboardUpdate);
+    };
+  }, [socket, currentUser, userCountryCode]);
+
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -98,6 +92,8 @@ export function LeaderboardPage({ onBack, currencySymbol = '$', currentUser }: {
     }, 1000);
     return () => clearInterval(timer);
   }, []);
+
+  const todayStr = format(new Date(), 'dd MMMM yyyy');
 
   return (
     <div className="min-h-full bg-[#121212] text-white font-sans flex flex-col relative overflow-y-auto scrollbar-hide">
@@ -146,7 +142,7 @@ export function LeaderboardPage({ onBack, currencySymbol = '$', currentUser }: {
               </div>
               <div className="flex flex-col items-end">
                  <div className="flex items-center gap-2">
-                    <span className="text-[22px] font-bold text-white tabular-nums tracking-tight">00:30:55</span>
+                    <span className="text-[22px] font-bold text-white tabular-nums tracking-tight">{lastUpdate}</span>
                     <Info size={18} className="text-gray-600" />
                  </div>
                  <span className="text-[13px] text-gray-500 font-medium text-right">Latest update</span>
@@ -171,7 +167,7 @@ export function LeaderboardPage({ onBack, currencySymbol = '$', currentUser }: {
         <div className="space-y-2 mt-2">
            <label className="text-[11px] text-gray-600 font-black uppercase tracking-widest ml-1">Period</label>
            <button className="w-full bg-[#1e1e1e] border border-white/5 rounded-2xl p-4 flex items-center justify-between group">
-              <span className="text-base font-bold text-gray-200">Today, 24 April 2026</span>
+              <span className="text-base font-bold text-gray-200">Today, {todayStr}</span>
               <ChevronDown size={20} className="text-gray-500" />
            </button>
         </div>
@@ -184,38 +180,63 @@ export function LeaderboardPage({ onBack, currencySymbol = '$', currentUser }: {
               
               return (
                 <motion.div 
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
+                  initial={{ opacity: 0, x: -10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: index * 0.03 }}
                   key={entry.id}
-                  className={cn("flex items-center justify-between px-1 rounded-lg py-2", entry.isCurrentUser ? "bg-white/10 ring-1 ring-white/20" : "")}
+                  className={cn(
+                    "flex items-center justify-between px-3 rounded-2xl py-3.5 transition-all", 
+                    entry.isCurrentUser 
+                      ? "bg-gradient-to-r from-emerald-500/20 to-emerald-500/5 border border-emerald-500/30 shadow-[0_0_15px_rgba(16,185,129,0.1)]" 
+                      : "hover:bg-white/5"
+                  )}
                 >
                    <div className="flex items-center gap-4">
                       <div className={cn(
-                        "w-6 h-6 flex items-center justify-center text-xs font-bold rounded-md",
-                        rank === 1 ? "bg-[#ffd700] text-black" : 
-                        rank === 2 ? "bg-gray-400 text-black" : 
-                        rank === 3 ? "bg-amber-600 text-white" : 
-                        "text-gray-500"
+                        "w-7 h-7 flex items-center justify-center text-[13px] font-black rounded-lg shadow-sm font-mono",
+                        rank === 1 ? "bg-gradient-to-br from-[#ffd700] to-[#b8860b] text-black" : 
+                        rank === 2 ? "bg-gradient-to-br from-gray-300 to-gray-500 text-black" : 
+                        rank === 3 ? "bg-gradient-to-br from-amber-600 to-amber-800 text-white" : 
+                        "bg-white/5 text-gray-500"
                       )}>
                         {rank}
                       </div>
                       <div className="flex items-center gap-3">
-                         <FlagIcon code={entry.countryCode} />
-                         <span className={cn(
-                           "text-[15px] font-bold tracking-tight",
-                           isTop3 ? "text-white" : "text-gray-300",
-                           entry.isCurrentUser ? "text-emerald-400" : ""
-                         )}>
-                           {entry.name} {entry.isCurrentUser && '(You)'}
-                         </span>
+                         <div className="relative">
+                            <FlagIcon code={entry.countryCode} />
+                            {isTop3 && (
+                               <Medal size={10} className={cn(
+                                 "absolute -top-2 -right-2",
+                                 rank === 1 ? "text-[#ffd700]" : rank === 2 ? "text-gray-300" : "text-amber-600"
+                               )} />
+                            )}
+                         </div>
+                         <div className="flex flex-col">
+                            <span className={cn(
+                              "text-[14px] font-bold tracking-tight leading-tight",
+                              isTop3 ? "text-white" : "text-gray-300",
+                              entry.isCurrentUser ? "text-emerald-400" : ""
+                            )}>
+                              {entry.name.toUpperCase()}
+                            </span>
+                            {entry.isCurrentUser && (
+                               <span className="text-[10px] font-black text-emerald-500/80 uppercase tracking-widest mt-0.5">
+                                 Your Daily Performance
+                               </span>
+                            )}
+                         </div>
                       </div>
                    </div>
                    
                    <div className="flex flex-col items-end">
-                      <span className={cn("text-[15px] font-bold tabular-nums", entry.isCurrentUser ? "text-emerald-400" : "text-gray-100")}>
-                        ${entry.profit.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                        {entry.profit >= 2000 && "+"}
+                      <span className={cn(
+                        "text-[16px] font-black tabular-nums tracking-tighter", 
+                        entry.isCurrentUser ? "text-emerald-400" : (isTop3 ? "text-white" : "text-gray-200")
+                      )}>
+                        {currencySymbol}{entry.profit.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        {entry.profit >= 5000 && <span className="ml-0.5 text-[10px] opacity-60">+</span>}
                       </span>
+                      <span className="text-[9px] text-gray-500 font-bold uppercase tracking-tighter">Profit</span>
                    </div>
                 </motion.div>
               );

@@ -1,7 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { Socket } from 'socket.io-client';
 import { 
-  ChevronLeft, TrendingUp, TrendingDown, Users, Activity, Settings, Zap, 
+  ChevronLeft, ChevronRight, TrendingUp, TrendingDown, Users, Activity, Settings, Zap, 
   Anchor, Play, Pause, Target, HelpCircle, X, Gift, Bell, CreditCard, 
   Check, Trash2, ShieldCheck, ShieldAlert, User, ArrowUp, ArrowDown, 
   Percent, Info, Send, Phone, Mail, Video, Trophy, FileText, Plus, BarChart2, Wallet, RefreshCw, CheckCircle2, XCircle, Search,
@@ -11,6 +11,8 @@ import { cn, safeStringify } from './utils';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useToast } from './Toast';
 import { FinanceAdminPanel } from './FinanceAdminPanel';
+import { db, handleFirestoreError, OperationType } from './firebase';
+import { collection, onSnapshot, query, orderBy, limit } from 'firebase/firestore';
 
 interface AdminPanelProps {
   socket: Socket | null;
@@ -355,6 +357,17 @@ const FinanceAdminView: React.FC<any> = (props) => {
 
 export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmail, isRestricted = false }) => {
   const { showToast } = useToast();
+  const tabsRef = useRef<HTMLDivElement>(null);
+
+  const scrollTabs = (direction: 'left' | 'right') => {
+    if (tabsRef.current) {
+      const scrollAmount = 300;
+      tabsRef.current.scrollBy({
+        left: direction === 'left' ? -scrollAmount : scrollAmount,
+        behavior: 'smooth'
+      });
+    }
+  };
   const [activeTrades, setActiveTrades] = useState<any[]>([]);
   const [users, setUsers] = useState<any[]>([]);
   const [allUsers, setAllUsers] = useState<any[]>([]);
@@ -420,7 +433,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
     isDepositsEnabled: true,
     isWithdrawalsEnabled: true,
     isChatEnabled: true,
-    maintenanceMode: false
+    maintenanceMode: false,
+    minWithdrawalAmount: 10,
+    minWithdrawalLimits: {} as Record<string, number>
   });
 
   const adminQuickReplies = [
@@ -637,6 +652,18 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
 
     socket.emit('admin-get-all-users');
 
+    // Professional Firestore Sync for All Users (Admin only)
+    let unsubscribeUsers: (() => void) | undefined;
+    if (userEmail === 'tasmeaykhatun565@gmail.com') {
+      const usersQuery = query(collection(db, 'users'), orderBy('createdAt', 'desc'), limit(500));
+      unsubscribeUsers = onSnapshot(usersQuery, (snapshot) => {
+        const usersData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        setAllUsers(usersData);
+      }, (error) => {
+        handleFirestoreError(error, OperationType.LIST, 'users');
+      });
+    }
+
     socket.on('admin-assets', (initialAssets) => {
       setAssets(initialAssets);
     });
@@ -726,11 +753,22 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
       });
     });
 
+    socket.on('asset-payout-updated', ({ assetId, payout }) => {
+      setAssets(prev => ({
+        ...prev,
+        [assetId]: {
+          ...(prev[assetId] || {}),
+          payout: payout
+        }
+      }));
+    });
+
     socket.on('admin-deposit-settings', (settings) => {
       if (settings) setDepositSettings(settings);
     });
 
     return () => {
+      unsubscribeUsers?.();
       socket.off('admin-active-trades');
       socket.off('admin-users');
       socket.off('admin-assets');
@@ -744,6 +782,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
       socket.off('admin-rewards');
       socket.off('admin-stats');
       socket.off('market-tick');
+      socket.off('asset-payout-updated');
     };
   }, [socket, userEmail]);
 
@@ -1076,9 +1115,21 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
           </div>
         )}
 
-        {/* Tabs - Scrollable on mobile */}
-        <div className="flex bg-[var(--bg-secondary)] rounded-2xl p-1.5 mb-6 overflow-x-auto no-scrollbar shadow-inner border border-[var(--border-color)]">
-          <div className="flex min-w-max gap-1">
+        {/* Tabs - Scrollable with navigation buttons */}
+        <div className="relative group mb-6">
+          <button 
+            type="button"
+            onClick={() => scrollTabs('left')}
+            className="absolute left-2 top-1/2 -translate-y-1/2 z-10 w-8 h-8 rounded-full bg-[var(--bg-secondary)] border border-[var(--border-color)] flex items-center justify-center text-[var(--text-secondary)] hover:text-white shadow-lg opacity-0 group-hover:opacity-100 transition-all active:scale-90"
+          >
+            <ChevronLeft size={16} />
+          </button>
+          
+          <div 
+            ref={tabsRef}
+            className="flex bg-[var(--bg-secondary)] rounded-2xl p-1.5 overflow-x-auto no-scrollbar shadow-inner border border-[var(--border-color)] scroll-smooth"
+          >
+            <div className="flex min-w-max gap-1">
           {isFullAdmin && (
             <>
               <button 
@@ -1207,8 +1258,17 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
               </button>
             </>
           )}
+            </div>
+          </div>
+
+          <button 
+            type="button"
+            onClick={() => scrollTabs('right')}
+            className="absolute right-2 top-1/2 -translate-y-1/2 z-10 w-8 h-8 rounded-full bg-[var(--bg-secondary)] border border-[var(--border-color)] flex items-center justify-center text-[var(--text-secondary)] hover:text-white shadow-lg opacity-0 group-hover:opacity-100 transition-all active:scale-90"
+          >
+            <ChevronRight size={16} />
+          </button>
         </div>
-      </div>
 
       {/* Content */}
       <div className="flex-1 overflow-y-auto">
@@ -1594,6 +1654,41 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
               </div>
 
               <div className="bg-[var(--bg-secondary)] p-6 rounded-3xl border border-[var(--border-color)] shadow-xl">
+                <h3 className="font-black text-[10px] uppercase tracking-[0.2em] text-blue-500 mb-6">Withdrawal System Controls</h3>
+                <div className="space-y-4">
+                  <label className="text-xs font-black uppercase tracking-widest text-[var(--text-secondary)]">Minimum Withdrawal ($)</label>
+                  <input
+                    type="number"
+                    value={platformSettings.minWithdrawalAmount || 10}
+                    onChange={(e) => handleUpdatePlatformSettings({ minWithdrawalAmount: parseFloat(e.target.value) })}
+                    className="w-full bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-xl px-4 py-3 text-sm font-bold text-[var(--text-primary)] outline-none focus:border-blue-500 transition"
+                  />
+                  <div className="space-y-2 mt-4">
+                    <label className="text-[10px] font-black uppercase text-[var(--text-secondary)]">Per Method Limits ($)</label>
+                    <div className="grid grid-cols-2 gap-2">
+                       {['bkash', 'nagad', 'rocket', 'usdt', 'bank'].map(method => (
+                         <div key={method}>
+                           <label className="text-[9px] uppercase text-gray-500 mb-1 block">{method}</label>
+                           <input 
+                             type="number"
+                             value={platformSettings.minWithdrawalLimits?.[method] || ''}
+                             placeholder="Default"
+                             onChange={(e) => handleUpdatePlatformSettings({ 
+                               minWithdrawalLimits: { 
+                                 ...(platformSettings.minWithdrawalLimits || {}), 
+                                 [method]: parseFloat(e.target.value) 
+                               } 
+                             })}
+                             className="w-full bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-lg px-3 py-2 text-xs font-bold text-white outline-none focus:border-blue-500"
+                           />
+                         </div>
+                       ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-[var(--bg-secondary)] p-6 rounded-3xl border border-[var(--border-color)] shadow-xl">
                 <h3 className="font-black text-[10px] uppercase tracking-[0.2em] text-blue-500 mb-6">Trade Result Control</h3>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-6">
                   <button 
@@ -1640,8 +1735,18 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                     className="bg-[var(--bg-primary)] p-6 rounded-2xl border border-[var(--border-color)] shadow-inner"
                   >
                     <div className="flex justify-between items-center mb-4">
-                      <label className="text-xs font-black uppercase tracking-widest text-[var(--text-secondary)]">User Win Probability</label>
-                      <span className="text-2xl font-black text-purple-500">{tradeSettings.winPercentage}%</span>
+                      <label className="text-xs font-black uppercase tracking-widest text-[var(--text-secondary)]">User Win Probability (%)</label>
+                      <div className="flex items-center gap-2">
+                        <input 
+                          type="number"
+                          min="0"
+                          max="100"
+                          value={tradeSettings.winPercentage}
+                          onChange={(e) => handleUpdateSettings({ winPercentage: parseInt(e.target.value) || 0 })}
+                          className="w-16 bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-lg px-2 py-1 text-right text-sm font-bold text-white focus:border-purple-500 outline-none"
+                        />
+                        <span className="text-xl font-black text-purple-500">%</span>
+                      </div>
                     </div>
                     <input 
                       type="range" 
@@ -1653,6 +1758,24 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                     />
                     <p className="text-[9px] text-[var(--text-secondary)] text-center font-medium italic mt-4">
                       This will affect all users unless overridden by specific asset settings.
+                    </p>
+                  </motion.div>
+                )}
+
+                {tradeSettings.mode === 'SMART' && (
+                  <motion.div 
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="bg-emerald-500/10 p-6 rounded-2xl border border-emerald-500/20 shadow-inner"
+                  >
+                    <div className="flex items-center gap-3 mb-2">
+                       <div className="p-2 bg-emerald-500 rounded-lg">
+                          <TrendingDown size={18} className="text-white" />
+                       </div>
+                       <h4 className="text-sm font-black text-white uppercase tracking-tight">Zero-Threshold Active</h4>
+                    </div>
+                    <p className="text-[11px] text-emerald-400 font-medium leading-relaxed italic">
+                      Smart Mode is now fully automatic. The system will automatically ensure the side with the larger payout results in a loss, maximizing platform stability.
                     </p>
                   </motion.div>
                 )}

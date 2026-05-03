@@ -560,6 +560,63 @@ async function startServer() {
     }
   });
 
+  app.post('/api/withdraw-referral', async (req, res) => {
+    try {
+      const authHeader = req.headers.authorization;
+      if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+
+      const token = authHeader.split(' ')[1];
+      const decoded: any = jwt.verify(token, JWT_SECRET);
+      const email = decoded.email;
+
+      const user = db.prepare('SELECT * FROM users WHERE email = ?').get(email) as any;
+      if (!user) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+
+      const minWithdrawal = globalReferralSettings.minWithdrawal || 10;
+      if (!user.referralBalance || user.referralBalance < minWithdrawal) {
+        return res.status(400).json({ error: `Minimum withdrawal is USD ${minWithdrawal}` });
+      }
+
+      const withdrawAmount = user.referralBalance;
+      
+      // Update SQLite: Transfer from referralBalance to main balance
+      db.prepare('UPDATE users SET balance = balance + ?, referralBalance = 0 WHERE email = ?')
+        .run(withdrawAmount, email);
+      
+      // Log activity
+      logActivity(email, 'REFERRAL_PAYOUT', `Withdrew USD ${withdrawAmount.toFixed(2)} from referral balance to main balance`);
+      
+      // Emit update to user
+      emitUserUpdate(email);
+      
+      // Notify user via socket
+      const socketIds = Object.keys(connectedUsers).filter(id => connectedUsers[id].email === email);
+      socketIds.forEach(socketId => {
+        io.to(socketId).emit('balance-updated', { balance: (user.balance + withdrawAmount), type: 'REAL' });
+        io.to(socketId).emit('new-notification', {
+          id: Date.now().toString(),
+          title: 'Payout Successful!',
+          message: `USD ${withdrawAmount.toFixed(2)} has been transferred to your main balance.`,
+          type: 'success',
+          timestamp: Date.now()
+        });
+      });
+
+      res.json({ 
+        success: true, 
+        amount: withdrawAmount, 
+        message: 'Withdrawal successful' 
+      });
+    } catch (error: any) {
+      console.error('Withdraw referral error:', error);
+      res.status(500).json({ error: error.message || 'Internal server error' });
+    }
+  });
+
   app.post('/api/user/preferences', async (req, res) => {
     const { email, language, currency, currencySymbol, currencyName, currencyFlag, timeframe, chartType } = req.body;
     try {
@@ -767,10 +824,10 @@ async function startServer() {
       }
 
       // Get recent referrals
-      const recentReferrals = db.prepare('SELECT email, createdAt, status FROM users WHERE referredBy = ? ORDER BY createdAt DESC LIMIT 10').all(user.referralCode);
+      const recentReferrals = db.prepare('SELECT email, createdAt, status FROM users WHERE referredBy = ? OR referredBy = ? OR referredBy = ? ORDER BY createdAt DESC LIMIT 10').all(user.referralCode, user.uid, user.email);
       
       // Get commission history
-      const commissionHistory = db.prepare('SELECT * FROM referrals WHERE referrerUid = ? OR referredEmail = ? ORDER BY timestamp DESC LIMIT 10').all(user.uid, user.email);
+      const commissionHistory = db.prepare('SELECT * FROM referrals WHERE referrerUid = ? OR referrerUid = ? OR referredEmail = ? ORDER BY timestamp DESC LIMIT 10').all(user.uid, user.referralCode, user.email);
 
       socketIds.forEach(socketId => {
         if (connectedUsers[socketId]) {
@@ -842,6 +899,28 @@ async function startServer() {
     });
   };
 
+  const sendNotification = (email: string, title: string, message: string, type: 'info' | 'success' | 'warning' | 'error' = 'info') => {
+    try {
+      const id = Math.random().toString(36).substring(2, 11);
+      const timestamp = Date.now();
+      
+      db.prepare('INSERT INTO notifications (id, email, title, message, type, timestamp) VALUES (?, ?, ?, ?, ?, ?)')
+        .run(id, email, title, message, type, timestamp);
+      
+      const newNotification = { id, email, title, message, type, timestamp, isRead: 0 };
+      emitToUser(email, 'new-notification', newNotification);
+      
+      // Update admin list
+      const allNotifications = db.prepare('SELECT * FROM notifications ORDER BY timestamp DESC LIMIT 100').all();
+      io.to('admin-room').emit('admin-notifications', allNotifications);
+      
+      return newNotification;
+    } catch (error) {
+      console.error('sendNotification Error:', error);
+      return null;
+    }
+  };
+
   // API Routes
   app.get('/api/health', (req, res) => {
     res.json({ status: 'ok', time: Date.now() });
@@ -857,68 +936,64 @@ async function startServer() {
     winPercentage?: number, 
     payout?: number,
     isRealMarket?: boolean,
-    isOTC?: boolean
+    isOTC?: boolean,
+    baseMarketPrice?: number
   }> = {
-    'AUD/CHF': { price: 0.5720, volatility: 0.0002, trend: 0, winPercentage: 50, payout: 90 },
-    'AUD/JPY': { price: 97.50, volatility: 0.02, trend: 0, winPercentage: 50, payout: 90 },
-    'AUD/USD': { price: 0.6550, volatility: 0.0002, trend: 0, winPercentage: 50, payout: 90 },
-    'EUR/AUD': { price: 1.6550, volatility: 0.0002, trend: 0, winPercentage: 50, payout: 90 },
-    'EUR/CAD': { price: 1.4650, volatility: 0.0002, trend: 0, winPercentage: 50, payout: 90 },
-    'EUR/GBP': { price: 0.8550, volatility: 0.0002, trend: 0, winPercentage: 50, payout: 90 },
-    'EUR/JPY': { price: 163.50, volatility: 0.02, trend: 0, winPercentage: 50, payout: 90 },
-    'EUR/USD': { price: 1.0845, volatility: 0.0002, trend: 0, winPercentage: 50, payout: 90 },
-    'GBP/AUD': { price: 1.9350, volatility: 0.0003, trend: 0, winPercentage: 50, payout: 90 },
-    'GBP/CAD': { price: 1.7150, volatility: 0.0003, trend: 0, winPercentage: 50, payout: 90 },
-    'GBP/CHF': { price: 1.1350, volatility: 0.0003, trend: 0, winPercentage: 50, payout: 90 },
-    'GBP/USD': { price: 1.2670, volatility: 0.0003, trend: 0, winPercentage: 50, payout: 90 },
-    'NZD/USD': { price: 0.6150, volatility: 0.0002, trend: 0, winPercentage: 50, payout: 90 },
-    'USD/AED': { price: 3.67, volatility: 0.001, trend: 0, winPercentage: 50, payout: 90 },
-    'USD/ARS': { price: 830.50, volatility: 1.5, trend: 0, winPercentage: 50, payout: 90 },
-    'USD/BDT': { price: 109.50, volatility: 0.5, trend: 0, winPercentage: 50, payout: 90 },
-    'USD/BRL': { price: 4.95, volatility: 0.01, trend: 0, winPercentage: 50, payout: 90 },
-    'USD/CAD': { price: 1.3550, volatility: 0.0002, trend: 0, winPercentage: 50, payout: 90 },
-    'USD/CHF': { price: 0.8850, volatility: 0.0002, trend: 0, winPercentage: 50, payout: 90 },
-    'USD/COP': { price: 3950.50, volatility: 5.0, trend: 0, winPercentage: 50, payout: 90 },
-    'USD/DZD': { price: 134.50, volatility: 0.5, trend: 0, winPercentage: 50, payout: 90 },
-    'USD/EGP': { price: 30.90, volatility: 0.1, trend: 0, winPercentage: 50, payout: 90 },
-    'USD/IDR': { price: 15600.0, volatility: 20.0, trend: 0, winPercentage: 50, payout: 90 },
-    'USD/INR': { price: 83.00, volatility: 0.1, trend: 0, winPercentage: 50, payout: 90 },
-    'USD/JPY': { price: 150.20, volatility: 0.01500, trend: 0, winPercentage: 50, payout: 90 },
-    'USD/MXN': { price: 17.05, volatility: 0.05, trend: 0, winPercentage: 50, payout: 90 },
-    'USD/PKR': { price: 279.50, volatility: 1.0, trend: 0, winPercentage: 50, payout: 90 },
-    'USD/SAR': { price: 3.75, volatility: 0.001, trend: 0, winPercentage: 50, payout: 90 },
-    'USD/TRY': { price: 31.20, volatility: 0.05, trend: 0, winPercentage: 50, payout: 90 },
-    'USD/ZAR': { price: 19.10, volatility: 0.02, trend: 0, winPercentage: 50, payout: 90 },
-    'BTC/USD': { price: 51241.67, volatility: 15.5, trend: 0, winPercentage: 50, payout: 90 },
-    'ETH/USD': { price: 2950.12, volatility: 2.5, trend: 0, winPercentage: 50, payout: 90 },
-    'BNB/USD': { price: 380.50, volatility: 0.5, trend: 0, winPercentage: 50, payout: 90 },
-    'SOL/USD': { price: 105.45, volatility: 0.8, trend: 0, winPercentage: 50, payout: 90 },
-    'XRP/USD': { price: 0.54, volatility: 0.005, trend: 0, winPercentage: 50, payout: 90 },
-    'GOLD': { price: 2035.50, volatility: 0.5, trend: 0, winPercentage: 50, payout: 90 },
-    'SILVER': { price: 22.80, volatility: 0.05, trend: 0, winPercentage: 50, payout: 90 },
-    'OIL': { price: 78.40, volatility: 0.2, trend: 0, winPercentage: 50, payout: 90 },
-    'AAPL': { price: 182.30, volatility: 0.5, trend: 0, winPercentage: 50, payout: 90 },
-    'GOOGL': { price: 145.60, volatility: 0.4, trend: 0, winPercentage: 50, payout: 90 },
-    'TSLA': { price: 195.20, volatility: 1.2, trend: 0, winPercentage: 50, payout: 90 },
-    'AMZN': { price: 175.40, volatility: 0.6, trend: 0, winPercentage: 50, payout: 90 },
-    'MSFT': { price: 410.50, volatility: 0.8, trend: 0, winPercentage: 50, payout: 90 },
-    'META': { price: 485.20, volatility: 1.5, trend: 0, winPercentage: 50, payout: 90 },
-    'NFLX': { price: 590.40, volatility: 1.0, trend: 0, winPercentage: 50, payout: 90 },
-    'NVDA': { price: 785.30, volatility: 2.5, trend: 0, winPercentage: 50, payout: 90 },
-    'BABA': { price: 75.20, volatility: 0.8, trend: 0, winPercentage: 50, payout: 90 },
-    'DOGE/USD': { price: 0.085, volatility: 0.002, trend: 0, winPercentage: 50, payout: 90 },
-    'ADA/USD': { price: 0.58, volatility: 0.01, trend: 0, winPercentage: 50, payout: 90 },
-    'DOT/USD': { price: 7.45, volatility: 0.15, trend: 0, winPercentage: 50, payout: 90 },
-    'COPPER': { price: 3.85, volatility: 0.02, trend: 0, winPercentage: 50, payout: 90 },
-    'NATGAS': { price: 1.85, volatility: 0.05, trend: 0, winPercentage: 50, payout: 90 },
-    'CORN': { price: 4.50, volatility: 0.02, trend: 0, winPercentage: 50, payout: 90 },
-    'WHEAT': { price: 5.80, volatility: 0.03, trend: 0, winPercentage: 50, payout: 90 },
-    'LINK/USD': { price: 18.50, volatility: 0.2, trend: 0, winPercentage: 50, payout: 90 },
-    'MATIC/USD': { price: 0.95, volatility: 0.01, trend: 0, winPercentage: 50, payout: 90 },
-    'UNI/USD': { price: 7.20, volatility: 0.1, trend: 0, winPercentage: 50, payout: 90 },
-    'DIS': { price: 110.50, volatility: 0.4, trend: 0, winPercentage: 50, payout: 90 },
-    'PYPL': { price: 60.20, volatility: 0.5, trend: 0, winPercentage: 50, payout: 90 },
-    'NKE': { price: 105.40, volatility: 0.3, trend: 0, winPercentage: 50, payout: 90 },
+    'BTC/USD': { price: 65000.00, volatility: 25.0, trend: 0, winPercentage: 50, payout: 90 },
+    'ETH/USD': { price: 3500.00, volatility: 1.5, trend: 0, winPercentage: 50, payout: 90 },
+    'SOL/USD': { price: 150.00, volatility: 0.15, trend: 0, winPercentage: 50, payout: 90 },
+    'DOGE/USD': { price: 0.15, volatility: 0.001, trend: 0, winPercentage: 50, payout: 90 },
+    'EUR/USD': { price: 1.0800, volatility: 0.00005, trend: 0, winPercentage: 50, payout: 85 },
+    'GBP/USD': { price: 1.2500, volatility: 0.00006, trend: 0, winPercentage: 50, payout: 85 },
+    'USD/JPY': { price: 155.00, volatility: 0.01, trend: 0, winPercentage: 50, payout: 85 },
+    'USD/CAD': { price: 1.3500, volatility: 0.00005, trend: 0, winPercentage: 50, payout: 85 },
+    'GBP/JPY': { price: 195.50, volatility: 0.012, trend: 0, winPercentage: 50, payout: 85 },
+    'EUR/JPY': { price: 168.00, volatility: 0.01, trend: 0, winPercentage: 50, payout: 85 },
+    'AUD/JPY': { price: 101.50, volatility: 0.01, trend: 0, winPercentage: 50, payout: 82 },
+    'GOLD': { price: 2300.00, volatility: 0.15, trend: 0, winPercentage: 50, payout: 85 },
+    'OIL': { price: 80.00, volatility: 0.02, trend: 0, winPercentage: 50, payout: 80 },
+    'AAPL': { price: 175.00, volatility: 0.1, trend: 0, winPercentage: 50, payout: 90 },
+    'NVDA': { price: 900.00, volatility: 0.5, trend: 0, winPercentage: 50, payout: 90 },
+    'TSLA': { price: 180.00, volatility: 0.2, trend: 0, winPercentage: 50, payout: 90 },
+    'EUR/USD OTC': { price: 1.0850, volatility: 0.00008, trend: 0, winPercentage: 50, payout: 92, isOTC: true },
+    'GBP/USD OTC': { price: 1.2550, volatility: 0.00008, trend: 0, winPercentage: 50, payout: 92, isOTC: true },
+    'AUD/USD OTC': { price: 0.6650, volatility: 0.00008, trend: 0, winPercentage: 50, payout: 92, isOTC: true },
+    'NZD/USD OTC': { price: 0.6050, volatility: 0.00008, trend: 0, winPercentage: 50, payout: 92, isOTC: true },
+    'USD/CHF OTC': { price: 0.9050, volatility: 0.00008, trend: 0, winPercentage: 50, payout: 92, isOTC: true },
+    'USD/JPY OTC': { price: 155.50, volatility: 0.015, trend: 0, winPercentage: 50, payout: 92, isOTC: true },
+    'USD/CAD OTC': { price: 1.3550, volatility: 0.00008, trend: 0, winPercentage: 50, payout: 92, isOTC: true },
+    'EUR/GBP OTC': { price: 0.8650, volatility: 0.00008, trend: 0, winPercentage: 50, payout: 90, isOTC: true },
+    'EUR/JPY OTC': { price: 168.50, volatility: 0.015, trend: 0, winPercentage: 50, payout: 90, isOTC: true },
+    'GBP/JPY OTC': { price: 196.50, volatility: 0.018, trend: 0, winPercentage: 50, payout: 92, isOTC: true },
+    'AUD/JPY OTC': { price: 102.50, volatility: 0.012, trend: 0, winPercentage: 50, payout: 90, isOTC: true },
+    'NZD/JPY OTC': { price: 93.50, volatility: 0.012, trend: 0, winPercentage: 50, payout: 90, isOTC: true },
+    'EUR/AUD OTC': { price: 1.6350, volatility: 0.00012, trend: 0, winPercentage: 50, payout: 90, isOTC: true },
+    'EUR/CAD OTC': { price: 1.4750, volatility: 0.00012, trend: 0, winPercentage: 50, payout: 90, isOTC: true },
+    'GBP/CAD OTC': { price: 1.7150, volatility: 0.00012, trend: 0, winPercentage: 50, payout: 90, isOTC: true },
+    'AUD/CAD OTC': { price: 0.9050, volatility: 0.0001, trend: 0, winPercentage: 50, payout: 88, isOTC: true },
+    'USD/NOK OTC': { price: 10.8500, volatility: 0.0008, trend: 0, winPercentage: 50, payout: 88, isOTC: true },
+    'USD/SEK OTC': { price: 10.7500, volatility: 0.0008, trend: 0, winPercentage: 50, payout: 88, isOTC: true },
+    'USD/SGD OTC': { price: 1.3550, volatility: 0.00008, trend: 0, winPercentage: 50, payout: 88, isOTC: true },
+    'EUR/CHF OTC': { price: 0.9750, volatility: 0.00008, trend: 0, winPercentage: 50, payout: 90, isOTC: true },
+    'GBP/CHF OTC': { price: 1.1350, volatility: 0.00008, trend: 0, winPercentage: 50, payout: 90, isOTC: true },
+    'AUD/CHF OTC': { price: 0.5950, volatility: 0.00008, trend: 0, winPercentage: 50, payout: 88, isOTC: true },
+    'CAD/CHF OTC': { price: 0.6650, volatility: 0.00008, trend: 0, winPercentage: 50, payout: 88, isOTC: true },
+    'GOLD OTC': { price: 2310.00, volatility: 0.18, trend: 0, winPercentage: 50, payout: 90, isOTC: true },
+    'OIL OTC': { price: 81.00, volatility: 0.025, trend: 0, winPercentage: 50, payout: 90, isOTC: true },
+    'SILVER OTC': { price: 28.50, volatility: 0.005, trend: 0, winPercentage: 50, payout: 88, isOTC: true },
+    'COPPER OTC': { price: 4.50, volatility: 0.002, trend: 0, winPercentage: 50, payout: 85, isOTC: true },
+    'CRYPTO INDEX': { price: 2500.00, volatility: 1.2, trend: 0, winPercentage: 50, payout: 90, isOTC: true },
+    'ALTCOIN INDEX': { price: 1200.00, volatility: 1.8, trend: 0, winPercentage: 50, payout: 92, isOTC: true },
+    'DEFI INDEX': { price: 850.00, volatility: 2.5, trend: 0, winPercentage: 50, payout: 92, isOTC: true },
+    'AMZN': { price: 185.00, volatility: 0.12, trend: 0, winPercentage: 50, payout: 90 },
+    'GOOGL': { price: 170.00, volatility: 0.1, trend: 0, winPercentage: 50, payout: 90 },
+    'META': { price: 480.00, volatility: 0.3, trend: 0, winPercentage: 50, payout: 90 },
+    'MSFT': { price: 410.00, volatility: 0.25, trend: 0, winPercentage: 50, payout: 90 },
+    'NFLX': { price: 620.00, volatility: 0.4, trend: 0, winPercentage: 50, payout: 90 },
+    'AMD': { price: 160.00, volatility: 0.35, trend: 0, winPercentage: 50, payout: 88 },
+    'INTC': { price: 35.00, volatility: 0.08, trend: 0, winPercentage: 50, payout: 85 },
+    'BABA': { price: 75.00, volatility: 0.15, trend: 0, winPercentage: 50, payout: 85 },
+    'PYPL': { price: 65.00, volatility: 0.18, trend: 0, winPercentage: 50, payout: 85 },
   };
 
   // --- Binance WebSocket Integration ---
@@ -936,11 +1011,41 @@ async function startServer() {
     { symbol: 'UNI/USD', binanceSymbol: 'uniusdt' }
   ];
 
+  const binanceForexPairs = [
+    { symbol: 'EUR/USD', binanceSymbol: 'eurusdt' },
+    { symbol: 'GBP/USD', binanceSymbol: 'gbpusdt' },
+    { symbol: 'AUD/USD', binanceSymbol: 'audusdt' },
+    { symbol: 'USD/JPY', binanceSymbol: 'usdtjpy' },
+    { symbol: 'USD/CAD', binanceSymbol: 'usdtcad' },
+    { symbol: 'GBP/JPY', binanceSymbol: 'gbpjpy' },
+    { symbol: 'EUR/JPY', binanceSymbol: 'eurjpy' },
+    { symbol: 'AUD/JPY', binanceSymbol: 'audjpy' }
+  ];
+
+  const coinbaseCryptoPairs = [
+    { symbol: 'BTC/USD', coinbaseSymbol: 'BTC-USD' },
+    { symbol: 'ETH/USD', coinbaseSymbol: 'ETH-USD' },
+    { symbol: 'BNB/USD', coinbaseSymbol: 'BNB-USD' },
+    { symbol: 'SOL/USD', coinbaseSymbol: 'SOL-USD' },
+    { symbol: 'XRP/USD', coinbaseSymbol: 'XRP-USD' },
+    { symbol: 'DOGE/USD', coinbaseSymbol: 'DOGE-USD' },
+    { symbol: 'ADA/USD', coinbaseSymbol: 'ADA-USD' },
+    { symbol: 'DOT/USD', coinbaseSymbol: 'DOT-USD' },
+    { symbol: 'LINK/USD', coinbaseSymbol: 'LINK-USD' },
+    { symbol: 'MATIC/USD', coinbaseSymbol: 'MATIC-USD' },
+    { symbol: 'UNI/USD', coinbaseSymbol: 'UNI-USD' }
+  ];
+
   // Store historical ticks (last 1 hour = 3600 ticks)
   const history: Record<string, any[]> = {};
   Object.keys(assets).forEach(symbol => {
     history[symbol] = [];
-    if (binanceCryptoPairs.some(p => p.symbol === symbol)) {
+    const isCrypto = binanceCryptoPairs.some(p => p.symbol === symbol) || coinbaseCryptoPairs.some(p => p.symbol === symbol);
+    const isBinanceForex = binanceForexPairs.some(p => p.symbol === symbol);
+    const isForex = symbol.includes('/') && !symbol.includes('BTC') && !symbol.includes('ETH') && !symbol.includes('OTC');
+    const isStock = ['AAPL', 'NVDA', 'TSLA', 'AMZN', 'GOOGL', 'META', 'MSFT', 'NFLX', 'AMD', 'INTC', 'BABA', 'PYPL'].includes(symbol);
+    
+    if (isCrypto || isBinanceForex || isForex || isStock) {
       assets[symbol as keyof typeof assets].isRealMarket = true;
     }
   });
@@ -953,64 +1058,168 @@ async function startServer() {
 
   const initBinanceWS = () => {
     console.log('Initializing Binance WebSocket...');
-    const streams = binanceCryptoPairs.map(p => `${p.binanceSymbol}@ticker`).join('/');
-    const ws = new WebSocket(`wss://stream.binance.com:9443/ws/${streams}`);
+    const cryptoStreams = binanceCryptoPairs.map(p => `${p.binanceSymbol}@ticker`);
+    const forexStreams = binanceForexPairs.map(p => `${p.binanceSymbol}@ticker`);
+    const allStreams = [...cryptoStreams, ...forexStreams].join('/');
+    
+    const ws = new WebSocket(`wss://stream.binance.com:443/stream?streams=${allStreams}`);
 
     ws.on('open', () => {
-      console.log('Connected to Binance WebSocket');
+      console.log('Connected to Binance Combined Stream (Crypto + Forex)');
+    });
+
+    ws.on('message', (data: any) => {
+      try {
+        const rawMsg = JSON.parse(data);
+        const msg = rawMsg.data || rawMsg; 
+        
+        const symbol = (msg.s || '').toLowerCase();
+        const pair = [...binanceCryptoPairs, ...binanceForexPairs].find(p => p.binanceSymbol === symbol);
+        
+        if (pair && assets[pair.symbol as keyof typeof assets]) {
+          const asset = assets[pair.symbol as keyof typeof assets];
+          const newPrice = parseFloat(msg.c);
+          
+          if (!isNaN(newPrice) && !asset.isFrozen) {
+            const now = Date.now();
+            asset.price = newPrice;
+            (asset as any).lastRealUpdate = now;
+            (asset as any).priceSource = 'Binance';
+          }
+        }
+      } catch (e) {}
+    });
+
+    ws.on('close', () => {
+      setTimeout(initBinanceWS, 5000);
+    });
+    ws.on('error', () => {});
+  };
+
+  const initCoinbaseWS = () => {
+    console.log('Initializing Coinbase WebSocket...');
+    const ws = new WebSocket('wss://ws-feed.exchange.coinbase.com');
+    
+    ws.on('open', () => {
+      console.log('Connected to Coinbase Stream');
+      const subscribeMsg = {
+        type: 'subscribe',
+        product_ids: coinbaseCryptoPairs.map(p => p.coinbaseSymbol),
+        channels: ['ticker']
+      };
+      ws.send(JSON.stringify(subscribeMsg));
     });
 
     ws.on('message', (data: any) => {
       try {
         const msg = JSON.parse(data);
-        
-        const pair = binanceCryptoPairs.find(p => p.binanceSymbol === msg.s.toLowerCase());
-        if (pair && assets[pair.symbol as keyof typeof assets]) {
-          const asset = assets[pair.symbol as keyof typeof assets];
-          const newPrice = parseFloat(msg.c);
-          
-          if (!asset.isFrozen) {
+        if (msg.type === 'ticker' && msg.price) {
+          const pair = coinbaseCryptoPairs.find(p => p.coinbaseSymbol === msg.product_id);
+          if (pair && assets[pair.symbol as keyof typeof assets]) {
+            const asset = assets[pair.symbol as keyof typeof assets];
+            const newPrice = parseFloat(msg.price);
+            
+            // Only update if Binance hasn't updated recently (Binance is preferred if both active)
             const now = Date.now();
-            const tick = {
-              time: now,
-              price: newPrice,
-              open: asset.price,
-              high: Math.max(asset.price, newPrice),
-              low: Math.min(asset.price, newPrice),
-              close: newPrice,
-              isFrozen: false
-            };
-            
-            // Update asset price immediately
-            asset.price = newPrice;
-            
-            // Instantly sync the chart
-            io.emit('market-tick', { [pair.symbol]: tick });
+            const lastUpdate = (asset as any).lastRealUpdate || 0;
+            if (now - lastUpdate > 500 || (asset as any).priceSource !== 'Binance') {
+              asset.price = newPrice;
+              (asset as any).lastRealUpdate = now;
+              (asset as any).priceSource = 'Coinbase';
+            }
           }
         }
-      } catch (e) {
-        console.error('Binance WS Message Parsing Error:', e, 'Data:', data);
-      }
-    });
-
-    ws.on('error', (e) => {
-      console.error('Binance WS Error:', e);
+      } catch (e) {}
     });
 
     ws.on('close', () => {
-      console.log('Binance WS closed. Reconnecting in 5s...');
-      setTimeout(initBinanceWS, 5000);
+      setTimeout(initCoinbaseWS, 5000);
     });
+    ws.on('error', () => {});
   };
 
+  // REST Fallback for Prices
+  const priceRestFallback = async () => {
+    try {
+      // Binance Fallback
+      const allBinanceSymbols = [...binanceCryptoPairs, ...binanceForexPairs].map(p => `"${p.binanceSymbol.toUpperCase()}"`).join(',');
+      const encodedSymbols = encodeURIComponent(`[${allBinanceSymbols}]`);
+      
+      const mirrors = [
+        'https://api.binance.com',
+        'https://api1.binance.com',
+        'https://api2.binance.com',
+        'https://api3.binance.com'
+      ];
+      
+      let bResp = null;
+      for (const mirror of mirrors) {
+        try {
+          const resp = await fetch(`${mirror}/api/v3/ticker/price?symbols=${encodedSymbols}`).catch(() => null);
+          if (resp && resp.ok) {
+            bResp = resp;
+            break;
+          }
+        } catch (e) {}
+      }
+      if (bResp && bResp.ok) {
+        const data = await bResp.json() as any[];
+        const now = Date.now();
+        data.forEach(item => {
+          const pair = [...binanceCryptoPairs, ...binanceForexPairs].find(p => p.binanceSymbol.toUpperCase() === item.symbol);
+          if (pair && assets[pair.symbol]) {
+            const asset = assets[pair.symbol];
+            const lastUpdate = (asset as any).lastRealUpdate || 0;
+            if (now - lastUpdate > 5000) {
+              asset.price = parseFloat(item.price);
+              (asset as any).lastRealUpdate = now;
+              (asset as any).priceSource = 'Binance-REST';
+            }
+          }
+        });
+      }
+
+      // Forex Fallback (Simple update base rates)
+      const fResp = await fetch('https://api.exchangerate-api.com/v4/latest/USD').catch(() => null);
+      if (fResp && fResp.ok) {
+        const data = await fResp.json() as any;
+        const rates = data.rates;
+        const now = Date.now();
+        
+        Object.keys(assets).forEach(symbol => {
+          const isBinanceForex = binanceForexPairs.some(p => p.symbol === symbol);
+          if (!isBinanceForex && symbol.includes('/') && !symbol.includes('BTC') && !symbol.includes('ETH') && !symbol.includes('OTC')) {
+             const parts = symbol.split('/');
+             if (parts.length === 2) {
+               const base = parts[0];
+               const quote = parts[1];
+               if (rates[base] && rates[quote]) {
+                 const newPrice = rates[quote] / rates[base];
+                 const asset = assets[symbol];
+                 if (asset) {
+                   // Slow update for Forex to maintain simulation jitter
+                   asset.baseMarketPrice = newPrice;
+                   (asset as any).lastForexUpdate = now;
+                 }
+               }
+             }
+          }
+        });
+      }
+    } catch (e) {}
+  };
+
+  setInterval(priceRestFallback, 10000);
   initBinanceWS();
-  // --- End Binance Integration ---
+  initCoinbaseWS();
+  // --- End Price Integration ---
 
   // Global Trade Automation Settings
   let globalTradeSettings = {
     mode: 'FAIR', // 'FAIR', 'FORCE_LOSS', 'FORCE_WIN', 'PERCENTAGE', 'SMART'
     winPercentage: 50,
-    payoutPercentage: 90
+    payoutPercentage: 90,
+    smartThreshold: 10 // Default $10 threshold for SMART mode
   };
 
   let globalDepositSettings = {
@@ -1057,12 +1266,22 @@ async function startServer() {
     methodLogos: {} as Record<string, string>
   };
 
-  let globalPlatformSettings = {
+  let globalPlatformSettings: {
+    isTradingEnabled: boolean;
+    isDepositsEnabled: boolean;
+    isWithdrawalsEnabled: boolean;
+    isChatEnabled: boolean;
+    maintenanceMode: boolean;
+    minWithdrawalAmount: number;
+    minWithdrawalLimits?: Record<string, number>;
+  } = {
     isTradingEnabled: true,
     isDepositsEnabled: true,
     isWithdrawalsEnabled: true,
     isChatEnabled: true,
-    maintenanceMode: false
+    maintenanceMode: false,
+    minWithdrawalAmount: 10,
+    minWithdrawalLimits: {}
   };
 
   // Load trade settings from DB
@@ -1234,13 +1453,15 @@ async function startServer() {
         const isUp = activeTrade.type === 'UP';
         const needsUp = (isUp && isWin) || (!isUp && !isWin);
         
-        // Ensure final close price is on the correct side with a very small margin to avoid abnormal candles
+        // Ensure final close price is on the correct side with a clear visual distance
+        // This avoids "tie" or "barely win/loss" scenarios that look fake
         const volatility = assets[assetKey as keyof typeof assets]?.volatility || 0.001;
-        const smallMargin = volatility * 0.05; // 5% of volatility for a natural-looking tick
-        if (needsUp && finalClosePrice <= activeTrade.entryPrice) {
-          finalClosePrice = activeTrade.entryPrice + smallMargin;
-        } else if (!needsUp && finalClosePrice >= activeTrade.entryPrice) {
-          finalClosePrice = activeTrade.entryPrice - smallMargin;
+        const distinctMargin = volatility * 0.4; // 40% of volatility for a clear, professional visual gap
+        
+        if (needsUp && finalClosePrice <= activeTrade.entryPrice + (volatility * 0.05)) {
+          finalClosePrice = activeTrade.entryPrice + distinctMargin;
+        } else if (!needsUp && finalClosePrice >= activeTrade.entryPrice - (volatility * 0.05)) {
+          finalClosePrice = activeTrade.entryPrice - distinctMargin;
         }
         
         // Update the asset price to match the forced close price so the chart doesn't jump back
@@ -1378,11 +1599,11 @@ async function startServer() {
 
     // --- Referral Commission on Trade Loss ---
     if (!isWin && !isDraw && activeTrade.accountType === 'REAL') {
-       const tradeUser = db.prepare('SELECT referredBy, uid FROM users WHERE email = ?').get(email) as any;
+       const tradeUser = db.prepare('SELECT referredBy, uid, email FROM users WHERE email = ?').get(email) as any;
        if (tradeUser && tradeUser.referredBy) {
-          const referrer = db.prepare('SELECT * FROM users WHERE referralCode = ? OR uid = ? OR email = ?').get(tradeUser.referredBy, tradeUser.referredBy, tradeUser.referredBy) as any;
+          const referrer = db.prepare('SELECT * FROM users WHERE referralCode = ? OR uid = ? OR email = ? OR UPPER(substr(uid, 1, 8)) = UPPER(?)').get(tradeUser.referredBy, tradeUser.referredBy, tradeUser.referredBy, tradeUser.referredBy) as any;
           if (referrer) {
-             const tradeCommissionRate = (globalReferralSettings.referralPercentage || 5) / 100;
+             const tradeCommissionRate = (globalReferralSettings.referralPercentage || 50) / 100;
              const commission = Math.abs(activeTrade.amount) * tradeCommissionRate;
              
              db.prepare('UPDATE users SET referralBalance = referralBalance + ?, totalReferralEarnings = totalReferralEarnings + ? WHERE email = ?')
@@ -1501,12 +1722,12 @@ async function startServer() {
     }
   ];
 
-  // Generate initial history (30 days) asynchronously
+  // Generate initial history (24 hours for high resolution) asynchronously
   const now = Date.now();
-  const historyDurationMs = 30 * 24 * 3600 * 1000;
-  const historyTicksCount = 30 * 24 * 3600;
+  const historyDurationMs = 24 * 3600 * 1000;
+  const historyTicksCount = 24 * 3600;
   
-  console.log('Generating initial market history (30 days) asynchronously...');
+  console.log('Generating initial market history (24 hours) asynchronously...');
   
   const symbols = Object.keys(assets);
   let currentSymbolIndex = 0;
@@ -1525,8 +1746,8 @@ async function startServer() {
       const existingHistory = db.prepare('SELECT * FROM market_history WHERE symbol = ? ORDER BY time DESC LIMIT 1').get(symbol) as any;
       
       if (existingHistory && (now - existingHistory.time) < historyDurationMs) {
-        // Load existing history (only last 3600 items into memory)
-        const rows = db.prepare('SELECT * FROM market_history WHERE symbol = ? ORDER BY time DESC LIMIT 3600').all(symbol) as any[];
+        // Load existing history (only last 28800 items into memory)
+        const rows = db.prepare('SELECT * FROM market_history WHERE symbol = ? ORDER BY time DESC LIMIT 28800').all(symbol) as any[];
         history[symbol] = rows.map(r => ({
           time: r.time,
           price: r.close,
@@ -1557,18 +1778,25 @@ async function startServer() {
             let price = startPrice;
             for (let i = 1; i <= count; i++) {
               const time = startTime + i * 1000;
-              currentTrend += (Math.random() - 0.5) * asset.volatility * 0.1;
-              currentTrend *= 0.95;
-              const move = (currentTrend + (Math.random() - 0.5) * asset.volatility * 1.2);
+              
+              // Wave-like momentum for "Real Market" feel
+              currentTrend += (Math.random() - 0.5) * asset.volatility * 0.2;
+              currentTrend += Math.sin(time / 300000) * asset.volatility * 0.05; // 5 min waves
+              currentTrend *= 0.98; // Decay
+              
+              const move = (currentTrend + (Math.random() - 0.5) * asset.volatility * 1.5);
               const open = price;
               price += move;
               const close = price;
-              const high = Math.max(open, close) + Math.random() * asset.volatility;
-              const low = Math.min(open, close) - Math.random() * asset.volatility;
+              
+              // Realistic shadows with "Noise"
+              const wickVolatility = asset.volatility * (0.5 + Math.random());
+              const high = Math.max(open, close) + Math.random() * wickVolatility;
+              const low = Math.min(open, close) - Math.random() * wickVolatility;
               
               insert.run(symbol, time, open, high, low, close);
               history[symbol].push({ time, price: close, open, high, low, close });
-              if (history[symbol].length > 3600) history[symbol].shift();
+              if (history[symbol].length > 28800) history[symbol].shift();
             }
             return price;
           });
@@ -1584,24 +1812,28 @@ async function startServer() {
           let price = startPrice;
           for (let i = historyTicksCount; i >= 0; i--) {
             const time = now - i * 1000;
-            currentTrend += (Math.random() - 0.5) * asset.volatility * 0.1;
-            currentTrend *= 0.95;
+            
+            // Momentum / Waves
+            currentTrend += (Math.random() - 0.5) * asset.volatility * 0.2;
+            currentTrend += Math.sin(time / 600000) * asset.volatility * 0.1; // 10 min waves
+            currentTrend *= 0.98;
             
             const candleTypeRand = Math.random();
             let moveMultiplier = 1.0;
-            if (candleTypeRand < 0.15) moveMultiplier = 0.1;
-            else if (candleTypeRand < 0.35) moveMultiplier = 1.6;
+            if (candleTypeRand < 0.15) moveMultiplier = 0.2; // Small candles
+            else if (candleTypeRand < 0.3) moveMultiplier = 2.5; // Big "Power" candles
             
-            const move = (currentTrend + (Math.random() - 0.5) * asset.volatility * 1.2) * moveMultiplier;
+            const move = (currentTrend + (Math.random() - 0.5) * asset.volatility * 1.5) * moveMultiplier;
             const open = price;
             price += move;
             const close = price;
             
-            const high = Math.max(open, close);
-            const low = Math.min(open, close);
+            const wickVolatility = asset.volatility * (0.4 + Math.random() * 1.2);
+            const high = Math.max(open, close) + Math.random() * wickVolatility;
+            const low = Math.min(open, close) - Math.random() * wickVolatility;
 
             insert.run(symbol, time, open, high, low, close);
-            if (i <= 3600) {
+            if (i <= 28800) {
               history[symbol].push({ time, price: close, open, high, low, close });
             }
           }
@@ -1624,6 +1856,7 @@ async function startServer() {
   const insertTick = db.prepare('INSERT OR REPLACE INTO market_history (symbol, time, open, high, low, close) VALUES (?, ?, ?, ?, ?, ?)');
   
   setInterval(() => {
+    if (!globalPlatformSettings.isTradingEnabled) return;
     try {
       const now = Date.now();
       const ticks: Record<string, any> = {};
@@ -1634,7 +1867,7 @@ async function startServer() {
       }
 
       // --- Centralized Price Guiding Logic ---
-    const assetTargets: Record<string, { target: number | null, trend: number | null, timeRemaining?: number }> = {};
+    const assetTargets: Record<string, { target: number | null, trend: number | null, timeRemaining?: number, duration?: number }> = {};
     
     // First, aggregate exposure per asset
     const assetExposure: Record<string, { upAmount: number, downAmount: number, upPayout: number, downPayout: number, upTrades: any[], downTrades: any[] }> = {};
@@ -1672,14 +1905,18 @@ async function startServer() {
        let targetPrice = null;
 
        // Determine outcome based on mode
-       if (globalTradeSettings.mode === 'SMART' && exposure.upAmount > 0 && exposure.downAmount > 0) {
-          // House wants to pay out less.
-          if (exposure.upPayout > exposure.downPayout) {
-             needsUp = false; // House wants DOWN to win
-          } else {
-             needsUp = true; // House wants UP to win
+       if (globalTradeSettings.mode === 'SMART') {
+          if (exposure.upPayout > 0 || exposure.downPayout > 0) {
+             // Simply favor the side that pays out less to the house
+             if (exposure.upPayout > exposure.downPayout) {
+                needsUp = false; // Down wins
+             } else if (exposure.downPayout > exposure.upPayout) {
+                needsUp = true; // Up wins
+             } else {
+                needsUp = Math.random() > 0.5;
+             }
           }
-          hasConflict = true; 
+          hasConflict = true;
        } else if (globalTradeSettings.mode === 'FORCE_LOSS') {
           needsUp = exposure.upAmount > 0 ? false : true;
           hasConflict = true;
@@ -1727,13 +1964,14 @@ async function startServer() {
            });
        }
 
-       targetPrice = basePrice + (needsUp ? safeMargin : -safeMargin);
+       targetPrice = basePrice + (needsUp ? safeMargin : -safeMargin) * (0.8 + Math.random() * 0.4);
        if (isNaN(targetPrice)) targetPrice = asset.price;
 
        assetTargets[assetKey] = {
           target: targetPrice,
           trend: needsUp ? 1 : -1,
-          timeRemaining: minTimeRemaining === Infinity ? 10000 : minTimeRemaining
+          timeRemaining: minTimeRemaining === Infinity ? 10000 : minTimeRemaining,
+          duration: 60000
        };
        
        // Update forcedResults of trades to match the new reality so resolveTrade doesn't jump the price back
@@ -1760,13 +1998,28 @@ async function startServer() {
         const needsUp = targetInfo.trend! > 0;
         const isSafe = needsUp ? currentPrice > targetInfo.target! : currentPrice < targetInfo.target!;
         
-        if (!isSafe) {
-           const ticksRemaining = Math.max(15, targetInfo.timeRemaining! / 200); // Assume at least 3 seconds to avoid crazy jumps
-           drift = diff / ticksRemaining;
+        // Start nudging halfway through the trade duration for a professional experience
+        const nudgeStartThreshold = (targetInfo.duration || 60000) * 0.5;
+        
+        if (!isSafe && targetInfo.timeRemaining! <= nudgeStartThreshold) {
+           const progress = 1 - (targetInfo.timeRemaining! / nudgeStartThreshold);
+           
+           // Aim for a "safe buffer" instead of just crossing the line, 
+           // so the price stays on the correct side for the last ~15 seconds naturally.
+           const targetBuffer = asset.volatility * 0.4;
+           const adjustedDiff = needsUp ? (targetInfo.target! + targetBuffer - currentPrice) : (targetInfo.target! - targetBuffer - currentPrice);
+
+           // Smoother cubic progress
+           const nudgingIntensity = Math.pow(progress, 2) * 1.5; 
+           
+           // Calculate drift to bridge the gap smoothly over the remaining time
+           const ticksRemaining = Math.max(5, targetInfo.timeRemaining! / 200);
+           drift = (adjustedDiff / ticksRemaining) * Math.min(1.5, nudgingIntensity);
+           
            if (isNaN(drift)) drift = 0;
            
-           // Cap the drift so it doesn't overpower the noise completely (max 15% of volatility per tick)
-           const maxDrift = asset.volatility * 0.15;
+           // Cap the drift to maintain natural candle shapes
+           const maxDrift = asset.volatility * 0.4;
            if (drift > maxDrift) drift = maxDrift;
            if (drift < -maxDrift) drift = -maxDrift;
         }
@@ -1777,39 +2030,84 @@ async function startServer() {
       if (isNaN(asset.trend)) asset.trend = 0;
       
       if (!asset.isFrozen) {
-        if (asset.isRealMarket) {
-          // STRICTLY follow Binance price. No market manipulation.
+        // Only use strict external price if we have a recent update from a real source
+        const lastUpdate = (asset as any).lastRealUpdate || 0;
+        const hasLiveSource = (asset.isRealMarket || false) && (now - lastUpdate < 30000);
+
+        if (asset.isRealMarket && hasLiveSource) {
+          // STRICTLY follow local asset.price which is updated by WS/REST
           newPrice = asset.price;
         } else {
-          // --- Professional Smoother Movement Logic (ALWAYS RUNS for internal assets) ---
+          // --- Professional Smoother Movement Logic ---
+          // Also used as a fallback for "Real Market" assets that don't have a live source
+          let move = 0;
+          
           // Trend persistence: trends last longer and change more gradually
-          asset.trend += (Math.random() - 0.5) * asset.volatility * 0.01; 
-          asset.trend *= 0.97; // High decay to keep it stable but persistent
+          asset.trend += (Math.random() - 0.5) * asset.volatility * (asset.isRealMarket ? 0.08 : 0.12); 
+          asset.trend *= (asset.isRealMarket ? 0.85 : 0.94); 
           
           const candleTypeRand = Math.random();
           let moveMultiplier = 1.0;
           
-          // Occasional slightly larger moves, but much rarer than before
-          if (candleTypeRand < 0.05) moveMultiplier = 1.3;  
-          else if (candleTypeRand < 0.10) moveMultiplier = 0.6; 
+          // Occasional sharp movements
+          if (candleTypeRand < 0.02) moveMultiplier = 2.2;  
+          else if (candleTypeRand < 0.04) moveMultiplier = 0.3; 
           
-          // Noise is increased for a more dynamic feel as requested by user
-          // We use a slightly larger factor (0.25) to ensure the price feels "alive"
-          const noise = (Math.random() - 0.5) * asset.volatility * 0.25; 
+          // Professional jitter: controlled noise for realistic movement
+          const noise = (Math.random() - 0.5) * asset.volatility * (asset.isRealMarket ? 1.5 : 2.0); 
           
-          let move = (asset.trend + noise) * moveMultiplier + drift;
+          // Only apply drift (manipulation) if it's NOT a real market
+          const finalDrift = asset.isRealMarket ? 0 : drift;
           
-          // Limit on per-tick movement to prevent "teleporting" prices while allowing dynamic movement
-          const maxMovePerTick = asset.volatility * 0.15;
+          // Technical analysis: Occasional reversion if trend gets too high
+          if (Math.abs(asset.trend) > asset.volatility * 5) {
+            asset.trend *= 0.6;
+          }
+          
+          // Combine the deterministic/directional forces
+          let regressionDrift = 0;
+          if (asset.baseMarketPrice) {
+             const diffFromBase = asset.baseMarketPrice - asset.price;
+             // Faster catch-up for real markets that use baseMarketPrice markers
+             const catchUpSpeed = asset.isRealMarket ? 0.05 : 0.002;
+             regressionDrift = diffFromBase * catchUpSpeed;
+             
+             const maxRegression = asset.volatility * (asset.isRealMarket ? 1.5 : 0.15);
+             if (regressionDrift > maxRegression) regressionDrift = maxRegression;
+             if (regressionDrift < -maxRegression) regressionDrift = -maxRegression;
+          }
+
+          let directionalForce = (asset.trend + finalDrift + regressionDrift) * moveMultiplier;
+          
+          // Cap the directional force so it never completely overwhelms the random noise
+          const maxDirectional = asset.volatility * 0.3;
+          if (directionalForce > maxDirectional) directionalForce = maxDirectional;
+          if (directionalForce < -maxDirectional) directionalForce = -maxDirectional;
+
+          // The final move combines trend momentum with controlled noise
+          move = directionalForce + noise;
+          
+          // Technical analysis: Occasional reversion if trend gets too high
+          if (Math.abs(asset.trend) > asset.volatility * 5) {
+            asset.trend *= 0.6;
+          }
+
+          // Prevent static price by adding a minimum movement floor
+          if (Math.abs(move) < asset.volatility * 0.01) {
+            move = (Math.random() > 0.5 ? 1 : -1) * asset.volatility * 0.15;
+          }
+          
+          // Absolute safety limit on per-tick movement
+          const maxMovePerTick = asset.volatility * 0.8;
           if (move > maxMovePerTick) move = maxMovePerTick;
           if (move < -maxMovePerTick) move = -maxMovePerTick;
           
           newPrice += move;
 
           // --- Gap Up / Gap Down Logic ---
-          if (isFullSecond && Math.random() < 0.01) { 
+          if (isFullSecond && Math.random() < 0.005) { 
             const gapDirection = Math.random() > 0.5 ? 1 : -1;
-            const gapSize = (Math.random() * 1.0 + 0.2) * asset.volatility; 
+            const gapSize = (Math.random() * 1.5 + 0.5) * asset.volatility; 
             newPrice += gapDirection * gapSize;
           }
         }
@@ -1819,8 +2117,8 @@ async function startServer() {
         time: now,
         price: newPrice,
         open: asset.price,
-        high: Math.max(asset.price, newPrice),
-        low: Math.min(asset.price, newPrice),
+        high: Math.max(asset.price, newPrice) + (isFullSecond ? Math.random() * asset.volatility * 0.7 : 0),
+        low: Math.min(asset.price, newPrice) - (isFullSecond ? Math.random() * asset.volatility * 0.7 : 0),
         close: newPrice,
         isFrozen: asset.isFrozen
       };
@@ -1832,8 +2130,8 @@ async function startServer() {
         history[symbol].push(tick);
         insertTick.run(symbol, Math.floor(now / 1000) * 1000, tick.open, tick.high, tick.low, tick.close);
         
-        // Keep up to 1 hour of history in memory (3600 seconds)
-        if (history[symbol].length > 3600) {
+        // Keep up to 8 hours of history in memory (28800 seconds)
+        if (history[symbol].length > 28800) {
           history[symbol].shift(); 
         }
 
@@ -2002,9 +2300,12 @@ async function startServer() {
     // If trade.endTime is somehow missing or in the past, fallback to a minimum duration.
     const serverNow = Date.now();
     let serverEndTime = trade.endTime;
-    if (!serverEndTime || serverEndTime <= serverNow) {
+    
+    // Safety check: Prevent suspicious 1-second trades caused by client/server clock drifts
+    const minDurationMs = 3000; // Reduced to 3 seconds to allow candle-aligned trades
+    if (!serverEndTime || (serverEndTime - serverNow) < minDurationMs) {
        const durationSeconds = trade.duration || 60;
-       serverEndTime = serverNow + (durationSeconds * 1000);
+       serverEndTime = serverNow + Math.max(minDurationMs, durationSeconds * 1000);
     }
     
     // Similarly, trust the synced client's startTime if it's within a reasonable window, else use serverNow
@@ -2097,10 +2398,67 @@ async function startServer() {
     }
   };
 
+  // --- Leaderboard Simulation ---
+  const FIRST_NAMES = ['Sebas', 'Dani', 'Alex', 'John', 'Maria', 'Abdul', 'Yusuf', 'Chris', 'Elena', 'Diego', 'Mohammed', 'Chen', 'Satoshi', 'Oliver', 'Sophie', 'Lucas', 'Emma', 'Hiroshi', 'Anna', 'Ivan', 'Binomo', 'Dev', 'Trading', 'FX', 'Pro', 'ID', 'Crypto', 'King', 'Queen', 'Master'];
+  const LAST_NAMES = ['Trader', 'Pro', 'King', 'Master', 'Star', '17', '99', '2024', 'Win', 'Bull', 'Bear', 'Pip', 'Capital', 'Fund', 'Wealth', 'Rich', 'Cash', 'Money', 'Profit', 'Trade'];
+  const COUNTRIES = ['CO', 'BR', 'MX', 'IN', 'TR', 'AE', 'ID', 'KW', 'AR', 'NG', 'ZA', 'US', 'ES', 'GB', 'DE', 'FR', 'JP', 'KR', 'AU', 'CA', 'SG', 'MY', 'PH', 'VN', 'TH'];
+
+  let leaderboardEntries: any[] = [];
+  let lastResetDate = new Date().getDate();
+  let lastSwapTime = Date.now();
+
+  const generateLeaderboard = () => {
+    const newEntries = [];
+    for (let i = 0; i < 20; i++) {
+        // Distribute profits more realistically, top near $12000, min near $500
+        const profit = 500 + Math.random() * 11500;
+        newEntries.push({
+            id: `sim-${i}`,
+            name: `${FIRST_NAMES[Math.floor(Math.random() * FIRST_NAMES.length)]} ${LAST_NAMES[Math.floor(Math.random() * LAST_NAMES.length)]}`,
+            profit: profit,                
+            countryCode: COUNTRIES[Math.floor(Math.random() * COUNTRIES.length)],
+        });
+    }
+    return newEntries.sort((a, b) => b.profit - a.profit);
+  };
+
+  leaderboardEntries = generateLeaderboard();
+  console.log('Leaderboard initialized with', leaderboardEntries.length, 'entries');
+
+  // Update leaderboard every 30 minutes
+  setInterval(() => {
+    const now = Date.now();
+    const today = new Date().getDate();
+    if (today !== lastResetDate) {
+        leaderboardEntries = generateLeaderboard();
+        lastResetDate = today;
+    }
+
+    // Simulate profit growth and user swapping
+    leaderboardEntries = leaderboardEntries.map(entry => {
+        // Swap users
+        return {
+            id: entry.id, // keep id
+            name: `${FIRST_NAMES[Math.floor(Math.random() * FIRST_NAMES.length)]} ${LAST_NAMES[Math.floor(Math.random() * LAST_NAMES.length)]}`,
+            countryCode: COUNTRIES[Math.floor(Math.random() * COUNTRIES.length)],
+            profit: 500 + Math.random() * 11500 // Start fresh profit
+        };
+    }).sort((a, b) => b.profit - a.profit);
+
+    lastSwapTime = now;
+
+    io.emit('leaderboard-update', leaderboardEntries);
+  }, 30 * 60 * 1000);
+  // --- End Leaderboard Simulation ---
+
   setInterval(checkPendingOrders, 1000);
 
   // Handle Client Connections
   io.on('connection', (socket) => {
+    socket.emit('leaderboard-update', leaderboardEntries);
+    socket.on('request-leaderboard', () => {
+        socket.emit('leaderboard-update', leaderboardEntries);
+    });
     console.log('Client connected:', socket.id);
     
     // Default user state
@@ -2139,9 +2497,29 @@ async function startServer() {
           
           // Increment referralCount for referrer
           if (userData.referredBy) {
-            const referrer = db.prepare('SELECT * FROM users WHERE referralCode = ? OR UPPER(substr(uid, 1, 8)) = UPPER(?) OR email = ?').get(userData.referredBy, userData.referredBy, userData.referredBy) as any;
+            let referrer = db.prepare('SELECT * FROM users WHERE referralCode = ? OR UPPER(substr(uid, 1, 8)) = UPPER(?) OR email = ?').get(userData.referredBy, userData.referredBy, userData.referredBy) as any;
+            
+            // Fallback to Firestore if not found in SQLite
+            if (!referrer && canSyncFirestore()) {
+              try {
+                const snaps = await firestore.collection('users').where('referralCode', '==', userData.referredBy).limit(1).get();
+                if (!snaps.empty) {
+                  const data = snaps.docs[0].data();
+                  referrer = { ...data, uid: snaps.docs[0].id };
+                }
+              } catch (e) {
+                console.error('Firestore referrer lookup error:', e);
+              }
+            }
+
             if (referrer) {
-              db.prepare('UPDATE users SET referralCount = referralCount + 1 WHERE email = ?').run(referrer.email);
+              // Update SQLite if exists in SQLite
+              const existingReferrerInSql = db.prepare('SELECT * FROM users WHERE email = ?').get(referrer.email);
+              if (existingReferrerInSql) {
+                db.prepare('UPDATE users SET referralCount = referralCount + 1 WHERE email = ?').run(referrer.email);
+              }
+              
+              // Always update Firestore
               if (canSyncFirestore() && referrer.uid) {
                 firestore.collection('users').doc(referrer.uid).set({
                   referralCount: (referrer.referralCount || 0) + 1
@@ -2154,6 +2532,9 @@ async function startServer() {
                   }
                 });
               }
+              
+              // Notify referrer to update their referral count in real-time
+              emitUserUpdate(referrer.email);
             }
           }
           
@@ -2342,6 +2723,52 @@ async function startServer() {
         let params: any[] = [tfMs, assetShortName, startTime, endTime, assetShortName, assetShortName];
         
         candles = db.prepare(query).all(...params) as any[];
+        console.log(`DB History: found ${candles.length} candles for ${assetShortName} (${startTime} to ${endTime})`);
+
+        // If not enough candles, synthesize history to ensure chart is not empty - increased for professional feel
+        if (!beforeTime && candles.length < 2000) {
+          const needed = 2000 - candles.length;
+          const firstCandle = candles[0];
+          const firstTime = firstCandle ? firstCandle.time : Math.floor(Date.now() / tfMs) * tfMs;
+          const asset = (assets as any)[assetShortName];
+          const volatility = asset ? asset.volatility : 0.0001;
+          const startPrice = firstCandle ? firstCandle.open : (asset ? asset.price : 1.0);
+          
+          const synthetic: any[] = [];
+          
+          // To make it look extremely professional, we calculate trends properly
+          let currentOpen = startPrice;
+          let trend = 0;
+          
+          // Calculate scale based on timeframe to make larger timeframes have proportionally larger candles
+          const tfScale = Math.max(1, Math.sqrt(tfMs / 60000));
+          
+          for (let i = 1; i <= needed; i++) {
+            const time = firstTime - (i * tfMs);
+            
+            // Reversing the trend calculation since we are going background
+            trend += (Math.random() - 0.5) * volatility * 0.5;
+            trend *= 0.95; // Mean reversion
+            
+            const isPowerCandle = Math.random() < 0.1;
+            const multiplier = isPowerCandle ? (2 + Math.random() * 2) : 1;
+            
+            // Move represents the distance between open and close.
+            const move = (trend + (Math.random() - 0.5) * volatility * 12 * tfScale) * multiplier; 
+            
+            const close = currentOpen;
+            const open = close - move;
+            
+            const wickScale = volatility * 5 * tfScale;
+            // Add wicks using max/min so wicks extend beyond real body
+            const high = Math.max(open, close) + Math.random() * wickScale;
+            const low = Math.min(open, close) - Math.random() * wickScale;
+            
+            synthetic.push({ time, open, high, low, close });
+            currentOpen = open;
+          }
+          candles = [...synthetic.reverse(), ...candles];
+        }
 
         if (!beforeTime) {
            // Fetch recent ticks for the line chart
@@ -2791,6 +3218,14 @@ async function startServer() {
           status,
           message
         });
+
+        const notifyType = status === 'APPROVED' ? 'success' : status === 'REJECTED' ? 'error' : 'info';
+        sendNotification(
+          userEmail,
+          `Request ${status}`,
+          message || `Your request has been ${status.toLowerCase()}.`,
+          notifyType
+        );
         
         io.to('admin-room').emit('admin-requests', pendingRequests);
       }
@@ -3181,6 +3616,13 @@ async function startServer() {
         // Notify user if connected
         emitUserUpdate(email);
         emitToUser(email, 'balance-updated', { balance: parsedBalance, type });
+
+        sendNotification(
+          email,
+          'Balance Adjusted',
+          `Your ${type.toLowerCase()} balance has been adjusted to ${parsedBalance} by an administrator.`,
+          'info'
+        );
         
         // Refresh admin user list (only send the updated user)
         const updatedUser = db.prepare('SELECT * FROM users WHERE email = ?').get(email) as any;
@@ -3562,6 +4004,7 @@ async function startServer() {
       if (assets[asset]) {
         assets[asset].volatility = volatility;
         saveAssetSettings();
+        io.emit('market-assets-updated', assets);
       }
     });
 
@@ -3569,18 +4012,21 @@ async function startServer() {
       if (assets[asset]) {
         assets[asset].winPercentage = winPercentage;
         saveAssetSettings();
+        io.emit('market-assets-updated', assets);
       }
     });
 
     socket.on('admin-set-price', ({ asset, price }) => {
       if (assets[asset]) {
         assets[asset].price = price;
+        io.emit('market-assets-updated', assets);
       }
     });
 
     socket.on('admin-set-target', ({ asset, targetPrice }) => {
       if (assets[asset]) {
         assets[asset].targetPrice = targetPrice;
+        io.emit('market-assets-updated', assets);
       }
     });
 
@@ -3736,44 +4182,14 @@ async function startServer() {
             
             // --- Referral Commission Logic ---
             if (user.referredBy) {
-              console.log('User has referrer:', user.referredBy);
-              const referrer = db.prepare('SELECT * FROM users WHERE referralCode = ? OR UPPER(substr(uid, 1, 8)) = UPPER(?) OR email = ?').get(user.referredBy, user.referredBy, user.referredBy) as any;
+              const referrer = db.prepare('SELECT * FROM users WHERE referralCode = ? OR uid = ? OR email = ? OR UPPER(substr(uid, 1, 8)) = UPPER(?)').get(user.referredBy, user.referredBy, user.referredBy, user.referredBy) as any;
+              
               if (referrer) {
-                console.log('Referrer found:', referrer.email);
                 const commissionRate = (globalReferralSettings.referralPercentage || 10) / 100;
                 const commissionAmount = depositAmountUSD * commissionRate;
-                console.log('Commission Amount:', commissionAmount, 'Rate:', commissionRate);
                 
-                let newReferralBalance = (referrer.referralBalance || 0) + commissionAmount;
-                let newTotalReferralEarnings = (referrer.totalReferralEarnings || 0) + commissionAmount;
-                let finalMainBalance = referrer.balance;
-                
-                // If referral balance reaches threshold, transfer to main balance
-                const threshold = globalReferralSettings.minWithdrawal || 10;
-                if (newReferralBalance >= threshold) {
-                  console.log('Threshold reached, transferring to main balance:', newReferralBalance);
-                  finalMainBalance += newReferralBalance;
-                  logActivity(referrer.email, 'REFERRAL_TRANSFER', `Transferred ${newReferralBalance.toFixed(2)} to main balance`);
-                  newReferralBalance = 0;
-                }
-                
-                db.prepare('UPDATE users SET balance = ?, referralBalance = ?, totalReferralEarnings = ? WHERE email = ?')
-                  .run(finalMainBalance, newReferralBalance, newTotalReferralEarnings, referrer.email);
-                  
-                // Update Firestore for Referrer
-                if (canSyncFirestore() && referrer.uid) {
-                  firestore.collection('users').doc(referrer.uid).set({
-                    balance: finalMainBalance,
-                    referralBalance: newReferralBalance,
-                    totalReferralEarnings: newTotalReferralEarnings
-                  }, { merge: true }).catch((e: any) => {
-                    if (e.code === 7 || (e.message && e.message.includes('PERMISSION_DENIED'))) {
-                      firestoreDisabledDueToError = true;
-                    } else {
-                      console.error('Firestore referrer balance update error:', e);
-                    }
-                  });
-                }
+                db.prepare('UPDATE users SET referralBalance = referralBalance + ?, totalReferralEarnings = totalReferralEarnings + ? WHERE email = ?')
+                  .run(commissionAmount, commissionAmount, referrer.email);
                 
                 // Record referral event in SQLite
                 db.prepare(`
@@ -3781,16 +4197,14 @@ async function startServer() {
                   VALUES (?, ?, ?, ?, ?, ?)
                 `).run(referrer.uid, user.uid, user.email, commissionAmount, 'DEPOSIT', Date.now());
                 
-                // Notify referrer if connected
+                // Notify referrer
                 emitUserUpdate(referrer.email);
                 const referrerSocketIds = Object.keys(connectedUsers).filter(id => connectedUsers[id].email === referrer.email);
                 referrerSocketIds.forEach(socketId => {
-                  io.to(socketId).emit('balance-updated', { balance: finalMainBalance, type: 'REAL' });
                   io.to(socketId).emit('referral-commission-received', {
                     amount: commissionAmount,
                     from: user.email,
-                    newReferralBalance,
-                    newMainBalance: finalMainBalance
+                    type: 'DEPOSIT'
                   });
                   io.to(socketId).emit('new-notification', {
                     id: Date.now().toString(),
@@ -3800,8 +4214,6 @@ async function startServer() {
                     timestamp: Date.now()
                   });
                 });
-              } else {
-                console.log('Referrer not found for code:', user.referredBy);
               }
             }
             // --- End Referral Logic ---
@@ -3816,8 +4228,9 @@ async function startServer() {
             else if (depMethod.includes('nagad')) withdrawMethodId = 'nagad';
             else if (depMethod.includes('rocket')) withdrawMethodId = 'rocket';
             else if (depMethod.includes('upay')) withdrawMethodId = 'upay';
+            else if (depMethod.includes('binance')) withdrawMethodId = 'binance';
             else if (depMethod.includes('usdt') || depMethod.includes('bitcoin') || depMethod.includes('crypto')) withdrawMethodId = 'usdt';
-            else if (depMethod.includes('card')) withdrawMethodId = 'card';
+            else if (depMethod.includes('card') || depMethod.includes('bank')) withdrawMethodId = 'bank';
             
             if (withdrawMethodId && !methods.includes(withdrawMethodId)) {
               methods.push(withdrawMethodId);
@@ -3857,6 +4270,14 @@ async function startServer() {
         const userWithdrawals = db.prepare('SELECT * FROM withdrawals WHERE email = ? ORDER BY submittedAt DESC').all(deposit.email);
         emitToUser(deposit.email, 'user-transactions', { deposits: userDeposits, withdrawals: userWithdrawals });
         
+        const notifyType = status === 'APPROVED' ? 'success' : status === 'REJECTED' ? 'error' : 'info';
+        sendNotification(
+          deposit.email,
+          `Deposit ${status}`,
+          `Your deposit of ${deposit.currency} ${deposit.amount} has been ${status.toLowerCase()}.`,
+          notifyType
+        );
+
         emitToUser(deposit.email, 'request-status-updated', {
           requestId: deposit.id,
           status,
@@ -3875,6 +4296,16 @@ async function startServer() {
       }
       try {
         const { email, amount, currency, method, accountDetails } = withdrawData;
+        
+        const limits = globalPlatformSettings.minWithdrawalLimits || {};
+        const methodIdForLimit = withdrawData.method.toLowerCase();
+        // Fallback to global if method limit not set
+        const minWithdrawal = limits[methodIdForLimit] || globalPlatformSettings.minWithdrawalAmount || 10;
+        
+        if (amount < minWithdrawal) {
+          socket.emit('withdraw-error', `Minimum withdrawal amount for ${withdrawData.method} is $${minWithdrawal}.`);
+          return;
+        }
         
         const user = db.prepare('SELECT * FROM users WHERE email = ?').get(email) as any;
         if (!user) {
@@ -4043,6 +4474,14 @@ async function startServer() {
         const userWithdrawals = db.prepare('SELECT * FROM withdrawals WHERE email = ? ORDER BY submittedAt DESC').all(withdrawal.email);
         emitToUser(withdrawal.email, 'user-transactions', { deposits: userDeposits, withdrawals: userWithdrawals });
         
+        const notifyType = status === 'APPROVED' ? 'success' : (status === 'REJECTED' || status === 'CANCELLED') ? 'error' : 'info';
+        sendNotification(
+          withdrawal.email,
+          `Withdrawal ${status}`,
+          `Your withdrawal of ${withdrawal.currency} ${withdrawal.amount} has been ${status.toLowerCase()}. ${reason ? `Reason: ${reason}` : ''}`,
+          notifyType
+        );
+
         emitToUser(withdrawal.email, 'request-status-updated', {
           requestId: withdrawal.id,
           status,
@@ -4194,6 +4633,14 @@ async function startServer() {
           // Notify the user if connected
           emitUserUpdate(kyc.email);
           emitToUser(kyc.email, 'kyc-status-updated', { status, reason });
+
+          const notifyType = status === 'APPROVED' ? 'success' : status === 'REJECTED' ? 'error' : 'info';
+          sendNotification(
+            kyc.email,
+            `Verification ${status}`,
+            `Your account verification (KYC) has been ${status.toLowerCase()}.${reason ? ` Reason: ${reason}` : ''}`,
+            notifyType
+          );
         }
         
         // Refresh admin KYC list

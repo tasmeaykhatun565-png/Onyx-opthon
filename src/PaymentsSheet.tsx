@@ -9,7 +9,8 @@ import {
   TrendingUp,
   CreditCard,
   Smartphone,
-  Bitcoin
+  Bitcoin,
+  X
 } from 'lucide-react';
 import BottomSheet from './BottomSheet';
 import DepositFlow from './DepositFlow';
@@ -34,6 +35,7 @@ interface PaymentsSheetProps {
   turnoverRequired?: number;
   turnoverAchieved?: number;
   initialView?: 'DEPOSIT' | 'WITHDRAW' | 'TRANSFER' | 'HISTORY' | null;
+  platformSettings?: any;
 }
 
 const RECENT_TRANSACTIONS = [
@@ -42,7 +44,7 @@ const RECENT_TRANSACTIONS = [
   { id: 3, type: 'DEPOSIT', method: 'BinancePay', amount: 12000, date: 'Feb 25, 2026', status: 'SUCCESS' },
 ];
 
-export default function PaymentsSheet({ isOpen, onClose, balance, rawBalance, userId, activeAccount, currencySymbol, currencyCode, initialPromoCode, socket, userEmail, turnoverRequired, turnoverAchieved, initialView }: PaymentsSheetProps) {
+export default function PaymentsSheet({ isOpen, onClose, balance, rawBalance, userId, activeAccount, currencySymbol, currencyCode, initialPromoCode, socket, userEmail, turnoverRequired, turnoverAchieved, initialView, platformSettings }: PaymentsSheetProps) {
   const [isDepositOpen, setIsDepositOpen] = useState(false);
   const [isWithdrawOpen, setIsWithdrawOpen] = useState(false);
   const [isTransferOpen, setIsTransferOpen] = useState(false);
@@ -72,54 +74,54 @@ export default function PaymentsSheet({ isOpen, onClose, balance, rawBalance, us
         onClose={onClose}
         ignoreClickOutside={isDepositOpen || isWithdrawOpen || isTransferOpen || isHistoryOpen}
       >
-        <div className="px-4 pb-8 space-y-6">
-          <div className="flex items-center justify-center py-2 border-b border-[var(--border-color)] -mx-4 mb-4">
-            <h2 className="text-[var(--text-primary)] font-bold text-lg pb-2">Payments</h2>
+        <div className="px-5 pb-10 space-y-3">
+          <div className="flex items-center justify-between py-4 mb-2">
+            <h2 className="text-white font-black text-2xl tracking-tight">Payments</h2>
+            <button 
+              onClick={onClose}
+              className="w-10 h-10 flex items-center justify-center bg-white/5 rounded-full text-white/40 hover:text-white transition"
+            >
+              <X size={20} />
+            </button>
           </div>
           
-          <div className="space-y-1">
+          <div className="space-y-3">
             <button 
               onClick={() => setIsDepositOpen(true)}
-              className="w-full bg-[#1e1e1e] hover:bg-[#2a2a2a] transition-all rounded-xl py-3 px-4 flex items-center gap-4 text-[var(--text-primary)] font-medium text-base border border-transparent hover:border-[#333]"
+              className="w-full bg-[#00ff5f] hover:bg-[#00e655] transition-all rounded-2xl py-4 px-6 flex items-center gap-4 text-black font-black text-lg shadow-[0_4px_20px_rgba(0,255,95,0.2)] active:scale-[0.98]"
             >
-              <div className="w-8 h-8 flex items-center justify-center bg-[#22c55e]/10 rounded-lg text-[#22c55e]">
-                <Wallet size={18} />
-              </div>
-              <span className="flex-1 text-left">Deposit</span>
-              <ChevronRight size={18} className="text-[#666]" />
+              <Wallet size={24} strokeWidth={2.5} />
+              <span className="flex-1 text-center pr-8">Deposit</span>
             </button>
             
             <button 
               onClick={() => setIsWithdrawOpen(true)}
-              className="w-full bg-[#1e1e1e] hover:bg-[#2a2a2a] transition-all rounded-xl py-3 px-4 flex items-center gap-4 text-[var(--text-primary)] font-medium text-base border border-transparent hover:border-[#333]"
+              className="w-full bg-[#2d2d2d] hover:bg-[#353535] transition-all rounded-2xl py-4 px-6 flex items-center gap-4 text-white font-bold text-lg active:scale-[0.98]"
             >
-              <div className="w-8 h-8 flex items-center justify-center bg-[#f59e0b]/10 rounded-lg text-[#f59e0b]">
-                <ArrowDown size={18} />
+              <div className="text-white/70">
+                <ArrowDown size={24} strokeWidth={2.5} />
               </div>
-              <span className="flex-1 text-left">Withdraw</span>
-              <ChevronRight size={18} className="text-[#666]" />
+              <span className="flex-1 text-center pr-8">Withdraw</span>
             </button>
 
-            <button 
+             <button 
               onClick={() => setIsTransferOpen(true)}
-              className="w-full bg-[#1e1e1e] hover:bg-[#2a2a2a] transition-all rounded-xl py-3 px-4 flex items-center gap-4 text-[var(--text-primary)] font-medium text-base border border-transparent hover:border-[#333]"
+              className="w-full bg-[#2d2d2d] hover:bg-[#353535] transition-all rounded-2xl py-4 px-6 flex items-center gap-4 text-white font-bold text-lg active:scale-[0.98]"
             >
-              <div className="w-8 h-8 flex items-center justify-center bg-[#3b82f6]/10 rounded-lg text-[#3b82f6]">
-                <ArrowLeftRight size={18} />
+              <div className="text-white/70">
+                <ArrowLeftRight size={24} strokeWidth={2.5} />
               </div>
-              <span className="flex-1 text-left">Transfer</span>
-              <ChevronRight size={18} className="text-[#666]" />
+              <span className="flex-1 text-center pr-8">Transfer</span>
             </button>
-
-            <button 
+ 
+             <button 
               onClick={() => setIsHistoryOpen(true)}
-              className="w-full bg-[#1e1e1e] hover:bg-[#2a2a2a] transition-all rounded-xl py-3 px-4 flex items-center gap-4 text-[var(--text-primary)] font-medium text-base border border-transparent hover:border-[#333]"
+              className="w-full bg-[#2d2d2d] hover:bg-[#353535] transition-all rounded-2xl py-4 px-6 flex items-center gap-4 text-white font-bold text-lg active:scale-[0.98]"
             >
-              <div className="w-8 h-8 flex items-center justify-center bg-[#94a3b8]/10 rounded-lg text-[#94a3b8]">
-                <History size={18} />
+              <div className="text-white/70">
+                <History size={24} strokeWidth={2.5} />
               </div>
-              <span className="flex-1 text-left">Transactions</span>
-              <ChevronRight size={18} className="text-[#666]" />
+              <span className="flex-1 text-center pr-8">Transactions</span>
             </button>
           </div>
         </div>
@@ -143,6 +145,7 @@ export default function PaymentsSheet({ isOpen, onClose, balance, rawBalance, us
           <WithdrawFlow 
             isOpen={isWithdrawOpen} 
             onClose={() => setIsWithdrawOpen(false)} 
+            onDepositClick={() => setIsDepositOpen(true)}
             currencySymbol={currencySymbol}
             currencyCode={currencyCode}
             socket={socket}
@@ -151,6 +154,7 @@ export default function PaymentsSheet({ isOpen, onClose, balance, rawBalance, us
             activeAccount={activeAccount}
             turnoverRequired={turnoverRequired}
             turnoverAchieved={turnoverAchieved}
+            platformSettings={platformSettings}
           />
         )}
         {isTransferOpen && (

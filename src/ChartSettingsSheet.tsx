@@ -11,6 +11,7 @@ interface ChartSettingsSheetProps {
   onTimeFrameChange: (tf: string) => void;
   currentChartType: string;
   onChartTypeChange: (type: string) => void;
+  isOTC: boolean;
 }
 
 export default function ChartSettingsSheet({ 
@@ -19,7 +20,8 @@ export default function ChartSettingsSheet({
   currentTimeFrame, 
   onTimeFrameChange,
   currentChartType,
-  onChartTypeChange
+  onChartTypeChange,
+  isOTC
 }: ChartSettingsSheetProps) {
   return (
     <BottomSheet isOpen={isOpen} onClose={onClose}>
@@ -33,7 +35,12 @@ export default function ChartSettingsSheet({
           
           <div className="overflow-x-auto scrollbar-hide px-4">
             <div className="flex items-center gap-2 w-max">
-              {TIME_FRAMES.map((tf) => (
+              {TIME_FRAMES.filter(tf => {
+                  const tooLong = ['15m', '30m', '1h', '4h', '1d', '7d', '1M'];
+                  if (tooLong.includes(tf)) return false;
+                  if (isOTC) return true;
+                  return !['5s', '10s', '15s', '20s', '30s'].includes(tf);
+              }).map((tf) => (
                 <button
                   key={tf}
                   onClick={() => onTimeFrameChange(tf)}

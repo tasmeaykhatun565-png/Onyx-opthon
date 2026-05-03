@@ -13,7 +13,7 @@ export const auth = getAuth(app);
 async function testConnection() {
   try {
     // Attempt to fetch a non-existent document from the server to test connectivity
-    await getDocFromServer(doc(db, '_internal_', 'connection_test'));
+    await getDocFromServer(doc(db, 'stats', 'connection_test'));
     // Connection successful
   } catch (error) {
     if (error instanceof Error && (error.message.includes('the client is offline') || error.message.includes('network-request-failed'))) {

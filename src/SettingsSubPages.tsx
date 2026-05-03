@@ -1714,114 +1714,12 @@ export const AppearanceSettings: React.FC<SubPageProps & {
               color="#101114"
             />
             <ThemeButton 
-              active={theme === 'light'} 
-              onClick={() => handleThemeChange('light')}
-              icon={<Sun size={20} />}
-              label="Light"
-              color="#f3f4f6"
-            />
-            <ThemeButton 
               active={theme === 'onyx'} 
               onClick={() => handleThemeChange('onyx')}
               icon={<ShieldCheck size={20} />}
               label="Onyx"
               color="#000000"
             />
-            <ThemeButton 
-              active={theme === 'midnight'} 
-              onClick={() => handleThemeChange('midnight')}
-              icon={<Monitor size={20} />}
-              label="Midnight"
-              color="#020617"
-            />
-            <ThemeButton 
-              active={theme === 'emerald'} 
-              onClick={() => handleThemeChange('emerald')}
-              icon={<Activity size={20} />}
-              label="Emerald"
-              color="#022c22"
-            />
-          </div>
-        </section>
-
-        <section className="space-y-4">
-          <h2 className="text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider">Chat Background</h2>
-          <div className="space-y-4">
-            <div className="flex items-center gap-4">
-              <label className="flex-1 flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-500 text-white p-3 rounded-xl cursor-pointer transition-all active:scale-95 shadow-lg shadow-blue-500/20">
-                <Upload size={18} />
-                <span className="text-sm font-bold">Upload from Gallery</span>
-                <input type="file" accept="image/*" className="hidden" onChange={handleFileUpload} />
-              </label>
-              {chatBackground && (
-                <button 
-                  onClick={() => setChatBackground(null)}
-                  className="bg-rose-500/10 hover:bg-rose-500/20 text-rose-500 p-3 rounded-xl transition-all"
-                >
-                  <Trash2 size={18} />
-                </button>
-              )}
-            </div>
-
-            <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
-              <button 
-                onClick={() => setChatBackground(null)}
-                className={cn(
-                  "aspect-square rounded-xl border-2 flex items-center justify-center transition-all",
-                  !chatBackground ? "border-blue-500 bg-blue-500/10" : "border-[var(--border-color)] bg-[var(--bg-secondary)]"
-                )}
-              >
-                <div className="flex flex-col items-center gap-1">
-                  <div className="w-8 h-8 rounded-full bg-gray-500/20 flex items-center justify-center">
-                    <X size={16} className="text-gray-400" />
-                  </div>
-                  <span className="text-[10px] font-medium text-gray-400">None</span>
-                </div>
-              </button>
-
-              {defaultBackgrounds.map((bg, idx) => (
-                <button
-                  key={`default-${idx}`}
-                  onClick={() => setChatBackground(bg)}
-                  className={cn(
-                    "aspect-square rounded-xl border-2 overflow-hidden transition-all relative group",
-                    chatBackground === bg ? "border-blue-500 scale-[1.02]" : "border-transparent"
-                  )}
-                >
-                  <img src={bg} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                  {chatBackground === bg && (
-                    <div className="absolute inset-0 bg-blue-500/20 flex items-center justify-center">
-                      <Check size={20} className="text-white drop-shadow-md" strokeWidth={3} />
-                    </div>
-                  )}
-                </button>
-              ))}
-
-              {uploadedBackgrounds.map((bg, idx) => (
-                <div key={`uploaded-${idx}`} className="relative group aspect-square">
-                  <button
-                    onClick={() => setChatBackground(bg)}
-                    className={cn(
-                      "w-full h-full rounded-xl border-2 overflow-hidden transition-all relative",
-                      chatBackground === bg ? "border-blue-500 scale-[1.02]" : "border-transparent"
-                    )}
-                  >
-                    <img src={bg} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                    {chatBackground === bg && (
-                      <div className="absolute inset-0 bg-blue-500/20 flex items-center justify-center">
-                        <Check size={20} className="text-white drop-shadow-md" strokeWidth={3} />
-                      </div>
-                    )}
-                  </button>
-                  <button 
-                    onClick={(e) => handleDeleteBackground(bg, e)}
-                    className="absolute -top-1 -right-1 bg-rose-500 text-white p-1 rounded-full shadow-lg opacity-0 group-hover:opacity-100 transition-opacity z-10"
-                  >
-                    <X size={12} strokeWidth={3} />
-                  </button>
-                </div>
-              ))}
-            </div>
           </div>
         </section>
 

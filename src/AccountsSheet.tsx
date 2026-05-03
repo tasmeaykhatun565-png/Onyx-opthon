@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, Plus, MoreVertical, Check, RefreshCw, Trash2 } from 'lucide-react';
+import { X, Plus, MoreVertical, Check, RefreshCw, Trash2, Pencil } from 'lucide-react';
 import { cn } from './utils';
 import AddAccountSheet from './AddAccountSheet';
 
@@ -20,6 +20,7 @@ interface AccountsSheetProps {
   activeAccount: string;
   onSelectAccount: (id: string) => void;
   onRefill: () => void;
+  onSetDemoBalance?: (amount: number) => void;
   accounts: Account[];
   onAddAccount: (account: Account) => void;
   onDeleteAccount: (id: string) => void;
@@ -31,6 +32,7 @@ export default function AccountsSheet({
   activeAccount,
   onSelectAccount,
   onRefill,
+  onSetDemoBalance,
   accounts,
   onAddAccount,
   onDeleteAccount
@@ -38,6 +40,9 @@ export default function AccountsSheet({
   const [isAddAccountOpen, setIsAddAccountOpen] = useState(false);
   const [showDelete, setShowDelete] = useState<string | null>(null);
   const [hideBalance, setHideBalance] = useState(false);
+  
+  const [isEditingDemo, setIsEditingDemo] = useState(false);
+  const [editAmount, setEditAmount] = useState('10000');
 
   return (
     <>
@@ -107,6 +112,19 @@ export default function AccountsSheet({
                         <Trash2 size={18} />
                       </button>
                     )}
+                    {account.id === 'DEMO' && onSetDemoBalance && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setEditAmount(account.balance.toString());
+                          setIsEditingDemo(true);
+                        }}
+                        className="p-2 text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-white/5 rounded-lg transition active:scale-90"
+                        title="Edit Demo Balance"
+                      >
+                        <Pencil size={18} />
+                      </button>
+                    )}
                   </div>
                 ))}
 
@@ -147,6 +165,63 @@ export default function AccountsSheet({
           });
         }}
       />
+      <AnimatePresence>
+        {isEditingDemo && (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+              onClick={() => setIsEditingDemo(false)}
+            />
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="relative w-full max-w-sm bg-[var(--bg-primary)] rounded-2xl border border-[var(--border-color)] overflow-hidden shadow-2xl"
+            >
+              <div className="p-5">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-bold text-white">Set Demo Balance</h3>
+                  <button onClick={() => setIsEditingDemo(false)} className="text-[var(--text-secondary)] hover:text-white transition">
+                    <X size={20} />
+                  </button>
+                </div>
+                
+                <div className="space-y-4">
+                  <div>
+                    <label className="text-xs font-medium text-[var(--text-secondary)] mb-1 block uppercase tracking-wider">New Balance</label>
+                    <div className="relative">
+                      <span className="absolute left-3 shadow outline-none top-1/2 -translate-y-1/2 text-white/50 cursor-default">$</span>
+                      <input 
+                        type="number" 
+                        value={editAmount}
+                        onChange={(e) => setEditAmount(e.target.value)}
+                        className="w-full bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-xl py-3 pl-8 pr-4 text-white font-mono focus:border-blue-500 focus:outline-none transition"
+                        placeholder="10000"
+                      />
+                    </div>
+                  </div>
+                  
+                  <button 
+                    onClick={() => {
+                      const amount = parseFloat(editAmount);
+                      if (!isNaN(amount) && amount >= 0) {
+                        onSetDemoBalance && onSetDemoBalance(amount);
+                        setIsEditingDemo(false);
+                      }
+                    }}
+                    className="w-full bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white font-bold py-3 rounded-xl transition active:scale-[0.98] shadow-lg shadow-blue-500/20"
+                  >
+                    Save Balance
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </>
   );
 }

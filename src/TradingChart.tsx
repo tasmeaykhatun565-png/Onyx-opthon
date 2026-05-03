@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { ArrowUp, ArrowDown, Clock, TrendingUp, TrendingDown, Trash2, ArrowUpRight, ArrowDownRight } from 'lucide-react';
-import { createChart, ColorType, IChartApi, ISeriesApi, Time, CrosshairMode, CandlestickSeries, AreaSeries, BarSeries, LineSeries, HistogramSeries, LineStyle } from 'lightweight-charts';
+import { ArrowUp, ArrowDown, Clock, TrendingUp, TrendingDown, Trash2, ArrowUpRight, ArrowDownRight, Lock } from 'lucide-react';
+import { createChart, ColorType, IChartApi, ISeriesApi, Time, CrosshairMode, CandlestickSeries, AreaSeries, BarSeries, LineSeries, HistogramSeries, LineStyle, LogicalRange } from 'lightweight-charts';
 import { deepEqual, safeStringify, getTimeFrameInMs } from './utils';
 import { SMA, EMA, WMA, BollingerBands, MACD, RSI, CCI, ATR, PSAR, WilliamsR, ADX, AwesomeOscillator, ROC, Stochastic } from 'technicalindicators';
 
@@ -42,6 +42,7 @@ interface TradingChartProps {
   activeIndicators?: IndicatorConfig[];
   currencySymbol?: string;
   exchangeRate?: number;
+  isTradingEnabled?: boolean;
   onVisibleTimeRangeChange?: (range: { from: number; to: number }) => void;
   onLoadMoreHistory?: () => void;
 }
@@ -55,24 +56,39 @@ interface Drawing {
 
 import { DRAWING_TOOLS } from './constants';
 
-const ChartSkeleton = () => (
-  <div className="absolute inset-0 bg-[#101114] flex flex-col items-center justify-center z-50 backdrop-blur-sm">
-    <motion.div
-      initial={{ opacity: 0, scale: 0.8 }}
-      animate={{ opacity: 1, scale: 1 }}
-      exit={{ opacity: 0, scale: 0.8 }}
-      className="flex flex-col items-center gap-6"
-    >
-      <div className="relative w-16 h-16 flex items-center justify-center">
-        <motion.div
-          animate={{ rotate: 360 }}
-          transition={{ duration: 1.5, repeat: Infinity, ease: "linear" }}
-          className="w-full h-full border-4 border-[#22c55e]/20 border-t-[#22c55e] rounded-full"
-        />
+const ChartSkeleton = () => {
+  return (
+    <div className="absolute inset-0 bg-[#0a0a0a] flex flex-col items-center justify-center z-50 overflow-hidden">
+      {/* Background Ambience */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none opacity-40">
+        <div className="absolute top-[-20%] left-[-20%] w-[60%] h-[60%] bg-blue-600/20 blur-[150px] animate-pulse" />
+        <div className="absolute bottom-[-20%] right-[-20%] w-[60%] h-[60%] bg-indigo-600/20 blur-[150px] animate-pulse rounded-full" />
       </div>
-    </motion.div>
-  </div>
-);
+
+      <motion.div
+        initial={{ opacity: 0, scale: 0.9 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.9 }}
+        className="flex flex-col items-center gap-6 relative z-10"
+      >
+        <div className="relative w-24 h-24">
+          <motion.div
+            animate={{ rotate: 360 }}
+            transition={{ duration: 3, repeat: Infinity, ease: "linear" }}
+            className="absolute inset-0 border-t-4 border-blue-500 rounded-full"
+          />
+          <div className="absolute inset-0 flex items-center justify-center">
+            <div className="w-16 h-16 rounded-full bg-blue-500/10 animate-pulse" />
+          </div>
+        </div>
+        
+        <div className="text-white font-bold text-lg tracking-[0.2em] uppercase animate-pulse">
+          ONYX LOADING
+        </div>
+      </motion.div>
+    </div>
+  );
+};
 
 /* removed local getTimeFrameInMs */
 
@@ -90,15 +106,16 @@ export const TradingChart: React.FC<TradingChartProps> = ({
   activeIndicators = [],
   currencySymbol = '$',
   exchangeRate = 1,
+  isTradingEnabled = true,
   onLoadMoreHistory,
 }) => {
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const seriesRef = useRef<ISeriesApi<any> | null>(null);
   const indicatorsRef = useRef<Record<string, ISeriesApi<any>>>({});
-  const verticalLineRef = useRef<HTMLDivElement>(null);
   const horizontalLineRef = useRef<HTMLDivElement>(null);
   const priceDotRef = useRef<HTMLDivElement>(null);
+  const lockIconRef = useRef<HTMLDivElement>(null);
   const bubbleGroupRef = useRef<HTMLDivElement>(null);
   const timerBubbleRef = useRef<HTMLDivElement>(null);
   const priceBubbleRef = useRef<HTMLDivElement>(null);
@@ -107,6 +124,168 @@ export const TradingChart: React.FC<TradingChartProps> = ({
   const tradesRef = useRef<Trade[]>(trades);
   const dataRef = useRef<OHLCData[]>(data);
   const latestChartCandleRef = useRef<any>(null);
+  
+  const lastDataLengthRef = useRef(0);
+  const lastDataFirstTimeRef = useRef(0);
+  const lastAssetRef = useRef(assetName);
+  const lastTimeFrameRef = useRef(chartTimeFrame);
+  const lastChartTypeRef = useRef(chartType);
+  const haDataRef = useRef<any[]>([]);
+  const lastIndicatorConfigsRef = useRef<string>(JSON.stringify(activeIndicators));
+  const [isChartReady, setIsChartReady] = useState(false);
+
+  // Safeguard: Fetch more history if data takes too long to load
+  useEffect(() => {
+    if (data.length < 2 && onLoadMoreHistory) {
+      const timer = setTimeout(() => {
+          if (data.length < 2) {
+             onLoadMoreHistory();
+          }
+      }, 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [data, onLoadMoreHistory]);
+
+  const updateChartData = useCallback((series: ISeriesApi<any>, chartData: OHLCData[], type: string) => {
+    // Detect if we should use update() instead of setData()
+    // 1. Same asset as before
+    // 2. We have existing data
+    // 3. New data starts with same timestamp as old data
+    // 4. New data is longer or same length as old data (within reasonable bounds)
+    
+    let isIncremental = lastAssetRef.current === assetName &&
+                        lastDataLengthRef.current > 0 && 
+                        chartData.length >= lastDataLengthRef.current &&
+                        chartData.length > 0 &&
+                        chartData[0].time === lastDataFirstTimeRef.current;
+
+    // Force a full update if not initialized yet, regardless of isIncremental
+    if (!isInitializedRef.current) {
+        isIncremental = false;
+        isInitializedRef.current = true;
+    }
+
+    // Use incremental update if only last few bars change
+    if (isIncremental && chartData.length > lastDataLengthRef.current && chartData.length < lastDataLengthRef.current + 50) {
+      const startIndex = Math.max(0, lastDataLengthRef.current - 1);
+      
+      for (let i = startIndex; i < chartData.length; i++) {
+        const d = chartData[i];
+        const timeVal = Number(d.time);
+        if (isNaN(timeVal)) continue;
+
+        const base = {
+          time: (timeVal / 1000) as Time,
+          open: d.open,
+          high: d.high,
+          low: d.low,
+          close: d.close,
+        };
+        
+        let formatted: any = base;
+        if (type === 'Area') {
+          formatted = { time: base.time, value: base.close };
+        } else if (type === 'Heikin Ashi') {
+          let prevHA = i > 0 ? haDataRef.current[i - 1] : null;
+          const haClose = (base.open + base.high + base.low + base.close) / 4;
+          const haOpen = prevHA ? (prevHA.open + prevHA.close) / 2 : (base.open + base.close) / 2;
+          const haHigh = Math.max(base.high, haOpen, haClose);
+          const haLow = Math.min(base.low, haOpen, haClose);
+          formatted = { time: base.time, open: haOpen, high: haHigh, low: haLow, close: haClose };
+          haDataRef.current[i] = formatted;
+        }
+        
+        // Final guard for series update: try to avoid weird jumps if timeframe changed (though handled by useEffect dep)
+        try {
+          series.update(formatted);
+          if (i === chartData.length - 1) {
+            latestChartCandleRef.current = formatted;
+          }
+        } catch (e) {
+          console.error('Failed to update series:', e);
+        }
+      }
+    } else {
+        // Full update block
+        let prevHA: any = null;
+        haDataRef.current = [];
+        const formattedData = chartData
+          .map((d, i) => {
+            const timeVal = Number(d.time);
+            if (isNaN(timeVal)) return null;
+  
+            const base = {
+              time: (timeVal / 1000) as Time,
+              open: d.open,
+              high: d.high,
+              low: d.low,
+              close: d.close,
+            };
+            
+            if (type === 'Area') return { time: base.time, value: base.close };
+            
+            if (type === 'Heikin Ashi') {
+              const haClose = (base.open + base.high + base.low + base.close) / 4;
+              const haOpen = prevHA ? (prevHA.open + prevHA.close) / 2 : (base.open + base.close) / 2;
+              const haHigh = Math.max(base.high, haOpen, haClose);
+              const haLow = Math.min(base.low, haOpen, haClose);
+              const haCandle = { time: base.time, open: haOpen, high: haHigh, low: haLow, close: haClose };
+              prevHA = haCandle;
+              haDataRef.current[i] = haCandle;
+              return haCandle;
+            }
+            
+            return base;
+          })
+          .filter((item): item is any => item !== null)
+          .filter((item, index, self) => {
+              // Ensure strictly increasing timestamps for setData
+              if (index === 0) return true;
+              return (item.time as number) > (self[index - 1].time as number);
+          });
+  
+        if (formattedData.length > 0) {
+          latestChartCandleRef.current = formattedData[formattedData.length - 1];
+          
+          const timeScale = chartRef.current?.timeScale();
+          const currentRange = timeScale?.getVisibleLogicalRange();
+          const isSameAsset = lastAssetRef.current === assetName;
+          
+          series.setData(formattedData);
+          
+          // Initial load OR asset switch: focus on the end of the chart
+          if (!isSameAsset || lastDataLengthRef.current === 0) {
+            // Force scroll to end to ensure multiple candles are visible
+            timeScale?.scrollToRealTime();
+          }
+          // Restore logical range shifted by the number of prepended items, 
+          // but ONLY if the user was not already at the end of the chart.
+          else if (currentRange && isSameAsset && lastDataLengthRef.current > 0 && chartData.length > lastDataLengthRef.current) {
+            const diff = chartData.length - lastDataLengthRef.current;
+            // Shift the range to the right proportionally to the new candles
+            timeScale?.setVisibleLogicalRange({
+              from: currentRange.from + diff,
+              to: currentRange.to + diff
+            });
+          }
+        } else {
+           // Skip initialization only if NOT isIncremental - 
+           // if we have existing series, clearing it is probably wrong, 
+           // but `setData([])` is safe IF we know we want to clear.
+           // Maybe only clear if isIncremental is False?
+           if (!isIncremental) {
+             series.setData([]);
+             latestChartCandleRef.current = null;
+           }
+        }
+    }
+
+    
+    lastDataLengthRef.current = chartData.length;
+    if (chartData.length > 0) {
+      lastDataFirstTimeRef.current = chartData[0].time;
+    }
+  }, [assetName]);
   const [tradeCoords, setTradeCoords] = useState<Array<{ id: string; y: number; price: number; type: 'UP' | 'DOWN'; amount: number; startTime: number; endTime: number }>>([]);
   const timerStringRef = useRef<string>('');
   const [drawings, setDrawings] = useState<Drawing[]>([]);
@@ -241,17 +420,6 @@ export const TradingChart: React.FC<TradingChartProps> = ({
     const y = series.priceToCoordinate(price);
     
     // Direct DOM updates for zero-lag positioning
-    if (verticalLineRef.current && y !== null) {
-        if (xBase !== null) {
-            verticalLineRef.current.style.left = `${xBase}px`;
-            verticalLineRef.current.style.top = `0px`;
-            verticalLineRef.current.style.height = `${y}px`;
-            verticalLineRef.current.style.display = 'block';
-        } else {
-            verticalLineRef.current.style.display = 'none';
-        }
-    }
-    
     if (horizontalLineRef.current && y !== null) {
         horizontalLineRef.current.style.top = `${y}px`;
         horizontalLineRef.current.style.left = xBase !== null ? `${xBase}px` : '0px';
@@ -267,6 +435,16 @@ export const TradingChart: React.FC<TradingChartProps> = ({
             priceDotRef.current.style.display = 'none';
         }
     }
+
+    if (lockIconRef.current) {
+        if (!isTradingEnabled && xBase !== null && y !== null) {
+            lockIconRef.current.style.left = `${xBase}px`;
+            lockIconRef.current.style.top = `${y - 12}px`; // Nudge it upwards
+            lockIconRef.current.style.display = 'block';
+        } else {
+            lockIconRef.current.style.display = 'none';
+        }
+    }
     
     if (bubbleGroupRef.current && y !== null) {
         bubbleGroupRef.current.style.top = `${y - 12}px`;
@@ -278,7 +456,7 @@ export const TradingChart: React.FC<TradingChartProps> = ({
 
     // No state update here to avoid infinite re-render loops. 
     // We use refs for all high-frequency updates.
-  }, [assetName, chartTimeFrame]);
+  }, [assetName, chartTimeFrame, isTradingEnabled]);
 
   const updateTradeCoordsRef = useRef(updateTradeCoords);
   const updateLatestCoordsRef = useRef(updateLatestCoords);
@@ -489,17 +667,9 @@ export const TradingChart: React.FC<TradingChartProps> = ({
     };
   }, []);
 
-  // 1. Initialize Chart
+  // 1. Initialize Chart Instance (Once on mount)
   useEffect(() => {
     if (!chartContainerRef.current) return;
-
-    // Clear existing chart instance if any
-    if (chartRef.current) {
-      chartRef.current.remove();
-      chartRef.current = null;
-      seriesRef.current = null;
-      indicatorsRef.current = {};
-    }
 
     const getThemeColors = () => {
       const style = getComputedStyle(document.documentElement);
@@ -581,7 +751,7 @@ export const TradingChart: React.FC<TradingChartProps> = ({
         },
       },
       handleScroll: {
-        mouseWheel: true,
+        mouseWheel: false,
         pressedMouseMove: true,
         horzTouchDrag: true,
         vertTouchDrag: false,
@@ -600,106 +770,28 @@ export const TradingChart: React.FC<TradingChartProps> = ({
       },
     });
 
-    const commonOptions = {
-      priceLineVisible: false,
-      lastValueVisible: false,
-      priceFormat: {
-        type: 'price' as const,
-        precision: 5,
-        minMove: 0.00001,
-      },
-    };
-
-    const getSeries = () => {
-      switch (chartType) {
-        case 'Area':
-          return chart.addSeries(AreaSeries, {
-            ...commonOptions,
-            lineColor: '#3b82f6',
-            topColor: 'rgba(59, 130, 246, 0.4)',
-            bottomColor: 'rgba(59, 130, 246, 0.0)',
-            lineWidth: 2,
-          });
-        case 'Bar':
-          return chart.addSeries(BarSeries, {
-            ...commonOptions,
-            upColor: '#0ecb81',
-            downColor: '#f6465d',
-          });
-        case 'Heikin Ashi':
-          return chart.addSeries(CandlestickSeries, {
-            ...commonOptions,
-            upColor: '#0ecb81',
-            downColor: '#f6465d',
-            borderVisible: true,
-            borderUpColor: '#0ecb81',
-            borderDownColor: '#f6465d',
-            wickUpColor: '#0ecb81',
-            wickDownColor: '#f6465d',
-          });
-        case 'Candlestick':
-        default:
-          return chart.addSeries(CandlestickSeries, {
-            ...commonOptions,
-            upColor: '#0ecb81',
-            downColor: '#f6465d',
-            borderVisible: true,
-            borderUpColor: '#0ecb81',
-            borderDownColor: '#f6465d',
-            wickUpColor: '#0ecb81',
-            wickDownColor: '#f6465d',
-          });
-      }
-    };
-
-    const series = getSeries();
-
     chartRef.current = chart;
-    seriesRef.current = series;
-    isInitializedRef.current = true;
-
-    // Set initial data if available
-    if (data.length > 0) {
-        // ... (data formatting logic) ...
-        // I will re-use the logic from the data update useEffect here
-        updateChartData(series, data, chartType);
-    }
-
-    chart.priceScale('right').applyOptions({
-      scaleMargins: {
-        top: 0.1,
-        bottom: 0.3,
-      },
-    });
+    setIsChartReady(true);
 
     const handleResize = () => {
-      if (chartContainerRef.current) {
-        chart.applyOptions({ width: chartContainerRef.current.clientWidth, height: chartContainerRef.current.clientHeight });
-      }
+        if (chartContainerRef.current && chartRef.current) {
+            chartRef.current.applyOptions({
+                width: chartContainerRef.current.clientWidth,
+                height: chartContainerRef.current.clientHeight,
+            });
+        }
     };
-
-    window.addEventListener('resize', handleResize);
-
-    const isLoadingHistoryRef = { current: false };
-
-    let rAF: number | null = null;
-    chart.timeScale().subscribeVisibleLogicalRangeChange((logicalRange) => {
-        if (rAF) cancelAnimationFrame(rAF);
-        rAF = requestAnimationFrame(() => {
-            updateTradeCoordsRef.current();
-            updateLatestCoordsRef.current();
-            updateDrawingCoordsRef.current();
-            
-            if (logicalRange && logicalRange.from < 2000 && onLoadMoreHistory && !isLoadingHistoryRef.current) {
-                isLoadingHistoryRef.current = true;
-                onLoadMoreHistory();
-                setTimeout(() => { isLoadingHistoryRef.current = false; }, 2000);
-            }
-            rAF = null;
-        });
+    
+    // Use ResizeObserver for more reliable updates when containers change size (e.g. sidebars)
+    const resizeObserver = new ResizeObserver(() => {
+        handleResize();
     });
 
-    const observer = new MutationObserver(() => {
+    if (chartContainerRef.current) {
+        resizeObserver.observe(chartContainerRef.current);
+    }
+
+    const themeObserver = new MutationObserver(() => {
         const newColors = getThemeColors();
         chart.applyOptions({
             layout: {
@@ -720,143 +812,166 @@ export const TradingChart: React.FC<TradingChartProps> = ({
         });
     });
 
-    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+    themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
 
     return () => {
-      window.removeEventListener('resize', handleResize);
-      observer.disconnect();
+      resizeObserver.disconnect();
+      themeObserver.disconnect();
       chart.remove();
       chartRef.current = null;
-      seriesRef.current = null;
-      isInitializedRef.current = false;
-      indicatorsRef.current = {};
-      lastDataLengthRef.current = 0;
     };
-  }, [assetName, chartType]); // Recreate chart when asset or type changes
+  }, []); // Only once, never destroy the container
 
-  const lastDataLengthRef = useRef(0);
-  const lastDataFirstTimeRef = useRef(0);
-  const lastAssetRef = useRef(assetName);
-  const lastTimeFrameRef = useRef(chartTimeFrame);
-  const lastChartTypeRef = useRef(chartType);
-  const haDataRef = useRef<any[]>([]);
-  const lastIndicatorConfigsRef = useRef<string>(JSON.stringify(activeIndicators));
+  // 1.5 Handle Series Persistence (When assetName or chartType changes)
+  useEffect(() => {
+    if (!chartRef.current) return;
+    const chart = chartRef.current;
 
-  const updateChartData = useCallback((series: ISeriesApi<any>, chartData: OHLCData[], type: string) => {
-    const isIncremental = lastDataLengthRef.current > 0 && 
-                          chartData.length >= lastDataLengthRef.current &&
-                          chartData.length > 0 &&
-                          chartData[0].time === lastDataFirstTimeRef.current;
+    const isTypeChange = lastChartTypeRef.current !== chartType;
+    const isNewAsset = lastAssetRef.current !== assetName;
 
-    if (isIncremental) {
-      const diff = chartData.length - lastDataLengthRef.current;
-      const startIndex = Math.max(0, chartData.length - diff - 1);
-      
-      for (let i = startIndex; i < chartData.length; i++) {
-        const d = chartData[i];
-        const base = {
-          time: (Number(d.time) / 1000) as Time,
-          open: d.open,
-          high: d.high,
-          low: d.low,
-          close: d.close,
-        };
-        
-        let formatted: any = base;
-        if (type === 'Area') {
-          formatted = { time: base.time, value: base.close };
-        } else if (type === 'Heikin Ashi') {
-          let prevHA = i > 0 ? haDataRef.current[i - 1] : null;
-          const haClose = (base.open + base.high + base.low + base.close) / 4;
-          const haOpen = prevHA ? (prevHA.open + prevHA.close) / 2 : (base.open + base.close) / 2;
-          const haHigh = Math.max(base.high, haOpen, haClose);
-          const haLow = Math.min(base.low, haOpen, haClose);
-          formatted = { time: base.time, open: haOpen, high: haHigh, low: haLow, close: haClose };
-          haDataRef.current[i] = formatted;
+    // Only recreate the series if necessary (type changed)
+    if (isTypeChange || !seriesRef.current) {
+        if (seriesRef.current) {
+            chart.removeSeries(seriesRef.current);
+            seriesRef.current = null;
         }
-        
-        series.update(formatted);
-        if (i === chartData.length - 1) {
-          latestChartCandleRef.current = formatted;
-        }
-      }
-    } else {
-      let prevHA: any = null;
-      haDataRef.current = [];
-      const formattedData = chartData.map((d, i) => {
-        const base = {
-          time: (Number(d.time) / 1000) as Time,
-          open: d.open,
-          high: d.high,
-          low: d.low,
-          close: d.close,
-        };
-        
-        if (type === 'Area') return { time: base.time, value: base.close };
-        
-        if (type === 'Heikin Ashi') {
-          const haClose = (base.open + base.high + base.low + base.close) / 4;
-          const haOpen = prevHA ? (prevHA.open + prevHA.close) / 2 : (base.open + base.close) / 2;
-          const haHigh = Math.max(base.high, haOpen, haClose);
-          const haLow = Math.min(base.low, haOpen, haClose);
-          const haCandle = { time: base.time, open: haOpen, high: haHigh, low: haLow, close: haClose };
-          prevHA = haCandle;
-          haDataRef.current[i] = haCandle;
-          return haCandle;
-        }
-        
-        return base;
-      });
-      if (formattedData.length > 0) {
-        latestChartCandleRef.current = formattedData[formattedData.length - 1];
-        
-        console.log('DEBUG: TradingChart set data', {
-            firstTime: formattedData[0].time,
-            lastTime: formattedData[formattedData.length - 1].time,
-            dataLength: formattedData.length
-        });
-        
-        // Save current logical range before setData
-        const timeScale = chartRef.current?.timeScale();
-        const currentRange = timeScale?.getVisibleLogicalRange();
-        
-        series.setData(formattedData);
-        
-        // Restore logical range shifted by the number of prepended items
-        if (currentRange && lastDataLengthRef.current > 0 && chartData.length > lastDataLengthRef.current) {
-          const diff = chartData.length - lastDataLengthRef.current;
-          timeScale?.setVisibleLogicalRange({
-            from: currentRange.from + diff,
-            to: currentRange.to + diff
-          });
-        }
-      }
+        haDataRef.current = [];
     }
     
-    lastDataLengthRef.current = chartData.length;
-    if (chartData.length > 0) {
-      lastDataFirstTimeRef.current = chartData[0].time;
+    // If it's a new asset, we don't necessarily need to remove the series, 
+    // we can just call setData([]) on it if we want to clear it immediately, 
+    // but better to Wait for new data to avoid flicker.
+    if (isNewAsset) {
+        isInitializedRef.current = false;
+        lastDataLengthRef.current = 0;
     }
-  }, []);
+
+    const commonOptions = {
+        priceLineVisible: false,
+        lastValueVisible: false,
+        priceFormat: {
+          type: 'price' as const,
+          precision: 5,
+          minMove: 0.00001,
+        },
+      };
+  
+      const getSeries = () => {
+        switch (chartType) {
+          case 'Area':
+            return chart.addSeries(AreaSeries, {
+              ...commonOptions,
+              lineColor: '#3b82f6',
+              topColor: 'rgba(59, 130, 246, 0.4)',
+              bottomColor: 'rgba(59, 130, 246, 0.0)',
+              lineWidth: 2,
+            });
+          case 'Bar':
+            return chart.addSeries(BarSeries, {
+              ...commonOptions,
+              upColor: '#0ecb81',
+              downColor: '#f6465d',
+              thinBars: false,
+            });
+          case 'Heikin Ashi':
+            return chart.addSeries(CandlestickSeries, {
+              ...commonOptions,
+              upColor: '#0ecb81',
+              downColor: '#f6465d',
+              borderVisible: true,
+              wickVisible: true,
+              borderUpColor: '#0ecb81',
+              borderDownColor: '#f6465d',
+              wickUpColor: '#0ecb81',
+              wickDownColor: '#f6465d',
+            });
+          case 'Candlestick':
+          default:
+            return chart.addSeries(CandlestickSeries, {
+              ...commonOptions,
+              upColor: '#0ecb81',
+              downColor: '#f6465d',
+              borderVisible: true,
+              wickVisible: true,
+              borderUpColor: '#0ecb81',
+              borderDownColor: '#f6465d',
+              wickUpColor: '#0ecb81',
+              wickDownColor: '#f6465d',
+            });
+        }
+      };
+  
+      const series = getSeries();
+      seriesRef.current = series;
+      isInitializedRef.current = true;
+
+      // Adjust margins
+      chart.priceScale('right').applyOptions({
+        scaleMargins: {
+          top: 0.1,
+          bottom: 0.3,
+        },
+      });
+
+      // History loading handler
+      const isLoadingHistoryLocal = { current: false };
+      let rAF: number | null = null;
+      
+      const handleVisibleRangeChange = (logicalRange: LogicalRange | null) => {
+          if (rAF) cancelAnimationFrame(rAF);
+          rAF = requestAnimationFrame(() => {
+              updateTradeCoordsRef.current();
+              updateLatestCoordsRef.current();
+              updateDrawingCoordsRef.current();
+              
+              if (logicalRange && logicalRange.from < 2000 && onLoadMoreHistory && !isLoadingHistoryLocal.current) {
+                  isLoadingHistoryLocal.current = true;
+                  onLoadMoreHistory();
+                  setTimeout(() => { isLoadingHistoryLocal.current = false; }, 2000);
+              }
+              rAF = null;
+          });
+      };
+
+      chart.timeScale().subscribeVisibleLogicalRangeChange(handleVisibleRangeChange);
+
+      // Initial data paint if already available
+      if (dataRef.current.length > 0) {
+          updateChartData(series, dataRef.current, chartType);
+          chart.timeScale().scrollToRealTime();
+      }
+
+      return () => {
+          chart.timeScale().unsubscribeVisibleLogicalRangeChange(handleVisibleRangeChange);
+          if (seriesRef.current) {
+              try {
+                  chart.removeSeries(seriesRef.current);
+              } catch (e) {}
+              seriesRef.current = null;
+          }
+      };
+  }, [assetName, chartType]);
 
   // Update data when it changes
   useEffect(() => {
-    if (!seriesRef.current || data.length === 0) return;
+    if (!seriesRef.current || !isTradingEnabled) return;
     
     // We want to force center the chart anytime the asset, timeframe, or chart type changes.
     const isMajorChange = 
-      lastAssetRef.current !== assetName || 
+      lastAssetRef.current !== assetName ||
       lastTimeFrameRef.current !== chartTimeFrame ||
       lastChartTypeRef.current !== chartType;
 
     updateChartData(seriesRef.current, data, chartType);
     
-    if (isMajorChange) {
+    if (isMajorChange || (lastDataLengthRef.current === 0 && data.length > 0)) {
       const timeScale = chartRef.current?.timeScale();
       if (timeScale && data.length > 0) {
-        // Move to the latest bar, leaving some padding on the right for the current candle to draw.
-        // This prevents the chart from being weirdly constrained when history length varies.
-        timeScale.scrollToRealTime();
+        // Force scroll to real-time on major changes or first data population
+        setTimeout(() => {
+          timeScale.scrollToRealTime();
+        }, 100);
       }
       lastAssetRef.current = assetName;
       lastTimeFrameRef.current = chartTimeFrame;
@@ -865,7 +980,7 @@ export const TradingChart: React.FC<TradingChartProps> = ({
     
     // Only update latest tick UI, not all trades/drawings (save for range changes)
     updateLatestCoordsRef.current();
-  }, [data, chartType, assetName, chartTimeFrame, updateChartData]);
+  }, [data, chartType, assetName, chartTimeFrame, updateChartData, isTradingEnabled]);
 
   // Keep refs updated and trigger coordinate updates on data change
   useEffect(() => {
@@ -930,7 +1045,8 @@ export const TradingChart: React.FC<TradingChartProps> = ({
     const currentConfigsStr = JSON.stringify(activeIndicators);
     const needsRecreate = currentIndicatorKeys.length !== expectedKeys.length || 
                          !expectedKeys.every(key => currentIndicatorKeys.includes(key)) ||
-                         lastIndicatorConfigsRef.current !== currentConfigsStr;
+                         lastIndicatorConfigsRef.current !== currentConfigsStr ||
+                         (activeIndicators.length > 0 && Object.keys(indicatorsRef.current).length === 0);
 
     if (needsRecreate) {
         lastIndicatorConfigsRef.current = currentConfigsStr;
@@ -1651,12 +1767,16 @@ export const TradingChart: React.FC<TradingChartProps> = ({
         console.error(`Error updating indicator ${indicator}:`, e);
       }
     });
-  }, [data, activeIndicators, chartType]);
+  }, [data, activeIndicators, chartType, isChartReady]);
 
   const tfMs = getTimeFrameInMs(chartTimeFrame);
 
   // Smooth local timer updates that bypass React's render cycle
   useEffect(() => {
+    if (!isTradingEnabled) {
+      if (timerBubbleRef.current) timerBubbleRef.current.innerText = '00:00';
+      return;
+    }
     let animationFrameId: number;
     const updateTimer = () => {
       const now = Date.now() + serverTimeOffset;
@@ -1684,21 +1804,22 @@ export const TradingChart: React.FC<TradingChartProps> = ({
     };
     updateTimer();
     return () => cancelAnimationFrame(animationFrameId);
-  }, [tfMs, serverTimeOffset]);
+  }, [tfMs, serverTimeOffset, isTradingEnabled]);
 
   const isStalled = !isConnected;
   
   // Trigger DOM updates once React finishes rendering the wrappers
   useEffect(() => {
+     if (!isTradingEnabled) return;
      const timer = setTimeout(() => {
         updateTradeCoordsRef.current();
         updateDrawingCoordsRef.current();
      }, 100);
      return () => clearTimeout(timer);
-  }, [tradeCoords.length, drawingCoords.length]);
+  }, [tradeCoords.length, drawingCoords.length, isTradingEnabled]);
 
   return (
-    <div className="w-full h-full relative overflow-hidden bg-[var(--bg-primary)] flex-1 min-h-[300px] group">
+    <div className="w-full h-full relative overflow-hidden bg-[var(--bg-primary)] flex-1 min-h-[300px] group" style={{ touchAction: 'none' }}>
         {/* Gimbal UI Overlays - High Precision Glass & Depth */}
         <div className="absolute inset-0 pointer-events-none z-[45] bg-[radial-gradient(circle_at_center,transparent_40%,rgba(0,0,0,0.15)_100%)]" />
         <div className="absolute inset-0 pointer-events-none z-[45] shadow-[inset_0_0_80px_rgba(0,0,0,0.25)]" />
@@ -1725,7 +1846,7 @@ export const TradingChart: React.FC<TradingChartProps> = ({
         </style>
 
         <AnimatePresence mode="wait">
-            {(isLoading || data.length === 0 || isStalled) && (
+            {((isLoading && data.length === 0) || (data.length === 0 && !isStalled)) && (
                 <motion.div 
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
@@ -1740,7 +1861,7 @@ export const TradingChart: React.FC<TradingChartProps> = ({
         <motion.div 
             initial={{ opacity: 0 }}
             animate={{ 
-                opacity: (isLoading || data.length === 0 || isStalled) ? 0 : 1,
+                opacity: (isLoading || data.length < 50 || isStalled) ? 0 : 1,
             }}
             transition={{ duration: 0.3 }}
             className="w-full h-full absolute inset-0"
@@ -1971,18 +2092,21 @@ export const TradingChart: React.FC<TradingChartProps> = ({
                 {/* Horizontal Line to Price Scale - Thin and Professional (Candle to Right) */}
                 <div 
                     ref={horizontalLineRef}
-                    className="absolute right-0 h-[1.5px] bg-white pointer-events-none z-20 hidden"
+                    className="absolute right-0 h-[1px] border-t border-dashed border-white/40 pointer-events-none z-20 hidden"
                     style={{ 
-                        boxShadow: '0 0 8px rgba(255,255,255,0.9)',
-                        opacity: 0.8
+                        boxShadow: '0 0 4px rgba(255,255,255,0.2)',
                     }}
                 />
                 
-                {/* Vertical Line at current candle - Dotted line style */}
                 <div 
-                    ref={verticalLineRef}
-                    className="absolute top-0 w-[1px] border-l-2 border-white/60 border-dashed pointer-events-none z-20 hidden"
-                />
+                    ref={lockIconRef}
+                    className="absolute z-[60] hidden pointer-events-none"
+                    style={{ transform: 'translate(-50%, -50%)' }}
+                >
+                    <div className="bg-black/60 backdrop-blur-sm p-1 rounded-full border border-white/20">
+                        <Lock size={12} className="text-white" />
+                    </div>
+                </div>
                 
                 {/* Current Price Dot on Candle - Precise with Pulse */}
                 <div className="absolute z-40 bg-white rounded-full -translate-x-1/2 -translate-y-1/2 shadow-[0_0_15px_rgba(255,255,255,1)] pointer-events-none hidden"
@@ -2108,6 +2232,44 @@ export const TradingChart: React.FC<TradingChartProps> = ({
                 );
             })}
         </div>
+
+        {/* Global Market Closed Indicator */}
+        {!isTradingEnabled && (
+            <div className="absolute inset-0 z-[100] bg-black/40 backdrop-blur-[3px] flex items-center justify-center pointer-events-none overflow-hidden">
+                <motion.div 
+                    initial={{ scale: 0.5, opacity: 0 }}
+                    animate={{ 
+                        scale: [1, 1.05, 1],
+                        opacity: 1,
+                        rotate: [0, -3, 3, -3, 0] 
+                    }}
+                    transition={{ 
+                        rotate: { duration: 5, repeat: Infinity, ease: "easeInOut" },
+                        scale: { duration: 3, repeat: Infinity, ease: "easeInOut" },
+                        opacity: { duration: 0.8 }
+                    }}
+                    className="flex flex-col items-center gap-6"
+                >
+                    <div className="relative">
+                        <div className="w-24 h-24 bg-white/5 rounded-[32px] border border-white/10 backdrop-blur-xl flex items-center justify-center shadow-[0_0_80px_rgba(255,255,255,0.15)] ring-1 ring-white/20">
+                            <Lock size={48} className="text-white drop-shadow-[0_0_15px_rgba(255,255,255,0.6)]" />
+                        </div>
+                        {/* Glow effect */}
+                        <div className="absolute inset-0 bg-white/20 blur-[40px] rounded-full -z-10 animate-pulse" />
+                    </div>
+                    <div className="flex flex-col items-center gap-1">
+                        <motion.span 
+                            animate={{ opacity: [0.3, 1, 0.3] }}
+                            transition={{ duration: 3, repeat: Infinity }}
+                            className="text-white font-black text-[13px] uppercase tracking-[0.4em] drop-shadow-lg"
+                        >
+                            Market Offline
+                        </motion.span>
+                        <span className="text-white/40 text-[9px] uppercase tracking-widest font-bold">Trading Temporarily Disabled</span>
+                    </div>
+                </motion.div>
+            </div>
+        )}
         </motion.div>
     </div>
   );
