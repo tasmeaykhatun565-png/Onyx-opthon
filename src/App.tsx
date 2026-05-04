@@ -2801,10 +2801,10 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
 
         {/* Hero Section */}
         <section className="relative pt-44 pb-32 px-6 md:px-12 min-h-screen flex items-center overflow-hidden">
-          {/* Background Gradient Layer */}
+          {/* Enhanced Background Layer */}
           <div className="absolute inset-0 -z-10 bg-[#061626]">
-             <div className="absolute top-0 right-0 w-full h-full bg-gradient-to-bl from-blue-600/10 via-transparent to-transparent opacity-50" />
-             <div className="absolute top-1/4 right-[5%] w-[600px] h-[600px] bg-blue-500/5 blur-[150px] rounded-full" />
+             <div className="absolute inset-0 bg-gradient-to-tr from-[#061626] via-[#061626]/80 to-transparent" />
+             <div className="absolute inset-0 bg-gradient-to-b from-transparent via-[#061626]/20 to-[#061626]" />
           </div>
           
           <div className="max-w-7xl mx-auto w-full grid lg:grid-cols-2 gap-16 items-center">
@@ -2813,22 +2813,26 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
               animate={{ opacity: 1, x: 0 }}
               transition={{ duration: 0.8 }}
             >
-              <h1 className="text-4xl md:text-6xl lg:text-7xl font-bold mb-8 leading-[1.05] tracking-tight uppercase">
+              <h1 className="text-4xl md:text-6xl lg:text-7xl font-bold mb-8 leading-[1.05] tracking-tight uppercase drop-shadow-xl">
                 THE RIGHT PLACE<br />
                 FOR ONLINE TRADING<br />
-                <span className="text-blue-500 font-black">ON FINANCIAL MARKETS</span>
+                <span className="text-blue-500 font-black relative">
+                  ON FINANCIAL MARKETS
+                  <div className="absolute -bottom-2 left-0 w-1/2 h-1 bg-gradient-to-r from-blue-500 to-transparent" />
+                </span>
               </h1>
               
               <div className="space-y-4 mb-12">
-                <p className="text-xl md:text-2xl font-bold">The most user-friendly interface</p>
-                <p className="text-white/60 text-lg">Get access to trade over 100 global trading assets</p>
+                <p className="text-xl md:text-2xl font-bold text-gray-200">The most user-friendly interface</p>
+                <p className="text-gray-400 text-lg">Get access to trade over 100 global trading assets</p>
               </div>
               
               <div className="flex flex-col sm:flex-row gap-6 items-center">
                 <button 
                   onClick={() => setView('TRADING')}
-                  className="w-full sm:w-auto px-12 py-5 bg-blue-600 hover:bg-blue-500 text-white font-black rounded-md transition-all shadow-[0_10px_40px_rgba(37,99,235,0.4)] active:scale-95 text-xl uppercase tracking-wider"
+                  className="w-full sm:w-auto px-12 py-5 bg-blue-600 hover:bg-blue-500 text-white font-black rounded-md transition-all shadow-[0_10px_40px_rgba(37,99,235,0.4)] active:scale-95 text-xl uppercase tracking-wider relative overflow-hidden group"
                 >
+                  <div className="absolute inset-0 bg-white/20 translate-y-[-100%] group-hover:translate-y-[100%] transition-transform duration-500" />
                   REGISTRATION
                 </button>
                 <div className="flex items-center gap-2 text-white/50 font-bold uppercase text-[11px] tracking-widest">
@@ -2845,28 +2849,14 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
               transition={{ delay: 0.2, duration: 1 }}
               className="relative hidden lg:block"
             >
-              <div className="relative z-10 rounded-2xl border border-white/5 bg-[#0d2238] shadow-[0_40px_100px_rgba(0,0,0,0.6)] overflow-hidden p-3">
-                 <div className="aspect-[16/10] bg-[#061626] rounded-xl relative group overflow-hidden">
+              <div className="relative z-10 w-full rounded-2xl border border-white/5 bg-[#0d2238]/60 backdrop-blur-md shadow-[0_40px_100px_rgba(0,0,0,0.6)] overflow-hidden p-3 min-h-[400px]">
+                 <div className="w-full h-[400px] bg-[#061626] rounded-xl relative group overflow-hidden shadow-inner">
                     <img 
-                      src="https://images.unsplash.com/photo-1611974714151-fed11b8bbf40?q=80&w=2070&auto=format&fit=crop" 
-                      alt="Trading Terminal"
-                      className="w-full h-full object-cover opacity-50 group-hover:scale-105 transition-transform duration-1000"
+                      src="https://i.postimg.cc/RVbqGwtM/ca453c05-939e-4394-8cb3-65c66e6f354e.jpg" 
+                      alt="Trading Terminal Desktop Mockup" 
+                      className="w-full h-full object-cover opacity-90 group-hover:scale-105 group-hover:opacity-100 transition-all duration-1000"
                     />
-                    <div className="absolute inset-0 bg-gradient-to-t from-[#061626] to-transparent opacity-80" />
-                    
-                    {/* Mock Chart Elements */}
-                    <div className="absolute bottom-10 left-10 right-10 h-1/2 flex items-end gap-1">
-                       {[30, 50, 40, 70, 55, 80, 60, 45, 90, 75].map((h, i) => (
-                         <div key={i} className="flex-1 bg-blue-500/40 rounded-t-sm" style={{ height: `${h}%` }} />
-                       ))}
-                    </div>
-
-                    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
-                       <div className="w-16 h-16 rounded-full bg-blue-600/20 flex items-center justify-center animate-ping" />
-                       <div className="absolute top-0 left-0 w-16 h-16 rounded-full bg-blue-600 flex items-center justify-center">
-                          <Zap size={32} className="text-white fill-current" />
-                       </div>
-                    </div>
+                    <div className="absolute inset-0 bg-gradient-to-t from-[#061626]/80 to-transparent opacity-40 pointer-events-none" />
                  </div>
               </div>
               <div className="absolute -bottom-10 -left-10 w-40 h-40 bg-blue-500/10 blur-[80px] rounded-full" />
@@ -3080,8 +3070,8 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
               <div className="flex-1 order-2 lg:order-1">
                  <div className="relative inline-block">
                     <img 
-                      src="https://images.unsplash.com/photo-1512941937669-90a1b58e7e9c?q=80&w=2070&auto=format&fit=crop" 
-                      alt="Mobile App" 
+                      src="https://i.postimg.cc/QM7BFVV4/Gemini-Generated-Image-3ztx3l3ztx3l3ztx.png" 
+                      alt="Mobile App Mockup" 
                       className="w-[300px] md:w-[450px] mx-auto rounded-[3rem] shadow-2xl"
                     />
                     <div className="absolute -bottom-10 -right-10 w-40 h-40 bg-blue-600 rounded-full flex items-center justify-center text-white flex-col animate-bounce">

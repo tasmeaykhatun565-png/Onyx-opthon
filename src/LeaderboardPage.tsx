@@ -44,6 +44,9 @@ export function LeaderboardPage({ onBack, currencySymbol = '$', currentUser, soc
       });
   }, []);
 
+  const currentUserName = currentUser?.name;
+  const currentUserProfit = currentUser?.profit;
+
   useEffect(() => {
     if (!socket) return;
     
@@ -54,11 +57,11 @@ export function LeaderboardPage({ onBack, currencySymbol = '$', currentUser, soc
        console.log('Received leaderboard update', data);
        let updatedLeaderboard = [...data];
        
-       if (currentUser?.name && currentUser?.profit !== undefined) {
-          const userProfit = currentUser.profit; 
+       if (currentUserName && currentUserProfit !== undefined) {
+          const userProfit = currentUserProfit; 
           const userEntry: LeaderboardEntry = {
             id: 'current-user',
-            name: currentUser.name,
+            name: currentUserName,
             profit: userProfit,
             countryCode: userCountryCode,
             isCurrentUser: true,
@@ -78,7 +81,7 @@ export function LeaderboardPage({ onBack, currencySymbol = '$', currentUser, soc
 
        // Make sure the current user is visible even if they are not in the Top 20
        const userIndex = updatedLeaderboard.findIndex(e => e.isCurrentUser);
-       if (userIndex >= 20 && currentUser?.name) {
+       if (userIndex >= 20 && currentUserName) {
            const userEntry = updatedLeaderboard[userIndex];
            (userEntry as any).actualRank = userIndex + 1; // Preserve their real rank
            finalLeaderboard.push(userEntry);
@@ -93,7 +96,7 @@ export function LeaderboardPage({ onBack, currencySymbol = '$', currentUser, soc
     return () => {
         socket.off('leaderboard-update', handleLeaderboardUpdate);
     };
-  }, [socket, currentUser, userCountryCode]);
+  }, [socket, currentUserName, currentUserProfit, userCountryCode]);
 
 
   useEffect(() => {

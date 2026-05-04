@@ -1957,6 +1957,7 @@ async function startServer() {
           } else {
              needsUp = Math.random() > 0.5;
           }
+          hasConflict = true;
        } else if (exposure.upAmount > 0) {
           // Only UP trades
           const trade = exposure.upTrades[0];
@@ -1976,6 +1977,7 @@ async function startServer() {
        // Find the most extreme entry price we need to beat and the minimum time remaining
        let basePrice = asset.price;
        let minTimeRemaining = Infinity;
+       let maxDuration = 60000;
        const allTrades = [...exposure.upTrades, ...exposure.downTrades];
        if (allTrades.length > 0) {
            // Use the entry price of the first trade in the batch as the base
@@ -1983,9 +1985,12 @@ async function startServer() {
            basePrice = allTrades[0].entryPrice;
            if (isNaN(basePrice)) basePrice = asset.price;
            
+           maxDuration = 0;
            allTrades.forEach(t => {
               const tr = t.endTime - now;
+              const dur = t.endTime - t.startTime;
               if (tr > 0 && tr < minTimeRemaining) minTimeRemaining = tr;
+              if (dur > maxDuration) maxDuration = dur;
            });
        }
 
@@ -1996,7 +2001,7 @@ async function startServer() {
           target: targetPrice,
           trend: needsUp ? 1 : -1,
           timeRemaining: minTimeRemaining === Infinity ? 10000 : minTimeRemaining,
-          duration: 60000
+          duration: maxDuration || 60000
        };
        
        // Update forcedResults of trades to match the new reality so resolveTrade doesn't jump the price back
@@ -2221,8 +2226,7 @@ async function startServer() {
         forcedResult = 'WIN';
       } else if (globalTradeSettings.mode === 'PERCENTAGE') {
         const assetKey = trade.assetShortName || trade.asset;
-        const asset = assets[assetKey as keyof typeof assets];
-        const winPercentage = asset?.winPercentage !== undefined ? asset.winPercentage : globalTradeSettings.winPercentage;
+        const winPercentage = globalTradeSettings.winPercentage;
         
         // Check if there are active trades for this asset in the same direction
         // If so, inherit their forcedResult to ensure consistent outcome for multiple entries
