@@ -5,7 +5,7 @@ import {
   Anchor, Play, Pause, Target, HelpCircle, X, Gift, Bell, CreditCard, 
   Check, Trash2, ShieldCheck, ShieldAlert, User, ArrowUp, ArrowDown, 
   Percent, Info, Send, Phone, Mail, Video, Trophy, FileText, Plus, BarChart2, Wallet, RefreshCw, CheckCircle2, XCircle, Search,
-  ArrowUpCircle, ArrowDownCircle, MessageSquare, Edit, Smartphone, Globe, Shield, DollarSign, Layout, Bitcoin, ExternalLink, Megaphone
+  ArrowUpCircle, ArrowDownCircle, MessageSquare, Edit, Smartphone, Globe, Shield, DollarSign, Layout, Bitcoin, ExternalLink, Megaphone, Eye, EyeOff
 } from 'lucide-react';
 import { cn, safeStringify } from './utils';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -52,6 +52,11 @@ const AssetControl: React.FC<{ symbol: string, asset: any, socket: Socket | null
 
   const handleToggleFreeze = () => {
     if (socket) socket.emit('admin-toggle-freeze', { asset: symbol, isFrozen: !asset.isFrozen });
+  };
+
+  const handleToggleVisibility = () => {
+    const isCurrentlyVisible = asset.isVisible !== false; // Default to true
+    if (socket) socket.emit('admin-toggle-visibility', { asset: symbol, isVisible: !isCurrentlyVisible });
   };
 
   const handlePumpDump = (multiplier: number) => {
@@ -141,6 +146,10 @@ const AssetControl: React.FC<{ symbol: string, asset: any, socket: Socket | null
           <button onClick={handleToggleFreeze} className={`w-full py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-1.5 transition active:scale-95 ${asset.isFrozen ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20' : 'bg-blue-500/10 text-blue-500 border border-blue-500/20 hover:bg-blue-500/20'}`}>
             {asset.isFrozen ? <Play size={14} /> : <Pause size={14} />} 
             {asset.isFrozen ? 'Enable Market' : 'Disable Market'}
+          </button>
+          <button onClick={handleToggleVisibility} className={`w-full py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-1.5 transition active:scale-95 ${asset.isVisible === false ? 'bg-orange-600 text-white shadow-lg shadow-orange-600/20' : 'bg-orange-500/10 text-orange-500 border border-orange-500/20 hover:bg-orange-500/20'}`}>
+            {asset.isVisible === false ? <Eye size={14} /> : <EyeOff size={14} />} 
+            {asset.isVisible === false ? 'Show to Users' : 'Hide from Users'}
           </button>
         </div>
 
@@ -2492,7 +2501,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                               onChange={(e) => setDepositSettings(prev => ({ ...prev, exchangeRate: parseFloat(e.target.value) }))}
                               className="w-full bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-blue-500 transition pl-10"
                             />
-                            <div className="absolute left-4 top-1/2 -translate-y-1/2 text-[var(--text-secondary)]">৳</div>
+                            <div className="absolute left-4 top-1/2 -translate-y-1/2 text-[var(--text-secondary)] text-[10px] font-bold">BDT </div>
                           </div>
                         </div>
                       </div>

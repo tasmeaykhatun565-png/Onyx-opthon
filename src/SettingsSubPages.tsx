@@ -44,7 +44,7 @@ export const PersonalInformationSettings: React.FC<SubPageProps & {
 
   const CURRENCIES = [
     { code: 'USD', symbol: '$', name: 'US Dollar', flag: '🇺🇸' },
-    { code: 'BDT', symbol: '৳', name: 'Bangladeshi Taka', flag: '🇧🇩' },
+    { code: 'BDT', symbol: 'BDT ', name: 'Bangladeshi Taka', flag: '🇧🇩' },
     { code: 'EUR', symbol: '€', name: 'Euro', flag: '🇪🇺' },
     { code: 'INR', symbol: '₹', name: 'Indian Rupee', flag: '🇮🇳' },
     { code: 'PKR', symbol: '₨', name: 'Pakistani Rupee', flag: '🇵🇰' },
@@ -1566,7 +1566,7 @@ export const TradingPlatformSettings: React.FC<SubPageProps> = ({ onBack }) => {
 
 const CURRENCIES = [
   { code: 'USD', symbol: '$', name: 'US Dollar', flag: '🇺🇸' },
-  { code: 'BDT', symbol: '৳', name: 'Bangladeshi Taka', flag: '🇧🇩' },
+  { code: 'BDT', symbol: 'BDT ', name: 'Bangladeshi Taka', flag: '🇧🇩' },
   { code: 'EUR', symbol: '€', name: 'Euro', flag: '🇪🇺' },
   { code: 'INR', symbol: '₹', name: 'Indian Rupee', flag: '🇮🇳' },
   { code: 'PKR', symbol: '₨', name: 'Pakistani Rupee', flag: '🇵🇰' },

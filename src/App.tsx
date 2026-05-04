@@ -12,7 +12,7 @@ import {
   Shuffle, Target, ChevronsUp, GraduationCap, MessageCircle, BookOpen,
   Trophy, ShoppingBag, ArrowUpDown, Mail, UserCheck, Key, Shield, ShieldCheck, Zap, Check, Grid, Image, Activity, LogOut,
   Search, Info, AlignLeft, Star, MoreVertical, Lock, Video, FileText, Phone, Youtube, Globe, Send, Bitcoin, Gem, TrendingUp, RefreshCw, Users, Newspaper,
-  Coins, Droplets, Flame, Pencil, PencilLine, CandlestickChart, Radio, Compass, Headphones,
+  Coins, Droplets, Flame, Pencil, PencilLine, CandlestickChart, Radio, Compass, Headphones, ArrowRight, Layers, Twitter, Facebook, Instagram, Download, Smartphone, Apple, PlayCircle
 } from 'lucide-react';
 import { playSound } from './sounds';
 import { cn, deepEqual, safeStringify } from './utils';
@@ -37,7 +37,6 @@ import { auth, db, handleFirestoreError, OperationType } from './firebase';
 import { onAuthStateChanged, signOut, User as FirebaseUser } from 'firebase/auth';
 import { doc, onSnapshot, arrayUnion, setDoc, getDoc, collection, query, orderBy, limit, getDocs, getDocFromServer } from 'firebase/firestore';
 import InfoPage from './InfoPage';
-import HomePage from './HomePage';
 
 import { ReferralPage } from './ReferralPage';
 import { LeaderboardPage } from './LeaderboardPage';
@@ -83,6 +82,9 @@ type Trade = {
   status: 'ACTIVE' | 'WIN' | 'LOSS';
   accountType: string;
   payout: number;
+  currency?: string;
+  currencySymbol?: string;
+  exchangeRate?: number;
   profit?: number;
   asset: string;
   assetShortName: string;
@@ -147,6 +149,18 @@ const ASSETS: Asset[] = [
   { id: 'gbp_chf_otc', name: 'GBP/CHF OTC', shortName: 'GBP/CHF OTC', payout: 90, category: 'Forex', flag: '🇬🇧🇨🇭', basePrice: 1.1350, volatility: 0.00008, isOTC: true },
   { id: 'aud_chf_otc', name: 'AUD/CHF OTC', shortName: 'AUD/CHF OTC', payout: 88, category: 'Forex', flag: '🇦🇺🇨🇭', basePrice: 0.5950, volatility: 0.00008, isOTC: true },
   { id: 'cad_chf_otc', name: 'CAD/CHF OTC', shortName: 'CAD/CHF OTC', payout: 88, category: 'Forex', flag: '🇨🇦🇨🇭', basePrice: 0.6650, volatility: 0.00008, isOTC: true },
+  { id: 'cad_jpy_otc', name: 'CAD/JPY OTC', shortName: 'CAD/JPY OTC', payout: 92, category: 'Forex', flag: '🇨🇦🇯🇵', basePrice: 112.50, volatility: 0.012, isOTC: true },
+  { id: 'chf_jpy_otc', name: 'CHF/JPY OTC', shortName: 'CHF/JPY OTC', payout: 92, category: 'Forex', flag: '🇨🇭🇯🇵', basePrice: 171.50, volatility: 0.012, isOTC: true },
+  { id: 'gbp_aud_otc', name: 'GBP/AUD OTC', shortName: 'GBP/AUD OTC', payout: 92, category: 'Forex', flag: '🇬🇧🇦🇺', basePrice: 1.8950, volatility: 0.00015, isOTC: true },
+  { id: 'gbp_nzd_otc', name: 'GBP/NZD OTC', shortName: 'GBP/NZD OTC', payout: 92, category: 'Forex', flag: '🇬🇧🇳🇿', basePrice: 2.0750, volatility: 0.00015, isOTC: true },
+  { id: 'eur_nzd_otc', name: 'EUR/NZD OTC', shortName: 'EUR/NZD OTC', payout: 92, category: 'Forex', flag: '🇪🇺🇳🇿', basePrice: 1.7850, volatility: 0.00015, isOTC: true },
+  { id: 'aud_nzd_otc', name: 'AUD/NZD OTC', shortName: 'AUD/NZD OTC', payout: 92, category: 'Forex', flag: '🇦🇺🇳🇿', basePrice: 1.0950, volatility: 0.0001, isOTC: true },
+  { id: 'usd_try_otc', name: 'USD/TRY OTC', shortName: 'USD/TRY OTC', payout: 90, category: 'Forex', flag: '🇺🇸🇹🇷', basePrice: 32.50, volatility: 0.005, isOTC: true },
+  { id: 'usd_brl_otc', name: 'USD/BRL OTC', shortName: 'USD/BRL OTC', payout: 90, category: 'Forex', flag: '🇺🇸🇧🇷', basePrice: 5.15, volatility: 0.0008, isOTC: true },
+  { id: 'latam_index_otc', name: 'LATAM INDEX OTC', shortName: 'LATAM INDEX', payout: 93, category: 'Stocks', flag: '🌎', basePrice: 3200, volatility: 2.5, isOTC: true },
+  { id: 'asia_index_otc', name: 'ASIA INDEX OTC', shortName: 'ASIA INDEX', payout: 93, category: 'Stocks', flag: '🌏', basePrice: 1800, volatility: 1.5, isOTC: true },
+  { id: 'europe_index_otc', name: 'EUROPE INDEX OTC', shortName: 'EUROPE INDEX', payout: 93, category: 'Stocks', flag: '🌍', basePrice: 4500, volatility: 1.2, isOTC: true },
+  { id: 'commodity_index_otc', name: 'COMMODITIES INDEX OTC', shortName: 'COMMODITY', payout: 93, category: 'Commodities', flag: '🏗️', basePrice: 950, volatility: 0.8, isOTC: true },
   
   // Crypto
   { id: 'btc_usd', name: 'Bitcoin', shortName: 'BTC/USD', payout: 90, category: 'Crypto', flag: '₿', basePrice: 65000, volatility: 25.0, isOTC: false },
@@ -419,6 +433,9 @@ function AssetSelector({
   };
 
   const filteredAssets = ASSETS.filter(asset => {
+    const dynamicAsset = marketAssets[asset.shortName];
+    if (dynamicAsset && dynamicAsset.isVisible === false) return false;
+
     const matchesSearch = asset.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
                           asset.shortName.toLowerCase().includes(searchQuery.toLowerCase());
     return matchesSearch;
@@ -1145,7 +1162,17 @@ export default function TradingPlatform() {
   const [notifications, setNotifications] = useState<any[]>([]);
   const [tutorials, setTutorials] = useState<any[]>([]);
   const [announcements, setAnnouncements] = useState<any[]>([]);
-  const [investment, setInvestment] = useState<number>(1);
+  const [investment, setInvestment] = useState<number>(() => {
+    // Check if initial currency is BDT and set 20 if so
+    const saved = localStorage.getItem('app-currency');
+    if (saved) {
+      try {
+        const c = JSON.parse(saved);
+        if (c.code === 'BDT') return 20;
+      } catch (e) {}
+    }
+    return 1;
+  });
   
   useEffect(() => {
     const min = currency.code === 'BDT' ? 20 : 1;
@@ -1177,8 +1204,8 @@ export default function TradingPlatform() {
     const todayStartTs = todayStart.getTime();
 
     const todayProfit = trades.reduce((acc, t) => {
-      // Only include trades ended today
-      if (t.endTime >= todayStartTs && (t.status === 'WIN' || t.status === 'LOSS')) {
+      // Only include trades ended today and exclude DEMO account trades
+      if (t.endTime >= todayStartTs && (t.status === 'WIN' || t.status === 'LOSS') && t.accountType !== 'DEMO') {
         const p = t.profit !== undefined ? t.profit : (t.status === 'WIN' ? t.amount * ((t.payout || 82) / 100) : -t.amount);
         return acc + p;
       }
@@ -1187,7 +1214,7 @@ export default function TradingPlatform() {
 
     return { 
       name: user.displayName || user.email.split('@')[0], 
-      profit: todayProfit > 0 ? todayProfit : 0 
+      profit: todayProfit 
     };
   }, [user, trades]);
 
@@ -1415,13 +1442,18 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
         
         if (userData.currency && userData.currencySymbol) {
           setCurrency(prev => {
-            if (prev.code === userData.currency && prev.symbol === userData.currencySymbol && prev.name === (userData.currencyName || userData.currency) && prev.flag === (userData.currencyFlag || '')) return prev;
-            return {
-              code: userData.currency,
-              symbol: userData.currencySymbol,
-              name: userData.currencyName || userData.currency,
-              flag: userData.currencyFlag || ''
-            };
+            if (prev.code === userData.currency && prev.symbol === userData.currencySymbol) return prev;
+            
+            // Only update from Firestore if it hasn't been changed manually very recently
+            if (Date.now() - lastCurrencyChangeRef.current > 15000) {
+              return {
+                code: userData.currency,
+                symbol: userData.currencySymbol,
+                name: userData.currencyName || userData.currency,
+                flag: userData.currencyFlag || ''
+              };
+            }
+            return prev;
           });
         }
         
@@ -1631,14 +1663,22 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
     return 1;
   }, [activeAccount, currency.code, extraAccounts]);
 
+  // Always stick to exactly what the user sets or what is in localStorage
+  const lastCurrencyRef = useRef(currency.code);
   useEffect(() => {
-    const rate = EXCHANGE_RATES[currency.code] || 1;
+    if (lastCurrencyRef.current === currency.code) return;
+    
+    // We stop automatic balance conversion based on exchange rates 
+    // because it causes unexpected jumps like 20 -> 2200.
+    // Instead, we only ensure the minimum bound is respected.
     setInvestment(prev => {
-      const newVal = Math.round(1 * rate);
-      if (prev === newVal) return prev;
-      return newVal;
+      const minVal = currency.code === 'BDT' ? 20 : 1;
+      if (prev < minVal) return minVal;
+      return prev;
     });
-  }, [currency]);
+    
+    lastCurrencyRef.current = currency.code;
+  }, [currency.code]);
 
   useEffect(() => {
     localStorage.setItem('app-currency', safeStringify(currency));
@@ -1652,7 +1692,9 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
     localStorage.setItem('chartType', chartType);
   }, [chartType]);
 
+  const lastCurrencyChangeRef = useRef(0);
   const handleCurrencyChange = async (newCurrency: typeof CURRENCIES[0]) => {
+    lastCurrencyChangeRef.current = Date.now();
     setCurrency(newCurrency);
     setPreferences(prev => ({ ...prev, currency: newCurrency.code }));
     
@@ -2065,6 +2107,18 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
       handleTick(ticks);
     });
     socket.on('asset-payout-updated', handlePayoutUpdate);
+    socket.on('market-assets-updated', (updatedAssets: Record<string, any>) => {
+      setMarketAssets(prev => {
+        const newState = { ...prev };
+        Object.keys(updatedAssets).forEach(key => {
+          newState[key] = {
+            ...(prev[key] || {}),
+            ...updatedAssets[key]
+          };
+        });
+        return newState;
+      });
+    });
     socket.on('global-payout-updated', handleGlobalPayoutUpdate);
 
     socket.on('user-data-updated', (userData) => {
@@ -2075,6 +2129,18 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
       if (userData.turnover_achieved !== undefined) setTurnoverAchieved(prev => prev === userData.turnover_achieved ? prev : userData.turnover_achieved);
       if (userData.trades !== undefined) setTrades(prev => deepEqual(prev, userData.trades) ? prev : userData.trades);
       if (userData.extraAccounts !== undefined) setExtraAccounts(prev => deepEqual(prev, userData.extraAccounts) ? prev : userData.extraAccounts);
+      
+      if (userData.currency !== undefined && userData.currency !== null) {
+        const found = CURRENCIES.find(c => c.code === userData.currency);
+        // Only update if it's a valid change to avoid unwanted reverts, and strictly check if different
+        if (found && found.code !== currency.code) {
+           // We ONLY update if the local state was just initialized or if the server has a newer authoritative version
+           // To keep the user's manual change, we trust the local state if it was changed recently.
+           if (Date.now() - lastCurrencyChangeRef.current > 15000) {
+              setCurrency(found);
+           }
+        }
+      }
       
       // Update Referral Stats via Socket directly
       if (userData.totalReferralEarnings !== undefined || userData.referralBalance !== undefined || userData.referralCount !== undefined || userData.recentReferrals !== undefined || userData.commissionHistory !== undefined) {
@@ -2128,7 +2194,7 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
       showToast(notification.message, notification.type || 'info');
       
       // Play a notification sound
-      playSound('SUCCESS'); // Or a dedicated notification sound if available
+      playSound('click'); // Or a dedicated notification sound if available
     });
 
     socket.on('user-notifications', (notifs) => {
@@ -2158,6 +2224,7 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
     return () => {
       socket.off('market-tick', handleTick);
       socket.off('asset-payout-updated', handlePayoutUpdate);
+      socket.off('market-assets-updated');
       socket.off('global-payout-updated', handleGlobalPayoutUpdate);
       socket.off('user-data-updated');
       socket.off('kyc-status-updated');
@@ -2317,14 +2384,14 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
       }
     }
 
-    const investmentInUSD = investment / rate;
+    const investmentInUSD = Math.round((investment / rate) * 100000000) / 100000000;
 
     let totalAvailable = currentBalance;
     if (activeAccount === 'REAL') {
       totalAvailable = balance + bonusBalance;
     }
 
-    if (totalAvailable < investmentInUSD) {
+    if (totalAvailable < investmentInUSD - 0.00000001) {
       showToast(`Insufficient Balance. You need ${displayCurrencySymbol}${(investmentInUSD * rate).toFixed(2)} but have ${displayCurrencySymbol}${(totalAvailable * rate).toFixed(2)}.`, "error");
       return;
     }
@@ -2376,19 +2443,19 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
     const entryPrice = lastCloseRef.current;
     
     if (activeAccount === 'DEMO') {
-      setDemoBalance(prev => prev - investmentInUSD);
+      setDemoBalance(prev => Math.round((prev - investmentInUSD) * 100000000) / 100000000);
     } else if (activeAccount === 'REAL') {
       let remaining = investmentInUSD;
       let newRealBalance = balance;
       let newBonusBalance = bonusBalance;
       
       if (newRealBalance >= remaining) {
-        newRealBalance -= remaining;
+        newRealBalance = Math.round((newRealBalance - remaining) * 100000000) / 100000000;
         remaining = 0;
       } else {
         remaining -= newRealBalance;
         newRealBalance = 0;
-        newBonusBalance = Math.max(0, newBonusBalance - remaining);
+        newBonusBalance = Math.round(Math.max(0, newBonusBalance - remaining) * 100000000) / 100000000;
       }
       setBalance(newRealBalance);
       setBonusBalance(newBonusBalance);
@@ -2396,7 +2463,7 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
       // Update turnover achieved locally for immediate feedback
       setTurnoverAchieved(prev => prev + investmentInUSD);
     } else {
-      setExtraAccounts(prev => prev.map(a => a.id === activeAccount ? { ...a, balance: a.balance - investmentInUSD } : a));
+      setExtraAccounts(prev => prev.map(a => a.id === activeAccount ? { ...a, balance: Math.round((a.balance - investment) * 100) / 100 } : a));
     }
     
     const now = Date.now() + serverTimeOffset;
@@ -2404,11 +2471,25 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
     const tradeDurationSeconds = Math.floor((expirationTime - now) / 1000);
 
     const tradeId = Math.random().toString(36).substr(2, 9);
+    
+    // Determine the symbol to store with this specific trade
+    let tradeSymbol = currency.symbol;
+    if (activeAccount !== 'DEMO' && activeAccount !== 'REAL') {
+      const extra = extraAccounts.find(a => a.id === activeAccount);
+      if (extra) {
+        const found = CURRENCIES.find(c => c.code === extra.currency);
+        tradeSymbol = found?.symbol || (extra.currency === 'BDT' ? 'BDT ' : '$');
+      }
+    }
+
     const newTrade: Trade = {
       id: tradeId,
       type,
       entryPrice: entryPrice,
-      amount: investmentInUSD, // Store in USD
+      amount: investmentInUSD, // Store in USD for global stats
+      currency: currency.code,
+      currencySymbol: tradeSymbol,
+      exchangeRate: rate,
       startTime: now,
       endTime: expirationTime,
       duration: tradeDurationSeconds,
@@ -2428,7 +2509,13 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
       try {
         // We use local state updates for immediate feedback, but the source of truth is Firestore
         if (activeAccount === 'DEMO') {
-          setDoc(doc(db, 'users', user.uid), { demoBalance: demoBalance - investmentInUSD }, { merge: true });
+          setDoc(doc(db, 'users', user.uid), { 
+            demoBalance: demoBalance - investmentInUSD,
+            currency: currency.code,
+            currencySymbol: currency.symbol,
+            currencyName: currency.name,
+            currencyFlag: currency.flag
+          }, { merge: true });
         } else if (activeAccount === 'REAL') {
           let remaining = investmentInUSD;
           let newRealBalance = balance;
@@ -2445,7 +2532,11 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
           setDoc(doc(db, 'users', user.uid), { 
             balance: newRealBalance, 
             bonusBalance: newBonusBalance,
-            turnover_achieved: (turnoverAchieved || 0) + investmentInUSD 
+            turnover_achieved: (turnoverAchieved || 0) + investmentInUSD,
+            currency: currency.code,
+            currencySymbol: currency.symbol,
+            currencyName: currency.name,
+            currencyFlag: currency.flag
           }, { merge: true });
         }
 
@@ -2465,6 +2556,9 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
 
   const handlePlacePendingOrder = (order: { type: 'PRICE' | 'TIME', value: string, minProfitability: number, direction: 'UP' | 'DOWN' }) => {
     if (socket && user) {
+      const rate = EXCHANGE_RATES[currency.code] || 1;
+      const amountInUSD = investment / rate;
+      
       const pendingOrder = {
         email: user.email,
         uid: user.uid,
@@ -2473,10 +2567,13 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
         type: order.type,
         triggerValue: order.type === 'PRICE' ? parseFloat(order.value) : parseInt(order.value),
         profitability: order.minProfitability,
-        amount: investment,
+        amount: amountInUSD,
         duration: timerDuration,
         direction: order.direction,
-        accountType: activeAccount
+        accountType: activeAccount,
+        currency: currency.code,
+        currencySymbol: currency.symbol,
+        exchangeRate: rate
       };
       socket.emit('create-pending-order', pendingOrder);
     }
@@ -2621,32 +2718,872 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
 
   if (view === 'HOME') {
     return (
-      <HomePage 
-        tutorials={tutorials}
-        onStartTrading={() => {
-          if (user) {
-            setView('TRADING');
-          } else {
-            // If not logged in, Auth component will be shown by the next check
-            setView('TRADING');
-          }
-        }} 
-        onLogin={() => {
-          setView('TRADING');
-        }}
-        onNavigate={(pageTitle: string) => {
-          if (pageTitle === 'Trading Terminal') {
-            setView('TRADING');
-          } else if (pageTitle === 'Live Support') {
-            setIsChatOpen(true);
-          } else {
-            setInfoPageTitle(pageTitle);
-            setView('INFO_PAGE');
-          }
-        }}
-      />
+      <div className="min-h-screen bg-[#061626] text-white font-sans selection:bg-blue-500/30 overflow-x-hidden">
+        {/* Navigation */}
+        <nav className="fixed top-0 left-0 right-0 z-[100] px-6 md:px-12 py-5 flex items-center justify-between bg-[#061626]/80 backdrop-blur-lg border-b border-white/5">
+          <div className="flex items-center gap-3 cursor-pointer group" onClick={() => setView('HOME')}>
+            <div className="relative">
+              <div className="w-10 h-10 md:w-14 md:h-14 rounded-xl overflow-hidden border border-white/10 shadow-[0_8px_20px_rgba(37,99,235,0.2)] group-hover:scale-105 transition-transform duration-500 bg-white">
+                <img 
+                  src="https://i.imghippo.com/files/Gtw3911Dmk.jpg" 
+                  alt="Onyx Option Logo" 
+                  className="w-full h-full object-cover"
+                />
+              </div>
+              <div className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-emerald-500 rounded-full border-2 border-[#061626] shadow-[0_0_10px_rgba(16,185,129,0.5)]" />
+            </div>
+            <div className="flex flex-col">
+              <div className="flex items-center gap-1.5">
+                <span className="text-xl md:text-2xl font-black tracking-tighter leading-none text-white flex items-center uppercase">
+                  ONYX<span className="text-blue-500 ml-0.5">OPTION</span>
+                </span>
+                <div className="h-1.5 w-1.5 rounded-full bg-blue-500 hidden md:block" />
+              </div>
+              <span className="text-[8px] md:text-[9px] font-black uppercase tracking-[0.5em] text-blue-400/60 mt-1 leading-none">Elite Trading Terminal</span>
+            </div>
+          </div>
+          
+          <div className="hidden lg:flex items-center gap-10 text-[11px] font-bold text-white/50 uppercase tracking-widest">
+            <button onClick={() => setView('TRADING')} className="hover:text-white transition-colors">Trading</button>
+            <button onClick={() => { setInfoPageTitle('Assets'); setView('INFO_PAGE'); }} className="hover:text-white transition-colors">Assets</button>
+            <button onClick={() => setView('LEADERBOARD')} className="hover:text-white transition-colors">Tournament</button>
+            <div className="flex items-center gap-1 cursor-pointer hover:text-white">
+              <Globe size={14} />
+              <span>English</span>
+              <ChevronDown size={14} />
+            </div>
+          </div>
+
+          <div className="flex items-center gap-4">
+            <button 
+              onClick={() => setView('TRADING')}
+              className="px-6 py-2.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-black rounded-md transition-all active:scale-95 shadow-lg shadow-blue-600/20 uppercase tracking-widest"
+            >
+              REGISTRATION
+            </button>
+            <button className="lg:hidden p-2 text-white/70"><AlignLeft size={24} /></button>
+          </div>
+        </nav>
+
+        {/* Live Asset Ticker Bar */}
+        <div className="fixed top-[73px] left-0 right-0 z-[90] bg-[#0d2238] border-b border-white/5 py-2 overflow-hidden h-[40px] flex items-center">
+          <motion.div 
+            animate={{ x: [0, -1000] }}
+            transition={{ duration: 30, repeat: Infinity, ease: "linear" }}
+            className="flex whitespace-nowrap gap-12 px-6"
+          >
+            {[
+              { pair: 'BTC/USD', price: '64,281.20', change: '+1.24%' },
+              { pair: 'ETH/USD', price: '3,452.15', change: '+0.85%' },
+              { pair: 'EUR/USD', price: '1.0842', change: '-0.12%' },
+              { pair: 'GOLD', price: '2,314.80', change: '+0.45%' },
+              { pair: 'GBP/JPY', price: '192.45', change: '+0.32%' },
+              { pair: 'SOL/USD', price: '142.60', change: '+4.52%' },
+              { pair: 'OIL', price: '82.15', change: '-1.05%' },
+              { pair: 'APPLE', price: '189.40', change: '+0.25%' },
+              { pair: 'BTC/USD', price: '64,281.20', change: '+1.24%' },
+              { pair: 'ETH/USD', price: '3,452.15', change: '+0.85%' },
+              { pair: 'EUR/USD', price: '1.0842', change: '-0.12%' },
+              { pair: 'GOLD', price: '2,314.80', change: '+0.45%' },
+              { pair: 'GBP/JPY', price: '192.45', change: '+0.32%' },
+              { pair: 'SOL/USD', price: '142.60', change: '+4.52%' },
+              { pair: 'OIL', price: '82.15', change: '-1.05%' },
+              { pair: 'APPLE', price: '189.40', change: '+0.25%' },
+            ].map((item, i) => (
+              <div key={i} className="flex items-center gap-3 text-[10px] font-black uppercase tracking-widest">
+                <span className="text-white/40">{item.pair}</span>
+                <span className="text-white">{item.price}</span>
+                <span className={item.change.startsWith('+') ? 'text-emerald-500' : 'text-red-500'}>{item.change}</span>
+              </div>
+            ))}
+          </motion.div>
+        </div>
+
+        {/* Hero Section */}
+        <section className="relative pt-44 pb-32 px-6 md:px-12 min-h-screen flex items-center overflow-hidden">
+          {/* Background Gradient Layer */}
+          <div className="absolute inset-0 -z-10 bg-[#061626]">
+             <div className="absolute top-0 right-0 w-full h-full bg-gradient-to-bl from-blue-600/10 via-transparent to-transparent opacity-50" />
+             <div className="absolute top-1/4 right-[5%] w-[600px] h-[600px] bg-blue-500/5 blur-[150px] rounded-full" />
+          </div>
+          
+          <div className="max-w-7xl mx-auto w-full grid lg:grid-cols-2 gap-16 items-center">
+            <motion.div
+              initial={{ opacity: 0, x: -30 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ duration: 0.8 }}
+            >
+              <h1 className="text-4xl md:text-6xl lg:text-7xl font-bold mb-8 leading-[1.05] tracking-tight uppercase">
+                THE RIGHT PLACE<br />
+                FOR ONLINE TRADING<br />
+                <span className="text-blue-500 font-black">ON FINANCIAL MARKETS</span>
+              </h1>
+              
+              <div className="space-y-4 mb-12">
+                <p className="text-xl md:text-2xl font-bold">The most user-friendly interface</p>
+                <p className="text-white/60 text-lg">Get access to trade over 100 global trading assets</p>
+              </div>
+              
+              <div className="flex flex-col sm:flex-row gap-6 items-center">
+                <button 
+                  onClick={() => setView('TRADING')}
+                  className="w-full sm:w-auto px-12 py-5 bg-blue-600 hover:bg-blue-500 text-white font-black rounded-md transition-all shadow-[0_10px_40px_rgba(37,99,235,0.4)] active:scale-95 text-xl uppercase tracking-wider"
+                >
+                  REGISTRATION
+                </button>
+                <div className="flex items-center gap-2 text-white/50 font-bold uppercase text-[11px] tracking-widest">
+                  <span className="cursor-pointer hover:text-white underline underline-offset-4" onClick={() => setView('TRADING')}>Log In</span>
+                  <span>or</span>
+                  <span className="cursor-pointer hover:text-white underline underline-offset-4" onClick={() => setView('TRADING')}>Start in one click</span>
+                </div>
+              </div>
+            </motion.div>
+
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9, y: 30 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              transition={{ delay: 0.2, duration: 1 }}
+              className="relative hidden lg:block"
+            >
+              <div className="relative z-10 rounded-2xl border border-white/5 bg-[#0d2238] shadow-[0_40px_100px_rgba(0,0,0,0.6)] overflow-hidden p-3">
+                 <div className="aspect-[16/10] bg-[#061626] rounded-xl relative group overflow-hidden">
+                    <img 
+                      src="https://images.unsplash.com/photo-1611974714151-fed11b8bbf40?q=80&w=2070&auto=format&fit=crop" 
+                      alt="Trading Terminal"
+                      className="w-full h-full object-cover opacity-50 group-hover:scale-105 transition-transform duration-1000"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-[#061626] to-transparent opacity-80" />
+                    
+                    {/* Mock Chart Elements */}
+                    <div className="absolute bottom-10 left-10 right-10 h-1/2 flex items-end gap-1">
+                       {[30, 50, 40, 70, 55, 80, 60, 45, 90, 75].map((h, i) => (
+                         <div key={i} className="flex-1 bg-blue-500/40 rounded-t-sm" style={{ height: `${h}%` }} />
+                       ))}
+                    </div>
+
+                    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
+                       <div className="w-16 h-16 rounded-full bg-blue-600/20 flex items-center justify-center animate-ping" />
+                       <div className="absolute top-0 left-0 w-16 h-16 rounded-full bg-blue-600 flex items-center justify-center">
+                          <Zap size={32} className="text-white fill-current" />
+                       </div>
+                    </div>
+                 </div>
+              </div>
+              <div className="absolute -bottom-10 -left-10 w-40 h-40 bg-blue-500/10 blur-[80px] rounded-full" />
+            </motion.div>
+          </div>
+        </section>
+
+        {/* Trading Conditions */}
+        <section className="py-32 px-6 md:px-12 bg-white text-[#061626]">
+          <div className="max-w-7xl mx-auto">
+            <h2 className="text-4xl md:text-5xl font-bold mb-24 tracking-tight">Place your trades on best conditions</h2>
+            
+            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-y-20 gap-x-16">
+               {[
+                 { label: 'Minimum investment', value: '$5*', sub: 'Minimum investment amount' },
+                 { label: 'Trade amount', value: '$1', sub: 'Minimum trade amount' },
+                 { label: 'Demo balance', value: '$50 000', sub: 'Virtual money on your Demo account' },
+                 { label: 'Payment methods', value: '50+', sub: 'Fast and secure payment methods' },
+                 { label: 'Commission', value: '$0', sub: 'No commission on deposit and withdrawal' },
+                 { pair: 'Assets', value: '100+', sub: 'Available assets for trading' }
+               ].map((item, i) => (
+                 <div key={i} className="border-l-4 border-blue-600 pl-8 transition-transform hover:translate-x-2">
+                   <div className="text-5xl md:text-6xl font-black text-blue-600 mb-3">{item.value}</div>
+                   <div className="text-lg font-bold text-[#061626]/40 uppercase tracking-widest">{item.sub}</div>
+                 </div>
+               ))}
+            </div>
+          </div>
+        </section>
+
+        {/* Professional Asset Index Preview */}
+        <section className="py-32 px-6 md:px-12 bg-[#f8fafc] text-[#061626]">
+          <div className="max-w-7xl mx-auto">
+            <div className="flex flex-col md:flex-row justify-between items-end gap-8 mb-20">
+               <div>
+                  <span className="text-blue-600 font-black uppercase tracking-[0.3em] text-xs mb-4 block">Asset Coverage</span>
+                  <h2 className="text-4xl md:text-5xl font-bold tracking-tight uppercase">Global Markets</h2>
+               </div>
+               <div className="flex gap-4">
+                  {['Currencies', 'Crypto', 'Stocks', 'Commodities'].map((cat) => (
+                    <button key={cat} className="px-6 py-2 rounded-full border border-gray-200 text-xs font-bold uppercase hover:bg-blue-600 hover:text-white transition-all">
+                      {cat}
+                    </button>
+                  ))}
+               </div>
+            </div>
+
+            <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
+               {[
+                 { pair: 'AUD/USD OTC', payout: '92%', status: 'Hot' },
+                 { pair: 'EUR/USD OTC', payout: '91%', status: 'Hot' },
+                 { pair: 'GBP/USD OTC', payout: '89%', status: 'Stable' },
+                 { pair: 'GOLD (XAU/USD)', payout: '82%', status: 'Volatile' },
+                 { pair: 'BITCOIN', payout: '78%', status: 'Trending' },
+                 { pair: 'APPLE INC', payout: '85%', status: 'Stable' },
+                 { pair: 'ETH/USD', payout: '80%', status: 'Trending' },
+                 { pair: 'CRUDE OIL', payout: '75%', status: 'Volatile' },
+               ].map((asset, i) => (
+                 <div key={i} className="p-6 bg-white rounded-xl border border-gray-100 flex justify-between items-center hover:shadow-lg transition-all group cursor-pointer">
+                    <div>
+                       <div className="text-sm font-black uppercase tracking-tight mb-1 group-hover:text-blue-600 transition-colors">{asset.pair}</div>
+                       <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{asset.status}</div>
+                    </div>
+                    <div className="text-right">
+                       <div className="text-xl font-black text-emerald-600">{asset.payout}</div>
+                       <div className="text-[9px] font-black text-gray-300 uppercase">Payout</div>
+                    </div>
+                 </div>
+               ))}
+            </div>
+          </div>
+        </section>
+
+        {/* Security Pillars Deep Dive */}
+        <section className="py-32 px-6 md:px-12 bg-[#061626] text-white">
+           <div className="max-w-7xl mx-auto">
+              <div className="grid lg:grid-cols-2 gap-24 items-center">
+                 <div className="relative">
+                    <div className="absolute -top-10 -left-10 w-64 h-64 bg-blue-600/10 blur-[100px] rounded-full" />
+                    <h2 className="text-4xl md:text-6xl font-black uppercase mb-10 leading-tight">Institutional Grade<br /> <span className="text-blue-500">Security Layers</span></h2>
+                    <p className="text-xl text-white/50 mb-12 leading-relaxed">
+                       Your security is our highest priority. We use the same encryption standards as leading global banking institutions.
+                    </p>
+                    <div className="space-y-8">
+                       {[
+                         { title: 'Segregated Accounts', desc: 'Client funds are held in top-tier banks, completely separate from company capital.' },
+                         { title: '256-bit SSL Encryption', desc: 'Every byte of data transmitted between your device and our servers is encrypted.' },
+                         { title: 'Two-Factor Authentication', desc: 'Secure your withdrawals and sensitive actions with biometric or SMS verification.' }
+                       ].map((item, i) => (
+                         <div key={i} className="flex gap-6">
+                            <div className="w-12 h-12 rounded-xl bg-blue-600/20 flex items-center justify-center shrink-0">
+                               <ShieldCheck size={24} className="text-blue-500" />
+                            </div>
+                            <div>
+                               <h3 className="text-lg font-bold uppercase tracking-tight mb-2">{item.title}</h3>
+                               <p className="text-white/30 text-sm leading-relaxed">{item.desc}</p>
+                            </div>
+                         </div>
+                       ))}
+                    </div>
+                 </div>
+                 <div className="bg-[#0d2238] p-10 rounded-[40px] border border-white/5 relative group">
+                    <div className="absolute inset-0 bg-blue-600/5 opacity-0 group-hover:opacity-100 transition-opacity rounded-[40px]" />
+                    <div className="relative z-10">
+                       <Lock size={80} className="text-blue-500/20 mb-10" />
+                       <h3 className="text-3xl font-black uppercase italic mb-6">Regulated Infrastructure</h3>
+                       <p className="text-white/40 mb-10 leading-relaxed font-medium">
+                          Our platform architecture is built on multi-node redundancy, ensuring 99.9% uptime and zero-latency execution even during periods of extreme market volatility.
+                       </p>
+                       <div className="grid grid-cols-2 gap-4">
+                          <div className="p-6 bg-black/20 rounded-2xl border border-white/5">
+                             <div className="text-2xl font-black text-blue-500">24/7</div>
+                             <div className="text-[10px] font-black uppercase text-white/30 tracking-widest">Monitoring</div>
+                          </div>
+                          <div className="p-6 bg-black/20 rounded-2xl border border-white/5">
+                             <div className="text-2xl font-black text-blue-500">AI</div>
+                             <div className="text-[10px] font-black uppercase text-white/30 tracking-widest">Fraud Guard</div>
+                          </div>
+                       </div>
+                    </div>
+                 </div>
+              </div>
+           </div>
+        </section>
+
+        {/* Why Choose Us Icons */}
+        <section className="py-32 px-6 md:px-12 bg-gray-50 text-[#061626]">
+           <div className="max-w-7xl mx-auto">
+             <h2 className="text-4xl font-bold mb-20 tracking-tight text-center lg:text-left">Why choose us?</h2>
+             <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-x-16 gap-y-20">
+                {[
+                  { icon: ArrowUpDown, title: 'FLEXIBLE TRADING', desc: 'Latest trends: quick and digital trading, express trades, pending trades, copy trading. Payouts of up to 218%.' },
+                  { icon: GraduationCap, title: 'COMPREHENSIVE EDUCATION', desc: 'Our help section contains tutorials, guides and various trading strategies for all levels.' },
+                  { icon: Bitcoin, title: 'DIVERSE INSTRUMENTS', desc: 'Assets suitable for any trader: currency pairs, major crypto, commodities, and stocks.' },
+                  { icon: Activity, title: 'FREE DEMO ACCOUNT', desc: 'Try all platform benefits on the Demo account using virtual money. No investment needed.' },
+                  { icon: RefreshCw, title: 'QUICK DEPOSITS & WITHDRAWALS', desc: 'Use the most convenient payment methods for hassle-free deposits and withdrawals locally.' },
+                  { icon: Trophy, title: 'PLATFORM REWARDS', desc: 'Trading tournaments, regular bonuses, gifts, promo codes and contests are available to loyal users.' }
+                ].map((feat, i) => (
+                  <div key={i} className="flex flex-col gap-8 group">
+                    <div className="w-16 h-16 rounded-2xl bg-blue-100 flex items-center justify-center text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition-all duration-500">
+                      <feat.icon size={32} strokeWidth={1.5} />
+                    </div>
+                    <div>
+                      <h3 className="text-xl font-black uppercase mb-4 tracking-tighter">0 {i+1} {feat.title}</h3>
+                      <p className="text-[#061626]/60 leading-relaxed font-medium text-sm">{feat.desc}</p>
+                    </div>
+                  </div>
+                ))}
+             </div>
+           </div>
+        </section>
+
+        {/* How to Start Section */}
+        <section className="py-32 px-6 md:px-12 bg-white text-[#061626]">
+          <div className="max-w-7xl mx-auto">
+            <div className="text-center mb-24">
+              <h2 className="text-4xl md:text-5xl font-bold tracking-tight mb-6">How it works?</h2>
+              <p className="text-xl text-[#061626]/50">Start trading in three simple steps</p>
+            </div>
+            
+            <div className="grid md:grid-cols-3 gap-12">
+               {[
+                 { title: 'Registration', desc: 'Open an account for free in just a few minutes.', icon: UserCheck },
+                 { title: 'Practice', icon: Target, desc: 'Perfect your skills with a demo account and educational materials.' },
+                 { title: 'Deposit and trade', icon: TrendingUp, desc: 'Over 100 assets (currency pairs, stocks, commodities, indices) for best trading conditions.' }
+               ].map((step, i) => (
+                 <div key={i} className="relative p-10 rounded-3xl bg-gray-50 flex flex-col items-center text-center group hover:bg-blue-600 hover:text-white transition-all duration-500">
+                    <div className="w-20 h-20 rounded-full bg-white flex items-center justify-center text-blue-600 mb-8 shadow-xl shadow-black/5 group-hover:scale-110 transition-transform">
+                       <step.icon size={32} />
+                    </div>
+                    <div className="absolute top-10 right-10 text-4xl font-black text-blue-600/10 group-hover:text-white/10 uppercase">0{i+1}</div>
+                    <h3 className="text-2xl font-black uppercase mb-4 tracking-tighter">{step.title}</h3>
+                    <p className="opacity-60 font-medium">{step.desc}</p>
+                 </div>
+               ))}
+            </div>
+          </div>
+        </section>
+
+        {/* Community / Global Stats */}
+        <section className="py-32 px-6 md:px-12 bg-blue-600 text-white overflow-hidden relative">
+           <div className="max-w-7xl mx-auto grid lg:grid-cols-2 gap-20 items-center relative z-10">
+              <div>
+                 <h2 className="text-4xl md:text-6xl font-black uppercase mb-10 leading-tight">Trusted by millions<br /> of traders worldwide</h2>
+                 <p className="text-xl opacity-80 mb-12 max-w-lg">Over <span className="font-bold underline">10 000 000</span> active clients use our platform for their financial success every day.</p>
+                 <button onClick={() => setView('TRADING')} className="px-10 py-5 bg-white text-blue-600 font-bold rounded-lg uppercase tracking-widest hover:bg-blue-50 transition-colors shadow-2xl">Join Community</button>
+              </div>
+              <div className="grid grid-cols-2 gap-8">
+                 {[
+                   { label: 'Total active users', value: '14.2M' },
+                   { label: 'Trades handled per day', value: '1.5M+' },
+                   { label: 'Weekly turnover', value: '$840M' },
+                   { label: 'Withdrawals in 24h', value: '$2.5M' }
+                 ].map((stat, i) => (
+                   <div key={i} className="p-8 bg-white/10 backdrop-blur-md rounded-2xl border border-white/10 text-center">
+                     <div className="text-3xl md:text-5xl font-black mb-2 tracking-tighter uppercase">{stat.value}</div>
+                     <div className="text-[10px] font-black uppercase tracking-widest opacity-60">{stat.label}</div>
+                   </div>
+                 ))}
+              </div>
+           </div>
+           {/* Abstract Map Background */}
+           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[120%] h-[120%] opacity-10 pointer-events-none grayscale">
+              <Globe size={1000} className="mx-auto" strokeWidth={0.5} />
+           </div>
+        </section>
+
+        {/* Mobile App Promotion */}
+        <section className="py-32 px-6 md:px-12 bg-white text-[#061626]">
+           <div className="max-w-7xl mx-auto flex flex-col lg:flex-row items-center gap-24">
+              <div className="flex-1 order-2 lg:order-1">
+                 <div className="relative inline-block">
+                    <img 
+                      src="https://images.unsplash.com/photo-1512941937669-90a1b58e7e9c?q=80&w=2070&auto=format&fit=crop" 
+                      alt="Mobile App" 
+                      className="w-[300px] md:w-[450px] mx-auto rounded-[3rem] shadow-2xl"
+                    />
+                    <div className="absolute -bottom-10 -right-10 w-40 h-40 bg-blue-600 rounded-full flex items-center justify-center text-white flex-col animate-bounce">
+                       <span className="text-2xl font-black">NEW</span>
+                       <span className="text-[10px] font-bold uppercase tracking-widest">Version 4.2</span>
+                    </div>
+                 </div>
+              </div>
+              <div className="flex-1 order-1 lg:order-2">
+                 <h2 className="text-4xl md:text-6xl font-black uppercase mb-10 tracking-tight leading-tight">Always with you on <span className="text-blue-600">any device</span></h2>
+                 <p className="text-xl text-[#061626]/60 mb-12 leading-relaxed">
+                    The platform for computer allows you to trade on your laptop, but for those who are always on the go, our mobile app provides the same level of security and performance.
+                 </p>
+                 <div className="flex flex-wrap gap-4">
+                    <button className="flex items-center gap-3 px-8 py-4 bg-[#061626] text-white rounded-xl hover:bg-[#0d2238] transition-all">
+                       <Apple size={24} />
+                       <div className="text-left">
+                          <div className="text-[10px] uppercase opacity-50 font-bold">Download on the</div>
+                          <div className="text-lg font-black leading-tight">App Store</div>
+                       </div>
+                    </button>
+                    <button className="flex items-center gap-3 px-8 py-4 bg-[#061626] text-white rounded-xl hover:bg-[#0d2238] transition-all">
+                       <PlayCircle size={24} />
+                       <div className="text-left">
+                          <div className="text-[10px] uppercase opacity-50 font-bold">Get it on</div>
+                          <div className="text-lg font-black leading-tight">Google Play</div>
+                       </div>
+                    </button>
+                 </div>
+              </div>
+           </div>
+        </section>
+
+        {/* Live Market Insights / Signals */}
+        <section className="py-32 px-6 md:px-12 bg-[#0d2238] text-white relative overflow-hidden">
+           <div className="max-w-7xl mx-auto relative z-10">
+              <div className="flex flex-col md:flex-row justify-between items-end gap-8 mb-20">
+                 <div>
+                    <span className="text-blue-500 font-black uppercase tracking-[0.3em] text-xs mb-4 block">Market Sentiment</span>
+                    <h2 className="text-4xl md:text-5xl font-bold tracking-tight uppercase">Trading Indicators</h2>
+                 </div>
+                 <p className="max-w-md text-white/50 text-right font-medium">Use our built-in technical indicators and charts to evaluate market trends and make informed decisions.</p>
+              </div>
+
+              <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
+                 {[
+                   { name: 'RSI', desc: 'Relative Strength Index for momentum measurement', value: 'Overbought: 70 / Oversold: 30' },
+                   { name: 'MACD', desc: 'Moving Average Convergence Divergence trend identifier', value: 'Golden Cross Detection' },
+                   { name: 'Bollinger Bands', desc: 'Volatility measurement and price breakout zones', value: 'Adaptive Volatility Filter' },
+                   { name: 'Candlestick Patterns', desc: 'Advanced recognition of reversal and continuation', value: '60+ Patterns Identified' }
+                 ].map((signal, i) => (
+                   <div key={i} className="p-8 bg-[#061626] border border-white/5 rounded-2xl hover:border-blue-500/50 transition-all group">
+                      <div className="text-blue-500 font-bold mb-4 flex items-center gap-2">
+                        <Zap size={16} />
+                        {signal.name}
+                      </div>
+                      <h3 className="text-lg font-bold mb-3 uppercase tracking-tighter">{signal.desc}</h3>
+                      <div className="text-[11px] font-black uppercase tracking-widest text-white/30 group-hover:text-blue-400 transition-colors">{signal.value}</div>
+                   </div>
+                 ))}
+              </div>
+           </div>
+        </section>
+
+        {/* Live Payouts / Wins Feed */}
+        <section className="py-32 px-6 md:px-12 bg-white text-[#061626]">
+           <div className="max-w-7xl mx-auto">
+              <h2 className="text-4xl font-bold mb-16 tracking-tight">Recent successful payouts</h2>
+              <div className="grid md:grid-cols-3 gap-8">
+                 {[
+                   { user: 'Ahmed R.', amount: '+ $1,420.00', asset: 'BTC/USD', time: '2m ago' },
+                   { user: 'Sarah K.', amount: '+ $580.50', asset: 'EUR/USD', time: '5m ago' },
+                   { user: 'Jason L.', amount: '+ $2,100.00', asset: 'GOLD', time: '8m ago' }
+                 ].map((win, i) => (
+                   <div key={i} className="p-6 bg-gray-50 rounded-2xl flex items-center justify-between border border-gray-100 hover:shadow-xl transition-all">
+                      <div className="flex items-center gap-4">
+                        <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold uppercase">{win.user[0]}</div>
+                        <div>
+                          <div className="font-bold text-sm tracking-tight">{win.user}</div>
+                          <div className="text-[10px] uppercase font-black text-[#061626]/40">{win.time}</div>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-emerald-600 font-black">{win.amount}</div>
+                        <div className="text-[10px] font-bold uppercase text-blue-600/50">{win.asset}</div>
+                      </div>
+                   </div>
+                 ))}
+              </div>
+           </div>
+        </section>
+
+        {/* Awards and Recognition */}
+        <section className="py-24 px-6 md:px-12 bg-[#061626] border-t border-white/5">
+           <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-12 opacity-40">
+              <div className="flex flex-col items-center gap-4">
+                 <Trophy size={48} className="text-blue-500" />
+                 <div className="text-center">
+                    <div className="text-white font-black tracking-tighter">BEST MOBILE TRADING PLATFORM</div>
+                    <div className="text-[10px] font-bold uppercase tracking-widest text-white/40">IBT Awards 2024</div>
+                 </div>
+              </div>
+              <div className="flex flex-col items-center gap-4">
+                 <ShieldCheck size={48} className="text-blue-500" />
+                 <div className="text-center">
+                    <div className="text-white font-black tracking-tighter">FASTEST WITHDRAWALS SYSTEM</div>
+                    <div className="text-[10px] font-bold uppercase tracking-widest text-white/40">Financial Review 2025</div>
+                 </div>
+              </div>
+              <div className="flex flex-col items-center gap-4">
+                 <Star size={48} className="text-blue-500" />
+                 <div className="text-center">
+                    <div className="text-white font-black tracking-tighter">MOST INNOVATIVE BROKER</div>
+                    <div className="text-[10px] font-bold uppercase tracking-widest text-white/40">Global Forex Expo</div>
+                 </div>
+              </div>
+           </div>
+        </section>
+
+        {/* Testimonials Section */}
+        <section className="py-32 px-6 md:px-12 bg-white text-[#061626]">
+           <div className="max-w-7xl mx-auto">
+              <div className="text-center mb-24">
+                 <span className="text-blue-600 font-black uppercase tracking-[0.3em] text-xs mb-4 block">Success Stories</span>
+                 <h2 className="text-4xl md:text-5xl font-bold tracking-tight">What our traders say</h2>
+              </div>
+
+              <div className="grid md:grid-cols-3 gap-8">
+                 {[
+                   { name: 'Michael Thompson', role: 'Full-time Trader', text: 'The lightning-fast execution and clear interface made Onyx Option my primary tool for daily market analysis and profits.' },
+                   { name: 'Elena Rodriguez', role: 'Financial Analyst', text: 'I have tried many platforms, but the level of security and withdrawal speed here is truly unmatched in the industry.' },
+                   { name: 'David Wilson', role: 'Beginner Trader', text: 'The demo account and educational materials helped me understand the market within a week. Now I am trading live and confident.' }
+                 ].map((testimonial, i) => (
+                   <div key={i} className="p-10 rounded-3xl bg-gray-50 border border-gray-100 flex flex-col justify-between relative group hover:bg-blue-600 hover:text-white transition-all duration-500">
+                      <div className="absolute top-8 left-8 text-6xl font-black opacity-10 font-serif">"</div>
+                      <p className="text-lg font-medium leading-relaxed relative z-10 mb-10 italic">
+                        {testimonial.text}
+                      </p>
+                      <div className="flex items-center gap-4">
+                         <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold group-hover:bg-white transition-colors">{testimonial.name[0]}</div>
+                         <div>
+                            <div className="font-bold text-sm tracking-tight">{testimonial.name}</div>
+                            <div className="text-[10px] uppercase font-black opacity-40 group-hover:opacity-60">{testimonial.role}</div>
+                         </div>
+                      </div>
+                   </div>
+                 ))}
+              </div>
+           </div>
+        </section>
+
+        {/* Global Referral Program */}
+        <section className="py-32 px-6 md:px-12 bg-blue-600 text-white relative overflow-hidden">
+           <div className="max-w-7xl mx-auto flex flex-col lg:flex-row items-center gap-20 relative z-10">
+              <div className="flex-1">
+                 <h2 className="text-4xl md:text-6xl font-black uppercase mb-8 leading-tight">Join our <br />Affiliate Network</h2>
+                 <p className="text-xl opacity-80 mb-10 max-w-lg">Invite your friends and colleagues and earn up to <span className="font-black">60% RevShare</span> on their trading volume. The highest payouts in the industry.</p>
+                 <div className="flex flex-wrap gap-6">
+                    <div className="px-8 py-4 bg-white/10 backdrop-blur-md rounded-xl border border-white/10">
+                       <div className="text-2xl font-black italic">60%</div>
+                       <div className="text-[10px] font-black uppercase tracking-widest opacity-60">RevShare</div>
+                    </div>
+                    <div className="px-8 py-4 bg-white/10 backdrop-blur-md rounded-xl border border-white/10">
+                       <div className="text-2xl font-black italic">Instant</div>
+                       <div className="text-[10px] font-black uppercase tracking-widest opacity-60">Payouts</div>
+                    </div>
+                 </div>
+              </div>
+              <div className="flex-1 bg-white p-12 rounded-[40px] text-[#061626]">
+                 <h3 className="text-2xl font-black uppercase mb-6 italic tracking-tighter">Become a Partner</h3>
+                 <p className="mb-10 text-gray-500 font-medium leading-relaxed">Fill out a simple application and get access to your personalized dashboard, marketing materials, and real-time statistics.</p>
+                 <button onClick={() => setView('TRADING')} className="w-full py-5 bg-blue-600 text-white font-black rounded-xl uppercase tracking-widest shadow-xl shadow-blue-600/20 hover:bg-blue-500 transition-all active:scale-95">Apply for Partnership</button>
+              </div>
+           </div>
+           <div className="absolute top-0 right-0 w-1/2 h-full bg-white/5 -skew-x-12 translate-x-1/2" />
+        </section>
+
+        {/* Economic Calendar Preview */}
+        <section className="py-32 px-6 md:px-12 bg-white text-[#061626]">
+           <div className="max-w-7xl mx-auto">
+              <div className="flex flex-col md:flex-row justify-between items-end gap-8 mb-20">
+                 <div>
+                    <span className="text-blue-600 font-black uppercase tracking-[0.3em] text-xs mb-4 block">Market Pulse</span>
+                    <h2 className="text-4xl md:text-5xl font-bold tracking-tight uppercase">Economic Calendar</h2>
+                 </div>
+                 <p className="max-w-md text-[#061626]/50 text-right font-medium">Keep track of high-impact news events that drive global market volatility and create trading opportunities.</p>
+              </div>
+
+              <div className="space-y-4">
+                 {[
+                   { event: 'Non-Farm Payrolls (NFP)', impact: 'High', currency: 'USD', time: '13:30 GMT', forecast: '240K' },
+                   { event: 'Interest Rate Decision', impact: 'Very High', currency: 'EUR', time: '12:45 GMT', forecast: '4.50%' },
+                   { event: 'CPI Consumer Price Index', impact: 'High', currency: 'GBP', time: '07:00 GMT', forecast: '3.1%' },
+                   { event: 'GDP Growth Rate QoQ', impact: 'Medium', currency: 'AUD', time: '01:30 GMT', forecast: '0.4%' }
+                 ].map((news, i) => (
+                   <div key={i} className="p-6 bg-gray-50 rounded-2xl border border-gray-100 flex flex-wrap items-center justify-between gap-6 hover:bg-blue-50 transition-colors">
+                      <div className="flex items-center gap-6 min-w-[250px]">
+                         <div className={`w-3 h-3 rounded-full ${news.impact === 'Very High' ? 'bg-red-600 animate-pulse' : news.impact === 'High' ? 'bg-orange-500' : 'bg-blue-400'}`} />
+                         <div>
+                            <div className="font-bold text-sm uppercase tracking-tight">{news.event}</div>
+                            <div className="text-[10px] font-black text-gray-400 uppercase">{news.impact} Impact</div>
+                         </div>
+                      </div>
+                      <div className="flex items-center gap-12">
+                         <div className="text-center">
+                            <div className="font-black text-blue-600">{news.currency}</div>
+                            <div className="text-[9px] font-bold text-gray-400 uppercase">Currency</div>
+                         </div>
+                         <div className="text-center">
+                            <div className="font-black">{news.forecast}</div>
+                            <div className="text-[9px] font-bold text-gray-400 uppercase">Forecast</div>
+                         </div>
+                         <div className="text-center">
+                            <div className="font-black text-gray-400">{news.time}</div>
+                            <div className="text-[9px] font-bold text-gray-400 uppercase">Time</div>
+                         </div>
+                      </div>
+                   </div>
+                 ))}
+              </div>
+           </div>
+        </section>
+
+        {/* Account Types / VIP Section */}
+        <section className="py-32 px-6 md:px-12 bg-white text-[#061626]">
+           <div className="max-w-7xl mx-auto">
+              <div className="text-center mb-24">
+                 <span className="text-blue-600 font-black uppercase tracking-[0.3em] text-xs mb-4 block">Account Levels</span>
+                 <h2 className="text-4xl md:text-5xl font-bold tracking-tight uppercase">Trading Statuses</h2>
+              </div>
+
+              <div className="grid md:grid-cols-3 gap-8">
+                 {[
+                   { title: 'Starter', deposit: '$10+', profit: 'Upto 82%', perks: ['Basic Tools', '24/7 Support', 'Standard Payouts'], color: 'bg-gray-50' },
+                   { title: 'Advanced', deposit: '$500+', profit: 'Upto 85%', perks: ['Personal Manager', 'Faster Withdrawals', 'Extra Asset Access'], color: 'border-blue-600 border-2 shadow-2xl scale-105' },
+                   { title: 'Expert', deposit: '$2000+', profit: 'Upto 92%', perks: ['Priority Payouts', 'Private Consulting', 'Risk-free Trades'], color: 'bg-[#061626] text-white' }
+                 ].map((plan, i) => (
+                   <div key={i} className={`p-10 rounded-[40px] flex flex-col justify-between transition-all duration-500 hover:-translate-y-4 ${plan.color}`}>
+                      <div>
+                         <h3 className="text-3xl font-black uppercase tracking-tighter mb-2">{plan.title}</h3>
+                         <div className="text-sm font-bold opacity-60 mb-8 uppercase tracking-widest">Min Deposit: {plan.deposit}</div>
+                         <div className="space-y-4 mb-12">
+                            {plan.perks.map((perk, j) => (
+                              <div key={j} className="flex items-center gap-3 font-medium">
+                                 <Check size={18} className="text-blue-500" strokeWidth={3} />
+                                 <span>{perk}</span>
+                              </div>
+                            ))}
+                         </div>
+                      </div>
+                      <div>
+                         <div className="text-4xl font-black text-blue-600 mb-6">{plan.profit}</div>
+                         <button onClick={() => setView('TRADING')} className={`w-full py-4 rounded-xl font-black uppercase tracking-widest text-sm transition-all ${plan.title === 'Expert' ? 'bg-blue-600 text-white' : 'bg-[#061626] text-white hover:bg-blue-600'}`}>Get {plan.title}</button>
+                      </div>
+                   </div>
+                 ))}
+              </div>
+           </div>
+        </section>
+
+        {/* Global Trading Academy */}
+        <section className="py-32 px-6 md:px-12 bg-gray-50 text-[#061626]">
+           <div className="max-w-7xl mx-auto flex flex-col lg:flex-row gap-24 items-center">
+              <div className="flex-1">
+                 <span className="text-blue-600 font-black uppercase tracking-[0.3em] text-xs mb-4 block">Learn to Trade</span>
+                 <h2 className="text-4xl md:text-6xl font-black uppercase mb-10 leading-tight tracking-tight">Onyx <br /><span className="text-blue-600">Academy</span></h2>
+                 <p className="text-xl text-[#061626]/50 mb-12 leading-relaxed font-medium">
+                    Master the art of technical analysis and market psychology with our comprehensive educational program. From basic concepts to professional strategies.
+                 </p>
+                 <div className="grid grid-cols-2 gap-8 mb-12">
+                    <div>
+                       <h4 className="text-lg font-black uppercase mb-2 text-blue-600">Video Courses</h4>
+                       <p className="text-sm text-gray-500 font-medium">Over 50+ hours of professional video content.</p>
+                    </div>
+                    <div>
+                       <h4 className="text-lg font-black uppercase mb-2 text-blue-600">Webinars</h4>
+                       <p className="text-sm text-gray-500 font-medium">Live market analysis with expert traders.</p>
+                    </div>
+                 </div>
+                 <button onClick={() => setView('TRADING')} className="px-10 py-5 bg-[#061626] text-white rounded-xl font-black uppercase tracking-widest hover:bg-blue-600 transition-all">Start Learning</button>
+              </div>
+              <div className="flex-1 relative">
+                 <div className="absolute -top-10 -right-10 w-64 h-64 bg-blue-600/10 blur-[100px] rounded-full" />
+                 <div className="grid grid-cols-2 gap-6 relative z-10">
+                    {[
+                      { icon: BookOpen, title: 'Basics' },
+                      { icon: CandlestickChart, title: 'Analysis' },
+                      { icon: Zap, title: 'Strategies' },
+                      { icon: Target, title: 'Psychology' }
+                    ].map((item, i) => (
+                      <div key={i} className={`p-8 bg-white rounded-3xl border border-gray-100 flex flex-col items-center transition-all hover:shadow-2xl hover:border-blue-500 hover:-translate-y-2 ${i === 1 || i === 2 ? 'mt-8' : ''}`}>
+                         <div className="w-16 h-16 rounded-2xl bg-blue-50 flex items-center justify-center text-blue-600 mb-6">
+                            <item.icon size={32} />
+                         </div>
+                         <h3 className="font-black uppercase tracking-tighter">{item.title}</h3>
+                      </div>
+                    ))}
+                 </div>
+              </div>
+           </div>
+        </section>
+
+        {/* Global Presence Map */}
+        <section className="py-32 px-6 md:px-12 bg-white text-[#061626] overflow-hidden">
+           <div className="max-w-7xl mx-auto text-center">
+              <span className="text-blue-600 font-black uppercase tracking-[0.3em] text-xs mb-4 block">Our Reach</span>
+              <h2 className="text-4xl md:text-5xl font-black uppercase mb-6 tracking-tight">Worldwide infrastructure</h2>
+              <p className="text-lg text-gray-500 mb-20 max-w-2xl mx-auto font-medium">Low-latency order execution provided by 12 data centers located in major financial hubs across the globe.</p>
+              
+              <div className="relative h-[400px] md:h-[600px] w-full flex items-center justify-center">
+                 <Globe size={600} className="text-blue-500/10 scale-150 md:scale-100" strokeWidth={0.5} />
+                 <div className="absolute inset-0 flex items-center justify-center">
+                    <div className="relative w-full h-full max-w-4xl">
+                       <div className="absolute top-1/4 left-1/4 w-3 h-3 bg-blue-600 rounded-full animate-ping" />
+                       <div className="absolute top-1/3 left-1/2 w-3 h-3 bg-blue-600 rounded-full animate-ping delay-300" />
+                       <div className="absolute bottom-1/4 left-1/3 w-3 h-3 bg-blue-600 rounded-full animate-ping delay-700" />
+                       <div className="absolute top-2/3 right-1/4 w-3 h-3 bg-blue-600 rounded-full animate-ping delay-1000" />
+                       <div className="absolute top-1/2 right-1/3 w-3 h-3 bg-blue-600 rounded-full animate-ping delay-1500" />
+                    </div>
+                 </div>
+              </div>
+           </div>
+        </section>
+
+        {/* Professional Deposit Guide */}
+        <section className="py-32 px-6 md:px-12 bg-[#061626] text-white">
+           <div className="max-w-7xl mx-auto">
+              <div className="text-center mb-24">
+                 <h2 className="text-4xl md:text-5xl font-bold tracking-tight uppercase">Ready to trade live?</h2>
+                 <p className="text-white/40 mt-4 font-medium">Follow these steps to fund your account and start your profit journey</p>
+              </div>
+
+              <div className="grid md:grid-cols-4 gap-12">
+                 {[
+                   { step: '01', title: 'Login', desc: 'Access your account or register a new one in seconds.' },
+                   { step: '02', title: 'Finance', desc: 'Go to the Deposit section in your trading terminal.' },
+                   { step: '03', title: 'Payment', desc: 'Select your preferred method (bKash, Binance, etc).' },
+                   { step: '04', title: 'Profit', desc: 'Confirmation is instant. Start placing your trades.' }
+                 ].map((s, i) => (
+                   <div key={i} className="flex flex-col gap-6 group">
+                      <div className="text-6xl font-black text-blue-500/20 group-hover:text-blue-500/40 transition-colors">{s.step}</div>
+                      <h3 className="text-2xl font-black uppercase tracking-tighter">{s.title}</h3>
+                      <p className="text-white/40 text-sm leading-relaxed font-medium">{s.desc}</p>
+                   </div>
+                 ))}
+              </div>
+           </div>
+        </section>
+
+        {/* FAQ Section */}
+        <section className="py-32 px-6 md:px-12 bg-gray-50 text-[#061626]">
+           <div className="max-w-4xl mx-auto">
+              <h2 className="text-4xl md:text-5xl font-bold mb-16 tracking-tight text-center">Frequently asked questions</h2>
+              <div className="space-y-4">
+                 {[
+                   { q: 'Is it free to register?', a: 'Yes, registration is absolutely free. You can open an account in less than a minute and start practicing with virtual funds immediately.' },
+                   { q: 'How much money can I earn?', a: 'Your potential profit depends on your strategy, market conditions, and the amount of invested funds. Some assets offer payouts up to 95% per successful trade.' },
+                   { q: 'Can I withdraw my money anytime?', a: 'Yes, you can request a withdrawal of your available funds at any time. We process most requests within 24 hours without any additional commission.' },
+                   { q: 'What is a demo account?', a: 'A demo account is a training tool that uses virtual money. It allows you to practice trading and explore all platform features without any financial risk.' }
+                 ].map((item, i) => (
+                   <div key={i} className="group overflow-hidden rounded-2xl bg-white border border-gray-200 hover:border-blue-600 transition-colors">
+                      <button className="w-full p-6 text-left flex justify-between items-center bg-transparent">
+                         <span className="text-lg font-bold uppercase tracking-tight">{item.q}</span>
+                         <HelpCircle className="text-blue-600" size={24} />
+                      </button>
+                      <div className="px-6 pb-6 text-[#061626]/60 leading-relaxed font-medium border-t border-gray-100 pt-4 opacity-0 group-hover:opacity-100 h-0 group-hover:h-auto overflow-hidden transition-all duration-500">
+                         {item.a}
+                      </div>
+                   </div>
+                 ))}
+              </div>
+           </div>
+        </section>
+
+        {/* Payment Methods Section */}
+        <section className="py-24 px-6 md:px-12 bg-[#061626] border-y border-white/5">
+           <div className="max-w-7xl mx-auto">
+              <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 items-center gap-12 opacity-80 hover:opacity-100 transition-all duration-500 cursor-default">
+                <img src="https://upload.wikimedia.org/wikipedia/commons/5/5e/Visa_Inc._logo.svg" className="h-6 md:h-8 mx-auto" alt="Visa" />
+                <img src="https://upload.wikimedia.org/wikipedia/commons/2/2a/Mastercard-logo.svg" className="h-10 md:h-12 mx-auto" alt="Mastercard" />
+                <img src="https://www.vectorlogo.zone/logos/bkash/bkash-ar21.svg" className="h-12 md:h-14 mx-auto" alt="bKash" />
+                <img src="https://upload.wikimedia.org/wikipedia/commons/5/57/Binance_Logo.svg" className="h-8 md:h-10 mx-auto" alt="Binance" />
+                <img src="https://upload.wikimedia.org/wikipedia/commons/b/b5/PayPal.svg" className="h-8 md:h-10 mx-auto" alt="PayPal" />
+                <div className="text-white font-black uppercase tracking-[0.2em] text-[10px] text-center bg-blue-600/20 py-2 px-4 rounded-full border border-blue-600/30">And 50+ more</div>
+              </div>
+           </div>
+        </section>
+
+        {/* Footer */}
+        <footer className="pt-32 pb-16 px-6 md:px-12 bg-[#040d17]">
+           <div className="max-w-7xl mx-auto">
+             <div className="grid lg:grid-cols-4 gap-16 mb-24">
+                <div className="lg:col-span-1">
+                  <div className="flex items-center gap-4 mb-10">
+                    <div className="relative">
+                      <div className="w-14 h-14 md:w-16 md:h-16 rounded-2xl overflow-hidden border border-white/10 shadow-[0_8px_25px_rgba(37,99,235,0.3)] bg-white">
+                        <img 
+                          src="https://i.imghippo.com/files/Gtw3911Dmk.jpg" 
+                          alt="Onyx Option Logo" 
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                      <div className="absolute -top-1 -right-1 w-4 h-4 bg-emerald-500 rounded-full border-2 border-[#040d17]" />
+                    </div>
+                    <div className="flex flex-col">
+                      <span className="text-2xl md:text-3xl font-black tracking-tighter leading-none text-white uppercase">
+                        ONYX<span className="text-blue-500">OPTION</span>
+                      </span>
+                      <span className="text-[9px] font-black uppercase tracking-[0.5em] text-blue-400 mt-2 leading-none">Institutional Intelligence</span>
+                    </div>
+                  </div>
+                  <p className="text-white/30 text-sm leading-relaxed mb-10 font-medium text-justify">
+                    Onyx Option is a world-class trading ecosystem providing premium access to digital assets for over 14 million users worldwide. Registered and regulated since 2018.
+                  </p>
+                  <div className="flex flex-col gap-4 mb-10">
+                     <button className="flex items-center gap-3 bg-white/5 border border-white/10 px-4 py-2.5 rounded-xl hover:bg-white/10 transition-colors group">
+                        <div className="text-white/40 group-hover:text-white"><Zap size={20} /></div>
+                        <div className="text-left">
+                           <div className="text-[8px] font-black uppercase tracking-widest text-white/30">Download on the</div>
+                           <div className="text-xs font-black uppercase text-white/70">App Store</div>
+                        </div>
+                     </button>
+                     <button className="flex items-center gap-3 bg-white/5 border border-white/10 px-4 py-2.5 rounded-xl hover:bg-white/10 transition-colors group">
+                        <div className="text-white/40 group-hover:text-white"><Zap size={20} /></div>
+                        <div className="text-left">
+                           <div className="text-[8px] font-black uppercase tracking-widest text-white/30">Get it on</div>
+                           <div className="text-xs font-black uppercase text-white/70">Google Play</div>
+                        </div>
+                     </button>
+                  </div>
+                  <div className="flex gap-4">
+                     {[Twitter, Facebook, Instagram].map((Icon, i) => (
+                       <a key={i} href="#" className="w-12 h-12 rounded-xl bg-white/5 flex items-center justify-center hover:bg-blue-600 transition-all text-white/50 hover:text-white">
+                         <Icon size={20} />
+                       </a>
+                     ))}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 md:grid-cols-4 lg:col-span-3 gap-12">
+                   <div className="flex flex-col gap-5">
+                     <span className="text-white text-[12px] font-black uppercase tracking-[0.3em] mb-4 text-blue-500">Platform</span>
+                     <button onClick={() => setView('TRADING')} className="text-white/40 hover:text-white transition-colors text-[13px] text-left font-bold uppercase tracking-widest leading-none">Web Terminal</button>
+                     <button className="text-white/40 hover:text-white transition-colors text-[13px] text-left font-bold uppercase tracking-widest leading-none">Mobile Apps</button>
+                     <button onClick={() => { setInfoPageTitle('Assets Index'); setView('INFO_PAGE'); }} className="text-white/40 hover:text-white transition-colors text-[13px] text-left font-bold uppercase tracking-widest leading-none">Assets Index</button>
+                     <button className="text-white/40 hover:text-white transition-colors text-[13px] text-left font-bold uppercase tracking-widest leading-none">Tournaments</button>
+                   </div>
+                   <div className="flex flex-col gap-5">
+                     <span className="text-white text-[12px] font-black uppercase tracking-[0.3em] mb-4 text-blue-500">Company</span>
+                     <button className="text-white/40 hover:text-white transition-colors text-[13px] text-left font-bold uppercase tracking-widest leading-none">About Us</button>
+                     <button className="text-white/40 hover:text-white transition-colors text-[13px] text-left font-bold uppercase tracking-widest leading-none">Academy</button>
+                     <button className="text-white/40 hover:text-white transition-colors text-[13px] text-left font-bold uppercase tracking-widest leading-none">News & Events</button>
+                     <button className="text-white/40 hover:text-white transition-colors text-[13px] text-left font-bold uppercase tracking-widest leading-none">Partnerships</button>
+                   </div>
+                   <div className="flex flex-col gap-5">
+                     <span className="text-white text-[12px] font-black uppercase tracking-[0.3em] mb-4 text-blue-500">Legal</span>
+                     <button onClick={() => { setInfoPageTitle('Terms and Conditions'); setView('INFO_PAGE'); }} className="text-white/40 hover:text-white transition-colors text-[13px] text-left font-bold uppercase tracking-widest leading-none">Terms of Use</button>
+                     <button onClick={() => { setInfoPageTitle('Privacy Policy'); setView('INFO_PAGE'); }} className="text-white/40 hover:text-white transition-colors text-[13px] text-left font-bold uppercase tracking-widest leading-none">Privacy Policy</button>
+                     <button onClick={() => { setInfoPageTitle('Risk Disclosure'); setView('INFO_PAGE'); }} className="text-white/40 hover:text-white transition-colors text-[13px] text-left font-bold uppercase tracking-widest leading-none">Risk Warning</button>
+                     <button className="text-white/40 hover:text-white transition-colors text-[13px] text-left font-bold uppercase tracking-widest leading-none">Cookie Policy</button>
+                   </div>
+                   <div className="hidden md:flex flex-col gap-5">
+                     <span className="text-white text-[12px] font-black uppercase tracking-[0.3em] mb-4 text-blue-500">Support</span>
+                     <span className="text-white/60 text-sm font-bold">support@onyxoption.com</span>
+                     <span className="text-white/30 text-[11px] font-bold leading-relaxed">Corporate Office:<br />Marina Bay Financial Centre,<br />Tower 3, Singapore</span>
+                     <div className="mt-4 flex gap-3">
+                        <div className="px-3 py-1 bg-emerald-500/10 text-emerald-500 text-[10px] font-black uppercase rounded-full border border-emerald-500/20">System Online</div>
+                     </div>
+                   </div>
+                </div>
+             </div>
+             
+             {/* Large Risk Disclosure Footer Block */}
+             <div className="p-8 md:p-12 bg-white/5 rounded-3xl border border-white/5 mb-20 text-center md:text-left">
+                <div className="flex flex-col md:flex-row gap-8 items-center">
+                   <ShieldCheck size={60} className="text-blue-500/30 shrink-0" strokeWidth={1} />
+                   <div>
+                      <h4 className="text-white font-black uppercase tracking-[0.2em] text-xs mb-4">Official Risk Disclosure</h4>
+                      <p className="text-white/20 text-[11px] leading-relaxed uppercase tracking-wider font-bold">
+                        The financial products offered by the company include contracts for difference ('CFDs') and other complex financial products. Trading CFDs carries a high level of risk since leverage can work both to your advantage and disadvantage. As a result, CFDs may not be suitable for all investors because you may lose all your invested capital. You should never invest money that you cannot afford to lose. Before trading in the complex financial products offered please ensure to understand the risks involved. 
+                      </p>
+                   </div>
+                </div>
+             </div>
+
+             <div className="flex flex-col md:flex-row justify-between items-center gap-10 pt-10 border-t border-white/5">
+                <div className="flex items-center gap-8">
+                   <span className="text-white/20 text-[10px] font-black uppercase tracking-[0.3em]">&copy; 2026 ONYX OPTION LTD.</span>
+                   <div className="w-1 h-1 rounded-full bg-white/10" />
+                   <span className="text-white/20 text-[10px] font-black uppercase tracking-[0.3em]">SECURE SSL CONNECTION</span>
+                </div>
+                <div className="flex gap-4 grayscale opacity-30">
+                   <div className="px-4 py-2 bg-white/5 rounded text-[10px] font-black tracking-widest border border-white/10">PCI DSS COMPLIANT</div>
+                   <div className="px-4 py-2 bg-white/5 rounded text-[10px] font-black tracking-widest border border-white/10">18+ ONLY</div>
+                </div>
+             </div>
+           </div>
+        </footer>
+      </div>
     );
   }
+
 
   if (!user) {
     return <Auth onSuccess={() => setView('TRADING')} />;
@@ -3167,7 +4104,7 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
                     onTradingTutorialsClick={() => { setInfoPageTitle('Trading Tutorials'); setView('INFO_PAGE'); setIsHelpOpen(false); }}
                     supportSettings={supportSettings}
                     tutorials={tutorials}
-                    currencySymbol={activeAccount === 'DEMO' ? '$' : currency.symbol}
+                    currencySymbol={currency.symbol}
                     onClose={() => setIsHelpOpen(false)}
                   />
                 </aside>
@@ -3608,7 +4545,7 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
              onTradingTutorialsClick={() => { setInfoPageTitle('Trading Tutorials'); setView('INFO_PAGE'); }}
              supportSettings={supportSettings}
              tutorials={tutorials}
-             currencySymbol={activeAccount === 'DEMO' ? '$' : currency.symbol}
+             currencySymbol={currency.symbol}
              onClose={() => setView('TRADING')}
           />
         )}
@@ -4154,20 +5091,22 @@ function NavButton({ icon, label, active, count, onClick }: { icon: React.ReactN
 function TradeDetailsSheet({ trade, onClose, tickHistory, currentTime, currencySymbol, exchangeRate, timezoneOffset, inSidebar = false }: { trade: Trade, onClose: () => void, tickHistory: TickData[], currentTime: number, currencySymbol: string, exchangeRate: number, timezoneOffset: number, inSidebar?: boolean }) {
   const isWin = trade.status === 'WIN';
   const isLoss = trade.status === 'LOSS';
-  const profit = (trade.profit !== undefined ? trade.profit : (isWin ? trade.amount * (trade.payout / 100) : -trade.amount)) * exchangeRate;
+  const tSymbol = trade.currencySymbol || currencySymbol;
+  const tRate = trade.exchangeRate || exchangeRate;
+  const profit = (trade.profit !== undefined ? trade.profit : (isWin ? trade.amount * (trade.payout / 100) : -trade.amount)) * tRate;
   
   // Format profit string
-  let profitString = `${currencySymbol}${Math.round(Math.abs(profit))}`;
+  let profitString = `${tSymbol}${Math.round(Math.abs(profit))}`;
   let profitColor = 'text-gray-400';
   
   if (isWin) {
-    profitString = `+${currencySymbol}${Math.round(profit)}`;
+    profitString = `+${tSymbol}${Math.round(profit)}`;
     profitColor = 'text-[#22c55e]';
   } else if (isLoss) {
-    profitString = `-${currencySymbol}${Math.round(Math.abs(profit))}`;
+    profitString = `-${tSymbol}${Math.round(Math.abs(profit))}`;
     profitColor = 'text-[#ff4757]';
   } else {
-    profitString = `${currencySymbol}0`;
+    profitString = `${tSymbol}0`;
   }
 
   // Generate chart data from history or fallback to simulation
@@ -4290,6 +5229,9 @@ function TradeDetailsContent({
   getCoordY,
   isWin
 }: any) {
+  const tSymbol = trade.currencySymbol || currencySymbol;
+  const tRate = trade.exchangeRate || exchangeRate;
+  
   return (
     <>
       {/* Header with Title and Tabs */}
@@ -4324,7 +5266,7 @@ function TradeDetailsContent({
                   <span className="text-white/60 font-bold text-sm tracking-tight">{trade.assetShortName} · {trade.payout}%</span>
                 </div>
                 <div className="flex items-center gap-1.5 text-xl font-black text-white">
-                  <span>{currencySymbol}{Math.round(trade.amount * exchangeRate)}</span>
+                  <span>{trade.currencySymbol || currencySymbol}{Math.round(trade.amount * (trade.exchangeRate || exchangeRate))}</span>
                   {trade.type === 'UP' ? <ArrowUp size={18} className="text-[#22c55e]" strokeWidth={3} /> : <ArrowDown size={18} className="text-[#ff4757]" strokeWidth={3} />}
                 </div>
               </div>
@@ -4387,7 +5329,7 @@ function TradeDetailsContent({
 
         {/* Details List */}
         <div className="space-y-4 mb-8">
-          <DetailRow label="Amount" value={`${currencySymbol}${Math.round(trade.amount * exchangeRate)}`} />
+          <DetailRow label="Amount" value={`${tSymbol}${Math.round(trade.amount * tRate)}`} />
           <DetailRow label="PnL" value={profitString} valueClassName={profitColor} />
           <DetailRow 
             label="Trade ID" 
@@ -4649,13 +5591,16 @@ const TradeItem: React.FC<{ trade: Trade, onClick?: () => void, currentPrice?: n
       ? currentPrice > trade.entryPrice 
       : currentPrice < trade.entryPrice;
     
-    const potentialProfit = trade.amount * (trade.payout / 100) * exchangeRate;
+    const tradeSymbol = trade.currencySymbol || currencySymbol;
+    const tradeRate = trade.exchangeRate || exchangeRate;
+
+    const potentialProfit = trade.amount * (trade.payout / 100) * tradeRate;
     
     if (isWinning) {
-        profitString = `+${currencySymbol}${potentialProfit.toFixed(2)}`;
+        profitString = `+${tradeSymbol}${potentialProfit.toFixed(2)}`;
         profitColor = 'text-[#22c55e]';
     } else {
-        profitString = `-${currencySymbol}${(trade.amount * exchangeRate).toFixed(2)}`;
+        profitString = `-${tradeSymbol}${(trade.amount * tradeRate).toFixed(2)}`;
         profitColor = 'text-[#ff4757]';
     }
 
@@ -4663,18 +5608,21 @@ const TradeItem: React.FC<{ trade: Trade, onClick?: () => void, currentPrice?: n
     // Closed Trade Logic
     const isWin = trade.status === 'WIN';
     const isLoss = trade.status === 'LOSS';
-    const profit = (trade.profit !== undefined ? trade.profit : (isWin ? trade.amount * (trade.payout / 100) : -trade.amount)) * exchangeRate;
+    const tradeSymbol = trade.currencySymbol || currencySymbol;
+    const tradeRate = trade.exchangeRate || exchangeRate;
+
+    const profit = (trade.profit !== undefined ? trade.profit : (isWin ? trade.amount * (trade.payout / 100) : -trade.amount)) * tradeRate;
 
     timeString = Math.floor(trade.duration / 60) > 0 ? `${Math.floor(trade.duration / 60)} min` : `${trade.duration} sec`;
 
     if (isWin) {
-      profitString = `+${currencySymbol}${Math.round(profit)}`;
+      profitString = `+${tradeSymbol}${Math.round(profit)}`;
       profitColor = 'text-[#22c55e]';
     } else if (isLoss) {
-      profitString = `-${currencySymbol}${Math.round(Math.abs(profit))}`;
+      profitString = `-${tradeSymbol}${Math.round(Math.abs(profit))}`;
       profitColor = 'text-[#ff4757]';
     } else {
-      profitString = `${currencySymbol}0`;
+      profitString = `${tradeSymbol}0`;
       profitColor = 'text-[var(--text-secondary)]';
     }
   }
@@ -4704,7 +5652,7 @@ const TradeItem: React.FC<{ trade: Trade, onClick?: () => void, currentPrice?: n
             <span className="text-xs text-[var(--text-secondary)]">· {isActive ? `${trade.payout}%` : 'Fixed Time'}</span>
           </div>
           <div className="flex items-center gap-1 text-xs text-[var(--text-primary)] font-medium">
-            <span>{currencySymbol}{Math.round(trade.amount * exchangeRate)}</span>
+            <span>{(trade.currencySymbol || currencySymbol)}{Math.round(trade.amount * (trade.exchangeRate || exchangeRate))}</span>
             {trade.type === 'UP' ? <span className="text-[#22c55e]">↑</span> : <span className="text-[#ff4757]">↓</span>}
           </div>
         </div>

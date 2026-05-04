@@ -214,7 +214,7 @@ export default function TradeInputSheet({
                     onInvestmentChange(val);
                   }}
                   onBlur={() => {
-                    const min = currencySymbol === '৳' ? 20 : 1;
+                    const min = currencySymbol === 'BDT ' ? 20 : 1;
                     if (investment < min) onInvestmentChange(min);
                   }}
                   className="flex-1 bg-transparent text-right font-black text-3xl text-white focus:outline-none"
@@ -223,7 +223,7 @@ export default function TradeInputSheet({
               </div>
 
               <div className="grid grid-cols-3 gap-2.5 w-full">
-                {(currencySymbol === '৳' ? [20, 50, 100, 200, 500, 1000, 2000, 5000, 10000] : [1, 5, 10, 20, 50, 100, 200, 500, 1000]).map(amt => (
+                {(currencySymbol === 'BDT ' ? [20, 50, 100, 200, 500, 1000, 2000, 5000, 10000] : [1, 5, 10, 20, 50, 100, 200, 500, 1000]).map(amt => (
                   <button 
                     key={amt}
                     onClick={() => {

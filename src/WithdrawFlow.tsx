@@ -366,7 +366,7 @@ export default function WithdrawFlow({
                     amount === val ? "bg-[#00ff5f]/10 border-[#00ff5f] text-[#00ff5f] shadow-[#00ff5f]/10" : "text-white/40 hover:text-white hover:bg-white/5"
                   )}
                 >
-                  {currencyCode === 'BDT' ? '৳' : currencySymbol}{val.toLocaleString()}
+                  {currencyCode === 'BDT' ? 'BDT ' : currencySymbol}{val.toLocaleString()}
                 </button>
               ))}
             </div>

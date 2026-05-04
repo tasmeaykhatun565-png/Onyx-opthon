@@ -275,6 +275,9 @@ async function startServer() {
         direction TEXT,
         accountType TEXT,
         status TEXT DEFAULT 'PENDING',
+        currency TEXT,
+        currencySymbol TEXT,
+        exchangeRate REAL,
         createdAt INTEGER
       );
 
@@ -636,6 +639,9 @@ async function startServer() {
         values.push(email);
         db.prepare(`UPDATE users SET ${updates.join(', ')} WHERE email = ?`).run(...values);
         
+        // CRITICAL: Notify all tabs to prevent currency reverts and keep preferences in sync
+        emitUserUpdate(email);
+        
         // Sync to Firestore
         if (canSyncFirestore()) {
           const user = db.prepare('SELECT uid FROM users WHERE email = ?').get(email) as any;
@@ -802,10 +808,14 @@ async function startServer() {
 
   // Helper to emit user data updates
   const emitUserUpdate = (email: string) => {
+    // Fresh SELECT from DB to ensure we have the absolute latest data from whatever route just modified it
     const user = db.prepare('SELECT * FROM users WHERE email = ?').get(email) as any;
     if (user) {
       // Find all sockets for this user (could be multiple tabs)
-      const socketIds = Object.keys(connectedUsers).filter(id => connectedUsers[id].email === email);
+      const socketIds = Object.keys(connectedUsers).filter(id => {
+        const u = connectedUsers[id];
+        return u && (u.email === email || u.uid === user.uid);
+      });
       
       // Parse trades if it's a string
       let trades = [];
@@ -823,14 +833,13 @@ async function startServer() {
         extraAccounts = [];
       }
 
-      // Get recent referrals
+      // Parse referral stats
       const recentReferrals = db.prepare('SELECT email, createdAt, status FROM users WHERE referredBy = ? OR referredBy = ? OR referredBy = ? ORDER BY createdAt DESC LIMIT 10').all(user.referralCode, user.uid, user.email);
-      
-      // Get commission history
       const commissionHistory = db.prepare('SELECT * FROM referrals WHERE referrerUid = ? OR referrerUid = ? OR referredEmail = ? ORDER BY timestamp DESC LIMIT 10').all(user.uid, user.referralCode, user.email);
 
       socketIds.forEach(socketId => {
         if (connectedUsers[socketId]) {
+          // IMPORTANT: Update the in-memory store so subsequent reads from socket context are correct
           connectedUsers[socketId] = {
             ...connectedUsers[socketId],
             ...user,
@@ -937,6 +946,7 @@ async function startServer() {
     payout?: number,
     isRealMarket?: boolean,
     isOTC?: boolean,
+    isVisible?: boolean,
     baseMarketPrice?: number
   }> = {
     'BTC/USD': { price: 65000.00, volatility: 25.0, trend: 0, winPercentage: 50, payout: 90 },
@@ -978,6 +988,18 @@ async function startServer() {
     'GBP/CHF OTC': { price: 1.1350, volatility: 0.00008, trend: 0, winPercentage: 50, payout: 90, isOTC: true },
     'AUD/CHF OTC': { price: 0.5950, volatility: 0.00008, trend: 0, winPercentage: 50, payout: 88, isOTC: true },
     'CAD/CHF OTC': { price: 0.6650, volatility: 0.00008, trend: 0, winPercentage: 50, payout: 88, isOTC: true },
+    'CAD/JPY OTC': { price: 112.50, volatility: 0.012, trend: 0, winPercentage: 50, payout: 92, isOTC: true },
+    'CHF/JPY OTC': { price: 171.50, volatility: 0.012, trend: 0, winPercentage: 50, payout: 92, isOTC: true },
+    'GBP/AUD OTC': { price: 1.8950, volatility: 0.00015, trend: 0, winPercentage: 50, payout: 92, isOTC: true },
+    'GBP/NZD OTC': { price: 2.0750, volatility: 0.00015, trend: 0, winPercentage: 50, payout: 92, isOTC: true },
+    'EUR/NZD OTC': { price: 1.7850, volatility: 0.00015, trend: 0, winPercentage: 50, payout: 92, isOTC: true },
+    'AUD/NZD OTC': { price: 1.0950, volatility: 0.0001, trend: 0, winPercentage: 50, payout: 92, isOTC: true },
+    'USD/TRY OTC': { price: 32.50, volatility: 0.005, trend: 0, winPercentage: 50, payout: 90, isOTC: true },
+    'USD/BRL OTC': { price: 5.15, volatility: 0.0008, trend: 0, winPercentage: 50, payout: 90, isOTC: true },
+    'LATAM INDEX OTC': { price: 3200, volatility: 2.5, trend: 0, winPercentage: 50, payout: 93, isOTC: true },
+    'ASIA INDEX OTC': { price: 1800, volatility: 1.5, trend: 0, winPercentage: 50, payout: 93, isOTC: true },
+    'EUROPE INDEX OTC': { price: 4500, volatility: 1.2, trend: 0, winPercentage: 50, payout: 93, isOTC: true },
+    'COMMODITIES INDEX OTC': { price: 950, volatility: 0.8, trend: 0, winPercentage: 50, payout: 93, isOTC: true },
     'GOLD OTC': { price: 2310.00, volatility: 0.18, trend: 0, winPercentage: 50, payout: 90, isOTC: true },
     'OIL OTC': { price: 81.00, volatility: 0.025, trend: 0, winPercentage: 50, payout: 90, isOTC: true },
     'SILVER OTC': { price: 28.50, volatility: 0.005, trend: 0, winPercentage: 50, payout: 88, isOTC: true },
@@ -1499,7 +1521,8 @@ async function startServer() {
         db.prepare('UPDATE users SET demoBalance = demoBalance + ? WHERE email = ?').run(totalReturn, email);
       } else {
         // Handle extra accounts
-        const totalReturn = activeTrade.amount + profit;
+        const rate = activeTrade.exchangeRate || 1;
+        const totalReturn = (activeTrade.amount + profit) * rate;
         const user = db.prepare('SELECT extraAccounts FROM users WHERE email = ?').get(email) as any;
         if (user) {
           let extraAccounts = [];
@@ -1542,10 +1565,12 @@ async function startServer() {
             extraAccounts = [];
           }
           let updated = false;
+          const rate = activeTrade.exchangeRate || 1;
+          const nativeAmount = activeTrade.amount * rate;
           extraAccounts = extraAccounts.map((acc: any) => {
             if (acc.id === activeTrade.accountType) {
               updated = true;
-              return { ...acc, balance: acc.balance + activeTrade.amount };
+              return { ...acc, balance: acc.balance + nativeAmount };
             }
             return acc;
           });
@@ -2275,6 +2300,53 @@ async function startServer() {
         return;
       }
       db.prepare('UPDATE users SET demoBalance = demoBalance - ? WHERE email = ?').run(trade.amount, email);
+    } else {
+      // Handle extra accounts deduction
+      const user = db.prepare('SELECT extraAccounts, uid FROM users WHERE email = ?').get(email) as any;
+      if (user && user.extraAccounts) {
+        let extraAccounts = [];
+        try {
+          extraAccounts = typeof user.extraAccounts === 'string' ? JSON.parse(user.extraAccounts) : (user.extraAccounts || []);
+        } catch (e) {
+          extraAccounts = [];
+        }
+        
+        let updated = false;
+        let insufficient = false;
+        
+        const newExtraAccounts = extraAccounts.map((acc: any) => {
+          if (acc.id === trade.accountType) {
+            const nativeAmount = trade.amount * (trade.exchangeRate || 1);
+            if (acc.balance < nativeAmount) {
+              insufficient = true;
+              return acc;
+            }
+            updated = true;
+            return { ...acc, balance: acc.balance - nativeAmount };
+          }
+          return acc;
+        });
+        
+        if (insufficient) {
+          socket.emit('trade-error', 'Insufficient account balance.');
+          return;
+        }
+        
+        if (updated) {
+          db.prepare('UPDATE users SET extraAccounts = ? WHERE email = ?').run(JSON.stringify(newExtraAccounts), email);
+          // Sync to firestore if needed
+          if (canSyncFirestore()) {
+             firestore.collection('users').doc(user.uid).set({ extraAccounts: JSON.stringify(newExtraAccounts) }, { merge: true }).catch(() => {});
+          }
+        } else {
+          // If account type not found and not REAL/DEMO, might be an error or old account
+          socket.emit('trade-error', 'Invalid account type selected.');
+          return;
+        }
+      } else {
+        socket.emit('trade-error', 'Account not found.');
+        return;
+      }
     }
 
     // Update Firestore after deduction
@@ -2383,7 +2455,10 @@ async function startServer() {
                   startTime: Date.now(),
                   endTime: Date.now() + order.duration * 1000,
                   payout: currentProfitability,
-                  accountType: order.accountType
+                  accountType: order.accountType,
+                  currency: order.currency,
+                  currencySymbol: order.currencySymbol,
+                  exchangeRate: order.exchangeRate
                 };
                 
                 socket.emit('pending-order-executed', { orderId: order.id, tradeId: tradeId });
@@ -2410,8 +2485,18 @@ async function startServer() {
   const generateLeaderboard = () => {
     const newEntries = [];
     for (let i = 0; i < 20; i++) {
-        // Distribute profits more realistically, top near $12000, min near $500
-        const profit = 500 + Math.random() * 11500;
+        // Distribute profits more realistically, top near $3000, min near $150
+        let profit;
+        if (i === 0) {
+          profit = 2850 + Math.random() * 145; // Top: 2850 - 2995
+        } else if (i < 5) {
+          profit = 2000 + Math.random() * 800; // Next 4: 2000 - 2800
+        } else if (i < 10) {
+          profit = 1000 + Math.random() * 1000; // Next 5: 1000 - 2000
+        } else {
+          profit = 150 + Math.random() * 850;   // Rest: 150 - 1000
+        }
+
         newEntries.push({
             id: `sim-${i}`,
             name: `${FIRST_NAMES[Math.floor(Math.random() * FIRST_NAMES.length)]} ${LAST_NAMES[Math.floor(Math.random() * LAST_NAMES.length)]}`,
@@ -2435,15 +2520,7 @@ async function startServer() {
     }
 
     // Simulate profit growth and user swapping
-    leaderboardEntries = leaderboardEntries.map(entry => {
-        // Swap users
-        return {
-            id: entry.id, // keep id
-            name: `${FIRST_NAMES[Math.floor(Math.random() * FIRST_NAMES.length)]} ${LAST_NAMES[Math.floor(Math.random() * LAST_NAMES.length)]}`,
-            countryCode: COUNTRIES[Math.floor(Math.random() * COUNTRIES.length)],
-            profit: 500 + Math.random() * 11500 // Start fresh profit
-        };
-    }).sort((a, b) => b.profit - a.profit);
+    leaderboardEntries = generateLeaderboard();
 
     lastSwapTime = now;
 
@@ -2806,13 +2883,15 @@ async function startServer() {
         const stmt = db.prepare(`
           INSERT INTO pending_orders (
             email, uid, assetId, assetName, type, triggerValue, 
-            profitability, amount, duration, direction, accountType, createdAt
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            profitability, amount, duration, direction, accountType, 
+            currency, currencySymbol, exchangeRate, createdAt
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `);
         const result = stmt.run(
           order.email, order.uid, order.assetId, order.assetName, order.type, 
           order.triggerValue, order.profitability, order.amount, order.duration, 
-          order.direction, order.accountType, Date.now()
+          order.direction, order.accountType, 
+          order.currency, order.currencySymbol, order.exchangeRate, Date.now()
         );
         
         const newOrder = { ...order, id: result.lastInsertRowid, status: 'PENDING', createdAt: Date.now() };
@@ -4040,6 +4119,13 @@ async function startServer() {
     socket.on('admin-toggle-freeze', ({ asset, isFrozen }) => {
       if (assets[asset]) {
         assets[asset].isFrozen = isFrozen;
+        io.emit('market-assets-updated', assets);
+      }
+    });
+
+    socket.on('admin-toggle-visibility', ({ asset, isVisible }) => {
+      if (assets[asset]) {
+        assets[asset].isVisible = isVisible;
         io.emit('market-assets-updated', assets);
       }
     });

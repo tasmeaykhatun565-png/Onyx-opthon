@@ -23,7 +23,7 @@ const COUNTRIES = [
   { code: 'GB', name: 'United Kingdom', currency: 'GBP', symbol: '£' },
   { code: 'EU', name: 'European Union', currency: 'EUR', symbol: '€' },
   { code: 'IN', name: 'India', currency: 'INR', symbol: '₹' },
-  { code: 'BD', name: 'Bangladesh', currency: 'BDT', symbol: '৳' },
+  { code: 'BD', name: 'Bangladesh', currency: 'BDT', symbol: 'BDT ' },
   { code: 'NG', name: 'Nigeria', currency: 'NGN', symbol: '₦' },
   { code: 'PK', name: 'Pakistan', currency: 'PKR', symbol: '₨' },
   { code: 'ID', name: 'Indonesia', currency: 'IDR', symbol: 'Rp' },

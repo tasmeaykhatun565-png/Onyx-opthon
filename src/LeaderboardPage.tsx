@@ -54,7 +54,7 @@ export function LeaderboardPage({ onBack, currencySymbol = '$', currentUser, soc
        console.log('Received leaderboard update', data);
        let updatedLeaderboard = [...data];
        
-       if (currentUser?.name && currentUser?.profit !== undefined && currentUser.profit > 0) {
+       if (currentUser?.name && currentUser?.profit !== undefined) {
           const userProfit = currentUser.profit; 
           const userEntry: LeaderboardEntry = {
             id: 'current-user',
@@ -66,15 +66,25 @@ export function LeaderboardPage({ onBack, currencySymbol = '$', currentUser, soc
           
           updatedLeaderboard.push(userEntry);
        }
-       // Sort descending and keep top 20
+       // Sort descending based on profit
        updatedLeaderboard.sort((a, b) => b.profit - a.profit);
        
+       let finalLeaderboard = [...updatedLeaderboard];
+       
        // Ensure we only slice if there's more than 20
-       if (updatedLeaderboard.length > 20) {
-           updatedLeaderboard = updatedLeaderboard.slice(0, 20);
+       if (finalLeaderboard.length > 20) {
+           finalLeaderboard = finalLeaderboard.slice(0, 20);
+       }
+
+       // Make sure the current user is visible even if they are not in the Top 20
+       const userIndex = updatedLeaderboard.findIndex(e => e.isCurrentUser);
+       if (userIndex >= 20 && currentUser?.name) {
+           const userEntry = updatedLeaderboard[userIndex];
+           (userEntry as any).actualRank = userIndex + 1; // Preserve their real rank
+           finalLeaderboard.push(userEntry);
        }
        
-       setLeaderboard(updatedLeaderboard);
+       setLeaderboard(finalLeaderboard);
        setLastUpdate(format(new Date(), 'HH:mm:ss'));
     };
 
@@ -135,17 +145,24 @@ export function LeaderboardPage({ onBack, currencySymbol = '$', currentUser, soc
         <div>
            <p className="text-sm font-bold text-gray-500 mb-6">Traders with the biggest profit</p>
            
-           <div className="flex justify-between items-start mb-8">
+           <div className="grid grid-cols-3 gap-4 mb-8">
               <div className="flex flex-col">
-                 <span className="text-[22px] font-bold text-white tracking-tight">20,000+</span>
-                 <span className="text-[13px] text-gray-500 font-medium">Participants a day</span>
+                 <span className="text-[18px] md:text-[22px] font-bold text-white tracking-tight">20,000+</span>
+                 <span className="text-[10px] text-gray-500 font-black uppercase tracking-widest leading-none mt-1">Traders</span>
+              </div>
+              <div className="flex flex-col items-center">
+                 <span className={`text-[18px] md:text-[22px] font-bold tracking-tight ${currentUser?.profit !== undefined && currentUser.profit < 0 ? 'text-red-500' : 'text-emerald-500'}`}>
+                   {currentUser?.profit !== undefined ? (currentUser.profit < 0 ? `-$${Math.abs(Math.floor(currentUser.profit)).toLocaleString()}` : `$${Math.floor(currentUser.profit).toLocaleString()}`) : '$0'}
+                 </span>
+                 <span className={`text-[10px] font-black uppercase tracking-widest leading-none mt-1 text-center ${currentUser?.profit !== undefined && currentUser.profit < 0 ? 'text-red-500/60' : 'text-emerald-500/60'}`}>
+                   Your Profit
+                 </span>
               </div>
               <div className="flex flex-col items-end">
                  <div className="flex items-center gap-2">
-                    <span className="text-[22px] font-bold text-white tabular-nums tracking-tight">{lastUpdate}</span>
-                    <Info size={18} className="text-gray-600" />
+                    <span className="text-[18px] md:text-[22px] font-bold text-white tabular-nums tracking-tight leading-none">{lastUpdate}</span>
                  </div>
-                 <span className="text-[13px] text-gray-500 font-medium text-right">Latest update</span>
+                 <span className="text-[10px] text-gray-500 font-black uppercase tracking-widest leading-none mt-1">Live Sync</span>
               </div>
            </div>
         </div>
@@ -175,7 +192,7 @@ export function LeaderboardPage({ onBack, currencySymbol = '$', currentUser, soc
         {/* Ranking List */}
         <div className="space-y-4 mt-8 pb-10">
            {leaderboard.map((entry, index) => {
-              const rank = index + 1;
+              const rank = (entry as any).actualRank || index + 1;
               const isTop3 = rank <= 3;
               
               return (
@@ -233,8 +250,8 @@ export function LeaderboardPage({ onBack, currencySymbol = '$', currentUser, soc
                         "text-[16px] font-black tabular-nums tracking-tighter", 
                         entry.isCurrentUser ? "text-emerald-400" : (isTop3 ? "text-white" : "text-gray-200")
                       )}>
-                        {currencySymbol}{entry.profit.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                        {entry.profit >= 5000 && <span className="ml-0.5 text-[10px] opacity-60">+</span>}
+                        {entry.profit < 0 ? `-$${Math.abs(entry.profit).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : `$${entry.profit.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                        {entry.profit >= 2500 && <span className="ml-0.5 text-[10px] opacity-60">+</span>}
                       </span>
                       <span className="text-[9px] text-gray-500 font-bold uppercase tracking-tighter">Profit</span>
                    </div>

@@ -709,7 +709,7 @@ export const TradingChart: React.FC<TradingChartProps> = ({
         borderColor: colors.border,
         fixLeftEdge: false,
         fixRightEdge: false,
-        minBarSpacing: 0.5,
+        minBarSpacing: 1,
         maxBarSpacing: 50,
         barSpacing: 8,
         shiftVisibleRangeOnNewBar: true,

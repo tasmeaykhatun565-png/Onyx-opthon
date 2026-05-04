@@ -667,7 +667,7 @@ const PaymentDetails = ({ handleBack, selectedMethod, amount, currencyCode, curr
     const exchangeRate = depositSettings.exchangeRate || 120;
     const localAmount = needsConversion ? amount * exchangeRate : amount;
     const displayCurrency = needsConversion ? 'BDT' : currencyCode;
-    const displaySymbol = needsConversion ? '৳' : currencySymbol;
+    const displaySymbol = needsConversion ? 'BDT ' : currencySymbol;
 
     const getPaymentTarget = () => {
       const currentAccount = numbers[numberIndex] || numbers[0] || { number: '01810761498', type: 'Cash Out', label: 'Agent' };
@@ -1132,7 +1132,7 @@ export default function DepositFlow({ isOpen, onClose, currencySymbol, currencyC
 
   const isBdtMethod = ['bkash_p2c', 'nagad_p2c', 'rocket_p2c', 'upay_p2c'].includes(selectedMethod.id);
   const displayCurrencyCode = isBdtMethod ? 'BDT' : currencyCode;
-  const displayCurrencySymbol = isBdtMethod ? '৳' : currencySymbol;
+  const displayCurrencySymbol = isBdtMethod ? 'BDT ' : currencySymbol;
 
   const rate = EXCHANGE_RATES[displayCurrencyCode] || 1;
   const minDeposit = displayCurrencyCode === 'BDT' ? 500 : Math.round(10 * rate);

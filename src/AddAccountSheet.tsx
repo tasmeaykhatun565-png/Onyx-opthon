@@ -17,7 +17,7 @@ interface AddAccountSheetProps {
 }
 
 const CURRENCIES: Currency[] = [
-  { code: 'BDT', name: 'Bangladeshi taka', symbol: '৳', flag: '🇧🇩' },
+  { code: 'BDT', name: 'Bangladeshi taka', symbol: 'BDT ', flag: '🇧🇩' },
   { code: 'USD', name: 'US dollar', symbol: '$', flag: '🇺🇸' },
   { code: 'EUR', name: 'Euro', symbol: '€', flag: '🇪🇺' },
   { code: 'GBP', name: 'British Pound', symbol: '£', flag: '🇬🇧' },
