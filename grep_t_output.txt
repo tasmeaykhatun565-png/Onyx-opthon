@@ -1,0 +1,2417 @@
+255-  { id: 'oil', name: 'WTI Crude Oil', shortName: 'OIL', payout: 80, category: 'Commodities', flag: '🛢️', basePrice: 80, volatility: 0.5, isOTC: false, precision: 2 },
+256-];
+257-
+258-const INITIAL_BALANCE = 12273.67;
+259-
+260-// --- Helper Functions ---
+261-const getTimeFrameInMs = (tf: string): number => {
+262-  const numMatches = tf.match(/\d+/);
+263-  const letterMatches = tf.match(/[a-zA-Z]+/);
+264-  if (!numMatches || !letterMatches) return 60000;
+265:  const value = parseInt(numMatches[0]);
+266-  const unit = letterMatches[0].toUpperCase();
+267-  
+268-  switch (unit) {
+269-    case 'S': return value * 1000;
+270-    case 'M': return value * 60 * 1000;
+271-    case 'H': return value * 60 * 60 * 1000;
+272-    case 'D': return value * 24 * 60 * 60 * 1000;
+273-    default: return 60000;
+274-  }
+275-};
+276-
+277-const formatWithOffset = (timestamp: number, pattern: string, offsetHours: number) => {
+278-  const date = new Date(timestamp + (offsetHours * 3600000));
+279:  const pads = (n: number, z = 2) => String(n).padStart(z, '0');
+280-  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+281-  
+282-  if (pattern === 'HH:mm:ss') {
+283-    return `${pads(date.getUTCHours())}:${pads(date.getUTCMinutes())}:${pads(date.getUTCSeconds())}`;
+284-  }
+285-  if (pattern === 'HH:mm') {
+286-    return `${pads(date.getUTCHours())}:${pads(date.getUTCMinutes())}`;
+287-  }
+288-  if (pattern === 'HH:mm:ss.SSS') {
+289-    return `${pads(date.getUTCHours())}:${pads(date.getUTCMinutes())}:${pads(date.getUTCSeconds())}.${pads(date.getUTCMilliseconds(), 3)}`;
+--
+292-    return `${months[date.getUTCMonth()]} ${pads(date.getUTCDate())} ${pads(date.getUTCHours())}:${pads(date.getUTCMinutes())}:${pads(date.getUTCSeconds())}.${pads(date.getUTCMilliseconds(), 3)}`;
+293-  }
+294-  if (pattern === 'MMM dd, yyyy') {
+295-    return `${months[date.getUTCMonth()]} ${pads(date.getUTCDate())}, ${date.getUTCFullYear()}`;
+296-  }
+297-  if (pattern === 'MMM dd') {
+298-    return `${months[date.getUTCMonth()]} ${pads(date.getUTCDate())}`;
+299-  }
+300-  
+301-  try {
+302:     return format(date, pattern); 
+303-  } catch(e) {
+304:     return format(new Date(timestamp), pattern);
+305-  }
+306-};
+307-
+308-// --- Helper Components ---
+309-const AssetIcon = ({ 
+310-  shortName, 
+311-  category, 
+312-  flag, 
+313-  size = "md" 
+314-}: { 
+315-  shortName: string, 
+316-  category?: string, 
+317-  flag?: string, 
+318-  size?: "sm" | "md" | "lg" 
+319-}) => {
+320-  const containerSize = size === "sm" ? "w-6 h-6" : size === "lg" ? "w-12 h-12" : "w-8 h-8";
+321-  const flagSize = size === "sm" ? "w-4 h-4" : size === "lg" ? "w-8 h-8" : "w-6 h-6";
+322-  const fontSize = size === "sm" ? "text-[10px]" : size === "lg" ? "text-2xl" : "text-lg";
+323-
+324-  if (category === 'Forex') {
+325:    const currencies = shortName.split('/');
+326-    if (currencies.length === 2) {
+327-      const c1 = currencies[0].toLowerCase();
+328-      const c2 = currencies[1].toLowerCase();
+329-      
+330-      const countryMap: Record<string, string> = {
+331-        aud: 'au', chf: 'ch', jpy: 'jp', usd: 'us', eur: 'eu',
+332-        cad: 'ca', gbp: 'gb', nzd: 'nz', aed: 'ae', ars: 'ar',
+333-        bd: 'bd', bdt: 'bd', brl: 'br', cop: 'co', dzd: 'dz',
+334-        egp: 'eg', idr: 'id', inr: 'in', mxn: 'mx', pkr: 'pk',
+335-        sar: 'sa', try: 'tr', zar: 'za'
+--
+574-              const dynamicAsset = marketAssets[asset.shortName];
+575-              const isFrozen = dynamicAsset?.isFrozen;
+576-              const payout = dynamicAsset?.payout || asset.payout;
+577-              
+578-              return (
+579-                  <div 
+580-                      key={asset.id}
+581-                      onClick={() => {
+582-                          if (isFrozen) return;
+583-                          setIsLoading(true);
+584:                          onSelect(asset);
+585-                          onClose();
+586-                      }}
+587-                      className={cn(
+588-                          "flex items-center justify-between px-4 py-3.5 rounded-xl hover:bg-[var(--color-text-primary)]/[0.03] cursor-pointer transition-all active:scale-[0.98]",
+589-                          asset.id === currentAssetId && "bg-[var(--color-text-primary)]/[0.05]",
+590-                          isFrozen && "opacity-40 grayscale"
+591-                      )}
+592-                  >
+593-                      <div className="flex items-center gap-4">
+594-                          <div className="relative">
+--
+599-                                  size="md"
+600-                              />
+601-                              {isFrozen && (
+602-                                  <div className="absolute -top-1 -right-1 bg-red-500 rounded-full p-0.5 border border-black shadow-lg">
+603-                                      <Lock size={8} className="text-text-primary" />
+604-                                  </div>
+605-                              )}
+606-                          </div>
+607-                          <div className="flex flex-col">
+608-                              <span className="text-text-primary font-bold text-[15px] leading-tight">
+609:                                {asset.name.split(' (')[0]}
+610-                              </span>
+611-                              {asset.name.includes('Equity') && (
+612-                                <span className="text-[10px] text-gray-500 font-bold uppercase tracking-wider mt-0.5">Stock Market</span>
+613-                              )}
+614-                              {asset.isOTC && !asset.name.toLowerCase().includes('quickler') && (
+615-                                <span className="text-[10px] text-gray-500 font-bold uppercase tracking-wider mt-0.5">Over-the-counter</span>
+616-                              )}
+617-                              {asset.name.toLowerCase().includes('quickler') && (
+618-                                <span className="text-[10px] text-gray-500 font-bold uppercase tracking-wider mt-0.5">5 Second Trading</span>
+619-                              )}
+--
+719-      </div>
+720-      
+721-      <div className="flex-1 overflow-y-auto p-4 space-y-3 scrollbar-hide">
+722-        {activeTab === 'CLOSED' ? (
+723-          <>
+724-            {totalToday > 0 && (
+725-              <div className="bg-bg-secondary p-4 rounded-2xl border border-border-color flex items-center gap-4 mb-4 shadow-xl">
+726-                <div 
+727-                  className="w-12 h-12 rounded-full flex items-center justify-center relative flex-shrink-0"
+728-                  style={{ 
+729:                    background: `conic-gradient(var(--color-success) ${winRate * 3.6}deg, rgba(255,255,255,0.05) 0deg)`
+730-                  }}
+731-                >
+732-                  <div className="absolute inset-[3px] bg-bg-secondary rounded-full flex flex-col items-center justify-center">
+733-                    <span className="text-[10px] font-black text-[var(--color-success)]">{winRate}%</span>
+734-                  </div>
+735-                </div>
+736-                <div className="flex-1">
+737-                  <div className="text-[10px] text-text-secondary/40 font-black uppercase tracking-widest mb-1">Today's Success</div>
+738-                  <div className="text-sm font-bold text-text-primary flex items-center gap-2">
+739-                    <span className="text-[#22c55e]">{winsToday} Wins</span>
+740-                    <span className="w-1 h-1 bg-white/20 rounded-full" />
+741:                    <span className="text-text-secondary/60">{totalToday} {t('common.total_trades')}</span>
+742-                  </div>
+743-                </div>
+744-              </div>
+745-            )}
+746-            
+747-            {trades.length === 0 ? (
+748-            <div className="flex flex-col items-center justify-center py-20 text-center">
+749-              <History size={48} className="text-text-secondary/10 mb-4" />
+750-              <p className="text-text-secondary/40 text-sm">No trade history yet</p>
+751-            </div>
+--
+767-              <Clock size={48} className="text-text-secondary/10 mb-4" />
+768-              <p className="text-text-secondary/40 text-sm">No pending orders</p>
+769-            </div>
+770-          ) : (
+771-            pendingOrders.map(order => (
+772-              <div key={order.id} className="bg-bg-secondary rounded-xl p-4 border border-border-color">
+773-                <div className="flex justify-between items-start mb-2">
+774-                  <div>
+775-                    <div className="text-text-primary font-bold text-sm">{order.assetName}</div>
+776-                    <div className="text-[10px] text-text-secondary/40 uppercase font-bold tracking-wider">
+777:                      {order.type === 'PRICE' ? `Price: ${order.triggerValue}` : `Time: ${formatWithOffset(Number(order.triggerValue), 'HH:mm:ss', timezoneOffset)}`}
+778-                    </div>
+779-                  </div>
+780-                  <div className={cn(
+781-                    "px-2 py-0.5 rounded text-[10px] font-bold",
+782-                    order.direction === 'UP' ? "bg-green-500/20 text-green-500" : "bg-red-500/20 text-red-500"
+783-                  )}>
+784-                    {order.direction}
+785-                  </div>
+786-                </div>
+787-                <div className="flex justify-between items-center">
+--
+851-        onClose={() => setIsLanguageOpen(false)} 
+852-      />
+853-      <AppearanceSheet 
+854-        isOpen={isAppearanceSheetOpen} 
+855-        onClose={() => setIsAppearanceSheetOpen(false)} 
+856-      />
+857-      <div className="flex items-center justify-between p-4 border-b border-border-color">
+858-        <button onClick={onBack} className="text-text-secondary/70 hover:text-text-primary transition">
+859-          <ChevronLeft size={28} />
+860-        </button>
+861:        <h1 className="text-[17px] font-bold text-text-primary absolute left-1/2 -translate-x-1/2 tracking-tight">{t('nav.settings')}</h1>
+862-        <button onClick={onBack} className="text-text-secondary/70 hover:text-text-primary transition">
+863-          <X size={28} />
+864-        </button>
+865-      </div>
+866-
+867-      <div className="flex-1 overflow-y-auto px-4 pb-12 space-y-8 no-scrollbar pt-4">
+868-        {/* PROFILE SECTION */}
+869-        <section className="space-y-4">
+870:          <h2 className="text-[14px] font-bold px-2 text-text-secondary/40 uppercase tracking-widest">{t('settings.profile')}</h2>
+871-          <div className="space-y-2">
+872-            <SettingsItem 
+873-              icon={<User size={18} />} 
+874:              label={t('settings.personal_info')} 
+875-              onClick={() => setActiveSubPage('PERSONAL')}
+876-            />
+877-            <SettingsItem 
+878-              icon={<Mail size={18} />} 
+879:              label={t('settings.contacts')} 
+880-              showWarning
+881-              onClick={() => setActiveSubPage('CONTACTS')}
+882-            />
+883-            <SettingsItem 
+884-              icon={<UserCheck size={18} />} 
+885:              label={t('settings.verification')} 
+886:              subtitle={t('settings.verification_desc')}
+887-              onClick={() => setActiveSubPage('VERIFICATION')}
+888-            />
+889-            <SettingsItem 
+890-              icon={<Smartphone size={18} />} 
+891:              label={t('settings.2fa')} 
+892:              subtitle={t('settings.2fa_desc')}
+893-              showWarning
+894-              onClick={() => setActiveSubPage('2FA')}
+895-            />
+896-            <SettingsItem 
+897-              icon={<Key size={18} />} 
+898:              label={t('auth.password')} 
+899:              subtitle={t('settings.password_desc')}
+900-              onClick={() => setActiveSubPage('PASSWORD')}
+901-            />
+902-          </div>
+903-        </section>
+904-
+905-        {/* SETUP SECTION */}
+906-        <section className="space-y-4">
+907:          <h2 className="text-[14px] font-bold px-2 text-text-secondary/40 uppercase tracking-widest">{t('settings.setup')}</h2>
+908-          <div className="space-y-2">
+909-            <SettingsItem 
+910-              icon={<Globe size={18} />} 
+911:              label={t('settings.language')} 
+912-              onClick={() => setIsLanguageOpen(true)}
+913-            />
+914-            <SettingsItem 
+915-              icon={<Image size={18} />} 
+916:              label={t('settings.appearance')} 
+917:              subtitle={t('settings.appearance_desc')}
+918-              onClick={() => setIsAppearanceSheetOpen(true)}
+919-            />
+920-            <SettingsItem 
+921-              icon={<Activity size={18} />} 
+922:              label={t('settings.trading_platform')} 
+923:              subtitle={t('settings.trading_platform_desc')}
+924-              onClick={() => setIsTradingPlatformOpen(true)}
+925-            />
+926-            <SettingsItem 
+927-              icon={<Bell size={18} />} 
+928:              label={t('settings.notifications')} 
+929:              subtitle={t('settings.notifications_desc')}
+930-              onClick={() => setActiveSubPage('NOTIFICATIONS')}
+931-            />
+932-          </div>
+933-        </section>
+934-
+935-        {/* LOGOUT BUTTON */}
+936-        <div className="pt-2">
+937-          <button 
+938-            onClick={onLogout}
+939-            className="w-full bg-[#ff3b30]/5 hover:bg-[#ff3b30]/10 text-[#ff3b30] font-bold py-4 rounded-[14px] flex items-center justify-center gap-2 transition active:scale-[0.98] border border-[#ff3b30]/10"
+940-          >
+941-            <LogOut size={18} />
+942:            <span className="text-base uppercase tracking-wider font-black">{t('settings.logout')}</span>
+943-          </button>
+944-        </div>
+945-      </div>
+946-
+947-      {/* Sub-Pages Overlay */}
+948-      <AnimatePresence mode="wait">
+949-        {activeSubPage === 'TRADING' && (
+950-          <TradingPlatformSettings key="trading" onBack={() => setActiveSubPage(null)} />
+951-        )}
+952-        {activeSubPage === 'APPEARANCE' && (
+--
+1363-  AUD: 1.52,
+1364-  JPY: 150,
+1365-  TRY: 31,
+1366-  BRL: 5,
+1367-  IDR: 15600,
+1368-  VND: 24600
+1369-};
+1370-
+1371-export default function TradingPlatform() {
+1372-  const { t } = useTranslation();
+1373:  const { showToast } = useToast();
+1374-
+1375-  // State
+1376-  const [socket, setSocket] = useState<Socket | null>(null);
+1377-  const [user, setUser] = useState<FirebaseUser | null>(null);
+1378-  const [preferences, setPreferences] = useState({
+1379-    language: 'en',
+1380-    currency: 'USD',
+1381-    timeframe: '1m',
+1382-    chartType: 'candles'
+1383-  });
+--
+1396-          ...newPrefs
+1397-        })
+1398-      });
+1399-    } catch (error) {
+1400-      console.error('Error saving preferences:', error);
+1401-    }
+1402-  }, [user?.email]);
+1403-  const { language, setLanguage } = useTranslation();
+1404-  const [authLoading, setAuthLoading] = useState(true);
+1405-
+1406:  useEffect(() => {
+1407-    if (preferences.language && preferences.language !== language) {
+1408-      setLanguage(preferences.language as any);
+1409-    }
+1410-  }, [preferences.language, setLanguage, language]);
+1411-  const [view, setView] = useState<'HOME' | 'TRADING' | 'PROFILE' | 'MARKET' | 'REWARDS' | 'REFERRAL' | 'HELP' | 'TRADES' | 'SETTINGS' | 'ADMIN' | 'INFO_PAGE' | 'NEWS' | 'LEADERBOARD' | 'CALENDAR'>('HOME');
+1412-  const [infoPageTitle, setInfoPageTitle] = useState<string>('');
+1413-  const [data, setData] = useState<OHLCData[]>([]);
+1414-  const [tickHistory, setTickHistory] = useState<Record<string, TickData[]>>({});
+1415-  const [currentPrice, setCurrentPrice] = useState<number>(51.677);
+1416-  const [activeAccount, setActiveAccount] = useState<string>('DEMO');
+--
+1427-      try {
+1428-        return JSON.parse(saved);
+1429-      } catch (e) {
+1430-        return CURRENCIES[1];
+1431-      }
+1432-    }
+1433-    return CURRENCIES[1];
+1434-  });
+1435-
+1436-  // Sync currency to localStorage
+1437:  useEffect(() => {
+1438-    localStorage.setItem('app-currency', safeStringify(currency));
+1439-  }, [currency]);
+1440-
+1441-  const [demoBalance, setDemoBalance] = useState<number>(1000);
+1442-  const [turnoverRequired, setTurnoverRequired] = useState(0);
+1443-  const [turnoverAchieved, setTurnoverAchieved] = useState(0);
+1444-  const [userBonuses, setUserBonuses] = useState<any[]>([]);
+1445-  const [clientAds, setClientAds] = useState<any[]>([]);
+1446-  const [activeAdIndex, setActiveAdIndex] = useState(0);
+1447-  const [extraAccounts, setExtraAccounts] = useState<Account[]>(() => {
+--
+1453-        return [];
+1454-      }
+1455-    }
+1456-    return [];
+1457-  });
+1458-
+1459-  const [balance, setBalance] = useState<number>(0);
+1460-  const [bonusBalance, setBonusBalance] = useState<number>(0);
+1461-
+1462-  // Socket Initialization
+1463:  useEffect(() => {
+1464-    const newSocket = io();
+1465:    setSocket(newSocket);
+1466-
+1467-    newSocket.on('connect', () => {
+1468-      setIsConnected(true);
+1469-    });
+1470-
+1471-    newSocket.on('disconnect', () => {
+1472-      setIsConnected(false);
+1473-    });
+1474-
+1475-    return () => {
+1476-      newSocket.close();
+1477-    };
+1478-  }, []);
+1479-
+1480:  useEffect(() => {
+1481-    localStorage.setItem('app-extra-accounts', safeStringify(extraAccounts));
+1482-    if (socket && user) {
+1483:      socket.emit('sync-extra-accounts', {
+1484-        email: user.email,
+1485-        extraAccounts
+1486-      });
+1487-    }
+1488-  }, [extraAccounts, socket, user]);
+1489-
+1490:  useEffect(() => {
+1491-    if (clientAds.length === 0) return;
+1492-    const timer = setInterval(() => {
+1493-      setActiveAdIndex((prev) => (prev + 1) % clientAds.length);
+1494-    }, 5000);
+1495-    return () => clearInterval(timer);
+1496-  }, [clientAds]);
+1497-
+1498-  const [kycStatus, setKycStatus] = useState<'NOT_SUBMITTED' | 'PENDING' | 'APPROVED' | 'REJECTED'>('NOT_SUBMITTED');
+1499-  const [kycRejectionReason, setKycRejectionReason] = useState<string | null>(null);
+1500-  const [selectedAsset, setSelectedAsset] = useState<Asset>(() => {
+--
+1503-      if (saved) {
+1504-        const parsed = JSON.parse(saved);
+1505-        // Ensure it's a valid asset from ASSETS list
+1506-        const found = ASSETS.find(a => a.id === parsed.id);
+1507-        return found || ASSETS[0];
+1508-      }
+1509-    } catch (e) {}
+1510-    return ASSETS[0];
+1511-  });
+1512-
+1513:  useEffect(() => {
+1514-    localStorage.setItem('selectedAsset', safeStringify(selectedAsset));
+1515-  }, [selectedAsset]);
+1516-  const [marketAssets, setMarketAssets] = useState<Record<string, any>>({});
+1517-  const [isAssetSelectorOpen, setIsAssetSelectorOpen] = useState(false);
+1518-  const [isLoading, setIsLoadingState] = useState(false);
+1519-  const isLoadingRef = useRef(false);
+1520-  const loadingStartTimeRef = useRef(Date.now());
+1521-  const lastTradingViewTimeRef = useRef<number>(Date.now());
+1522-  const prevViewRef = useRef(view);
+1523-  const setIsLoading = useCallback((loading: boolean) => {
+--
+1540-    const saved = localStorage.getItem('app-currency');
+1541-    if (saved) {
+1542-      try {
+1543-        const c = JSON.parse(saved);
+1544-        if (c.code === 'BDT') return 20;
+1545-      } catch (e) {}
+1546-    }
+1547-    return 1;
+1548-  });
+1549-  
+1550:  useEffect(() => {
+1551-    const min = currency.code === 'BDT' ? 20 : 1;
+1552-    if (investment < min) {
+1553:      setInvestment(min);
+1554-    }
+1555-  }, [currency.id, currency.code]);
+1556-
+1557-  const [tradeMode, setTradeMode] = useState<'TIMER' | 'CLOCK'>('CLOCK');
+1558-  const [clockOffset, setClockOffset] = useState<number>(1);
+1559-  const [timerDuration, setTimerDuration] = useState<number>(60); // 1 min
+1560-
+1561-  const [trades, setTrades] = useState<Trade[]>([]);
+1562-  const [timezoneOffset, setTimezoneOffset] = useState<number>(() => {
+1563-    const saved = localStorage.getItem('app-timezone-offset');
+1564-    if (saved !== null) return Number(saved);
+1565-    // Auto-detect browser timezone offset in hours
+1566:    return -new Date().getTimezoneOffset() / 60;
+1567-  });
+1568-  const [currentTime, setCurrentTime] = useState(Date.now());
+1569-  const [serverTimeOffset, setServerTimeOffset] = useState<number>(0);
+1570-
+1571-  const leaderboardCurrentUser = useMemo(() => {
+1572-    if (!user || !user.email) return undefined;
+1573-    
+1574-    // Calculate today's profit (start of current day in local time)
+1575-    const todayStart = new Date();
+1576-    todayStart.setHours(0, 0, 0, 0);
+--
+1579-    const todayProfit = trades.reduce((acc, t) => {
+1580-      // Only include trades ended today and exclude DEMO account trades
+1581-      if (t.endTime >= todayStartTs && (t.status === 'WIN' || t.status === 'LOSS') && t.accountType !== 'DEMO') {
+1582-        const p = t.profit !== undefined ? t.profit : (t.status === 'WIN' ? t.amount * ((t.payout || 82) / 100) : -t.amount);
+1583-        return acc + p;
+1584-      }
+1585-      return acc;
+1586-    }, 0);
+1587-
+1588-    return { 
+1589:      name: user.displayName || user.email.split('@')[0], 
+1590-      profit: todayProfit 
+1591-    };
+1592-  }, [user, trades]);
+1593-
+1594-  // Smooth local clock that syncs with server
+1595:  useEffect(() => {
+1596-    const timer = setInterval(() => {
+1597-      setCurrentTime(Date.now() + serverTimeOffset);
+1598-    }, 1000); // Update every 1000ms to prevent UI freezing
+1599-    return () => clearInterval(timer);
+1600-  }, [serverTimeOffset]);
+1601-
+1602-  const [tradeResults, setTradeResults] = useState<TradeResult[]>([]);
+1603-  const [isChatOpen, setIsChatOpen] = useState(false);
+1604-  const [isSocialChatOpen, setIsSocialChatOpen] = useState(false);
+1605-  const [isSwitchingAccount, setIsSwitchingAccount] = useState(false);
+1606-  const [isLocked, setIsLocked] = useState(() => localStorage.getItem('pin-enabled') === 'true');
+1607-  const [isConnected, setIsConnected] = useState(false);
+1608-  const [isIndicatorSheetOpen, setIsIndicatorSheetOpen] = useState(false);
+1609-  const [isServiceAgreementOpen, setIsServiceAgreementOpen] = useState(false);
+1610-  const [indicatorInitialTab, setIndicatorInitialTab] = useState('Indicators');
+1611-  const [activeDesktopChartMenu, setActiveDesktopChartMenu] = useState<'time' | 'type' | 'indicators' | 'tools' | null>(null);
+1612-
+1613-  // Close desktop menus on click outside
+1614:  useEffect(() => {
+1615-    const handleClickOutside = (event: MouseEvent) => {
+1616-      if (activeDesktopChartMenu) {
+1617-        const toolbar = document.getElementById('desktop-chart-toolbar');
+1618-        if (toolbar && !toolbar.contains(event.target as Node)) {
+1619-          setActiveDesktopChartMenu(null);
+1620-        }
+1621-      }
+1622-    };
+1623-    document.addEventListener('mousedown', handleClickOutside);
+1624-    return () => document.removeEventListener('mousedown', handleClickOutside);
+1625-  }, [activeDesktopChartMenu]);
+1626-  const [chatBackground, setChatBackground] = useState<string | null>(() => localStorage.getItem('chat-background'));
+1627-  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+1628-
+1629:  useEffect(() => {
+1630-    if (chatBackground) {
+1631-      localStorage.setItem('chat-background', chatBackground);
+1632-    } else {
+1633-      localStorage.removeItem('chat-background');
+1634-    }
+1635-  }, [chatBackground]);
+1636-
+1637-// ... existing code ...
+1638-
+1639-const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() => {
+1640-    try {
+1641-      const saved = localStorage.getItem('activeIndicators');
+1642-      return saved ? JSON.parse(saved) : [];
+1643-    } catch (e) {
+1644-      return [];
+1645-    }
+1646-  });
+1647-
+1648:  useEffect(() => {
+1649-    try {
+1650-      localStorage.setItem('activeIndicators', safeStringify(activeIndicators));
+1651-    } catch (e) {
+1652-      console.error('Failed to save indicators', e);
+1653-    }
+1654-  }, [activeIndicators]);
+1655-  const handleSelectIndicator = useCallback((indicator: IndicatorConfig, forceRemove = false) => {
+1656-    setActiveIndicators(prev => {
+1657-      const exists = prev.find(i => i.instanceId === indicator.instanceId);
+1658-      if (exists) {
+--
+1677-    referralCount: 0,
+1678-    activeTraders: 0,
+1679-    conversionRate: 0,
+1680-    recentReferrals: [] as any[],
+1681-    commissionHistory: [] as any[]
+1682-  });
+1683-
+1684-  const exchangeRate = 120; // Should ideally come from server settings
+1685-
+1686-  // Referral Tracking
+1687:  useEffect(() => {
+1688-    const params = new URLSearchParams(window.location.search);
+1689:    const refCode = params.get('ref');
+1690-    if (refCode) {
+1691-      localStorage.setItem('onyx_referral_code', refCode);
+1692-      // Clean up URL
+1693-      const newUrl = window.location.pathname + window.location.hash;
+1694-      window.history.replaceState({}, '', newUrl);
+1695-    }
+1696-  }, []);
+1697-
+1698-  const balanceRef = useRef(balance);
+1699-  const demoBalanceRef = useRef(demoBalance);
+1700-  const tradesRef = useRef(trades);
+1701:  const resolvedTradeIdsRef = useRef<Set<string>>(new Set());
+1702-  const dataRef = useRef(data);
+1703-  const historyCacheRef = useRef<Record<string, any>>({});
+1704-  const lastChartUpdateRef = useRef(0);
+1705-  const userRef = useRef(user);
+1706-  const selectedAssetRef = useRef(selectedAsset);
+1707-  const lastAssetIdRef = useRef(selectedAsset.id);
+1708-
+1709-  // Removed redundant localStorage sync as we use Firestore now
+1710-
+1711:  useEffect(() => {
+1712-    localStorage.setItem('app-timezone-offset', timezoneOffset.toString());
+1713-  }, [timezoneOffset]);
+1714-
+1715:  useEffect(() => {
+1716-    balanceRef.current = balance;
+1717-    demoBalanceRef.current = demoBalance;
+1718-    tradesRef.current = trades;
+1719-    dataRef.current = data;
+1720-    userRef.current = user;
+1721-    selectedAssetRef.current = selectedAsset;
+1722-  }, [balance, demoBalance, trades, data, user, selectedAsset]);
+1723-
+1724-  // Auth Listener
+1725:  useEffect(() => {
+1726-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+1727-      setUser(firebaseUser);
+1728-      
+1729-      if (firebaseUser) {
+1730-          setView('TRADING');
+1731-      } else {
+1732-          setView('HOME');
+1733-      }
+1734-
+1735-      if (firebaseUser?.email) {
+1736-        try {
+1737:          const response = await fetch(`${window.location.origin}/api/user?email=${encodeURIComponent(firebaseUser.email)}`);
+1738-          if (response.status === 404) {
+1739-             // User not yet synced to backend, normal for first-time login
+1740-             setAuthLoading(false);
+1741-             return;
+1742-          }
+1743-          if (!response.ok) {
+1744-            throw new Error(`Server responded with ${response.status}: ${response.statusText}`);
+1745-          }
+1746-          const userData = await response.json();
+1747-          if (userData.language || userData.currency || userData.timeframe || userData.chartType) {
+--
+1773-        }
+1774-      }
+1775-      setAuthLoading(false);
+1776-    });
+1777-
+1778-    return () => unsubscribe();
+1779-  }, []);
+1780-
+1781-  const logout = async () => {
+1782-    try {
+1783:      await signOut(auth);
+1784-      setUser(null);
+1785-      setView('HOME');
+1786-    } catch (error) {
+1787-      console.error('Logout error:', error);
+1788-    }
+1789-  };
+1790-
+1791-  const [isUserDataLoaded, setIsUserDataLoaded] = useState(false);
+1792-
+1793-  // Sync User Data and Trades from Firestore
+1794:  useEffect(() => {
+1795-    if (!user) {
+1796-      setIsUserDataLoaded(false);
+1797-      setTrades([]);
+1798-      return;
+1799-    }
+1800-
+1801-    // Main user doc listener
+1802:    const unsubscribeUser = onSnapshot(doc(db, 'users', user.uid), (doc) => {
+1803-      if (doc.exists()) {
+1804-        const userData = doc.data();
+1805-        
+1806-        let balanceToSet = userData.balance;
+1807-        if (balanceToSet === undefined && userData.extraAccounts) {
+1808-          const realAccount = userData.extraAccounts.find((a: any) => a.type === 'REAL');
+1809-          if (realAccount) balanceToSet = realAccount.balance;
+1810-        }
+1811-        if (balanceToSet !== undefined) setBalance(prev => Math.abs(prev - balanceToSet) < 0.000001 ? prev : balanceToSet);
+1812-        if (userData.bonus_balance !== undefined) setBonusBalance(prev => Math.abs(prev - userData.bonus_balance) < 0.000001 ? prev : userData.bonus_balance);
+--
+1832-          });
+1833-        }
+1834-        
+1835-        setIsUserDataLoaded(true);
+1836-      }
+1837-    }, (error) => {
+1838-      handleFirestoreError(error, OperationType.GET, `users/${user.uid}`);
+1839-    });
+1840-
+1841-    // Trades subcollection listener
+1842:    const tradesQuery = query(collection(db, 'users', user.uid, 'trades'), orderBy('startTime', 'desc'), limit(100));
+1843:    const unsubscribeTrades = onSnapshot(tradesQuery, (snapshot) => {
+1844-      const tradesData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Trade));
+1845-      setTrades(prev => deepEqual(prev, tradesData) ? prev : tradesData);
+1846-    }, (error) => {
+1847-      handleFirestoreError(error, OperationType.LIST, `users/${user.uid}/trades`);
+1848-    });
+1849-
+1850-    return () => {
+1851-      unsubscribeUser();
+1852-      unsubscribeTrades();
+1853-    };
+1854-  }, [user]);
+1855-
+1856-  // Force candle update on interval
+1857:  useEffect(() => {
+1858-    const timer = setInterval(() => {
+1859-      const tfMs = getTimeFrameInMs(chartTimeFrame);
+1860-      const currentTimeAligned = Math.floor(currentTime / tfMs) * tfMs;
+1861-      
+1862-      setData(prev => {
+1863-        if (prev.length === 0) return prev;
+1864-        
+1865-        const lastCandle = prev[prev.length - 1];
+1866-        if (lastCandle.time < currentTimeAligned) {
+1867-           const newCandle = {
+1868-             time: currentTimeAligned,
+1869-             open: lastCandle.close,
+1870-             high: lastCandle.close,
+1871-             low: lastCandle.close,
+1872-             close: lastCandle.close,
+1873-             volume: 0,
+1874:             formattedTime: formatWithOffset(currentTimeAligned, 'HH:mm:ss', timezoneOffset),
+1875-           };
+1876-           return [...prev, newCandle];
+1877-        }
+1878-        return prev;
+1879-      });
+1880-    }, 1000);
+1881-    return () => clearInterval(timer);
+1882-  }, [currentTime, chartTimeFrame, timezoneOffset]);
+1883-
+1884-  const refillDemoBalance = () => {
+1885-    if (socket && user) {
+1886:      socket.emit('refill-demo-balance', { email: user.email });
+1887-    }
+1888-  };
+1889-
+1890-  const handleSetCustomDemoBalance = async (amount: number) => {
+1891-    setDemoBalance(amount);
+1892-    demoBalanceRef.current = amount;
+1893-    
+1894-    if (user) {
+1895-      try {
+1896-        await setDoc(doc(db, 'users', user.uid), { demoBalance: amount }, { merge: true });
+1897-        // Emit user-sync socket event if available
+1898-        if (socket) {
+1899:          socket.emit('user-sync', {
+1900-            email: user.email,
+1901-            uid: user.uid,
+1902-            name: user.displayName || 'Anonymous',
+1903-            demoBalance: amount
+1904-          });
+1905-        }
+1906-      } catch (err) {
+1907-        console.error("Failed to update custom demo balance", err);
+1908-      }
+1909-    }
+1910-  };
+1911-
+1912:  useEffect(() => {
+1913-    if (socket && user) {
+1914-      const syncUser = () => {
+1915:        socket.emit('user-sync', {
+1916-          email: user.email,
+1917-          name: user.displayName,
+1918-          photoURL: user.photoURL,
+1919-          uid: user.uid,
+1920-          referredBy: localStorage.getItem('onyx_referral_code')
+1921-        });
+1922:        socket.emit('get-notifications', user.email);
+1923-      };
+1924-
+1925-      if (socket.connected) {
+1926-        syncUser();
+1927-      }
+1928-
+1929-      socket.on('connect', syncUser);
+1930-
+1931-      return () => {
+1932-        socket.off('connect', syncUser);
+1933-      };
+1934-    }
+1935-  }, [socket, user]);
+1936-
+1937:  useEffect(() => {
+1938-    if (socket && user && view === 'REWARDS') {
+1939:      socket.emit('get-user-bonuses', user.email);
+1940-    }
+1941-  }, [socket, user, view]);
+1942-  const [isPaymentsOpen, setIsPaymentsOpen] = useState(false);
+1943-  const [isLanguageOpen, setIsLanguageOpen] = useState(false);
+1944-  const [isAppearanceSheetOpen, setIsAppearanceSheetOpen] = useState(false);
+1945-  const [isTradingPlatformOpen, setIsTradingPlatformOpen] = useState(false);
+1946-  const [paymentsInitialView, setPaymentsInitialView] = useState<'DEPOSIT' | 'WITHDRAW' | 'TRANSFER' | 'HISTORY' | null>(null);
+1947-
+1948-  const handleOpenPayments = useCallback((view: 'DEPOSIT' | 'WITHDRAW' | 'TRANSFER' | 'HISTORY' | null = null) => {
+1949-    setPaymentsInitialView(view);
+--
+1992-    setIsActivitiesOpen(false);
+1993-    setIsLeaderboardOpen(false);
+1994-    setIsWhatsNewOpen(false);
+1995-    setIsHelpOpen(false);
+1996-    setIsAssetSelectorOpen(false);
+1997-    setIsProfileOpen(false);
+1998-    setIsPaymentsOpen(false);
+1999-    setIsAccountsSheetOpen(false);
+2000-  }, []);
+2001-
+2002:  useEffect(() => {
+2003-    const hasSeenOnboarding = localStorage.getItem('hasSeenOnboarding');
+2004-    if (!hasSeenOnboarding) {
+2005-      setIsOnboardingOpen(true);
+2006-      localStorage.setItem('hasSeenOnboarding', 'true');
+2007-    }
+2008-  }, []);
+2009-
+2010-  const displayBalance = useMemo(() => {
+2011-    const rate = EXCHANGE_RATES[currency.code] || 1;
+2012-    if (activeAccount === 'DEMO') {
+--
+2036-  const currentExchangeRate = useMemo(() => {
+2037-    if (activeAccount === 'DEMO') return EXCHANGE_RATES[currency.code] || 1;
+2038-    if (activeAccount === 'REAL') return EXCHANGE_RATES[currency.code] || 1;
+2039-    const extra = extraAccounts.find(a => a.id === activeAccount);
+2040-    if (extra) return EXCHANGE_RATES[extra.currency] || 1;
+2041-    return 1;
+2042-  }, [activeAccount, currency.code, extraAccounts]);
+2043-
+2044-  // Always stick to exactly what the user sets or what is in localStorage
+2045-  const lastCurrencyRef = useRef(currency.code);
+2046:  useEffect(() => {
+2047-    if (lastCurrencyRef.current === currency.code) return;
+2048-    
+2049-    // We stop automatic balance conversion based on exchange rates 
+2050-    // because it causes unexpected jumps like 20 -> 2200.
+2051-    // Instead, we only ensure the minimum bound is respected.
+2052:    setInvestment(prev => {
+2053-      const minVal = currency.code === 'BDT' ? 20 : 1;
+2054-      if (prev < minVal) return minVal;
+2055-      return prev;
+2056-    });
+2057-    
+2058-    lastCurrencyRef.current = currency.code;
+2059-  }, [currency.code]);
+2060-
+2061:  useEffect(() => {
+2062-    if (!selectedAsset.isOTC && tradeMode === 'TIMER' && timerDuration < 60) {
+2063-      setTimerDuration(60);
+2064-    }
+2065-  }, [selectedAsset.isOTC, tradeMode, timerDuration]);
+2066-
+2067:  useEffect(() => {
+2068-    localStorage.setItem('app-currency', safeStringify(currency));
+2069-  }, [currency]);
+2070-
+2071:  useEffect(() => {
+2072-    localStorage.setItem('chartTimeFrame', chartTimeFrame);
+2073-  }, [chartTimeFrame]);
+2074-
+2075:  useEffect(() => {
+2076-    localStorage.setItem('chartType', chartType);
+2077-  }, [chartType]);
+2078-
+2079-  const lastCurrencyChangeRef = useRef(0);
+2080-  const handleCurrencyChange = async (newCurrency: typeof CURRENCIES[0]) => {
+2081-    lastCurrencyChangeRef.current = Date.now();
+2082-    setCurrency(newCurrency);
+2083-    setPreferences(prev => ({ ...prev, currency: newCurrency.code }));
+2084-    
+2085-    if (user?.email) {
+--
+2099-        console.error('Error updating currency:', error);
+2100-      }
+2101-    }
+2102-  };
+2103-
+2104-  const [sentiment, setSentiment] = useState(57); // Percentage of green (up) sentiment
+2105-
+2106-  // Refs for Data
+2107-  const lastCloseRef = useRef(selectedAsset.basePrice);
+2108-  // Force reset timeframe if invalid for non-OTC removed by user request
+2109:  useEffect(() => {
+2110-    // Sub-minute timeframes now allowed for all assets
+2111-  }, [selectedAsset.isOTC, chartTimeFrame]);
+2112-  const trendRef = useRef(0); // Track trend for smoother movement
+2113-  const volatilityRef = useRef(1.0); // Dynamic volatility multiplier
+2114-  const chartTimeFrameRef = useRef(chartTimeFrame);
+2115-
+2116:  useEffect(() => {
+2117-    chartTimeFrameRef.current = chartTimeFrame;
+2118-  }, [chartTimeFrame]);
+2119-
+2120-  // Initialize Data (Candlesticks)
+2121:  useEffect(() => {
+2122-    if (!socket || !selectedAsset) return;
+2123-    
+2124-    const assetShortName = selectedAsset.shortName;
+2125-    const basePrice = selectedAsset.basePrice;
+2126-
+2127-    setIsLoading(true);
+2128-    setData([]); // Clear old data to avoid flicker
+2129-    
+2130-    // Reset price to asset base price when asset changes
+2131-    lastCloseRef.current = basePrice;
+--
+2141-      
+2142-      const tfMs = getTimeFrameInMs(chartTimeFrame);
+2143-      
+2144-      let candles: OHLCData[] = [];
+2145-      let historyTicks: TickData[] = [];
+2146-
+2147-      if (response.candles && response.candles.length > 0) {
+2148-        candles = response.candles.map(c => ({
+2149-          ...c,
+2150-          volume: Math.floor(Math.random() * 100) + 10,
+2151:          formattedTime: formatWithOffset(c.time, 'HH:mm:ss', timezoneOffset)
+2152-        }));
+2153-        historyTicks = (response.data || []).map(t => ({ time: t.time, price: t.close || t.price }));
+2154-      } else {
+2155-        const ticks = response.data || [];
+2156-        
+2157-        let currentCandle: OHLCData | null = null;
+2158-        for (const tick of ticks) {
+2159-          historyTicks.push({ time: tick.time, price: tick.price });
+2160-          const candleTime = Math.floor(tick.time / tfMs) * tfMs;
+2161-          
+2162-          if (!currentCandle || currentCandle.time !== candleTime) {
+2163-            if (currentCandle) candles.push(currentCandle);
+2164-            currentCandle = {
+2165-              time: candleTime,
+2166-              open: tick.open !== undefined ? tick.open : tick.price,
+2167-              high: tick.high !== undefined ? tick.high : tick.price,
+2168-              low: tick.low !== undefined ? tick.low : tick.price,
+2169-              close: tick.close !== undefined ? tick.close : tick.price,
+2170-              volume: Math.floor(Math.random() * 100) + 10,
+2171:              formattedTime: formatWithOffset(candleTime, 'HH:mm:ss', timezoneOffset)
+2172-            };
+2173-          } else {
+2174-            currentCandle.high = Math.max(currentCandle.high, tick.high !== undefined ? tick.high : tick.price);
+2175-            currentCandle.low = Math.min(currentCandle.low, tick.low !== undefined ? tick.low : tick.price);
+2176-            currentCandle.close = tick.close !== undefined ? tick.close : tick.price;
+2177-            currentCandle.volume = (currentCandle.volume || 0) + Math.floor(Math.random() * 10) + 1;
+2178-          }
+2179-        }
+2180-        if (currentCandle) candles.push(currentCandle);
+2181-      }
+--
+2186-          // synthesize base candles only if this is the initial load and no data found
+2187-          const basePrice = selectedAssetRef.current?.basePrice || 100;
+2188-          const volatility = selectedAssetRef.current?.volatility || 1;
+2189-          const startCandle = candles[0];
+2190-          let lastPrice = startCandle ? startCandle.open : basePrice;
+2191-          const now = startCandle ? startCandle.time : Date.now();
+2192-        const needed = 500 - candles.length;
+2193-        
+2194-        const synthetic: OHLCData[] = [];
+2195-        let trend = 0;
+2196:        const tfScale = Math.max(1, Math.sqrt(tfMs / 60000));
+2197-        
+2198-        // Deterministic Random helper
+2199-        const seededRandom = (seed: number) => {
+2200-            const x = Math.sin(seed) * 10000;
+2201-            return x - Math.floor(x);
+2202-        };
+2203-  
+2204:        const assetSeed = assetShortName.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+2205-  
+2206-        for (let i = needed; i >= 1; i--) {
+2207-            const time = Math.floor((now - i * tfMs) / tfMs) * tfMs;
+2208-            
+2209-            // Use time and asset as seed for constant "synthetic" history
+2210-            const seed = time + assetSeed;
+2211-            const rnd1 = seededRandom(seed);
+2212-            const rnd2 = seededRandom(seed + 1);
+2213-            const rnd3 = seededRandom(seed + 2);
+2214-            const rnd4 = seededRandom(seed + 3);
+--
+2223-            const move = (trend + (rnd4 - 0.5) * volatility * 12 * tfScale) * multiplier;
+2224-            const close = open + move;
+2225-            
+2226-            const wickScale = volatility * 5 * tfScale;
+2227-            const high = Math.max(open, close) + seededRandom(seed + 4) * wickScale;
+2228-            const low = Math.min(open, close) - seededRandom(seed + 5) * wickScale;
+2229-            
+2230-            synthetic.push({
+2231-                time, open, high, low, close,
+2232-                volume: Math.floor(seededRandom(seed + 6) * 100) + 10,
+2233:                formattedTime: formatWithOffset(time, 'HH:mm:ss', timezoneOffset)
+2234-            });
+2235-            lastPrice = close;
+2236-        }
+2237-        candles = [...synthetic, ...candles];
+2238-        }
+2239-
+2240-      if (response.isOlder) {
+2241-        setTickHistory(prev => {
+2242-          const existing = prev[response.asset] || [];
+2243-          if (historyTicks.length === 0) return prev;
+--
+2271-          lastCloseRef.current = last.close;
+2272-          setCurrentPrice(last.close);
+2273-        }
+2274-      }
+2275-      
+2276-      // Professional loading: Only stop loading on the initial history response
+2277-      if (!response.isOlder) {
+2278-        setIsLoading(false);
+2279-      }
+2280-      
+2281:      clearTimeout(timeout);
+2282-    };
+2283-
+2284-    socket.on('asset-history', handleHistory);
+2285-    
+2286-    // Clear data only if the asset ID changed (not just the timeframe)
+2287-    if (selectedAsset.id !== lastAssetIdRef.current) {
+2288-        setData([]);
+2289-        dataRef.current = [];
+2290-    }
+2291-    lastAssetIdRef.current = selectedAsset.id;
+2292-
+2293-    setIsLoading(true);
+2294-
+2295-    // Add a small delay for the request to ensure the UI has cleared
+2296:    const requestTimeout = setTimeout(() => {
+2297-      if (socket.connected) {
+2298:        socket.emit('request-history', { asset: assetShortName, timeframe: chartTimeFrame, limit: 500 });
+2299-      } else {
+2300-        socket.once('connect', () => {
+2301:          socket.emit('request-history', { asset: assetShortName, timeframe: chartTimeFrame, limit: 500 });
+2302-        });
+2303-      }
+2304-    }, 100);
+2305-
+2306-    // Fallback if history takes too long
+2307:    const timeout = setTimeout(() => {
+2308-      setIsLoading(false);
+2309-    }, 5000);
+2310-
+2311-    return () => {
+2312-      socket.off('asset-history', handleHistory);
+2313:      clearTimeout(timeout);
+2314:      clearTimeout(requestTimeout);
+2315-    };
+2316-  }, [socket, selectedAsset.id, chartTimeFrame]);
+2317-
+2318-  const handleLoadMoreHistory = useCallback(() => {
+2319-    if (!socket || !selectedAsset || dataRef.current.length === 0) return;
+2320-    const oldestTime = dataRef.current[0].time;
+2321-    // Request older history
+2322:    socket.emit('request-history', {
+2323-      asset: selectedAsset.shortName,
+2324-      beforeTime: oldestTime,
+2325-      limit: 500, // Fetch 500 more candles
+2326-      timeframe: chartTimeFrame
+2327-    });
+2328-  }, [socket, selectedAsset.id, chartTimeFrame]); // Removed data from deps, using dataRef instead
+2329-
+2330-  // Handle Live Ticks from Server
+2331:  useEffect(() => {
+2332-    if (!socket) return;
+2333-
+2334-    const handleTick = (ticks: Record<string, any>) => {
+2335-      setMarketAssets(prev => {
+2336-        // Only update if there's a change to avoid unnecessary re-renders
+2337-        const hasChange = Object.entries(ticks).some(([key, val]) => prev[key]?.price !== val.price || prev[key]?.isFrozen !== val.isFrozen);
+2338-        if (!hasChange) return prev;
+2339-        return { ...prev, ...ticks };
+2340-      });
+2341-      
+2342-      const currentAsset = selectedAssetRef.current;
+2343-      // ONLY block ticks if we have ZERO data. If we have data, we want to see it move even if history is still syncing.
+2344-      if (!currentAsset || (isLoadingRef.current && dataRef.current.length === 0)) return; 
+2345-
+2346-      const tick = ticks[currentAsset.shortName];
+2347-      if (!tick) return;
+2348-      
+2349-      const timestamp = tick.time;
+2350-      
+2351-      // Update server time offset (only if drift is significant to avoid jitter)
+2352:      setServerTimeOffset(prev => {
+2353-        const newOffset = timestamp - Date.now();
+2354-        if (prev === 0 || Math.abs(prev - newOffset) > 100) return newOffset;
+2355-        return prev;
+2356-      });
+2357-      
+2358-      const newPrice = tick.price;
+2359-      const tfMs = getTimeFrameInMs(chartTimeFrameRef.current);
+2360-
+2361-      setCurrentPrice(newPrice);
+2362-      lastCloseRef.current = newPrice;
+2363-
+2364-      // Update frozen status if it changed
+2365:      setSelectedAsset(prev => {
+2366-        if (prev.isFrozen !== tick.isFrozen) {
+2367-          return { ...prev, isFrozen: tick.isFrozen };
+2368-        }
+2369-        return prev;
+2370-      });
+2371-
+2372-      // Update Sentiment based on price movement
+2373:      setSentiment(prev => {
+2374-        const currentData = dataRef.current;
+2375-        const priceDiff = newPrice - (currentData.length > 0 ? currentData[currentData.length - 1].close : newPrice);
+2376-        const impact = (priceDiff / currentAsset.volatility) * 3; 
+2377-        let next = prev + impact + (Math.random() - 0.5) * 2;
+2378-        next += (50 - next) * 0.05;
+2379-        return Math.max(10, Math.min(90, next));
+2380-      });
+2381-
+2382-      setTickHistory(prev => {
+2383-        const assetHistory = prev[currentAsset.shortName] || [];
+--
+2401-            const isMinuteTf = chartTimeFrameRef.current === '1m';
+2402-            const useMinuteAcc = isMinuteTf && tick.minuteOpen !== undefined;
+2403-
+2404-            const newCandle = {
+2405-                time: currentTFStart,
+2406-                open: useMinuteAcc ? tick.minuteOpen : newPrice,
+2407-                high: useMinuteAcc ? tick.minuteHigh : Math.max(newPrice, tick.high || newPrice),
+2408-                low: useMinuteAcc ? tick.minuteLow : Math.min(newPrice, tick.low || newPrice),
+2409-                close: newPrice,
+2410-                volume: Math.floor(Math.random() * 100) + 10,
+2411:                formattedTime: formatWithOffset(currentTFStart, 'HH:mm:ss', timezoneOffset),
+2412-            };
+2413-            dataRef.current = [newCandle];
+2414-            return [newCandle];
+2415-        }
+2416-        
+2417-        const lastCandle = prev[prev.length - 1];
+2418-        
+2419-        // Ensure time is a number to prevent [object Object] comparisons
+2420-        const lastCandleTime = Number(lastCandle.time);
+2421-        const newCandleTime = Number(currentTFStart);
+--
+2449-            updatedData = [...prev.slice(0, -1), updatedCandle];
+2450-        } else {
+2451-            // New candle started
+2452-            const newCandle = {
+2453-                time: currentTFStart,
+2454-                open: useMinuteAcc ? tick.minuteOpen : lastCandle.close,
+2455-                high: useMinuteAcc ? tick.minuteHigh : Math.max(lastCandle.close, tick.high || newPrice),
+2456-                low: useMinuteAcc ? tick.minuteLow : Math.min(lastCandle.close, tick.low || newPrice),
+2457-                close: newPrice,
+2458-                volume: Math.floor(Math.random() * 10) + 1,
+2459:                formattedTime: formatWithOffset(currentTFStart, 'HH:mm:ss', timezoneOffset),
+2460-            };
+2461-            updatedData = [...prev, newCandle];
+2462:            if (updatedData.length > 5000) updatedData.shift();
+2463-        }
+2464-        
+2465-        dataRef.current = updatedData;
+2466-        return updatedData;
+2467-      });
+2468-    };
+2469-
+2470-    const handlePayoutUpdate = (data: { assetId: string, payout: number }) => {
+2471-      setMarketAssets(prev => ({
+2472-        ...prev,
+--
+2482-        const updated = { ...prev };
+2483-        Object.keys(updated).forEach(key => {
+2484-          updated[key] = { ...updated[key], payout };
+2485-        });
+2486-        return updated;
+2487-      });
+2488-    };
+2489-
+2490-    socket.on('connect', () => {
+2491-      setIsConnected(true)
+2492:      socket.emit('get-client-ads');
+2493:      socket.emit('get-client-announcements');
+2494-    });
+2495-    socket.on('disconnect', () => setIsConnected(false));
+2496-    socket.on('trade-accepted', ({ id, startTime, endTime }) => {
+2497-      setTrades(prev => prev.map(t => t.id === id ? { ...t, startTime, endTime } : t));
+2498-    });
+2499-
+2500-    socket.on('initial-prices', (prices: Record<string, any>) => {
+2501-      setMarketAssets(prev => {
+2502-        const next = { ...prev };
+2503-        Object.entries(prices).forEach(([symbol, price]) => {
+--
+2613-
+2614-    socket.on('kyc-status-updated', (data: { status: any, reason?: string }) => {
+2615-      setKycStatus(data.status);
+2616-      if (data.reason) setKycRejectionReason(data.reason);
+2617-    });
+2618-
+2619-    socket.on('new-notification', (notification) => {
+2620-      setNotifications(prev => [notification, ...prev]);
+2621-      
+2622-      // Show professional real-time toast
+2623:      showToast(notification.message, notification.type || 'info');
+2624-      
+2625-      // Play a notification sound
+2626-      playSound('click'); // Or a dedicated notification sound if available
+2627-    });
+2628-
+2629-    socket.on('user-notifications', (notifs) => {
+2630-      setNotifications(notifs);
+2631-    });
+2632-
+2633-    socket.on('client-ads', (ads) => {
+--
+2661-      socket.off('withdrawal-cancelled');
+2662-      socket.off('new-notification');
+2663-      socket.off('user-bonuses');
+2664-      socket.off('user-notifications');
+2665-      socket.off('rewards');
+2666-      socket.off('platform-settings');
+2667-    };
+2668-  }, [socket]);
+2669-
+2670-  // Re-send active trades to server on connection
+2671:  const sentTradesRef = useRef<Set<string>>(new Set());
+2672-  const activeTradesCount = useMemo(() => trades.filter(t => t.status === 'ACTIVE').length, [trades]);
+2673-  
+2674:  useEffect(() => {
+2675-    if (!socket || !user || !trades) return;
+2676-    
+2677-    const activeTrades = trades.filter(t => t.status === 'ACTIVE');
+2678-    activeTrades.forEach(trade => {
+2679-      if (!sentTradesRef.current.has(trade.id)) {
+2680-        sentTradesRef.current.add(trade.id);
+2681:        socket.emit('place-trade', trade);
+2682-      }
+2683-    });
+2684-  }, [socket, user, activeTradesCount]);
+2685-
+2686-  // Handle Trade Results from Server
+2687:  useEffect(() => {
+2688-    if (!socket) return;
+2689-
+2690-    const handleTradeResult = (result: any) => {
+2691-      const currentTrades = tradesRef.current;
+2692-      const trade = currentTrades.find(t => t.id === result.id);
+2693-      
+2694-      // Prevent processing the same trade multiple times
+2695-      if (resolvedTradeIdsRef.current.has(result.id)) return;
+2696-      resolvedTradeIdsRef.current.add(result.id);
+2697-
+--
+2756-
+2757-    return () => {
+2758-      socket.off('trade-result', handleTradeResult);
+2759-      socket.off('user-pending-orders');
+2760-      socket.off('pending-order-created');
+2761-      socket.off('pending-order-executed');
+2762-    };
+2763-  }, [socket]);
+2764-
+2765-  // Clear Toasts
+2766:  useEffect(() => {
+2767-    if (tradeResults.length > 0) {
+2768:      const timer = setTimeout(() => setTradeResults(prev => prev.slice(1)), 3000);
+2769:      return () => clearTimeout(timer);
+2770-    }
+2771-  }, [tradeResults.length]);
+2772-
+2773-  const getExpirationTime = () => {
+2774-    const now = Date.now() + serverTimeOffset;
+2775-    if (tradeMode === 'CLOCK') {
+2776-      const msToNextMinute = 60000 - (now % 60000);
+2777-      const nextClose = msToNextMinute < 30000 ? now + msToNextMinute + 60000 : now + msToNextMinute;
+2778-      return nextClose + (clockOffset - 1) * 60000;
+2779-    } else {
+2780-      return now + timerDuration * 1000;
+2781-    }
+2782-  };
+2783-
+2784-  const handleTrade = (type: 'UP' | 'DOWN') => {
+2785:    if (selectedAsset.isFrozen) return showToast(t('trade.closed_assets'), "error");
+2786-    
+2787-    let currentBalance = 0;
+2788-    let rate = 1;
+2789-    let accountName = '';
+2790-
+2791-    if (activeAccount === 'DEMO') {
+2792-      rate = EXCHANGE_RATES[currency.code] || 1;
+2793-      currentBalance = demoBalance;
+2794-      accountName = 'Demo';
+2795-    } else if (activeAccount === 'REAL') {
+--
+2806-    }
+2807-
+2808-    const investmentInUSD = Math.round((investment / rate) * 100000000) / 100000000;
+2809-
+2810-    let totalAvailable = currentBalance;
+2811-    if (activeAccount === 'REAL') {
+2812-      totalAvailable = balance + bonusBalance;
+2813-    }
+2814-
+2815-    if (totalAvailable < investmentInUSD - 0.00000001) {
+2816:      showToast(`${t('trade.insufficient_balance')}. You need ${displayCurrencySymbol}${(investmentInUSD * rate).toFixed(2)} but have ${displayCurrencySymbol}${(totalAvailable * rate).toFixed(2)}.`, "error");
+2817-      return;
+2818-    }
+2819-
+2820-    // Risk Management Check
+2821-    const savedRM = localStorage.getItem('risk_management');
+2822-    if (savedRM) {
+2823-      const rm = JSON.parse(savedRM);
+2824-      const currentSymbol = displayCurrencySymbol;
+2825-      const investmentInDisplay = investment;
+2826-      
+2827-      // Max Trade Amount Check
+2828-      if (rm.maxTradeAmount > 0 && investmentInDisplay > rm.maxTradeAmount) {
+2829:        return showToast(`Risk Management: Max trade amount is ${currentSymbol}${rm.maxTradeAmount}`, "error");
+2830-      }
+2831-
+2832-      // Calculate Daily PnL based on selected timezone
+2833-      const now = Date.now();
+2834-      const offsetMs = timezoneOffset * 3600000;
+2835-      const todayInTimezone = new Date(now + offsetMs);
+2836-      todayInTimezone.setUTCHours(0, 0, 0, 0);
+2837-      const todayStartUtc = todayInTimezone.getTime() - offsetMs;
+2838-
+2839-      const todaysTrades = trades.filter(t => t.startTime >= todayStartUtc && t.status !== 'ACTIVE' && t.accountType === activeAccount);
+--
+2845-          dailyPnL += (t.profit * rate);
+2846-        } else if (t.status === 'WIN') {
+2847-          dailyPnL += (tAmount * (t.payout / 100));
+2848-        } else if (t.status === 'LOSS') {
+2849-          dailyPnL -= tAmount;
+2850-        }
+2851-      });
+2852-
+2853-      // Daily Stop Loss Check
+2854-      if (rm.dailyStopLoss > 0 && dailyPnL <= -rm.dailyStopLoss) {
+2855:        return showToast(`Risk Management: Daily Stop Loss of ${currentSymbol}${rm.dailyStopLoss} reached.`, "error");
+2856-      }
+2857-
+2858-      // Daily Take Profit Check
+2859-      if (rm.dailyTakeProfit > 0 && dailyPnL >= rm.dailyTakeProfit) {
+2860:        return showToast(`Risk Management: Daily Take Profit of ${currentSymbol}${rm.dailyTakeProfit} reached.`, "error");
+2861-      }
+2862-    }
+2863-
+2864-    const entryPrice = lastCloseRef.current;
+2865-    
+2866-    if (activeAccount === 'DEMO') {
+2867-      setDemoBalance(prev => Math.round((prev - investmentInUSD) * 100000000) / 100000000);
+2868-    } else if (activeAccount === 'REAL') {
+2869-      let remaining = investmentInUSD;
+2870-      let newRealBalance = balance;
+--
+2950-    
+2951-            // Add trade to subcollection
+2952-            setDoc(doc(db, 'users', user.uid, 'trades', tradeId), newTrade);
+2953-          } catch (error) {
+2954-        handleFirestoreError(error, OperationType.WRITE, `users/${user.uid}/trades/${tradeId}`);
+2955-      }
+2956-    }
+2957-    
+2958-    if (socket) {
+2959-      sentTradesRef.current.add(newTrade.id);
+2960:      socket.emit('place-trade', newTrade);
+2961-      playSound('trade');
+2962-    }
+2963-  };
+2964-
+2965-  const handlePlacePendingOrder = (order: { type: 'PRICE' | 'TIME', value: string, minProfitability: number, direction: 'UP' | 'DOWN' }) => {
+2966-    if (socket && user) {
+2967-      const rate = EXCHANGE_RATES[currency.code] || 1;
+2968-      const amountInUSD = investment / rate;
+2969-      
+2970-      const pendingOrder = {
+2971-        email: user.email,
+2972-        uid: user.uid,
+2973-        assetId: selectedAsset.id,
+2974-        assetName: selectedAsset.name,
+2975-        type: order.type,
+2976:        triggerValue: order.type === 'PRICE' ? parseFloat(order.value) : parseInt(order.value),
+2977-        profitability: order.minProfitability,
+2978-        amount: amountInUSD,
+2979-        duration: timerDuration,
+2980-        direction: order.direction,
+2981-        accountType: activeAccount,
+2982-        currency: currency.code,
+2983-        currencySymbol: currency.symbol,
+2984-        exchangeRate: rate
+2985-      };
+2986:      socket.emit('create-pending-order', pendingOrder);
+2987-    }
+2988-  };
+2989-
+2990-  const handleCancelPendingOrder = (orderId: number) => {
+2991-    if (socket) {
+2992:      socket.emit('cancel-pending-order', orderId);
+2993-    }
+2994-  };
+2995-
+2996-  const activeTrades = useMemo(() => {
+2997-    return trades.filter(t => t.status === 'ACTIVE' && t.assetShortName === selectedAsset.shortName && t.accountType === activeAccount);
+2998-  }, [trades, selectedAsset.shortName, activeAccount]);
+2999-
+3000-  // Client-side Trade Resolution Fallback (Fixes 00:00 stuck trades)
+3001:  useEffect(() => {
+3002-    if (!user || trades.length === 0) return;
+3003-
+3004-    const interval = setInterval(async () => {
+3005-      const now = Date.now() + serverTimeOffset;
+3006-      const activeTrades = trades.filter(t => t.status === 'ACTIVE');
+3007-
+3008-      for (const trade of activeTrades) {
+3009-        // If trade expired more than 7 seconds ago and still active, Resolve it locally
+3010-        if (now > (trade.endTime + 7000)) {
+3011-          console.warn(`[Self-Resolution] Resolving stuck trade: ${trade.id}`);
+--
+3049-            console.error('Self-resolution failed:', error);
+3050-          }
+3051-        }
+3052-      }
+3053-    }, 2000);
+3054-
+3055-    return () => clearInterval(interval);
+3056-  }, [user, trades, balance, demoBalance, serverTimeOffset]);
+3057-
+3058-  const appClosedTrades = useMemo(() => {
+3059:    return trades.filter(t => t.status !== 'ACTIVE' && t.accountType === activeAccount).sort((a, b) => b.endTime - a.endTime);
+3060-  }, [trades, activeAccount]);
+3061-
+3062-  const currentPayout = marketAssets[selectedAsset.shortName]?.payout || selectedAsset.payout || 90;
+3063-  const potentialProfit = (investment * currentPayout / 100).toFixed(2);
+3064-
+3065-  // Handle Visibility Change for Chart Sync
+3066:  useEffect(() => {
+3067-    const handleVisibilityChange = () => {
+3068-      if (document.visibilityState === 'visible' && socket?.connected) {
+3069-        setIsLoading(true);
+3070:        socket.emit('request-history', { asset: selectedAsset.shortName, timeframe: chartTimeFrame, limit: 500 });
+3071-      }
+3072-    };
+3073-
+3074-    document.addEventListener('visibilitychange', handleVisibilityChange);
+3075-    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+3076-  }, [socket, selectedAsset.shortName, chartTimeFrame]); // Use shortName instead of full object
+3077-
+3078:  useEffect(() => {
+3079-    if (view !== 'TRADING') {
+3080-      lastTradingViewTimeRef.current = Date.now();
+3081-    }
+3082-  }, [view]);
+3083-
+3084-  // Handle returning to TRADING view from another page
+3085:  useEffect(() => {
+3086-    if (view === 'TRADING' && prevViewRef.current !== 'TRADING' && socket?.connected) {
+3087-      const timeAway = Date.now() - lastTradingViewTimeRef.current;
+3088-      const isQuickReturn = timeAway < 15000;
+3089-
+3090-      if (!isQuickReturn) {
+3091-        setIsLoading(true);
+3092-        loadingStartTimeRef.current = Date.now();
+3093-        // REMOVED: setData([]); // Clear data for full reload - causing flash
+3094-      }
+3095-      
+3096-      // Always request history to sync up, but if quick return, we don't clear the screen
+3097:      socket.emit('request-history', { asset: selectedAsset.shortName, timeframe: chartTimeFrame, limit: 500 });
+3098-    }
+3099-    prevViewRef.current = view;
+3100-  }, [view, socket, selectedAsset.shortName, chartTimeFrame]);
+3101-
+3102-  if (authLoading) {
+3103-    return <LoadingOverlay message="Initializing Onyx" />;
+3104-  }
+3105-
+3106-  if (isLocked) {
+3107-    return <LockScreen onUnlock={() => setIsLocked(false)} />;
+--
+3979-    return <Auth onSuccess={() => setView('TRADING')} />;
+3980-  }
+3981-
+3982-  // Verification Gate for Email/Password users
+3983-  if (!user.emailVerified && user.providerData.some(p => p.providerId === 'password')) {
+3984-    return (
+3985-      <div className="fixed inset-0 bg-bg-primary flex items-center justify-center p-4">
+3986-        <EmailVerificationSheet 
+3987-          email={user.email || ''} 
+3988-          isOpen={true} 
+3989:          onClose={() => signOut(auth)} 
+3990-          onSuccess={() => {
+3991-            // Success handler will reload via EmailVerificationSheet's internal check
+3992-            // or we can force a state update here
+3993-            window.location.reload();
+3994-          }} 
+3995-        />
+3996-      </div>
+3997-    );
+3998-  }
+3999-
+--
+4018-          setIsHelpOpen={setIsHelpOpen}
+4019-          isAssetSelectorOpen={isAssetSelectorOpen}
+4020-          setIsAssetSelectorOpen={setIsAssetSelectorOpen}
+4021-          setIsProfileOpen={setIsProfileOpen}
+4022-          setIsPaymentsOpen={setIsPaymentsOpen}
+4023-          setIsAccountsSheetOpen={setIsAccountsSheetOpen}
+4024-        />
+4025-      )}
+4026-      <div className="flex flex-col flex-1 min-w-0 h-full relative">
+4027-        {user?.email?.toLowerCase() === 'emon@gmail.com' || user?.email?.toLowerCase() === 'hasan23@gmail.com' ? (
+4028:          <AdminPanel socket={socket} onBack={() => logout()} userEmail={user.email || ''} isRestricted={false} />
+4029-        ) : user?.email?.toLowerCase() === 'mdrajon56@gmail.com' ? (
+4030:          <AdminPanel socket={socket} onBack={() => logout()} userEmail={user.email || ''} isRestricted={true} />
+4031-        ) : view === 'PROFILE' ? (
+4032-          <ProfilePage 
+4033-            onBack={() => setView('TRADING')} 
+4034-            onSettings={() => setView('SETTINGS')} 
+4035-            user={user} 
+4036-            onAdmin={() => setView('ADMIN')} 
+4037-            setView={setView}
+4038-            balance={balance}
+4039-            bonusBalance={bonusBalance}
+4040-            turnoverRequired={turnoverRequired}
+--
+4042-            currency={currency}
+4043-            notifications={notifications}
+4044-            onNotificationsClick={() => setIsNotificationsOpen(true)}
+4045-            clientAds={clientAds}
+4046-            timezoneOffset={timezoneOffset}
+4047-          />
+4048-        ) : view === 'SETTINGS' ? (
+4049-          <SettingsPage 
+4050-            onBack={() => setView('PROFILE')} 
+4051-            onLogout={() => {
+4052:              logout();
+4053-            }} 
+4054-            timezoneOffset={timezoneOffset}
+4055-            setTimezoneOffset={setTimezoneOffset}
+4056-            currency={currency}
+4057-            setCurrency={handleCurrencyChange}
+4058-            socket={socket}
+4059-            user={user}
+4060-            chatBackground={chatBackground}
+4061-            setChatBackground={setChatBackground}
+4062-            savePreferences={savePreferences}
+4063-            setIsLanguageOpen={setIsLanguageOpen}
+4064-            setIsAppearanceSheetOpen={setIsAppearanceSheetOpen}
+4065-            setIsTradingPlatformOpen={setIsTradingPlatformOpen}
+4066-            isLanguageOpen={isLanguageOpen}
+4067-            isAppearanceSheetOpen={isAppearanceSheetOpen}
+4068-          />
+4069-        ) : view === 'ADMIN' ? (
+4070-          <AdminPanel socket={socket} onBack={() => {
+4071-            if (user.email?.toLowerCase() === 'emon@gmail.com') {
+4072:              logout();
+4073-            } else {
+4074-              setView('TRADING');
+4075-            }
+4076-          }} userEmail={user.email || ''} />
+4077-        ) : null}
+4078-
+4079-        {/* --- Top Navbar --- */}
+4080-        {view === 'TRADING' && !isActivitiesOpen && (
+4081-          <>
+4082-            <header className="hidden md:flex items-center justify-between px-6 bg-bg-primary z-20 h-[72px] shrink-0 relative border-b border-border-color">
+--
+4086-                    <Plus size={18} />
+4087-                 </button>
+4088-                 <button 
+4089-                   onClick={() => setIsAssetSelectorOpen(true)}
+4090-                   className="flex items-center gap-4 px-4 h-12 bg-bg-secondary hover:bg-bg-tertiary rounded-xl active:scale-95 transition shrink-0 cursor-pointer text-left border border-border-color"
+4091-                 >
+4092-                   <div className="w-6 h-6 rounded-md overflow-hidden shrink-0 bg-bg-tertiary flex items-center justify-center">
+4093-                      <AssetIcon shortName={selectedAsset.shortName} category={selectedAsset.category} flag={selectedAsset.flag} size="sm" />
+4094-                   </div>
+4095-                   <div className="flex flex-col">
+4096:                      <div className="text-text-primary font-bold text-[12px] leading-none mb-0.5">{selectedAsset.name.split('(')[0].trim()}</div>
+4097-                      <div className="text-[10px] text-text-secondary font-medium leading-none">FT • <span className="text-text-primary/80">{currentPayout}%</span></div>
+4098-                   </div>
+4099-                 </button>
+4100-              </div>
+4101-              
+4102-              {/* Right: Account & Payments */}
+4103-              <div className="flex items-center gap-4">
+4104-                 {/* Connection Status Indicator */}
+4105-                 <div className="hidden lg:flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-bg-secondary border border-border-color">
+4106-                    <div className={cn(
+--
+4118-                      setIsAccountsSheetOpen(true);
+4119-                    }}
+4120-                    className="flex flex-col items-end cursor-pointer active:scale-95 transition group"
+4121-                  >
+4122-                    <div className="flex items-center gap-2">
+4123-                       <span className="text-text-primary font-black text-[16px] tracking-tight">
+4124-                         {displayCurrencySymbol}{displayBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+4125-                       </span>
+4126-                    </div>
+4127-                    <div className={cn("flex items-center gap-1 text-[11px] font-bold uppercase tracking-wider transition-colors", activeAccount === 'DEMO' ? 'text-[#f59e0b]' : 'text-text-secondary')}>
+4128:                       {activeAccount === 'DEMO' ? t('account.demo') : t('account.real')} <ChevronDown size={12} className="text-gray-600 group-hover:text-gray-400 transition-colors" />
+4129-                    </div>
+4130-                 </div>
+4131-                 
+4132-                 <button 
+4133-                   onClick={() => setIsPaymentsOpen(true)}
+4134-                   className="h-[48px] px-6 rounded-xl bg-[#00ff5f] text-[#0d0e12] font-black text-sm uppercase tracking-widest flex items-center justify-center transition-all hover:bg-[#00e154] active:scale-95 shadow-[0_0_25px_rgba(0,255,95,0.3)]"
+4135-                 >
+4136-                   Deposit
+4137-                 </button>
+4138-                 
+--
+4177-                }}
+4178-                className="flex flex-col items-center cursor-pointer active:scale-95 transition group"
+4179-              >
+4180-                <div className="text-text-primary font-bold text-[15px] tracking-tight leading-tight flex items-center gap-1">
+4181-                  {displayCurrencySymbol}{displayBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+4182-                </div>
+4183-                <div className={cn(
+4184-                  "flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest transition-colors",
+4185-                  activeAccount === 'DEMO' ? "text-orange-400" : "text-gray-500"
+4186-                )}>
+4187:                  {activeAccount === 'DEMO' ? t('account.demo') : `${currency.code} Account`} <ChevronDown size={10} className="text-gray-600" />
+4188-                </div>
+4189-              </div>
+4190-
+4191-              {/* Right: Wallet/Deposit */}
+4192-              <button 
+4193-                onClick={() => setIsPaymentsOpen(true)}
+4194-                className="w-[42px] h-[42px] bg-[#00ff5f] rounded-lg flex items-center justify-center text-[#0d0e12] shadow-[0_0_20px_rgba(0,255,95,0.25)] transition active:scale-95"
+4195-              >
+4196-                <Wallet size={24} strokeWidth={2.5} />
+4197-              </button>
+--
+4241-        {view === 'TRADING' && (
+4242-          <div className="md:hidden flex items-center px-2 bg-bg-primary gap-1 overflow-x-auto scrollbar-hide border-b border-border-color h-11">
+4243-             <div 
+4244-               onClick={() => setIsAssetSelectorOpen(true)}
+4245-               className="flex items-center gap-2 px-2.5 h-8 bg-[var(--color-text-primary)]/[0.03] rounded-lg border border-[var(--color-text-primary)]/5 active:scale-95 transition shrink-0 cursor-pointer"
+4246-             >
+4247-                <div className="w-6 h-6 rounded-md overflow-hidden shrink-0">
+4248-                  <AssetIcon shortName={selectedAsset.shortName} category={selectedAsset.category} flag={selectedAsset.flag} size="sm" />
+4249-                </div>
+4250-                <div className="flex items-center gap-2">
+4251:                   <span className="text-text-primary font-bold text-[12px] truncate max-w-[80px]">{selectedAsset.name.split('(')[0].trim()}</span>
+4252-                   <span className="text-[var(--color-success)] text-[11px] font-black">{currentPayout}%</span>
+4253-                   <ChevronDown size={10} className="text-text-secondary" />
+4254-                </div>
+4255-             </div>
+4256-             
+4257-             <div className="flex items-center h-full gap-1 ml-auto">
+4258-                <button 
+4259-                  onClick={() => setIsIndicatorSheetOpen(true)}
+4260-                  className="w-10 h-10 flex items-center justify-center text-text-secondary/80 hover:text-text-primary transition group relative ml-1 rounded-sm border-r border-border-color bg-transparent"
+4261-                >
+--
+4288-      <OnboardingModal 
+4289-        isOpen={isOnboardingOpen}
+4290-        onClose={() => setIsOnboardingOpen(false)}
+4291-      />
+4292-      <div className="md:hidden">
+4293-        <AccountsSheet 
+4294-          isOpen={isAccountsSheetOpen}
+4295-          onClose={() => setIsAccountsSheetOpen(false)}
+4296-          activeAccount={activeAccount}
+4297-          onSelectAccount={(id) => {
+4298:            setIsSwitchingAccount(true);
+4299:            setTimeout(() => {
+4300:              setActiveAccount(id);
+4301:              setIsSwitchingAccount(false);
+4302-            }, 1500); // 1.5s professional transition
+4303-          }}
+4304-          onRefill={refillDemoBalance}
+4305-          onSetDemoBalance={handleSetCustomDemoBalance}
+4306-          accounts={[
+4307-            { id: 'DEMO', name: 'Demo account', currency: currency.code, symbol: currency.symbol, balance: demoBalance * (EXCHANGE_RATES[currency.code] || 1), type: 'DEMO', flag: currency.flag },
+4308-            { id: 'REAL', name: `${currency.code} Account`, currency: currency.code, symbol: currency.symbol, balance: (balance + bonusBalance) * (EXCHANGE_RATES[currency.code] || 1), type: 'REAL', flag: currency.flag },
+4309-            ...extraAccounts.filter(a => a.id !== 'DEMO' && a.id !== 'REAL')
+4310-          ]}
+4311-          onAddAccount={(account) => setExtraAccounts(prev => [...prev, account])}
+4312-          onDeleteAccount={(id) => {
+4313-            setExtraAccounts(prev => prev.filter(a => a.id !== id));
+4314-            if (activeAccount === id) {
+4315:              setActiveAccount('DEMO');
+4316-            }
+4317-          }}
+4318-        />
+4319-      </div>
+4320-
+4321-      <AnimatePresence>
+4322-        {isSwitchingAccount && (
+4323-          <LoadingOverlay message={`Switching to ${activeAccount === 'DEMO' ? 'Demo' : 'Real'} Account`} />
+4324-        )}
+4325-      </AnimatePresence>
+--
+4396-                  marketAssets={marketAssets}
+4397-                />
+4398-              )}
+4399-              {isMarketOpen && (
+4400-                <MarketSidePanel onClose={() => setIsMarketOpen(false)} />
+4401-              )}
+4402-              {isAccountsSheetOpen && (
+4403-                <AccountsSidePanel 
+4404-                   activeAccount={activeAccount}
+4405-                   onSelectAccount={(id: string) => {
+4406:                     setIsSwitchingAccount(true);
+4407:                     setTimeout(() => {
+4408:                       setActiveAccount(id);
+4409:                       setIsSwitchingAccount(false);
+4410-                     }, 1500);
+4411-                   }}
+4412-                   onClose={() => setIsAccountsSheetOpen(false)}
+4413-                   onAddAccount={() => { setIsAccountsSheetOpen(false); }}
+4414-                   onDeposit={() => handleOpenPayments('DEPOSIT')}
+4415-                   onWithdraw={() => handleOpenPayments('WITHDRAW')}
+4416-                   onRefill={refillDemoBalance}
+4417-                   onSetDemoBalance={handleSetCustomDemoBalance}
+4418-                   accounts={[
+4419-                     { id: 'DEMO', name: 'Demo account', currency: currency.code, symbol: currency.symbol, balance: demoBalance * (EXCHANGE_RATES[currency.code] || 1), type: 'DEMO', flag: currency.flag },
+--
+5007-                 </div>
+5008-              </div>
+5009-
+5010-              {/* Input Grid */}
+5011-              <div className="grid grid-cols-2 gap-2.5 mt-0.5">
+5012-                 {/* Duration Selector */}
+5013-                 <div className="flex flex-col gap-1.5 flex-1">
+5014-                    <div className="flex items-center bg-bg-secondary rounded-xl border border-border-color overflow-hidden h-10">
+5015-                       <button 
+5016-                         onClick={() => {
+5017:                            if (tradeMode === 'CLOCK') setClockOffset(Math.max(1, clockOffset - 1));
+5018-                            else {
+5019-                               const arr = selectedAsset?.isOTC ? [5, 10, 15, 30, 60, 120, 180, 240, 300, 600, 900, 1800, 3600, 7200, 14400, 28800] : [60, 120, 180, 240, 300, 600, 900, 1800, 3600, 7200, 14400, 28800];
+5020-                               const idx = arr.indexOf(timerDuration);
+5021-                               if (idx > 0) setTimerDuration(arr[idx - 1]);
+5022-                            }
+5023-                         }}
+5024-                         className="w-9 h-full flex items-center justify-center text-text-secondary hover:text-text-primary active:bg-[var(--color-text-primary)]/5 transition"
+5025-                       >
+5026-                          <Minus size={16} />
+5027-                       </button>
+5028-                       <div 
+5029-                         onClick={() => setIsTradeInputSheetOpen(true)}
+5030-                         className="flex-1 flex flex-col items-center justify-center leading-tight cursor-pointer"
+5031-                       >
+5032-                          <span className="text-text-primary font-bold text-[14px] whitespace-nowrap">
+5033:                             {tradeMode === 'CLOCK' ? formatWithOffset(getExpirationTime(), 'HH:mm', timezoneOffset) : (timerDuration < 60 ? `${timerDuration} sec` : `${Math.floor(timerDuration / 60)} min`)}
+5034-                          </span>
+5035-                       </div>
+5036-                       <button 
+5037-                         onClick={() => {
+5038:                            if (tradeMode === 'CLOCK') setClockOffset(clockOffset + 1);
+5039-                            else {
+5040-                               const arr = selectedAsset?.isOTC ? [5, 10, 15, 30, 60, 120, 180, 240, 300, 600, 900, 1800, 3600, 7200, 14400, 28800] : [60, 120, 180, 240, 300, 600, 900, 1800, 3600, 7200, 14400, 28800];
+5041-                               const idx = arr.indexOf(timerDuration);
+5042-                               if (idx < arr.length - 1) setTimerDuration(arr[idx === -1 ? 0 : idx + 1]);
+5043-                            }
+5044-                         }}
+5045-                         className="w-9 h-full flex items-center justify-center text-text-secondary hover:text-text-primary active:bg-[var(--color-text-primary)]/5 transition"
+5046-                       >
+5047-                          <Plus size={16} />
+5048-                       </button>
+5049-                    </div>
+5050-                 </div>
+5051-
+5052-                 {/* Amount Selector */}
+5053-                 <div className="flex flex-col gap-1.5 flex-1">
+5054-                    <div className="flex items-center bg-bg-secondary rounded-xl border border-border-color overflow-hidden h-10">
+5055-                       <button 
+5056-                         onClick={() => {
+5057-                            const min = currency.code === 'BDT' ? 20 : 1;
+5058:                            setInvestment(Math.max(min, Math.floor(investment / 2)));
+5059-                         }}
+5060-                         className="w-9 h-full flex items-center justify-center text-text-secondary hover:text-text-primary active:bg-[var(--color-text-primary)]/5 transition border-r border-border-color"
+5061-                       >
+5062-                          <Minus size={16} />
+5063-                       </button>
+5064-                       <div className="flex-1 h-full flex items-center justify-center relative">
+5065-                          <span className="absolute left-2.5 text-text-secondary/50 font-bold text-[10px] pointer-events-none">{currency.symbol}</span>
+5066-                          <input 
+5067-                            type="number"
+5068-                            inputMode="numeric"
+5069-                            value={investment || ''}
+5070-                            onChange={(e) => {
+5071-                              const val = e.target.value === '' ? 0 : Number(e.target.value);
+5072:                              setInvestment(val);
+5073-                            }}
+5074-                            onBlur={() => {
+5075-                              const min = currency.code === 'BDT' ? 20 : 1;
+5076:                              if (investment < min) setInvestment(min);
+5077-                            }}
+5078-                            className="w-full h-full bg-transparent text-center font-bold text-[14px] focus:outline-none text-text-primary px-5"
+5079-                          />
+5080-                       </div>
+5081-                       <button 
+5082:                         onClick={() => setInvestment(investment * 2 || (currency.code === 'BDT' ? 20 : 1))}
+5083-                         className="w-9 h-full flex items-center justify-center text-text-secondary hover:text-text-primary active:bg-[var(--color-text-primary)]/5 transition border-l border-border-color"
+5084-                       >
+5085-                          <Plus size={16} />
+5086-                       </button>
+5087-                    </div>
+5088-                 </div>
+5089-              </div>
+5090-
+5091-              {/* Trade Actions */}
+5092-              <div className="flex items-center gap-2.5">
+--
+5189-        currentTimeFrame={chartTimeFrame}
+5190-        isOTC={!!selectedAsset.isOTC}
+5191-        onTimeFrameChange={(tf) => {
+5192-          setChartTimeFrame(tf);
+5193-          setIsChartSettingsOpen(false);
+5194-        }}
+5195-        currentChartType={chartType}
+5196-        onChartTypeChange={(type) => {
+5197-          setIsLoading(true);
+5198-          setChartType(type);
+5199:          setTimeout(() => setIsLoading(false), 800); // Faster loading duration
+5200-          setIsChartSettingsOpen(false);
+5201-        }}
+5202-      />
+5203-
+5204-      <AnimatePresence>
+5205-        {(isAssetSelectorOpen && window.innerWidth < 768) && (
+5206-          <motion.div 
+5207-            initial={{ opacity: 0, y: "100%" }}
+5208-            animate={{ opacity: 1, y: 0 }}
+5209-            exit={{ opacity: 0, y: "100%" }}
+--
+5331-            }
+5332-          } catch(e){}
+5333-        }}
+5334-        onMarkAllRead={() => {
+5335-           const allIds = announcements.map(a => a.id);
+5336-           localStorage.setItem('read-announcements', JSON.stringify(allIds));
+5337-           // Trigger a re-render
+5338-           setAnnouncements([...announcements]); 
+5339-        }}
+5340-        onVote={(id, voteType) => {
+5341:          socket?.emit('announcement-vote', { id, voteType });
+5342-        }}
+5343-      />
+5344-
+5345-      <RiskManagementSheet
+5346-        isOpen={isRiskManagementOpen}
+5347-        onClose={() => setIsRiskManagementOpen(false)}
+5348-        balance={displayBalance}
+5349-        currencySymbol={displayCurrencySymbol}
+5350-      />
+5351-
+--
+5363-      />
+5364-    </div>
+5365-  </div>
+5366-);
+5367-}
+5368-
+5369-const NotificationsSheet = ({ isOpen, onClose, notifications, socket, timezoneOffset = 0 }: { isOpen: boolean, onClose: () => void, notifications: any[], socket: any, timezoneOffset?: number }) => {
+5370-  const unreadCount = notifications.filter(n => !n.isRead).length;
+5371-
+5372-  const handleMarkRead = (id: string) => {
+5373:    socket.emit('mark-notification-read', id);
+5374-  };
+5375-
+5376-  return (
+5377-    <AnimatePresence>
+5378-      {isOpen && (
+5379-        <>
+5380-          <motion.div 
+5381-            initial={{ opacity: 0 }}
+5382-            animate={{ opacity: 1 }}
+5383-            exit={{ opacity: 0 }}
+--
+5423-                      )}
+5424-                    >
+5425-                      {!notif.isRead && (
+5426-                        <div className="absolute top-0 left-0 w-1 h-full bg-blue-500" />
+5427-                      )}
+5428-                      <div className="flex justify-between items-start mb-1">
+5429-                        <h3 className={cn("font-bold text-sm", !notif.isRead ? "text-text-primary" : "text-text-secondary")}>
+5430-                          {notif.title}
+5431-                        </h3>
+5432-                        <span className="text-[10px] text-text-secondary font-bold">
+5433:                          {formatWithOffset(notif.timestamp, 'HH:mm', timezoneOffset)}
+5434-                        </span>
+5435-                      </div>
+5436-                      <p className="text-xs text-text-secondary leading-relaxed">
+5437-                        {notif.message}
+5438-                      </p>
+5439-                      <div className="mt-2 flex items-center gap-2">
+5440-                        <span className={cn(
+5441-                          "text-[9px] font-black px-2 py-0.5 rounded uppercase tracking-tighter",
+5442-                          notif.type === 'ALERT' ? "bg-red-500/10 text-red-500" :
+5443-                          notif.type === 'PROMO' ? "bg-purple-500/10 text-purple-500" :
+5444-                          "bg-blue-500/10 text-blue-500"
+5445-                        )}>
+5446-                          {notif.type || 'SYSTEM'}
+5447-                        </span>
+5448-                        <span className="text-[9px] text-text-secondary font-bold">
+5449:                          {formatWithOffset(notif.timestamp, 'MMM dd, yyyy', timezoneOffset)}
+5450-                        </span>
+5451-                      </div>
+5452-                    </div>
+5453-                  ))}
+5454-                </div>
+5455-              ) : (
+5456-                <div className="flex flex-col items-center justify-center py-20 text-center">
+5457-                  <div className="w-20 h-20 bg-bg-secondary rounded-full flex items-center justify-center mb-4 border border-dashed border-border-color">
+5458-                    <Bell size={32} className="text-text-secondary opacity-20" />
+5459-                  </div>
+--
+5473-
+5474-function NavButton({ icon, label, active, count, onClick }: { icon: React.ReactNode, label: string, active?: boolean, count?: number, onClick?: () => void }) {
+5475-  return (
+5476-    <button 
+5477-      onClick={onClick}
+5478-      className={cn(
+5479-      "flex flex-col items-center gap-0 p-1 rounded-lg transition min-w-[55px] relative",
+5480-      active ? "text-text-primary" : "hover:text-text-secondary"
+5481-    )}>
+5482-      <div className={cn("p-0.5 rounded-md", active && "bg-[var(--color-text-primary)]/10")}>
+5483:        {React.isValidElement(icon) ? React.cloneElement(icon as React.ReactElement<any>, { size: 16 }) : icon}
+5484-      </div>
+5485-      <span className="scale-90 origin-top">{label}</span>
+5486-      {count !== undefined && count > 0 && (
+5487-        <span className="absolute top-0 right-1 w-3.5 h-3.5 bg-red-500 text-white text-[8px] flex items-center justify-center rounded-full border border-[var(--color-bg-primary)]">
+5488-          {count}
+5489-        </span>
+5490-      )}
+5491-    </button>
+5492-  );
+5493-}
+5494-
+5495-
+5496-
+5497:function TradeDetailsSheet({ trade, onClose, tickHistory, currentTime, currencySymbol, exchangeRate, timezoneOffset, inSidebar = false }: { trade: Trade, onClose: () => void, tickHistory: TickData[], currentTime: number, currencySymbol: string, exchangeRate: number, timezoneOffset: number, inSidebar?: boolean }) {
+5498-  const isWin = trade.status === 'WIN';
+5499-  const isLoss = trade.status === 'LOSS';
+5500-  const tSymbol = trade.currencySymbol || currencySymbol;
+5501-  const tRate = trade.exchangeRate || exchangeRate;
+5502-  const profit = (trade.profit !== undefined ? trade.profit : (isWin ? trade.amount * (trade.payout / 100) : -trade.amount)) * tRate;
+5503-  
+5504-  // Format profit string
+5505-  let profitString = `${tSymbol}${Math.round(Math.abs(profit))}`;
+5506-  let profitColor = 'text-gray-400';
+5507-  
+--
+5527-    if (relevantTicks.length > 1) {
+5528-        return relevantTicks.map((t, i) => ({
+5529-            i,
+5530-            price: t.price,
+5531-            time: t.time
+5532-        }));
+5533-    }
+5534-
+5535-    // Fallback: Generate fake chart data for the trade duration
+5536-    // Use a deterministic seed based on trade ID to prevent "jumping" when re-rendering
+5537:    const seed = trade.id.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+5538-    const seededRandom = (n: number) => {
+5539-        const x = Math.sin(seed + n) * 10000;
+5540-        return x - Math.floor(x);
+5541-    };
+5542-
+5543-    const data = [];
+5544-    const points = 40; // More points for smoother static line
+5545-    const startPrice = trade.entryPrice;
+5546-    const endPrice = trade.closePrice || trade.entryPrice;
+5547-    const duration = endTime - trade.startTime;
+--
+5559-      data.push({ 
+5560-          i, 
+5561-          price,
+5562-          time: trade.startTime + (progress * duration)
+5563-      });
+5564-    }
+5565-    return data;
+5566-  }, [trade.id, trade.startTime, trade.endTime, trade.status, trade.entryPrice, trade.closePrice, tickHistory, trade.status === 'ACTIVE' ? currentTime : null]);
+5567-
+5568-  // Capture static data for closed trades to prevent jumps when tickHistory is pruned
+5569:  useEffect(() => {
+5570-    if (trade.status !== 'ACTIVE' && !capturedData && derivedChartData.length > 5) {
+5571-      setCapturedData(derivedChartData);
+5572-    }
+5573-  }, [trade.status, derivedChartData, capturedData]);
+5574-
+5575-  const chartData = capturedData || derivedChartData;
+5576-
+5577-  const minPrice = Math.min(...chartData.map(d => d.price), trade.entryPrice, trade.closePrice || trade.entryPrice);
+5578-  const maxPrice = Math.max(...chartData.map(d => d.price), trade.entryPrice, trade.closePrice || trade.entryPrice);
+5579-  const range = maxPrice - minPrice || 0.001;
+--
+5633-        minPrice={minPrice}
+5634-        maxPrice={maxPrice}
+5635-        padding={padding}
+5636-        getCoordY={getCoordY}
+5637-        isWin={isWin}
+5638-      />
+5639-    </motion.div>
+5640-  );
+5641-}
+5642-
+5643:function TradeDetailsContent({ 
+5644-  trade, 
+5645-  onClose, 
+5646-  chartData, 
+5647-  currencySymbol, 
+5648-  exchangeRate, 
+5649-  timezoneOffset, 
+5650-  profitString, 
+5651-  profitColor,
+5652-  minPrice,
+5653-  maxPrice,
+--
+5657-}: any) {
+5658-  const { t } = useTranslation();
+5659-  const tSymbol = trade.currencySymbol || currencySymbol;
+5660-  const tRate = trade.exchangeRate || exchangeRate;
+5661-  
+5662-  return (
+5663-    <>
+5664-      {/* Header with Title and Tabs */}
+5665-      <div className="pt-6 px-4">
+5666-        <div className="flex items-center justify-between mb-4">
+5667:          <h1 className="text-3xl font-bold text-text-primary">{t('nav.trades')}</h1>
+5668-          <button onClick={onClose} className="p-2 text-text-secondary/60 hover:text-text-primary transition">
+5669-            <X size={24} />
+5670-          </button>
+5671-        </div>
+5672-        
+5673-        <div className="flex gap-6 border-b border-border-color pb-2 mb-4">
+5674-          <span className="text-text-primary font-bold border-b-2 border-white pb-2 px-1">Fixed Time</span>
+5675-          <span className="text-text-secondary/40 font-bold px-1">Forex</span>
+5676-          <span className="text-text-secondary/40 font-bold px-1">Stocks</span>
+5677-        </div>
+--
+5743-                 style={{ left: '20px', top: `${getCoordY(trade.entryPrice)}%`, transform: 'translateY(-50%)' }}
+5744-               >
+5745-                 {trade.type === 'UP' ? <ArrowUp size={12} className="text-text-primary" strokeWidth={4} /> : <ArrowDown size={12} className="text-text-primary" strokeWidth={4} />}
+5746-               </div>
+5747-               <div className="absolute w-1 h-1 bg-white rounded-full z-30" style={{ left: '30px', top: `${getCoordY(trade.entryPrice)}%`, transform: 'translate(-50%, -50%)' }} />
+5748-               <div className="absolute w-1 h-1 bg-white rounded-full z-30" style={{ right: '30px', top: `${getCoordY(trade.entryPrice)}%`, transform: 'translate(50%, -50%)' }} />
+5749-            </div>
+5750-          </div>
+5751-          
+5752-          <button className="w-full mt-4 py-3 bg-bg-secondary hover:bg-bg-tertiary text-white font-bold rounded-xl border border-border-color transition active:scale-[0.98] shadow-lg text-sm">
+5753:            {t('trade.show_on_chart')}
+5754-          </button>
+5755-        </div>
+5756-
+5757-        {/* Details List */}
+5758-        <div className="space-y-4 mb-8">
+5759:          <DetailRow label={t('trade.amount')} value={`${tSymbol}${Math.round(trade.amount * tRate)}`} />
+5760:          <DetailRow label={t('trade.pnl')} value={profitString} valueClassName={profitColor} />
+5761-          <DetailRow 
+5762:            label={t('trade.id')} 
+5763-            value={trade.id.slice(0, 11).toUpperCase()} 
+5764-            showCopy 
+5765:            onCopy={() => navigator.clipboard.writeText(trade.id)}
+5766-          />
+5767:          <DetailRow label={t('trade.status')} value={isWin ? t('trade.with_profit') : t('trade.with_loss')} />
+5768:          <DetailRow label={t('trade.duration')} value="1 min" />
+5769:          <DetailRow label={t('trade.opened')} value={formatWithOffset(trade.startTime, 'MMM dd HH:mm:ss.SSS', timezoneOffset)} />
+5770:          <DetailRow label={t('trade.closed_time')} value={formatWithOffset(trade.endTime, 'MMM dd HH:mm:ss.SSS', timezoneOffset)} />
+5771:          <DetailRow label={t('trade.opening_quote')} value={trade.entryPrice.toFixed(5)} />
+5772:          <DetailRow label={t('trade.closing_quote')} value={trade.closePrice?.toFixed(5) || '---'} />
+5773-        </div>
+5774-
+5775-        <div className="px-2 mb-8">
+5776-          <p className="text-text-secondary/40 text-[11px] leading-relaxed">
+5777:            {t('trade.tick_quotes_desc')} <span className="text-[#22c55e] font-bold">{t('trade.quotes_history')}</span>
+5778-          </p>
+5779-        </div>
+5780-        
+5781-        <button 
+5782-          onClick={onClose}
+5783-          className="w-full bg-bg-secondary text-white font-bold py-4 rounded-2xl hover:bg-bg-tertiary transition active:scale-[0.98] shadow-xl text-sm border border-border-color"
+5784-        >
+5785:          {t('common.close')}
+5786-        </button>
+5787-      </div>
+5788-    </>
+5789-  );
+5790-}
+5791-
+5792-const DetailRow = ({ label, value, valueClassName, showCopy, onCopy }: { label: string, value: string, valueClassName?: string, showCopy?: boolean, onCopy?: () => void }) => (
+5793-  <div className="flex justify-between items-center py-1">
+5794-    <span className="text-text-secondary/40 text-sm font-medium">{label}</span>
+5795-    <div className="flex items-center gap-2">
+--
+5831-  exchangeRate: number,
+5832-  onCancelPendingOrder: (id: number) => void,
+5833-  timezoneOffset?: number,
+5834-  onClose?: () => void,
+5835-  inSidebar?: boolean
+5836-}) {
+5837-  const { t } = useTranslation();
+5838-  const [selectedTrade, setSelectedTrade] = useState<Trade | null>(null);
+5839-  const [showHistory, setShowHistory] = useState(false);
+5840-  const activeTrades = trades.filter(t => t.status === 'ACTIVE');
+5841:  const closedTrades = trades.filter(t => t.status !== 'ACTIVE').sort((a, b) => b.endTime - a.endTime);
+5842-
+5843-  // Calculate today's stats for current timezone
+5844-  const now = Date.now();
+5845-  const offsetMs = (timezoneOffset || 0) * 3600000;
+5846-  const todayInTimezone = new Date(now + offsetMs);
+5847-  todayInTimezone.setUTCHours(0, 0, 0, 0);
+5848-  const todayStartUtc = todayInTimezone.getTime() - offsetMs;
+5849-
+5850-  const todayClosedTrades = closedTrades.filter(t => t.endTime >= todayStartUtc);
+5851-  const totalToday = todayClosedTrades.length;
+--
+5857-      "bg-bg-primary text-text-primary font-sans flex flex-col h-full",
+5858-      !inSidebar && "absolute inset-0 z-50 md:relative md:z-auto"
+5859-    )}>
+5860-      <div className="p-4 pb-2 flex items-center justify-between">
+5861-        <div className="flex items-center gap-2">
+5862-          {!inSidebar && (
+5863-            <button onClick={onViewAsset} className="md:hidden p-2 -ml-2 text-gray-400 hover:text-text-primary transition">
+5864-               <ChevronLeft size={24} />
+5865-            </button>
+5866-          )}
+5867:          <h1 className="text-xl font-bold">{t('common.trades')}</h1>
+5868-        </div>
+5869-        {inSidebar && onClose && (
+5870-          <button onClick={onClose} className="p-2 text-text-secondary hover:text-text-primary transition">
+5871-            <X size={20} />
+5872-          </button>
+5873-        )}
+5874-      </div>
+5875-      
+5876-      {/* Tabs */}
+5877-      <div className="flex border-b border-border-color px-4 mb-4">
+--
+5889-            <button 
+5890-              onClick={onViewAsset}
+5891-              className="w-full bg-bg-secondary text-text-primary font-bold py-4 rounded-2xl border border-border-color hover:bg-bg-tertiary transition-colors"
+5892-            >
+5893-              Explore Assets
+5894-            </button>
+5895-          </div>
+5896-        ) : (
+5897-          <div className="space-y-3 mb-8">
+5898-             <h2 className="text-lg font-bold mb-3 flex items-center justify-between">
+5899:                <span>{t('common.open_trades')}</span>
+5900:                <span className="text-xs font-normal text-text-secondary">{activeTrades.length} {t('common.active')}</span>
+5901-             </h2>
+5902-             {activeTrades.map(trade => (
+5903-               <TradeItem 
+5904-                  key={trade.id} 
+5905-                  trade={trade} 
+5906-                  currentPrice={marketAssets[trade.assetShortName]?.price || currentPrice}
+5907-                  currentTime={currentTime}
+5908-                  onClick={() => setSelectedTrade(trade)} 
+5909-                  currencySymbol={currencySymbol}
+5910-                  exchangeRate={exchangeRate}
+5911-                />
+5912-             ))}
+5913-          </div>
+5914-        )}
+5915-
+5916-        {/* Closed Trades Section */}
+5917-        <div className="flex justify-between items-center mb-4 mt-8">
+5918:          <h2 className="text-lg font-bold">{t('common.closed_trades')}</h2>
+5919-          <button 
+5920-            onClick={() => setShowHistory(true)}
+5921-            className="text-xs text-text-secondary flex items-center gap-1 hover:text-text-primary transition-colors font-medium"
+5922-          >
+5923-            Show All <ChevronRight size={14}/>
+5924-          </button>
+5925-        </div>
+5926-
+5927-        <div className="space-y-3">
+5928-          {totalToday === 0 ? (
+--
+5936-          ) : (
+5937-             <>
+5938-               {/* Daily Summary Box (Real logic for today)*/}
+5939-               <div 
+5940-                 onClick={() => setShowHistory(true)}
+5941-                 className="bg-bg-secondary p-4 rounded-2xl border border-border-color flex items-center gap-4 mb-4 cursor-pointer hover:bg-bg-tertiary transition-colors group"
+5942-               >
+5943-                  <div 
+5944-                    className="w-12 h-12 rounded-full flex items-center justify-center relative flex-shrink-0"
+5945-                    style={{ 
+5946:                      background: `conic-gradient(#22c55e ${winRate * 3.6}deg, rgba(255,255,255,0.08) 0deg)`
+5947-                    }}
+5948-                  >
+5949-                    <div className="absolute inset-[3px] bg-bg-secondary rounded-full flex items-center justify-center">
+5950-                       <span className="text-[10px] font-black text-[#22c55e]">{winRate}%</span>
+5951-                    </div>
+5952-                  </div>
+5953-                  <div className="flex-1">
+5954-                     <div className="text-[10px] text-text-secondary font-black uppercase tracking-widest mb-1">Today's success</div>
+5955-                     <div className="text-sm font-bold flex flex-col">
+5956-                       <span className="text-[#22c55e]">{winsToday} of {totalToday} trades successful</span>
+--
+6006-  
+6007-  let profitString = '';
+6008-  let profitColor = 'text-text-secondary';
+6009-  let timeString = '';
+6010-
+6011-  if (isActive && currentPrice !== undefined && currentTime !== undefined) {
+6012-    // Active Trade Logic
+6013-    const timeLeft = Math.max(0, Math.ceil((trade.endTime - currentTime) / 1000));
+6014-    const minutes = Math.floor(timeLeft / 60);
+6015-    const seconds = timeLeft % 60;
+6016:    timeString = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+6017-
+6018-    const isWinning = trade.type === 'UP' 
+6019-      ? currentPrice > trade.entryPrice 
+6020-      : currentPrice < trade.entryPrice;
+6021-    
+6022-    const tradeSymbol = trade.currencySymbol || currencySymbol;
+6023-    const tradeRate = trade.exchangeRate || exchangeRate;
+6024-
+6025-    const potentialProfit = trade.amount * (trade.payout / 100) * tradeRate;
+6026-    
+--
+6153-        {/* User Info Section */}
+6154-        <div className="flex flex-col items-center mt-2 mb-8">
+6155-          <div className="w-28 h-28 rounded-full bg-bg-tertiary flex items-center justify-center mb-5 overflow-hidden border border-border-color shadow-xl">
+6156-            {user.photoURL ? (
+6157-              <img src={user.photoURL} alt="Profile" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+6158-            ) : (
+6159-              <User size={56} className="text-text-secondary" />
+6160-            )}
+6161-          </div>
+6162-          <h1 className="text-3xl font-bold tracking-tight mb-2 text-text-primary">
+6163:            {user.displayName || user.email?.split('@')[0] || 'User'}
+6164-          </h1>
+6165-          <button 
+6166-            onClick={() => {
+6167-              const id = user.uid?.slice(-10).toUpperCase() || '132783071';
+6168:              navigator.clipboard.writeText(id);
+6169-            }}
+6170-            className="flex items-center gap-2 text-text-secondary text-[13px] font-medium tracking-wide hover:text-text-primary transition active:scale-95 px-3 py-1 bg-bg-secondary rounded-full"
+6171-          >
+6172-            ID {user.uid?.slice(-10).toUpperCase() || '132783071'} <Copy size={14} />
+6173-          </button>
+6174-
+6175-          {(user.email?.toLowerCase() === 'tasmeaykhatun565@gmail.com') && (
+6176-            <button 
+6177-              onClick={onAdmin}
+6178-              className="mt-6 bg-red-500/10 text-red-500 border border-red-500/20 px-8 py-2 rounded-full font-black text-xs transition uppercase tracking-widest hover:bg-red-500/20"
+--
+6514-          ))
+6515-        )}
+6516-      </div>
+6517-
+6518-      <div className="flex justify-between items-center mb-4">
+6519-        <h2 className="font-bold text-lg text-text-primary">My Trading Stats</h2>
+6520-      </div>
+6521-
+6522-      <div className="grid grid-cols-2 gap-4 mb-8">
+6523-        <div className="bg-bg-secondary p-4 rounded-2xl border border-border-color">
+6524:          <span className="text-[10px] text-text-secondary uppercase font-black">{t('common.total_trades')}</span>
+6525-          <div className="text-2xl font-black text-text-primary mt-1">{trades.length}</div>
+6526-        </div>
+6527-        <div className="bg-bg-secondary p-4 rounded-2xl border border-border-color">
+6528-          <span className="text-[10px] text-text-secondary uppercase font-black">Win Rate</span>
+6529-          <div className="text-2xl font-black text-green-500 mt-1">
+6530-            {trades.length > 0 ? ((trades.filter(t => t.status === 'WIN').length / trades.length) * 100).toFixed(1) : 0}%
+6531-          </div>
+6532-        </div>
+6533-        <div className="bg-bg-secondary p-4 rounded-2xl border border-border-color">
+6534-          <span className="text-[10px] text-text-secondary uppercase font-black">Wins</span>
+--
+6726-          src="https://i.imghippo.com/files/Gtw3911Dmk.jpg" 
+6727-          alt="Onyx Elite Logo" 
+6728-          className="w-[120%] h-[120%] object-cover contrast-110 brightness-110"
+6729-          referrerPolicy="no-referrer"
+6730-        />
+6731-      </div>
+6732-
+6733-      <div className="flex flex-col gap-2 flex-1 w-full px-2">
+6734-        <SidebarNavButton 
+6735-          icon={<ArrowUpDown size={20} />} 
+6736:          label={t('nav.trades')} 
+6737-          active={isHistoryOpen} 
+6738-          onClick={() => handleNavClick('TRADES')} 
+6739-          count={activeTradesCount} 
+6740-        />
+6741-        <SidebarNavButton 
+6742-          icon={<ShoppingBag size={20} />} 
+6743-          label="Market" 
+6744-          active={isActivitiesOpen} 
+6745-          onClick={() => handleNavClick('MARKET')} 
+6746-        />
+6747-        <SidebarNavButton 
+6748-          icon={<Trophy size={20} />} 
+6749:          label={t('nav.rewards')} 
+6750-          active={isRewardsOpen} 
+6751-          onClick={() => handleNavClick('REWARDS')} 
+6752-        />
+6753-        <SidebarNavButton 
+6754-          icon={<HelpCircle size={20} />} 
+6755:          label={t('nav.help')} 
+6756-          active={isHelpOpen} 
+6757-          onClick={() => handleNavClick('HELP')} 
+6758-        />
+6759-      </div>
+6760-      
+6761-      <div className="mt-auto pt-4 w-full flex flex-col items-center gap-1 text-[10px] text-text-secondary/40 font-mono">
+6762-        <span className="font-bold text-text-primary">3788</span>
+6763-        <span>online</span>
+6764-      </div>
+6765-    </aside>
+--
+6867-       <div className="flex-1 overflow-y-auto px-4 space-y-4 custom-scrollbar">
+6868-          {accounts.map((account: any) => {
+6869-              const isActive = activeAccount === account.id;
+6870-              return (
+6871-                  <div 
+6872-                    key={account.id} 
+6873-                    className={cn(
+6874-                        "rounded-2xl p-5 flex items-center justify-between transition-all cursor-pointer group active:scale-[0.98]",
+6875-                        isActive ? "bg-bg-secondary border border-border-color" : "hover:bg-white/[0.03]"
+6876-                    )}
+6877:                    onClick={() => !isActive && onSelectAccount(account.id)}
+6878-                  >
+6879-                     <div className="flex items-center gap-4">
+6880-                        {/* Icon based on account type */}
+6881-                        <div className="relative">
+6882-                          {account.id === 'DEMO' ? (
+6883-                            <div className="w-10 h-10 rounded-xl bg-[#f59e0b] flex items-center justify-center border-2 border-white/20 shadow-lg">
+6884-                              <span className="text-text-primary font-black text-lg">Đ</span>
+6885-                            </div>
+6886-                          ) : (
+6887-                            <div className="w-10 h-10 rounded-xl bg-bg-secondary border border-border-color flex items-center justify-center shadow-lg relative overflow-hidden">
+--
+6905-                     
+6906-                     <div className="flex items-center gap-2">
+6907-                        <MoreVertical size={24} className="text-text-secondary group-hover:text-text-primary transition" />
+6908-                     </div>
+6909-                  </div>
+6910-              );
+6911-          })}
+6912-
+6913-          {/* Add Account Button */}
+6914-          <button 
+6915:            onClick={() => onAddAccount()}
+6916-            className="w-full mt-2 group flex items-center gap-4 px-6 py-5 rounded-2xl transition hover:bg-white/[0.03] active:scale-[0.98]"
+6917-          >
+6918-            <div className="w-10 h-10 flex items-center justify-center text-text-secondary group-hover:text-text-primary transition">
+6919-               <Plus size={32} strokeWidth={2} />
+6920-            </div>
+6921-            <span className="text-[17px] font-bold text-text-primary transition">Add Account</span>
+6922-          </button>
+6923-       </div>
+6924-    </aside>
+6925-  );
+--
+6952-        <div className="relative">
+6953-          <div className="w-16 h-16 rounded-full bg-bg-secondary flex items-center justify-center border border-border-color overflow-hidden shadow-xl">
+6954-            {user.photoURL ? (
+6955-              <img src={user.photoURL} alt="Profile" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+6956-            ) : (
+6957-              <User size={24} className="text-text-secondary" />
+6958-            )}
+6959-          </div>
+6960-        </div>
+6961-        <div className="flex flex-col">
+6962:           <h1 className="text-[17px] font-bold mb-0.5 tracking-tight text-text-primary">{user.displayName || user.email?.split('@')[0]}</h1>
+6963-           <div className="flex items-center gap-2 text-text-secondary text-[13px] font-medium tracking-wide">
+6964-             <span>{user.email}</span>
+6965-           </div>
+6966-           {(user.email?.toLowerCase() === 'tasmeaykhatun565@gmail.com') && (
+6967-             <button 
+6968-               onClick={onAdmin}
+6969-               className="mt-2 w-fit bg-red-500/10 text-red-500 border border-red-500/20 px-3 py-1 rounded-md font-bold text-[10px] flex items-center gap-1.5 hover:bg-red-500/20 transition uppercase tracking-widest"
+6970-             >
+6971-               <Settings size={12} /> Admin Panel
+6972-             </button>
+--
+7086-           <div className="bg-bg-secondary border border-border-color rounded-xl p-3 flex flex-col group focus-within:border-emerald-500/50 transition-colors">
+7087-             <div className="text-[11px] text-gray-500 font-bold uppercase tracking-widest mb-1.5">Investment Amount</div>
+7088-             <div className="flex items-center gap-2">
+7089-               <span className="text-text-secondary/30 font-bold text-lg">{displayCurrencySymbol}</span>
+7090-               <input 
+7091-                 type="number" 
+7092-                 inputMode="numeric"
+7093-                 value={investment || ''} 
+7094-                 onChange={e => {
+7095-                    const val = e.target.value === '' ? 0 : Number(e.target.value);
+7096:                    setInvestment(val);
+7097-                 }}
+7098-                 onBlur={() => {
+7099-                    const min = currency.code === 'BDT' ? 20 : 1;
+7100:                    if (investment < min) setInvestment(min);
+7101-                 }}
+7102-                 className="w-full bg-transparent text-left font-black text-xl focus:outline-none min-w-0 text-text-primary placeholder:text-text-secondary/10"
+7103-                 placeholder="0.00"
+7104-               />
+7105-             </div>
+7106-           </div>
+7107-           <div className="flex items-center gap-2">
+7108-             <button 
+7109-               onClick={() => {
+7110-                  const min = currency.code === 'BDT' ? 20 : 1;
+7111:                  setInvestment(Math.max(min, Math.floor(investment - 10)));
+7112-               }}
+7113-               className="flex-1 h-10 bg-bg-secondary hover:bg-bg-tertiary text-text-secondary/50 hover:text-white rounded-xl flex items-center justify-center transition border border-border-color active:scale-95 shadow-sm"
+7114-             >
+7115-               <Minus size={18} strokeWidth={2.5} />
+7116-             </button>
+7117-             <button 
+7118:               onClick={() => setInvestment((investment || 0) + 10)}
+7119-               className="flex-1 h-10 bg-bg-secondary hover:bg-bg-tertiary text-text-secondary/50 hover:text-white rounded-xl flex items-center justify-center transition border border-border-color active:scale-95 shadow-sm"
+7120-             >
+7121-               <Plus size={18} strokeWidth={2.5} />
+7122-             </button>
+7123-           </div>
+7124-        </div>
+7125-
+7126-        {/* Duration Section */}
+7127-        <div className="space-y-2">
+7128-           <div className="bg-bg-secondary rounded-lg p-3 cursor-pointer">
+7129-             <div className="text-[11px] text-gray-400 font-medium tracking-wide mb-1">Duration</div>
+7130-             <div className="flex items-baseline gap-3 text-text-primary">
+7131-                <span className="font-bold text-lg whitespace-nowrap">
+7132:                  {tradeMode === 'CLOCK' ? formatWithOffset(getExpirationTime(), 'HH:mm', timezoneOffset) : (timerDuration < 60 ? `${timerDuration} sec` : `${Math.floor(timerDuration / 60)} min`)}
+7133-                </span>
+7134-                {tradeMode === 'CLOCK' && (
+7135:                  <span className="text-[11px] text-gray-500 font-medium">{formatWithOffset(getExpirationTime(), 'MM/dd', timezoneOffset)}</span>
+7136-                )}
+7137-             </div>
+7138-           </div>
+7139-           <div className="flex items-center gap-2">
+7140-             <button 
+7141-               onClick={() => {
+7142:                  if (tradeMode === 'CLOCK') setClockOffset(Math.max(1, clockOffset - 1));
+7143-                  else {
+7144-                     const arr = selectedAsset?.isOTC ? [5, 10, 15, 30, 60, 120, 180, 240, 300, 600, 900, 1800, 3600, 7200, 14400, 28800] : [60, 120, 180, 240, 300, 600, 900, 1800, 3600, 7200, 14400, 28800];
+7145-                     const idx = arr.indexOf(timerDuration);
+7146-                     if (idx > 0) setTimerDuration(arr[idx - 1]);
+7147-                  }
+7148-               }}
+7149-               className="flex-1 h-8 bg-bg-secondary hover:bg-bg-tertiary text-text-secondary/60 hover:text-white rounded-lg flex items-center justify-center transition"
+7150-             >
+7151-               <Minus size={16} />
+7152-             </button>
+7153-             <button 
+7154-               onClick={() => {
+7155:                  if (tradeMode === 'CLOCK') setClockOffset(clockOffset + 1);
+7156-                  else {
+7157-                     const arr = selectedAsset?.isOTC ? [5, 10, 15, 30, 60, 120, 180, 240, 300, 600, 900, 1800, 3600, 7200, 14400, 28800] : [60, 120, 180, 240, 300, 600, 900, 1800, 3600, 7200, 14400, 28800];
+7158-                     const idx = arr.indexOf(timerDuration);
+7159-                     if (idx < arr.length - 1) setTimerDuration(arr[idx === -1 ? 0 : idx + 1]);
+7160-                  }
+7161-               }}
+7162-               className="flex-1 h-8 bg-bg-secondary hover:bg-bg-tertiary text-text-secondary/60 hover:text-white rounded-lg flex items-center justify-center transition"
+7163-             >
+7164-               <Plus size={16} />
+7165-             </button>

@@ -83,8 +83,8 @@ const AssetControl: React.FC<{ symbol: string, asset: any, socket: Socket | null
   };
 
   return (
-    <div className="bg-[var(--bg-secondary)] rounded-2xl border border-[var(--border-color)] overflow-hidden shadow-xl hover:border-[var(--border-color)] transition-colors">
-      <div className="p-4 border-b border-[var(--border-color)] bg-[var(--bg-secondary)]/30">
+    <div className="bg-bg-secondary rounded-2xl border border-border-color overflow-hidden shadow-xl hover:border-border-color transition-colors">
+      <div className="p-4 border-b border-border-color bg-bg-secondary/30">
         <div className="flex justify-between items-center">
           <div className="flex items-center gap-3">
             <button 
@@ -98,7 +98,7 @@ const AssetControl: React.FC<{ symbol: string, asset: any, socket: Socket | null
               {asset.isRealMarket ? <Bitcoin size={18} /> : <Activity size={18} />}
             </button>
             <div>
-              <div className="font-bold text-sm text-[var(--text-primary)] flex items-center gap-2">
+              <div className="font-bold text-sm text-text-primary flex items-center gap-2">
                 {symbol}
                 {asset.isRealMarket ? (
                   <span className="bg-orange-500 text-black text-[7px] px-1 rounded-sm font-black uppercase tracking-tighter">Real Binance</span>
@@ -113,8 +113,8 @@ const AssetControl: React.FC<{ symbol: string, asset: any, socket: Socket | null
             </div>
           </div>
           <div className="text-right">
-            <div className="text-sm font-mono font-black text-[var(--text-secondary)]">{asset.price?.toFixed(5)}</div>
-            <div className="text-[9px] text-[var(--text-secondary)] font-bold uppercase">Live Price</div>
+            <div className="text-sm font-mono font-black text-text-secondary">{asset.price?.toFixed(5)}</div>
+            <div className="text-[9px] text-text-secondary font-bold uppercase">Live Price</div>
           </div>
         </div>
       </div>
@@ -124,12 +124,12 @@ const AssetControl: React.FC<{ symbol: string, asset: any, socket: Socket | null
         {!asset.isRealMarket && (
           <div>
             <div className="flex justify-between items-center mb-2">
-              <label className="text-[10px] text-[var(--text-secondary)] font-black uppercase tracking-wider">Trend Control</label>
+              <label className="text-[10px] text-text-secondary font-black uppercase tracking-wider">Trend Control</label>
               <span className="text-[10px] font-mono text-blue-400">{asset.trend?.toFixed(6)}</span>
             </div>
             <div className="flex gap-1">
               <button onClick={() => handleSetTrend((asset.trend || 0) + 0.001)} className="flex-1 bg-green-500/10 text-green-500 py-2 rounded-xl flex justify-center items-center hover:bg-green-500/20 transition active:scale-95 border border-green-500/10"><TrendingUp size={16} /></button>
-              <button onClick={() => handleSetTrend(0)} className="px-4 bg-[var(--bg-primary)] text-[var(--text-secondary)] py-2 rounded-xl text-[10px] font-black uppercase hover:text-[var(--text-primary)] transition active:scale-95 border border-[var(--border-color)]">Reset</button>
+              <button onClick={() => handleSetTrend(0)} className="px-4 bg-bg-primary text-text-secondary py-2 rounded-xl text-[10px] font-black uppercase hover:text-text-primary transition active:scale-95 border border-border-color">Reset</button>
               <button onClick={() => handleSetTrend((asset.trend || 0) - 0.001)} className="flex-1 bg-red-500/10 text-red-500 py-2 rounded-xl flex justify-center items-center hover:bg-red-500/20 transition active:scale-95 border border-red-500/10"><TrendingDown size={16} /></button>
             </div>
           </div>
@@ -162,7 +162,7 @@ const AssetControl: React.FC<{ symbol: string, asset: any, socket: Socket | null
                 value={customPrice}
                 onChange={(e) => setCustomPrice(e.target.value)}
                 placeholder="Set Price"
-                className="w-full bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-xl px-3 py-2 text-xs text-[var(--text-primary)] focus:border-blue-500 outline-none transition"
+                className="w-full bg-bg-primary border border-border-color rounded-xl px-3 py-2 text-xs text-text-primary focus:border-blue-500 outline-none transition"
               />
               <button onClick={handleSetPrice} className="absolute right-1 top-1 bottom-1 bg-blue-600 text-white px-2 rounded-lg text-[10px] font-black uppercase hover:bg-blue-500 transition">Set</button>
             </div>
@@ -172,7 +172,7 @@ const AssetControl: React.FC<{ symbol: string, asset: any, socket: Socket | null
                 value={targetPrice}
                 onChange={(e) => setTargetPrice(e.target.value)}
                 placeholder="Target"
-                className="w-full bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-xl px-3 py-2 text-xs text-[var(--text-primary)] focus:border-purple-500 outline-none transition"
+                className="w-full bg-bg-primary border border-border-color rounded-xl px-3 py-2 text-xs text-text-primary focus:border-purple-500 outline-none transition"
               />
               <button onClick={handleSetTarget} className="absolute right-1 top-1 bottom-1 bg-purple-600 text-white px-2 rounded-lg text-[10px] font-black uppercase hover:bg-purple-500 transition"><Target size={14} /></button>
             </div>
@@ -183,8 +183,8 @@ const AssetControl: React.FC<{ symbol: string, asset: any, socket: Socket | null
         {!asset.isRealMarket && (
           <div>
             <div className="flex justify-between items-center mb-1.5">
-              <label className="text-[10px] text-[var(--text-secondary)] font-black uppercase tracking-wider">Volatility</label>
-              <span className="text-[10px] font-mono text-[var(--text-secondary)]">{(asset.volatility * 100).toFixed(2)}%</span>
+              <label className="text-[10px] text-text-secondary font-black uppercase tracking-wider">Volatility</label>
+              <span className="text-[10px] font-mono text-text-secondary">{(asset.volatility * 100).toFixed(2)}%</span>
             </div>
             <input 
               type="range" 
@@ -193,7 +193,7 @@ const AssetControl: React.FC<{ symbol: string, asset: any, socket: Socket | null
               step="0.0001"
               value={String(asset.volatility || 0)}
               onChange={(e) => handleSetVolatility(parseFloat(e.target.value))}
-              className="w-full h-1.5 bg-[var(--bg-primary)] rounded-lg appearance-none cursor-pointer accent-blue-500"
+              className="w-full h-1.5 bg-bg-primary rounded-lg appearance-none cursor-pointer accent-blue-500"
             />
           </div>
         )}
@@ -201,7 +201,7 @@ const AssetControl: React.FC<{ symbol: string, asset: any, socket: Socket | null
         {/* Payout Control */}
         <div>
           <div className="flex justify-between items-center mb-1.5">
-            <label className="text-[10px] text-[var(--text-secondary)] font-black uppercase tracking-wider">Market Payout</label>
+            <label className="text-[10px] text-text-secondary font-black uppercase tracking-wider">Market Payout</label>
             <span className="text-[10px] font-mono text-green-500 font-bold">{asset.payout || 90}%</span>
           </div>
           <div className="flex items-center gap-2">
@@ -212,14 +212,14 @@ const AssetControl: React.FC<{ symbol: string, asset: any, socket: Socket | null
               step="1"
               value={String(asset.payout || 90)}
               onChange={(e) => handleUpdatePayout(parseInt(e.target.value))}
-              className="flex-1 h-1.5 bg-[var(--bg-primary)] rounded-lg appearance-none cursor-pointer accent-green-500"
+              className="flex-1 h-1.5 bg-bg-primary rounded-lg appearance-none cursor-pointer accent-green-500"
             />
             <div className="flex gap-1">
               {[80, 90, 95].map(p => (
                 <button 
                   key={p}
                   onClick={() => handleUpdatePayout(p)}
-                  className="px-1.5 py-0.5 bg-[var(--bg-primary)] border border-[var(--border-color)] rounded text-[8px] font-bold text-[var(--text-secondary)] hover:text-green-500 transition"
+                  className="px-1.5 py-0.5 bg-bg-primary border border-border-color rounded text-[8px] font-bold text-text-secondary hover:text-green-500 transition"
                 >
                   {p}%
                 </button>
@@ -231,7 +231,7 @@ const AssetControl: React.FC<{ symbol: string, asset: any, socket: Socket | null
         {/* Win Percentage Control */}
         <div>
           <div className="flex justify-between items-center mb-1.5">
-            <label className="text-[10px] text-[var(--text-secondary)] font-black uppercase tracking-wider">Win Percentage</label>
+            <label className="text-[10px] text-text-secondary font-black uppercase tracking-wider">Win Percentage</label>
             <span className="text-[10px] font-mono text-purple-500 font-bold">{asset.winPercentage ?? 50}%</span>
           </div>
           <div className="flex items-center gap-2">
@@ -242,14 +242,14 @@ const AssetControl: React.FC<{ symbol: string, asset: any, socket: Socket | null
               step="1"
               value={String(asset.winPercentage ?? 50)}
               onChange={(e) => handleUpdateWinPercentage(parseInt(e.target.value))}
-              className="flex-1 h-1.5 bg-[var(--bg-primary)] rounded-lg appearance-none cursor-pointer accent-purple-500"
+              className="flex-1 h-1.5 bg-bg-primary rounded-lg appearance-none cursor-pointer accent-purple-500"
             />
             <div className="flex gap-1">
               {[30, 50, 70].map(p => (
                 <button 
                   key={p}
                   onClick={() => handleUpdateWinPercentage(p)}
-                  className="px-1.5 py-0.5 bg-[var(--bg-primary)] border border-[var(--border-color)] rounded text-[8px] font-bold text-[var(--text-secondary)] hover:text-purple-500 transition"
+                  className="px-1.5 py-0.5 bg-bg-primary border border-border-color rounded text-[8px] font-bold text-text-secondary hover:text-purple-500 transition"
                 >
                   {p}%
                 </button>
@@ -267,11 +267,11 @@ const FinanceAdminView: React.FC<any> = (props) => {
   const { onBack, deposits, withdrawals, handleUpdateDepositStatus, handleUpdateWithdrawStatus } = props;
   const [activeTab, setActiveTab] = useState<'DEPOSITS' | 'WITHDRAWALS'>('DEPOSITS');
   return (
-    <div className="min-h-[100dvh] bg-[var(--bg-primary)] text-[var(--text-primary)] p-6">
+    <div className="min-h-[100dvh] bg-bg-primary text-text-primary p-6">
       <div className="max-w-7xl mx-auto">
         <div className="flex justify-between items-center mb-8">
           <h1 className="text-2xl font-black">Finance Admin</h1>
-          <button onClick={onBack} className="px-4 py-2 bg-[var(--bg-secondary)] rounded-xl border border-[var(--border-color)] text-xs font-bold hover:bg-[var(--bg-tertiary)] transition">
+          <button onClick={onBack} className="px-4 py-2 bg-bg-secondary rounded-xl border border-border-color text-xs font-bold hover:bg-bg-tertiary transition">
             Logout
           </button>
         </div>
@@ -279,24 +279,24 @@ const FinanceAdminView: React.FC<any> = (props) => {
         <div className="flex gap-2 mb-6">
           <button 
             onClick={() => setActiveTab('DEPOSITS')}
-            className={cn("px-6 py-3 rounded-xl text-sm font-bold transition", activeTab === 'DEPOSITS' ? "bg-blue-600 text-white" : "bg-[var(--bg-secondary)] text-[var(--text-secondary)]")}
+            className={cn("px-6 py-3 rounded-xl text-sm font-bold transition", activeTab === 'DEPOSITS' ? "bg-blue-600 text-white" : "bg-bg-secondary text-text-secondary")}
           >
             Deposits
           </button>
           <button 
             onClick={() => setActiveTab('WITHDRAWALS')}
-            className={cn("px-6 py-3 rounded-xl text-sm font-bold transition", activeTab === 'WITHDRAWALS' ? "bg-blue-600 text-white" : "bg-[var(--bg-secondary)] text-[var(--text-secondary)]")}
+            className={cn("px-6 py-3 rounded-xl text-sm font-bold transition", activeTab === 'WITHDRAWALS' ? "bg-blue-600 text-white" : "bg-bg-secondary text-text-secondary")}
           >
             Withdrawals
           </button>
         </div>
 
-        <div className="bg-[var(--bg-secondary)] rounded-3xl border border-[var(--border-color)] p-6 shadow-xl">
+        <div className="bg-bg-secondary rounded-3xl border border-border-color p-6 shadow-xl">
           {activeTab === 'DEPOSITS' && (
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm">
                 <thead>
-                  <tr className="border-b border-[var(--border-color)] text-[var(--text-secondary)]">
+                  <tr className="border-b border-border-color text-text-secondary">
                     <th className="pb-3 font-medium">Email</th>
                     <th className="pb-3 font-medium">Amount</th>
                     <th className="pb-3 font-medium">Method</th>
@@ -304,9 +304,9 @@ const FinanceAdminView: React.FC<any> = (props) => {
                     <th className="pb-3 font-medium text-right">Actions</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-[var(--border-color)]">
-                  {deposits.map((deposit: any) => (
-                    <tr key={deposit.id}>
+                <tbody className="divide-y divide-[var(--color-border-color)]">
+                  {deposits.map((deposit: any, idx: number) => (
+                    <tr key={deposit.id || `dep-${idx}`}>
                       <td className="py-4">{deposit.email}</td>
                       <td className="py-4 font-bold">{deposit.currency} {deposit.amount}</td>
                       <td className="py-4">{deposit.method}</td>
@@ -330,7 +330,7 @@ const FinanceAdminView: React.FC<any> = (props) => {
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm">
                 <thead>
-                  <tr className="border-b border-[var(--border-color)] text-[var(--text-secondary)]">
+                  <tr className="border-b border-border-color text-text-secondary">
                     <th className="pb-3 font-medium">Email</th>
                     <th className="pb-3 font-medium">Amount</th>
                     <th className="pb-3 font-medium">Method</th>
@@ -338,9 +338,9 @@ const FinanceAdminView: React.FC<any> = (props) => {
                     <th className="pb-3 font-medium text-right">Actions</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-[var(--border-color)]">
-                  {withdrawals.map((withdraw: any) => (
-                    <tr key={withdraw.id}>
+                <tbody className="divide-y divide-[var(--color-border-color)]">
+                  {withdrawals.map((withdraw: any, idx: number) => (
+                    <tr key={withdraw.id || `with-${idx}`}>
                       <td className="py-4">{withdraw.email}</td>
                       <td className="py-4 font-bold">{withdraw.currency} {withdraw.amount}</td>
                       <td className="py-4">{withdraw.method}</td>
@@ -924,9 +924,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
     }
   };
 
-  const handleUpdateWithdrawStatus = (id: number, status: 'APPROVED') => {
+  const handleUpdateWithdrawStatus = (id: number, status: 'APPROVED' | 'REJECTED', reason?: string) => {
     if (socket) {
-      socket.emit('admin-update-withdraw-status', { id, status });
+      socket.emit('admin-update-withdraw-status', { id, status, reason });
     }
   };
 
@@ -958,59 +958,59 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
     if (filteredLogs.length === 0) {
       return (
         <div className="p-8 text-center">
-          <Activity className="mx-auto text-[var(--text-secondary)] mb-2 opacity-20" size={24} />
-          <p className="text-[10px] font-bold text-[var(--text-secondary)] uppercase">No {activeLogTab.toLowerCase()} found</p>
+          <Activity className="mx-auto text-text-secondary mb-2 opacity-20" size={24} />
+          <p className="text-[10px] font-bold text-text-secondary uppercase">No {activeLogTab.toLowerCase()} found</p>
         </div>
       );
     }
 
     return filteredLogs.map((log, idx) => (
-      <div key={idx} className="p-3 hover:bg-[var(--bg-secondary)] transition-colors">
+      <div key={idx} className="p-3 hover:bg-bg-secondary transition-colors">
         {/* Render based on log type */}
         {activeLogTab === 'ACTIVITY' && (
           <>
             <div className="flex justify-between items-start mb-1">
               <span className="text-[10px] font-black text-blue-500 uppercase tracking-wider">{log.action}</span>
-              <span className="text-[9px] font-mono text-[var(--text-secondary)]">{new Date(log.timestamp).toLocaleString()}</span>
+              <span className="text-[9px] font-mono text-text-secondary">{new Date(log.timestamp).toLocaleString()}</span>
             </div>
-            <p className="text-[11px] text-[var(--text-primary)] font-medium mb-1">{log.details}</p>
-            <div className="text-[9px] text-[var(--text-secondary)] font-mono">IP: {log.ip || 'N/A'}</div>
+            <p className="text-[11px] text-text-primary font-medium mb-1">{log.details}</p>
+            <div className="text-[9px] text-text-secondary font-mono">IP: {log.ip || 'N/A'}</div>
           </>
         )}
         {activeLogTab === 'TRADES' && (
           <>
             <div className="flex justify-between items-start mb-1">
               <span className="text-[10px] font-black text-green-500 uppercase tracking-wider">{log.assetShortName}</span>
-              <span className="text-[9px] font-mono text-[var(--text-secondary)]">{new Date(log.startTime).toLocaleString()}</span>
+              <span className="text-[9px] font-mono text-text-secondary">{new Date(log.startTime).toLocaleString()}</span>
             </div>
-            <p className="text-[11px] text-[var(--text-primary)] font-medium mb-1">Amount: {log.amount} | Result: {log.result || 'PENDING'}</p>
+            <p className="text-[11px] text-text-primary font-medium mb-1">Amount: {log.amount} | Result: {log.result || 'PENDING'}</p>
           </>
         )}
         {activeLogTab === 'DEPOSITS' && (
           <>
             <div className="flex justify-between items-start mb-1">
               <span className="text-[10px] font-black text-green-500 uppercase tracking-wider">{log.method}</span>
-              <span className="text-[9px] font-mono text-[var(--text-secondary)]">{new Date(log.submittedAt).toLocaleString()}</span>
+              <span className="text-[9px] font-mono text-text-secondary">{new Date(log.submittedAt).toLocaleString()}</span>
             </div>
-            <p className="text-[11px] text-[var(--text-primary)] font-medium mb-1">Amount: {log.amount} | Status: {log.status}</p>
+            <p className="text-[11px] text-text-primary font-medium mb-1">Amount: {log.amount} | Status: {log.status}</p>
           </>
         )}
         {activeLogTab === 'WITHDRAWALS' && (
           <>
             <div className="flex justify-between items-start mb-1">
               <span className="text-[10px] font-black text-red-500 uppercase tracking-wider">{log.method}</span>
-              <span className="text-[9px] font-mono text-[var(--text-secondary)]">{new Date(log.submittedAt).toLocaleString()}</span>
+              <span className="text-[9px] font-mono text-text-secondary">{new Date(log.submittedAt).toLocaleString()}</span>
             </div>
-            <p className="text-[11px] text-[var(--text-primary)] font-medium mb-1">Amount: {log.amount} | Status: {log.status}</p>
+            <p className="text-[11px] text-text-primary font-medium mb-1">Amount: {log.amount} | Status: {log.status}</p>
           </>
         )}
         {activeLogTab === 'KYC' && (
           <>
             <div className="flex justify-between items-start mb-1">
               <span className="text-[10px] font-black text-purple-500 uppercase tracking-wider">{log.documentType}</span>
-              <span className="text-[9px] font-mono text-[var(--text-secondary)]">{new Date(log.submittedAt).toLocaleString()}</span>
+              <span className="text-[9px] font-mono text-text-secondary">{new Date(log.submittedAt).toLocaleString()}</span>
             </div>
-            <p className="text-[11px] text-[var(--text-primary)] font-medium mb-1">Status: {log.status}</p>
+            <p className="text-[11px] text-text-primary font-medium mb-1">Status: {log.status}</p>
           </>
         )}
       </div>
@@ -1044,35 +1044,35 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
 
   if (!isFullAdmin && !isSupportAgent && !isFinanceAdmin) {
     return (
-      <div className="min-h-[100dvh] bg-[var(--bg-primary)] text-[var(--text-primary)] flex items-center justify-center">
+      <div className="min-h-[100dvh] bg-bg-primary text-text-primary flex items-center justify-center">
         <div className="text-center">
           <h1 className="text-2xl font-bold text-red-500 mb-4">Access Denied</h1>
-          <p className="text-[var(--text-secondary)] mb-6">You do not have permission to view this page.</p>
-          <button onClick={onBack} className="bg-[var(--bg-secondary)] px-6 py-2 rounded-lg">Go Back</button>
+          <p className="text-text-secondary mb-6">You do not have permission to view this page.</p>
+          <button onClick={onBack} className="bg-bg-secondary px-6 py-2 rounded-lg">Go Back</button>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-[100dvh] bg-[var(--bg-primary)] text-[var(--text-primary)] font-sans flex flex-col">
+    <div className="min-h-[100dvh] bg-bg-primary text-text-primary font-sans flex flex-col">
       {/* Header */}
-      <div className="bg-[var(--bg-secondary)] border-b border-[var(--border-color)] px-4 py-4 flex items-center justify-between sticky top-0 z-50 backdrop-blur-xl bg-[var(--bg-secondary)]/80">
+      <div className="bg-bg-secondary border-b border-border-color px-4 py-4 flex items-center justify-between sticky top-0 z-50 backdrop-blur-xl bg-bg-secondary/80">
         <div className="flex items-center gap-3">
           <button 
             onClick={onBack} 
-            className="w-10 h-10 rounded-xl bg-[var(--bg-secondary)] flex items-center justify-center text-[var(--text-primary)] hover:bg-[var(--bg-secondary)]/80 transition-all active:scale-90"
+            className="w-10 h-10 rounded-xl bg-bg-secondary flex items-center justify-center text-text-primary hover:bg-bg-secondary/80 transition-all active:scale-90"
           >
             <ChevronLeft size={24} />
           </button>
           <div>
             <h1 className="text-sm font-black uppercase tracking-widest text-red-500">Admin Panel</h1>
-            <div className="text-[10px] text-[var(--text-secondary)] font-bold">ONYX OPTION v2.4</div>
+            <div className="text-[10px] text-text-secondary font-bold">ONYX ELITE v2.4</div>
           </div>
         </div>
         <div className="flex items-center gap-2">
           <div className="hidden sm:flex flex-col items-end mr-2">
-            <span className="text-[10px] font-bold text-[var(--text-secondary)]">{userEmail}</span>
+            <span className="text-[10px] font-bold text-text-secondary">{userEmail}</span>
             <span className="text-[8px] font-black text-green-500 uppercase tracking-tighter">{isSupportAgent ? 'Support Agent' : 'System Administrator'}</span>
           </div>
           <div className="w-10 h-10 rounded-xl bg-red-500/10 border border-red-500/20 flex items-center justify-center text-red-500">
@@ -1085,41 +1085,41 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
         {/* Platform Stats Overview */}
         {isFullAdmin && (
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-            <div className="bg-[var(--bg-secondary)] p-4 rounded-2xl border border-[var(--border-color)] shadow-lg">
+            <div className="bg-bg-secondary p-4 rounded-2xl border border-border-color shadow-lg">
               <div className="flex items-center gap-2 mb-1">
                 <div className="w-6 h-6 rounded-lg bg-blue-500/10 flex items-center justify-center text-blue-500">
                   <Activity size={14} />
                 </div>
-                <span className="text-[9px] font-black text-[var(--text-secondary)] uppercase tracking-widest">Active Trades</span>
+                <span className="text-[9px] font-black text-text-secondary uppercase tracking-widest">Active Trades</span>
               </div>
-              <div className="text-xl font-black text-[var(--text-primary)]">{activeTrades.length}</div>
+              <div className="text-xl font-black text-text-primary">{activeTrades.length}</div>
             </div>
-            <div className="bg-[var(--bg-secondary)] p-4 rounded-2xl border border-[var(--border-color)] shadow-lg">
+            <div className="bg-bg-secondary p-4 rounded-2xl border border-border-color shadow-lg">
               <div className="flex items-center gap-2 mb-1">
                 <div className="w-6 h-6 rounded-lg bg-green-500/10 flex items-center justify-center text-green-500">
                   <Users size={14} />
                 </div>
-                <span className="text-[9px] font-black text-[var(--text-secondary)] uppercase tracking-widest">Total Users</span>
+                <span className="text-[9px] font-black text-text-secondary uppercase tracking-widest">Total Users</span>
               </div>
-              <div className="text-xl font-black text-[var(--text-primary)]">{users.length}</div>
+              <div className="text-xl font-black text-text-primary">{users.length}</div>
             </div>
-            <div className="bg-[var(--bg-secondary)] p-4 rounded-2xl border border-[var(--border-color)] shadow-lg">
+            <div className="bg-bg-secondary p-4 rounded-2xl border border-border-color shadow-lg">
               <div className="flex items-center gap-2 mb-1">
                 <div className="w-6 h-6 rounded-lg bg-orange-500/10 flex items-center justify-center text-orange-500">
                   <ArrowUp size={14} />
                 </div>
-                <span className="text-[9px] font-black text-[var(--text-secondary)] uppercase tracking-widest">Pending Req</span>
+                <span className="text-[9px] font-black text-text-secondary uppercase tracking-widest">Pending Req</span>
               </div>
-              <div className="text-xl font-black text-[var(--text-primary)]">{requests.filter(r => r.status === 'PENDING').length}</div>
+              <div className="text-xl font-black text-text-primary">{requests.filter(r => r.status === 'PENDING').length}</div>
             </div>
-            <div className="bg-[var(--bg-secondary)] p-4 rounded-2xl border border-[var(--border-color)] shadow-lg">
+            <div className="bg-bg-secondary p-4 rounded-2xl border border-border-color shadow-lg">
               <div className="flex items-center gap-2 mb-1">
                 <div className="w-6 h-6 rounded-lg bg-purple-500/10 flex items-center justify-center text-purple-500">
                   <Zap size={14} />
                 </div>
-                <span className="text-[9px] font-black text-[var(--text-secondary)] uppercase tracking-widest">Boosted</span>
+                <span className="text-[9px] font-black text-text-secondary uppercase tracking-widest">Boosted</span>
               </div>
-              <div className="text-xl font-black text-[var(--text-primary)]">{users.length}</div>
+              <div className="text-xl font-black text-text-primary">{users.length}</div>
             </div>
           </div>
         )}
@@ -1129,51 +1129,51 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
           <button 
             type="button"
             onClick={() => scrollTabs('left')}
-            className="absolute left-2 top-1/2 -translate-y-1/2 z-10 w-8 h-8 rounded-full bg-[var(--bg-secondary)] border border-[var(--border-color)] flex items-center justify-center text-[var(--text-secondary)] hover:text-white shadow-lg opacity-0 group-hover:opacity-100 transition-all active:scale-90"
+            className="absolute left-2 top-1/2 -translate-y-1/2 z-10 w-8 h-8 rounded-full bg-bg-secondary border border-border-color flex items-center justify-center text-text-secondary hover:text-text-primary shadow-lg opacity-0 group-hover:opacity-100 transition-all active:scale-90"
           >
             <ChevronLeft size={16} />
           </button>
           
           <div 
             ref={tabsRef}
-            className="flex bg-[var(--bg-secondary)] rounded-2xl p-1.5 overflow-x-auto no-scrollbar shadow-inner border border-[var(--border-color)] scroll-smooth"
+            className="flex bg-bg-secondary rounded-2xl p-1.5 overflow-x-auto no-scrollbar shadow-inner border border-border-color scroll-smooth"
           >
             <div className="flex min-w-max gap-1">
           {isFullAdmin && (
             <>
               <button 
                 onClick={() => setTab('TRADES')}
-                className={`px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 transition-all ${tab === 'TRADES' ? 'bg-red-500 text-white shadow-lg shadow-red-500/20' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'}`}
+                className={`px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 transition-all ${tab === 'TRADES' ? 'bg-red-500 text-white shadow-lg shadow-red-500/20' : 'text-text-secondary hover:text-text-primary'}`}
               >
                 <Activity size={14} /> Trades
               </button>
               <button 
                 onClick={() => setTab('USERS')}
-                className={`px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 transition-all ${tab === 'USERS' ? 'bg-red-500 text-white shadow-lg shadow-red-500/20' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'}`}
+                className={`px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 transition-all ${tab === 'USERS' ? 'bg-red-500 text-white shadow-lg shadow-red-500/20' : 'text-text-secondary hover:text-text-primary'}`}
               >
                 <Users size={14} /> Users
               </button>
               <button 
                 onClick={() => setTab('MARKET')}
-                className={`px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 transition-all ${tab === 'MARKET' ? 'bg-red-500 text-white shadow-lg shadow-red-500/20' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'}`}
+                className={`px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 transition-all ${tab === 'MARKET' ? 'bg-red-500 text-white shadow-lg shadow-red-500/20' : 'text-text-secondary hover:text-text-primary'}`}
               >
                 <Settings size={14} /> Market
               </button>
               <button 
                 onClick={() => setTab('REAL_MARKETS')}
-                className={`px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 transition-all ${tab === 'REAL_MARKETS' ? 'bg-yellow-500 text-white shadow-lg shadow-yellow-500/20' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'}`}
+                className={`px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 transition-all ${tab === 'REAL_MARKETS' ? 'bg-yellow-500 text-white shadow-lg shadow-yellow-500/20' : 'text-text-secondary hover:text-text-primary'}`}
               >
                 <Bitcoin size={14} /> Real Markets
               </button>
               <button 
                 onClick={() => setTab('AUTOMATION')}
-                className={`px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 transition-all ${tab === 'AUTOMATION' ? 'bg-red-500 text-white shadow-lg shadow-red-500/20' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'}`}
+                className={`px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 transition-all ${tab === 'AUTOMATION' ? 'bg-red-500 text-white shadow-lg shadow-red-500/20' : 'text-text-secondary hover:text-text-primary'}`}
               >
                 <Activity size={14} /> Controls
               </button>
               <button 
                 onClick={() => setTab('REQUESTS')}
-                className={`px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 transition-all ${tab === 'REQUESTS' ? 'bg-red-500 text-white shadow-lg shadow-red-500/20' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'}`}
+                className={`px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 transition-all ${tab === 'REQUESTS' ? 'bg-red-500 text-white shadow-lg shadow-red-500/20' : 'text-text-secondary hover:text-text-primary'}`}
               >
                 <CreditCard size={14} /> Requests
               </button>
@@ -1182,7 +1182,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
           {(isFullAdmin || isSupportAgent || isFinanceAdmin) && (
             <button 
               onClick={() => setTab('SUPPORT')}
-              className={`px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 transition-all ${tab === 'SUPPORT' ? 'bg-red-500 text-white shadow-lg shadow-red-500/20' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'}`}
+              className={`px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 transition-all ${tab === 'SUPPORT' ? 'bg-red-500 text-white shadow-lg shadow-red-500/20' : 'text-text-secondary hover:text-text-primary'}`}
             >
               <HelpCircle size={14} /> Support
             </button>
@@ -1191,61 +1191,61 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
             <>
               <button 
                 onClick={() => setTab('REFERRALS')}
-                className={`px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 transition-all ${tab === 'REFERRALS' ? 'bg-red-500 text-white shadow-lg shadow-red-500/20' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'}`}
+                className={`px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 transition-all ${tab === 'REFERRALS' ? 'bg-red-500 text-white shadow-lg shadow-red-500/20' : 'text-text-secondary hover:text-text-primary'}`}
               >
                 <Gift size={14} /> Referrals
               </button>
               <button 
                 onClick={() => setTab('REWARDS')}
-                className={`px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 transition-all ${tab === 'REWARDS' ? 'bg-red-500 text-white shadow-lg shadow-red-500/20' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'}`}
+                className={`px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 transition-all ${tab === 'REWARDS' ? 'bg-red-500 text-white shadow-lg shadow-red-500/20' : 'text-text-secondary hover:text-text-primary'}`}
               >
                 <Trophy size={14} /> Rewards
               </button>
               <button 
                 onClick={() => setTab('FINANCE')}
-                className={`px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 transition-all ${tab === 'FINANCE' ? 'bg-red-500 text-white shadow-lg shadow-red-500/20' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'}`}
+                className={`px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 transition-all ${tab === 'FINANCE' ? 'bg-red-500 text-white shadow-lg shadow-red-500/20' : 'text-text-secondary hover:text-text-primary'}`}
               >
                 <BarChart2 size={14} /> Reports
               </button>
               <button 
                 onClick={() => setTab('PROMO_CODES')}
-                className={`px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 transition-all ${tab === 'PROMO_CODES' ? 'bg-red-500 text-white shadow-lg shadow-red-500/20' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'}`}
+                className={`px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 transition-all ${tab === 'PROMO_CODES' ? 'bg-red-500 text-white shadow-lg shadow-red-500/20' : 'text-text-secondary hover:text-text-primary'}`}
               >
                 <Percent size={14} /> Promos
               </button>
               <button 
                 onClick={() => setTab('ADS')}
-                className={`px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 transition-all ${tab === 'ADS' ? 'bg-red-500 text-white shadow-lg shadow-red-500/20' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'}`}
+                className={`px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 transition-all ${tab === 'ADS' ? 'bg-red-500 text-white shadow-lg shadow-red-500/20' : 'text-text-secondary hover:text-text-primary'}`}
               >
-                <Layout size={14} /> Ads
+                <Layout size={14} /> Profile History
               </button>
               <button 
                 onClick={() => setTab('ANNOUNCEMENTS')}
-                className={`px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 transition-all ${tab === 'ANNOUNCEMENTS' ? 'bg-yellow-500 text-white shadow-lg shadow-yellow-500/20' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'}`}
+                className={`px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 transition-all ${tab === 'ANNOUNCEMENTS' ? 'bg-yellow-500 text-white shadow-lg shadow-yellow-500/20' : 'text-text-secondary hover:text-text-primary'}`}
               >
                 <Megaphone size={14} /> Announcements
               </button>
               <button 
                 onClick={() => setTab('TOURNAMENTS')}
-                className={`px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 transition-all ${tab === 'TOURNAMENTS' ? 'bg-red-500 text-white shadow-lg shadow-red-500/20' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'}`}
+                className={`px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 transition-all ${tab === 'TOURNAMENTS' ? 'bg-red-500 text-white shadow-lg shadow-red-500/20' : 'text-text-secondary hover:text-text-primary'}`}
               >
                 <Trophy size={14} /> Tournaments
               </button>
               <button 
                 onClick={() => setTab('NOTIFICATIONS')}
-                className={`px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 transition-all ${tab === 'NOTIFICATIONS' ? 'bg-red-500 text-white shadow-lg shadow-red-500/20' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'}`}
+                className={`px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 transition-all ${tab === 'NOTIFICATIONS' ? 'bg-red-500 text-white shadow-lg shadow-red-500/20' : 'text-text-secondary hover:text-text-primary'}`}
               >
                 <Bell size={14} /> Alerts
               </button>
               <button 
                 onClick={() => setTab('LOGS')}
-                className={`px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 transition-all ${tab === 'LOGS' ? 'bg-red-500 text-white shadow-lg shadow-red-500/20' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'}`}
+                className={`px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 transition-all ${tab === 'LOGS' ? 'bg-red-500 text-white shadow-lg shadow-red-500/20' : 'text-text-secondary hover:text-text-primary'}`}
               >
                 <FileText size={14} /> Logs
               </button>
               <button 
                 onClick={() => setTab('TRANSFERS')}
-                className={`px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 transition-all ${tab === 'TRANSFERS' ? 'bg-red-500 text-white shadow-lg shadow-red-500/20' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'}`}
+                className={`px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 transition-all ${tab === 'TRANSFERS' ? 'bg-red-500 text-white shadow-lg shadow-red-500/20' : 'text-text-secondary hover:text-text-primary'}`}
               >
                 <RefreshCw size={14} /> Transfers
               </button>
@@ -1255,13 +1255,13 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
             <>
               <button 
                 onClick={() => setTab('DEPOSITS')}
-                className={`px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 transition-all ${tab === 'DEPOSITS' ? 'bg-red-500 text-white shadow-lg shadow-red-500/20' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'}`}
+                className={`px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 transition-all ${tab === 'DEPOSITS' ? 'bg-red-500 text-white shadow-lg shadow-red-500/20' : 'text-text-secondary hover:text-text-primary'}`}
               >
                 <Wallet size={14} /> Deposits
               </button>
               <button 
                 onClick={() => setTab('WITHDRAWALS')}
-                className={`px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 transition-all ${tab === 'WITHDRAWALS' ? 'bg-red-500 text-white shadow-lg shadow-red-500/20' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'}`}
+                className={`px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 transition-all ${tab === 'WITHDRAWALS' ? 'bg-red-500 text-white shadow-lg shadow-red-500/20' : 'text-text-secondary hover:text-text-primary'}`}
               >
                 <ArrowDown size={14} /> Withdrawals
               </button>
@@ -1273,7 +1273,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
           <button 
             type="button"
             onClick={() => scrollTabs('right')}
-            className="absolute right-2 top-1/2 -translate-y-1/2 z-10 w-8 h-8 rounded-full bg-[var(--bg-secondary)] border border-[var(--border-color)] flex items-center justify-center text-[var(--text-secondary)] hover:text-white shadow-lg opacity-0 group-hover:opacity-100 transition-all active:scale-90"
+            className="absolute right-2 top-1/2 -translate-y-1/2 z-10 w-8 h-8 rounded-full bg-bg-secondary border border-border-color flex items-center justify-center text-text-secondary hover:text-text-primary shadow-lg opacity-0 group-hover:opacity-100 transition-all active:scale-90"
           >
             <ChevronRight size={16} />
           </button>
@@ -1294,39 +1294,39 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
             </div>
 
             {transfers.length === 0 ? (
-              <div className="bg-[var(--bg-secondary)] rounded-2xl border border-[var(--border-color)] p-12 flex flex-col items-center justify-center text-center">
-                <div className="w-16 h-16 bg-[var(--bg-tertiary)] rounded-full flex items-center justify-center mb-4 text-[var(--text-secondary)]">
+              <div className="bg-bg-secondary rounded-2xl border border-border-color p-12 flex flex-col items-center justify-center text-center">
+                <div className="w-16 h-16 bg-bg-tertiary rounded-full flex items-center justify-center mb-4 text-text-secondary">
                   <RefreshCw size={32} />
                 </div>
-                <h3 className="font-bold text-[var(--text-primary)]">No Transfers Found</h3>
-                <p className="text-xs text-[var(--text-secondary)] mt-1">No internal transfers have been made yet.</p>
+                <h3 className="font-bold text-text-primary">No Transfers Found</h3>
+                <p className="text-xs text-text-secondary mt-1">No internal transfers have been made yet.</p>
               </div>
             ) : (
-              <div className="bg-[var(--bg-secondary)] rounded-2xl border border-[var(--border-color)] overflow-hidden">
+              <div className="bg-bg-secondary rounded-2xl border border-border-color overflow-hidden">
                 <div className="overflow-x-auto">
                   <table className="w-full text-left border-collapse">
                     <thead>
-                      <tr className="bg-[var(--bg-tertiary)] border-b border-[var(--border-color)]">
-                        <th className="px-4 py-3 text-[10px] font-black text-[var(--text-secondary)] uppercase tracking-widest">Date</th>
-                        <th className="px-4 py-3 text-[10px] font-black text-[var(--text-secondary)] uppercase tracking-widest">Sender</th>
-                        <th className="px-4 py-3 text-[10px] font-black text-[var(--text-secondary)] uppercase tracking-widest">Recipient</th>
-                        <th className="px-4 py-3 text-[10px] font-black text-[var(--text-secondary)] uppercase tracking-widest">Amount</th>
-                        <th className="px-4 py-3 text-[10px] font-black text-[var(--text-secondary)] uppercase tracking-widest">Status</th>
+                      <tr className="bg-bg-tertiary border-b border-border-color">
+                        <th className="px-4 py-3 text-[10px] font-black text-text-secondary uppercase tracking-widest">Date</th>
+                        <th className="px-4 py-3 text-[10px] font-black text-text-secondary uppercase tracking-widest">Sender</th>
+                        <th className="px-4 py-3 text-[10px] font-black text-text-secondary uppercase tracking-widest">Recipient</th>
+                        <th className="px-4 py-3 text-[10px] font-black text-text-secondary uppercase tracking-widest">Amount</th>
+                        <th className="px-4 py-3 text-[10px] font-black text-text-secondary uppercase tracking-widest">Status</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-[var(--border-color)]">
+                    <tbody className="divide-y divide-[var(--color-border-color)]">
                       {transfers.map(transfer => (
-                        <tr key={transfer.id} className="hover:bg-[var(--bg-tertiary)]/30 transition-colors">
-                          <td className="px-4 py-3 text-xs text-[var(--text-secondary)] font-mono">
+                        <tr key={transfer.id} className="hover:bg-bg-tertiary/30 transition-colors">
+                          <td className="px-4 py-3 text-xs text-text-secondary font-mono">
                             {transfer.timestamp?.toDate ? transfer.timestamp.toDate().toLocaleString() : new Date(transfer.timestamp).toLocaleString()}
                           </td>
                           <td className="px-4 py-3">
-                            <div className="text-xs font-bold text-[var(--text-primary)]">{transfer.senderEmail}</div>
-                            <div className="text-[10px] text-[var(--text-secondary)] font-mono">{transfer.senderUid?.slice(0, 8)}...</div>
+                            <div className="text-xs font-bold text-text-primary">{transfer.senderEmail}</div>
+                            <div className="text-[10px] text-text-secondary font-mono">{transfer.senderUid?.slice(0, 8)}...</div>
                           </td>
                           <td className="px-4 py-3">
-                            <div className="text-xs font-bold text-[var(--text-primary)]">{transfer.recipientEmail}</div>
-                            <div className="text-[10px] text-[var(--text-secondary)] font-mono">{transfer.recipientUid?.slice(0, 8)}...</div>
+                            <div className="text-xs font-bold text-text-primary">{transfer.recipientEmail}</div>
+                            <div className="text-[10px] text-text-secondary font-mono">{transfer.recipientUid?.slice(0, 8)}...</div>
                           </td>
                           <td className="px-4 py-3">
                             <div className="text-sm font-black text-green-500">Đ{transfer.amount?.toFixed(2)}</div>
@@ -1359,17 +1359,17 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
             </div>
             
             {activeTrades.length === 0 ? (
-              <div className="bg-[var(--bg-secondary)] rounded-2xl border border-[var(--border-color)] p-12 flex flex-col items-center justify-center text-center">
-                <div className="w-16 h-16 bg-[var(--bg-tertiary)] rounded-full flex items-center justify-center mb-4 text-[var(--text-secondary)]">
+              <div className="bg-bg-secondary rounded-2xl border border-border-color p-12 flex flex-col items-center justify-center text-center">
+                <div className="w-16 h-16 bg-bg-tertiary rounded-full flex items-center justify-center mb-4 text-text-secondary">
                   <Activity size={32} />
                 </div>
-                <h3 className="font-bold text-[var(--text-primary)]">No Active Trades</h3>
-                <p className="text-xs text-[var(--text-secondary)] mt-1">Market is currently quiet.</p>
+                <h3 className="font-bold text-text-primary">No Active Trades</h3>
+                <p className="text-xs text-text-secondary mt-1">Market is currently quiet.</p>
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 {activeTrades.map(trade => (
-                  <div key={trade.id} className="bg-[var(--bg-secondary)] rounded-2xl border border-[var(--border-color)] overflow-hidden shadow-xl">
+                  <div key={trade.id} className="bg-bg-secondary rounded-2xl border border-border-color overflow-hidden shadow-xl">
                     <div className="p-4">
                       <div className="flex justify-between items-start mb-4">
                         <div className="flex items-center gap-3">
@@ -1377,23 +1377,23 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                             {trade.type === 'UP' ? <TrendingUp size={20} /> : <TrendingDown size={20} />}
                           </div>
                           <div>
-                            <div className="font-bold text-sm text-[var(--text-primary)]">{trade.assetShortName}</div>
-                            <div className="text-[10px] text-[var(--text-secondary)] font-mono">ID: {trade.id.slice(0, 8)}...</div>
+                            <div className="font-bold text-sm text-text-primary">{trade.assetShortName}</div>
+                            <div className="text-[10px] text-text-secondary font-mono">ID: {trade.id.slice(0, 8)}...</div>
                           </div>
                         </div>
                         <div className="text-right">
-                          <div className="text-lg font-black text-[var(--text-primary)]">Đ{trade.amount}</div>
-                          <div className="text-[10px] text-[var(--text-secondary)] font-bold uppercase tracking-wider">Investment</div>
+                          <div className="text-lg font-black text-text-primary">Đ{trade.amount}</div>
+                          <div className="text-[10px] text-text-secondary font-bold uppercase tracking-wider">Investment</div>
                         </div>
                       </div>
 
-                      <div className="grid grid-cols-2 gap-4 mb-4 bg-[var(--bg-primary)] p-3 rounded-xl border border-[var(--border-color)]">
+                      <div className="grid grid-cols-2 gap-4 mb-4 bg-bg-primary p-3 rounded-xl border border-border-color">
                         <div>
-                          <div className="text-[10px] text-[var(--text-secondary)] uppercase font-bold mb-0.5">Entry Price</div>
-                          <div className="text-xs font-mono text-[var(--text-secondary)]">{trade.entryPrice.toFixed(5)}</div>
+                          <div className="text-[10px] text-text-secondary uppercase font-bold mb-0.5">Entry Price</div>
+                          <div className="text-xs font-mono text-text-secondary">{trade.entryPrice.toFixed(5)}</div>
                         </div>
                         <div className="text-right">
-                          <div className="text-[10px] text-[var(--text-secondary)] uppercase font-bold mb-0.5">Time Left</div>
+                          <div className="text-[10px] text-text-secondary uppercase font-bold mb-0.5">Time Left</div>
                           <div className="text-xs font-mono text-blue-500 font-bold">
                             {Math.max(0, Math.ceil((trade.endTime - Date.now()) / 1000))}s
                           </div>
@@ -1433,24 +1433,24 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-2">
               <div>
                 <h2 className="text-lg font-bold">User Management</h2>
-                <p className="text-[10px] text-[var(--text-secondary)] font-bold uppercase tracking-widest">Manage all registered accounts</p>
+                <p className="text-[10px] text-text-secondary font-bold uppercase tracking-widest">Manage all registered accounts</p>
               </div>
               <div className="flex items-center gap-2 w-full sm:w-auto">
                 <button 
                   onClick={() => socket?.emit('admin-get-all-users')}
-                  className="p-2 bg-[var(--bg-secondary)] rounded-xl border border-[var(--border-color)] text-[var(--text-secondary)] hover:text-blue-500 transition"
+                  className="p-2 bg-bg-secondary rounded-xl border border-border-color text-text-secondary hover:text-blue-500 transition"
                   title="Refresh List"
                 >
                   <RefreshCw size={14} />
                 </button>
                 <div className="relative flex-1 sm:w-64">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-secondary)]" size={14} />
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-text-secondary" size={14} />
                   <input 
                     type="text" 
                     placeholder="Search by email or name..."
                     value={userSearch}
                     onChange={(e) => setUserSearch(e.target.value)}
-                    className="w-full bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-xl pl-9 pr-4 py-2 text-xs focus:outline-none focus:border-blue-500 transition shadow-sm"
+                    className="w-full bg-bg-secondary border border-border-color rounded-xl pl-9 pr-4 py-2 text-xs focus:outline-none focus:border-blue-500 transition shadow-sm"
                   />
                 </div>
                 <span className="bg-blue-500/10 text-blue-500 text-[10px] font-black px-2 py-1 rounded-full border border-blue-500/20 whitespace-nowrap">
@@ -1464,34 +1464,34 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                 (u.email || '').toLowerCase().includes(userSearch.toLowerCase()) || 
                 (u.name || '').toLowerCase().includes(userSearch.toLowerCase())
               ).map(u => (
-                <div key={u.email} className="bg-[var(--bg-secondary)] rounded-2xl border border-[var(--border-color)] p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-lg hover:border-blue-500/30 transition-all group">
+                <div key={u.email} className="bg-bg-secondary rounded-2xl border border-border-color p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-lg hover:border-blue-500/30 transition-all group">
                   <div className="flex items-center gap-4">
                     <div className="relative">
-                      <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-black text-xl shadow-lg group-hover:scale-105 transition-transform">
+                      <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-text-primary font-black text-xl shadow-lg group-hover:scale-105 transition-transform">
                         {u.name ? u.name[0].toUpperCase() : u.email[0].toUpperCase()}
                       </div>
                       {users.find(cu => cu.email === u.email) && (
-                        <div className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 border-2 border-[var(--bg-secondary)] rounded-full" title="Online" />
+                        <div className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 border-2 border-[var(--color-bg-secondary)] rounded-full" title="Online" />
                       )}
                     </div>
                     <div>
                       <div className="flex items-center gap-2">
-                        <span className="font-bold text-[var(--text-primary)]">{u.name || 'Anonymous'}</span>
+                        <span className="font-bold text-text-primary">{u.name || 'Anonymous'}</span>
                         {u.status === 'BLOCKED' && (
                           <div className="bg-red-500 text-white text-[8px] font-black px-1.5 py-0.5 rounded flex items-center gap-0.5">
                             <ShieldAlert size={8} /> BLOCKED
                           </div>
                         )}
                       </div>
-                      <div className="text-[10px] text-[var(--text-secondary)] font-medium">{u.email}</div>
+                      <div className="text-[10px] text-text-secondary font-medium">{u.email}</div>
                     </div>
                   </div>
 
-                  <div className="flex items-center justify-between sm:justify-end gap-4 w-full sm:w-auto border-t sm:border-t-0 border-[var(--border-color)] pt-3 sm:pt-0">
+                  <div className="flex items-center justify-between sm:justify-end gap-4 w-full sm:w-auto border-t sm:border-t-0 border-border-color pt-3 sm:pt-0">
                     <div className="text-left sm:text-right">
                       <div className="text-sm font-black text-green-500">Đ{u.balance?.toLocaleString() || '0.00'}</div>
                       <div className="text-[9px] text-blue-400 font-bold uppercase tracking-tighter">Bonus: Đ{u.bonus_balance?.toLocaleString() || '0.00'}</div>
-                      <div className="text-[9px] text-[var(--text-secondary)] font-bold uppercase tracking-tighter">Demo: Đ{u.demoBalance?.toLocaleString() || '0.00'}</div>
+                      <div className="text-[9px] text-text-secondary font-bold uppercase tracking-tighter">Demo: Đ{u.demoBalance?.toLocaleString() || '0.00'}</div>
                     </div>
                     <div className="flex gap-1">
                        <button 
@@ -1527,35 +1527,35 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
 
         {tab === 'MARKET' && (
           <div className="space-y-6 pb-10">
-            <div className="bg-[var(--bg-secondary)] rounded-3xl border border-[var(--border-color)] p-6 shadow-xl">
+            <div className="bg-bg-secondary rounded-3xl border border-border-color p-6 shadow-xl">
               <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
                 <Settings size={20} className="text-blue-500" /> Global Win Rate Settings
               </h3>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="space-y-2">
-                  <label className="text-[10px] font-black text-[var(--text-secondary)] uppercase tracking-widest">Global Win Rate (%)</label>
+                  <label className="text-[10px] font-black text-text-secondary uppercase tracking-widest">Global Win Rate (%)</label>
                   <input 
                     type="number" 
                     value={tradeSettings.winPercentage}
                     onChange={(e) => handleUpdateTradeSettings({ winPercentage: parseInt(e.target.value) })}
-                    className="w-full bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-blue-500 transition"
+                    className="w-full bg-bg-primary border border-border-color rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-blue-500 transition"
                   />
                 </div>
                 <div className="space-y-2">
-                  <label className="text-[10px] font-black text-[var(--text-secondary)] uppercase tracking-widest">Global Payout (%)</label>
+                  <label className="text-[10px] font-black text-text-secondary uppercase tracking-widest">Global Payout (%)</label>
                   <input 
                     type="number" 
                     value={tradeSettings.payoutPercentage}
                     onChange={(e) => handleUpdateTradeSettings({ payoutPercentage: parseInt(e.target.value) })}
-                    className="w-full bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-blue-500 transition"
+                    className="w-full bg-bg-primary border border-border-color rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-blue-500 transition"
                   />
                 </div>
                 <div className="space-y-2">
-                  <label className="text-[10px] font-black text-[var(--text-secondary)] uppercase tracking-widest">Trading Mode</label>
+                  <label className="text-[10px] font-black text-text-secondary uppercase tracking-widest">Trading Mode</label>
                   <select 
                     value={tradeSettings.mode}
                     onChange={(e) => handleUpdateTradeSettings({ mode: e.target.value })}
-                    className="w-full bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-blue-500 transition"
+                    className="w-full bg-bg-primary border border-border-color rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-blue-500 transition"
                   >
                     <option value="FAIR">FAIR</option>
                     <option value="MANIPULATED">MANIPULATED</option>
@@ -1567,14 +1567,14 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
             <div className="flex justify-between items-center mb-2">
               <h2 className="text-lg font-bold">Market Manipulation</h2>
               <div className="flex gap-2">
-                <button className="bg-[var(--bg-secondary)] text-[var(--text-secondary)] p-2 rounded-xl hover:text-[var(--text-primary)] transition">
+                <button className="bg-bg-secondary text-text-secondary p-2 rounded-xl hover:text-text-primary transition">
                   <Activity size={18} />
                 </button>
               </div>
             </div>
             <div className="space-y-8">
               <div>
-                <h3 className="text-lg font-bold text-[var(--text-primary)] mb-4 flex items-center gap-2">
+                <h3 className="text-lg font-bold text-text-primary mb-4 flex items-center gap-2">
                   <Activity size={20} className="text-purple-500" />
                   OTC Markets (Full Control)
                 </h3>
@@ -1590,11 +1590,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
 
         {tab === 'REAL_MARKETS' && (
           <div className="space-y-6 pb-10">
-            <div className="bg-[var(--bg-secondary)] rounded-3xl border border-[var(--border-color)] p-6 shadow-xl">
+            <div className="bg-bg-secondary rounded-3xl border border-border-color p-6 shadow-xl">
               <h2 className="text-xl font-bold flex items-center gap-2 mb-2">
                 <Bitcoin size={24} className="text-yellow-500" /> Real Crypto Markets (Binance)
               </h2>
-              <p className="text-[10px] text-[var(--text-secondary)] font-bold uppercase tracking-widest mb-6">Easily manage profit limits and win percentages for real market pairs</p>
+              <p className="text-[10px] text-text-secondary font-bold uppercase tracking-widest mb-6">Easily manage profit limits and win percentages for real market pairs</p>
               
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-6">
                 {Object.keys(assets).filter(symbol => assets[symbol].isRealMarket).map(symbol => (
@@ -1616,7 +1616,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
             
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {/* Master Switches */}
-              <div className="bg-[var(--bg-secondary)] p-6 rounded-3xl border border-[var(--border-color)] shadow-xl">
+              <div className="bg-bg-secondary p-6 rounded-3xl border border-border-color shadow-xl">
                 <h3 className="font-black text-[10px] uppercase tracking-[0.2em] text-purple-500 mb-6">Master Switches</h3>
                 <div className="space-y-4">
                   {[
@@ -1626,7 +1626,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                     { key: 'isChatEnabled', label: 'Support Chat', icon: <MessageSquare size={18} />, color: 'yellow' },
                     { key: 'maintenanceMode', label: 'Maintenance Mode', icon: <ShieldAlert size={18} />, color: 'orange' },
                   ].map((item) => (
-                    <div key={item.key} className="flex items-center justify-between p-4 bg-[var(--bg-primary)] rounded-2xl border border-[var(--border-color)]">
+                    <div key={item.key} className="flex items-center justify-between p-4 bg-bg-primary rounded-2xl border border-border-color">
                       <div className="flex items-center gap-3">
                         <div className={cn(
                           "w-10 h-10 rounded-xl flex items-center justify-center",
@@ -1639,8 +1639,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                           {item.icon}
                         </div>
                         <div>
-                          <div className="text-sm font-bold text-[var(--text-primary)]">{item.label}</div>
-                          <div className="text-[10px] text-[var(--text-secondary)] font-medium">
+                          <div className="text-sm font-bold text-text-primary">{item.label}</div>
+                          <div className="text-[10px] text-text-secondary font-medium">
                             {platformSettings[item.key as keyof typeof platformSettings] ? 'Operational' : 'Disabled'}
                           </div>
                         </div>
@@ -1662,18 +1662,18 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                 </div>
               </div>
 
-              <div className="bg-[var(--bg-secondary)] p-6 rounded-3xl border border-[var(--border-color)] shadow-xl">
+              <div className="bg-bg-secondary p-6 rounded-3xl border border-border-color shadow-xl">
                 <h3 className="font-black text-[10px] uppercase tracking-[0.2em] text-blue-500 mb-6">Withdrawal System Controls</h3>
                 <div className="space-y-4">
-                  <label className="text-xs font-black uppercase tracking-widest text-[var(--text-secondary)]">Minimum Withdrawal ($)</label>
+                  <label className="text-xs font-black uppercase tracking-widest text-text-secondary">Minimum Withdrawal ($)</label>
                   <input
                     type="number"
                     value={platformSettings.minWithdrawalAmount || 10}
                     onChange={(e) => handleUpdatePlatformSettings({ minWithdrawalAmount: parseFloat(e.target.value) })}
-                    className="w-full bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-xl px-4 py-3 text-sm font-bold text-[var(--text-primary)] outline-none focus:border-blue-500 transition"
+                    className="w-full bg-bg-primary border border-border-color rounded-xl px-4 py-3 text-sm font-bold text-text-primary outline-none focus:border-blue-500 transition"
                   />
                   <div className="space-y-2 mt-4">
-                    <label className="text-[10px] font-black uppercase text-[var(--text-secondary)]">Per Method Limits ($)</label>
+                    <label className="text-[10px] font-black uppercase text-text-secondary">Per Method Limits ($)</label>
                     <div className="grid grid-cols-2 gap-2">
                        {['bkash', 'nagad', 'rocket', 'usdt', 'bank'].map(method => (
                          <div key={method}>
@@ -1688,7 +1688,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                                  [method]: parseFloat(e.target.value) 
                                } 
                              })}
-                             className="w-full bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-lg px-3 py-2 text-xs font-bold text-white outline-none focus:border-blue-500"
+                             className="w-full bg-bg-primary border border-border-color rounded-lg px-3 py-2 text-xs font-bold text-text-primary outline-none focus:border-blue-500"
                            />
                          </div>
                        ))}
@@ -1697,40 +1697,40 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                 </div>
               </div>
 
-              <div className="bg-[var(--bg-secondary)] p-6 rounded-3xl border border-[var(--border-color)] shadow-xl">
+              <div className="bg-bg-secondary p-6 rounded-3xl border border-border-color shadow-xl">
                 <h3 className="font-black text-[10px] uppercase tracking-[0.2em] text-blue-500 mb-6">Trade Result Control</h3>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-6">
                   <button 
                     onClick={() => handleUpdateSettings({ mode: 'FAIR' })}
-                    className={`group relative py-4 rounded-2xl font-black text-xs border transition-all active:scale-95 flex flex-col items-center gap-2 ${tradeSettings.mode === 'FAIR' ? 'bg-blue-600 border-blue-500 text-white shadow-lg shadow-blue-600/20' : 'bg-[var(--bg-primary)] border-[var(--border-color)] text-[var(--text-secondary)] hover:border-[var(--text-secondary)]/20'}`}
+                    className={`group relative py-4 rounded-2xl font-black text-xs border transition-all active:scale-95 flex flex-col items-center gap-2 ${tradeSettings.mode === 'FAIR' ? 'bg-blue-600 border-blue-500 text-white shadow-lg shadow-blue-600/20' : 'bg-bg-primary border-border-color text-text-secondary hover:border-[var(--color-text-secondary)]/20'}`}
                   >
                     <Activity size={20} />
                     FAIR MARKET
                   </button>
                   <button 
                     onClick={() => handleUpdateSettings({ mode: 'SMART' })}
-                    className={`group relative py-4 rounded-2xl font-black text-xs border transition-all active:scale-95 flex flex-col items-center gap-2 ${tradeSettings.mode === 'SMART' ? 'bg-indigo-600 border-indigo-500 text-white shadow-lg shadow-indigo-600/20' : 'bg-[var(--bg-primary)] border-[var(--border-color)] text-[var(--text-secondary)] hover:border-[var(--text-secondary)]/20'}`}
+                    className={`group relative py-4 rounded-2xl font-black text-xs border transition-all active:scale-95 flex flex-col items-center gap-2 ${tradeSettings.mode === 'SMART' ? 'bg-indigo-600 border-indigo-500 text-white shadow-lg shadow-indigo-600/20' : 'bg-bg-primary border-border-color text-text-secondary hover:border-[var(--color-text-secondary)]/20'}`}
                   >
                     <Zap size={20} />
                     SMART MODE
                   </button>
                   <button 
                     onClick={() => handleUpdateSettings({ mode: 'FORCE_LOSS' })}
-                    className={`group relative py-4 rounded-2xl font-black text-xs border transition-all active:scale-95 flex flex-col items-center gap-2 ${tradeSettings.mode === 'FORCE_LOSS' ? 'bg-red-600 border-red-500 text-white shadow-lg shadow-red-600/20' : 'bg-[var(--bg-primary)] border-[var(--border-color)] text-[var(--text-secondary)] hover:border-[var(--text-secondary)]/20'}`}
+                    className={`group relative py-4 rounded-2xl font-black text-xs border transition-all active:scale-95 flex flex-col items-center gap-2 ${tradeSettings.mode === 'FORCE_LOSS' ? 'bg-red-600 border-red-500 text-white shadow-lg shadow-red-600/20' : 'bg-bg-primary border-border-color text-text-secondary hover:border-[var(--color-text-secondary)]/20'}`}
                   >
                     <TrendingDown size={20} />
                     FORCE LOSS
                   </button>
                   <button 
                     onClick={() => handleUpdateSettings({ mode: 'FORCE_WIN' })}
-                    className={`group relative py-4 rounded-2xl font-black text-xs border transition-all active:scale-95 flex flex-col items-center gap-2 ${tradeSettings.mode === 'FORCE_WIN' ? 'bg-green-600 border-green-500 text-white shadow-lg shadow-green-600/20' : 'bg-[var(--bg-primary)] border-[var(--border-color)] text-[var(--text-secondary)] hover:border-[var(--text-secondary)]/20'}`}
+                    className={`group relative py-4 rounded-2xl font-black text-xs border transition-all active:scale-95 flex flex-col items-center gap-2 ${tradeSettings.mode === 'FORCE_WIN' ? 'bg-green-600 border-green-500 text-white shadow-lg shadow-green-600/20' : 'bg-bg-primary border-border-color text-text-secondary hover:border-[var(--color-text-secondary)]/20'}`}
                   >
                     <TrendingUp size={20} />
                     FORCE WIN
                   </button>
                   <button 
                     onClick={() => handleUpdateSettings({ mode: 'PERCENTAGE' })}
-                    className={`group relative py-4 rounded-2xl font-black text-xs border transition-all active:scale-95 flex flex-col items-center gap-2 ${tradeSettings.mode === 'PERCENTAGE' ? 'bg-purple-600 border-purple-500 text-white shadow-lg shadow-purple-600/20' : 'bg-[var(--bg-primary)] border-[var(--border-color)] text-[var(--text-secondary)] hover:border-[var(--text-secondary)]/20'}`}
+                    className={`group relative py-4 rounded-2xl font-black text-xs border transition-all active:scale-95 flex flex-col items-center gap-2 ${tradeSettings.mode === 'PERCENTAGE' ? 'bg-purple-600 border-purple-500 text-white shadow-lg shadow-purple-600/20' : 'bg-bg-primary border-border-color text-text-secondary hover:border-[var(--color-text-secondary)]/20'}`}
                   >
                     <Percent size={20} />
                     PERCENTAGE
@@ -1741,10 +1741,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                   <motion.div 
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="bg-[var(--bg-primary)] p-6 rounded-2xl border border-[var(--border-color)] shadow-inner"
+                    className="bg-bg-primary p-6 rounded-2xl border border-border-color shadow-inner"
                   >
                     <div className="flex justify-between items-center mb-4">
-                      <label className="text-xs font-black uppercase tracking-widest text-[var(--text-secondary)]">User Win Probability (%)</label>
+                      <label className="text-xs font-black uppercase tracking-widest text-text-secondary">User Win Probability (%)</label>
                       <div className="flex items-center gap-2">
                         <input 
                           type="number"
@@ -1752,7 +1752,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                           max="100"
                           value={tradeSettings.winPercentage}
                           onChange={(e) => handleUpdateSettings({ winPercentage: parseInt(e.target.value) || 0 })}
-                          className="w-16 bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-lg px-2 py-1 text-right text-sm font-bold text-white focus:border-purple-500 outline-none"
+                          className="w-16 bg-bg-secondary border border-border-color rounded-lg px-2 py-1 text-right text-sm font-bold text-text-primary focus:border-purple-500 outline-none"
                         />
                         <span className="text-xl font-black text-purple-500">%</span>
                       </div>
@@ -1763,9 +1763,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                       max="100" 
                       value={tradeSettings.winPercentage}
                       onChange={(e) => handleUpdateSettings({ winPercentage: parseInt(e.target.value) })}
-                      className="w-full h-2 bg-[var(--bg-secondary)] rounded-lg appearance-none cursor-pointer accent-purple-500 border border-[var(--border-color)]"
+                      className="w-full h-2 bg-bg-secondary rounded-lg appearance-none cursor-pointer accent-purple-500 border border-border-color"
                     />
-                    <p className="text-[9px] text-[var(--text-secondary)] text-center font-medium italic mt-4">
+                    <p className="text-[9px] text-text-secondary text-center font-medium italic mt-4">
                       This will affect all users unless overridden by specific asset settings.
                     </p>
                   </motion.div>
@@ -1779,9 +1779,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                   >
                     <div className="flex items-center gap-3 mb-2">
                        <div className="p-2 bg-emerald-500 rounded-lg">
-                          <TrendingDown size={18} className="text-white" />
+                          <TrendingDown size={18} className="text-text-primary" />
                        </div>
-                       <h4 className="text-sm font-black text-white uppercase tracking-tight">Zero-Threshold Active</h4>
+                       <h4 className="text-sm font-black text-text-primary uppercase tracking-tight">Zero-Threshold Active</h4>
                     </div>
                     <p className="text-[11px] text-emerald-400 font-medium leading-relaxed italic">
                       Smart Mode is now fully automatic. The system will automatically ensure the side with the larger payout results in a loss, maximizing platform stability.
@@ -1804,13 +1804,13 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
             
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
               {/* Chat List */}
-              <div className="bg-[var(--bg-secondary)] p-4 rounded-3xl border border-[var(--border-color)] shadow-xl h-[600px] overflow-y-auto">
+              <div className="bg-bg-secondary p-4 rounded-3xl border border-border-color shadow-xl h-[600px] overflow-y-auto">
                 <div className="flex justify-between items-center mb-4">
                   <h3 className="font-black text-[10px] uppercase tracking-[0.2em] text-green-500">Active Chats</h3>
                   <div className="flex items-center gap-4">
                     <div className="flex items-center gap-2">
-                      <span className="text-[10px] font-bold text-[var(--text-secondary)]">Status:</span>
-                      <div className="flex bg-[var(--bg-primary)] p-1 rounded-xl border border-[var(--border-color)]">
+                      <span className="text-[10px] font-bold text-text-secondary">Status:</span>
+                      <div className="flex bg-bg-primary p-1 rounded-xl border border-border-color">
                         <button 
                           onClick={() => {
                             const newSettings = { ...supportSettings, supportStatus: 'online' as const };
@@ -1819,7 +1819,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                           }}
                           className={cn(
                             "px-3 py-1 rounded-lg text-[10px] font-black uppercase transition-all",
-                            supportSettings.supportStatus === 'online' ? "bg-green-500 text-white shadow-lg shadow-green-500/20" : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+                            supportSettings.supportStatus === 'online' ? "bg-green-500 text-white shadow-lg shadow-green-500/20" : "text-text-secondary hover:text-text-primary"
                           )}
                         >
                           Online
@@ -1832,7 +1832,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                           }}
                           className={cn(
                             "px-3 py-1 rounded-lg text-[10px] font-black uppercase transition-all",
-                            supportSettings.supportStatus === 'offline' ? "bg-red-500 text-white shadow-lg shadow-red-500/20" : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+                            supportSettings.supportStatus === 'offline' ? "bg-red-500 text-white shadow-lg shadow-red-500/20" : "text-text-secondary hover:text-text-primary"
                           )}
                         >
                           Offline
@@ -1840,7 +1840,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
-                      <span className="text-[10px] font-bold text-[var(--text-secondary)]">Chat:</span>
+                      <span className="text-[10px] font-bold text-text-secondary">Chat:</span>
                       <button 
                         onClick={() => {
                           const newState = !isChatOpen;
@@ -1864,10 +1864,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                   <div key={session.id} className="relative group mb-2">
                     <button 
                       onClick={() => setSelectedChat(session.id)}
-                      className={`w-full p-4 rounded-2xl text-left transition-all ${selectedChat === session.id ? 'bg-green-500/10 border border-green-500/20' : 'bg-[var(--bg-primary)] border border-[var(--border-color)]'}`}
+                      className={`w-full p-4 rounded-2xl text-left transition-all ${selectedChat === session.id ? 'bg-green-500/10 border border-green-500/20' : 'bg-bg-primary border border-border-color'}`}
                     >
                       <div className="font-bold text-sm truncate pr-6">{session.email}</div>
-                      <div className="text-[10px] text-[var(--text-secondary)] truncate">{session.lastMessage || 'Started chat'}</div>
+                      <div className="text-[10px] text-text-secondary truncate">{session.lastMessage || 'Started chat'}</div>
                     </button>
                     <button 
                       onClick={(e) => {
@@ -1894,15 +1894,15 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                 
                 {chatSessions.filter(s => s.status === 'closed').length > 0 && (
                   <>
-                    <h3 className="font-black text-[10px] uppercase tracking-[0.2em] text-[var(--text-secondary)] mt-6 mb-4">Closed Chats</h3>
+                    <h3 className="font-black text-[10px] uppercase tracking-[0.2em] text-text-secondary mt-6 mb-4">Closed Chats</h3>
                     {chatSessions.filter(s => s.status === 'closed').map(session => (
                       <button 
                         key={session.id}
                         onClick={() => setSelectedChat(session.id)}
-                        className={`w-full p-4 rounded-2xl text-left mb-2 transition-all opacity-60 ${selectedChat === session.id ? 'bg-[var(--bg-tertiary)] border border-[var(--border-color)]' : 'bg-[var(--bg-primary)]/50 border border-[var(--border-color)]'}`}
+                        className={`w-full p-4 rounded-2xl text-left mb-2 transition-all opacity-60 ${selectedChat === session.id ? 'bg-bg-tertiary border border-border-color' : 'bg-bg-primary/50 border border-border-color'}`}
                       >
                         <div className="font-bold text-sm truncate">{session.email}</div>
-                        <div className="text-[10px] text-[var(--text-secondary)]">Closed</div>
+                        <div className="text-[10px] text-text-secondary">Closed</div>
                       </button>
                     ))}
                   </>
@@ -1910,12 +1910,12 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
               </div>
 
               {/* Chat Window */}
-              <div className="lg:col-span-2 bg-[var(--bg-secondary)] p-6 rounded-3xl border border-[var(--border-color)] shadow-xl h-[600px] flex flex-col">
+              <div className="lg:col-span-2 bg-bg-secondary p-6 rounded-3xl border border-border-color shadow-xl h-[600px] flex flex-col">
                 {selectedChat ? (
                   <>
-                    <div className="flex justify-between items-center mb-4 pb-4 border-b border-[var(--border-color)]">
+                    <div className="flex justify-between items-center mb-4 pb-4 border-b border-border-color">
                       <div>
-                        <div className="font-black text-sm text-[var(--text-primary)]">{selectedChat}</div>
+                        <div className="font-black text-sm text-text-primary">{selectedChat}</div>
                         <div className="text-[10px] text-green-500 font-bold uppercase tracking-widest">Live Support Session</div>
                       </div>
                       <div className="flex items-center gap-2">
@@ -1937,11 +1937,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                       {selectedChatMessages.map((msg, i) => (
                         <div key={msg.id || i} className={`flex ${msg.sender === 'admin' ? 'justify-end' : msg.sender === 'system' ? 'justify-center' : 'justify-start'}`}>
                           {msg.sender === 'system' ? (
-                            <div className="text-[10px] font-bold text-[var(--text-secondary)] bg-[var(--bg-primary)] px-3 py-1 rounded-full border border-[var(--border-color)]">
+                            <div className="text-[10px] font-bold text-text-secondary bg-bg-primary px-3 py-1 rounded-full border border-border-color">
                               {msg.text}
                             </div>
                           ) : (
-                            <div className={`p-3 rounded-2xl max-w-[80%] shadow-sm ${msg.sender === 'admin' ? 'bg-green-600 text-white rounded-tr-none' : 'bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-tl-none'}`}>
+                            <div className={`p-3 rounded-2xl max-w-[80%] shadow-sm ${msg.sender === 'admin' ? 'bg-green-600 text-white rounded-tr-none' : 'bg-bg-primary border border-border-color rounded-tl-none'}`}>
                               <div className="text-sm leading-relaxed">{msg.text}</div>
                               <div className={`text-[8px] mt-1 font-bold uppercase opacity-50 ${msg.sender === 'admin' ? 'text-right' : 'text-left'}`}>
                                 {msg.timestamp?.toDate ? new Date(msg.timestamp.toDate()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Just now'}
@@ -1958,7 +1958,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                         <button 
                           key={idx}
                           onClick={() => handleAdminSendMessage(reply)}
-                          className="whitespace-nowrap bg-[var(--bg-primary)] border border-[var(--border-color)] hover:border-green-500/50 text-[10px] font-bold px-3 py-2 rounded-xl transition-all active:scale-95"
+                          className="whitespace-nowrap bg-bg-primary border border-border-color hover:border-green-500/50 text-[10px] font-bold px-3 py-2 rounded-xl transition-all active:scale-95"
                         >
                           {reply}
                         </button>
@@ -1971,7 +1971,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                         value={adminInput}
                         onChange={(e) => setAdminInput(e.target.value)}
                         onKeyDown={(e) => e.key === 'Enter' && handleAdminSendMessage()}
-                        className="flex-1 bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-2xl px-4 py-3 text-sm outline-none focus:border-green-500 transition shadow-inner"
+                        className="flex-1 bg-bg-primary border border-border-color rounded-2xl px-4 py-3 text-sm outline-none focus:border-green-500 transition shadow-inner"
                         placeholder="Type a professional reply..."
                       />
                       <button 
@@ -1983,11 +1983,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                     </div>
                   </>
                 ) : (
-                  <div className="flex-1 flex flex-col items-center justify-center text-[var(--text-secondary)] text-center">
-                    <div className="w-20 h-20 bg-[var(--bg-primary)] rounded-full flex items-center justify-center mb-4 border border-[var(--border-color)]">
+                  <div className="flex-1 flex flex-col items-center justify-center text-text-secondary text-center">
+                    <div className="w-20 h-20 bg-bg-primary rounded-full flex items-center justify-center mb-4 border border-border-color">
                       <MessageSquare size={32} className="opacity-20" />
                     </div>
-                    <h4 className="font-bold text-[var(--text-primary)]">No Chat Selected</h4>
+                    <h4 className="font-bold text-text-primary">No Chat Selected</h4>
                     <p className="text-xs max-w-[200px] mt-2">Select an active conversation from the list to start replying.</p>
                   </div>
                 )}
@@ -1997,23 +1997,23 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
 
 
               {/* YouTube Tutorials */}
-              <div className="bg-[var(--bg-secondary)] p-6 rounded-3xl border border-[var(--border-color)] shadow-xl space-y-6">
+              <div className="bg-bg-secondary p-6 rounded-3xl border border-border-color shadow-xl space-y-6">
                 <h3 className="font-black text-[10px] uppercase tracking-[0.2em] text-red-500">YouTube Tutorials</h3>
                 
-                <div className="bg-[var(--bg-primary)] p-5 rounded-2xl border border-[var(--border-color)] space-y-4 shadow-inner">
+                <div className="bg-bg-primary p-5 rounded-2xl border border-border-color space-y-4 shadow-inner">
                   <div className="grid grid-cols-1 gap-3">
                     <input 
                       type="text" 
                       placeholder="Video Title"
                       value={newTutorial.title}
                       onChange={(e) => setNewTutorial(prev => ({ ...prev, title: e.target.value }))}
-                      className="w-full bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-xl px-4 py-2.5 text-sm text-[var(--text-primary)] outline-none focus:border-red-500/50 transition"
+                      className="w-full bg-bg-secondary border border-border-color rounded-xl px-4 py-2.5 text-sm text-text-primary outline-none focus:border-red-500/50 transition"
                     />
                     <textarea 
                       placeholder="Short Description"
                       value={newTutorial.description}
                       onChange={(e) => setNewTutorial(prev => ({ ...prev, description: e.target.value }))}
-                      className="w-full bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-xl px-4 py-2.5 text-sm text-[var(--text-primary)] outline-none h-20 focus:border-red-500/50 transition resize-none"
+                      className="w-full bg-bg-secondary border border-border-color rounded-xl px-4 py-2.5 text-sm text-text-primary outline-none h-20 focus:border-red-500/50 transition resize-none"
                     />
                     <div className="grid grid-cols-2 gap-3">
                       <input 
@@ -2021,20 +2021,20 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                         placeholder="YouTube URL"
                         value={newTutorial.link}
                         onChange={(e) => setNewTutorial(prev => ({ ...prev, link: e.target.value }))}
-                        className="w-full bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-xl px-4 py-2.5 text-sm text-[var(--text-primary)] outline-none focus:border-red-500/50 transition"
+                        className="w-full bg-bg-secondary border border-border-color rounded-xl px-4 py-2.5 text-sm text-text-primary outline-none focus:border-red-500/50 transition"
                       />
                       <input 
                         type="text" 
                         placeholder="Duration"
                         value={newTutorial.duration}
                         onChange={(e) => setNewTutorial(prev => ({ ...prev, duration: e.target.value }))}
-                        className="w-full bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-xl px-4 py-2.5 text-sm text-[var(--text-primary)] outline-none focus:border-red-500/50 transition"
+                        className="w-full bg-bg-secondary border border-border-color rounded-xl px-4 py-2.5 text-sm text-text-primary outline-none focus:border-red-500/50 transition"
                       />
                     </div>
                     <select 
                       value={newTutorial.category}
                       onChange={(e) => setNewTutorial(prev => ({ ...prev, category: e.target.value }))}
-                      className="w-full bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-xl px-4 py-2.5 text-sm text-[var(--text-primary)] outline-none focus:border-red-500/50 transition"
+                      className="w-full bg-bg-secondary border border-border-color rounded-xl px-4 py-2.5 text-sm text-text-primary outline-none focus:border-red-500/50 transition"
                     >
                       <option value="Beginner">Beginner</option>
                       <option value="Intermediate">Intermediate</option>
@@ -2057,15 +2057,15 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
 
                 <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2 no-scrollbar">
                   {tutorials.map((t, idx) => (
-                    <div key={t.id} className="bg-[var(--bg-primary)] p-4 rounded-2xl border border-[var(--border-color)] flex flex-col gap-2 group hover:border-red-500/20 transition-colors">
+                    <div key={t.id} className="bg-bg-primary p-4 rounded-2xl border border-border-color flex flex-col gap-2 group hover:border-red-500/20 transition-colors">
                       <div className="flex justify-between items-start">
                         <div className="flex items-center gap-3">
                           <div className="w-10 h-10 rounded-xl bg-red-500/10 flex items-center justify-center text-red-500">
                             <Video size={18} />
                           </div>
                           <div>
-                            <div className="font-bold text-sm text-[var(--text-primary)]">{t.title}</div>
-                            <div className="text-[9px] text-[var(--text-secondary)] font-black uppercase tracking-widest">{t.category} • {t.duration}</div>
+                            <div className="font-bold text-sm text-text-primary">{t.title}</div>
+                            <div className="text-[9px] text-text-secondary font-black uppercase tracking-widest">{t.category} • {t.duration}</div>
                           </div>
                         </div>
                         <button 
@@ -2074,12 +2074,12 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                             setTutorials(updated);
                             socket?.emit('admin-update-tutorials', updated);
                           }}
-                          className="text-[var(--text-secondary)] hover:text-red-500 p-1.5 rounded-lg hover:bg-red-500/10 transition-all"
+                          className="text-text-secondary hover:text-red-500 p-1.5 rounded-lg hover:bg-red-500/10 transition-all"
                         >
                           <Trash2 size={16} />
                         </button>
                       </div>
-                      <p className="text-[11px] text-[var(--text-secondary)] line-clamp-2 ml-1">{t.description}</p>
+                      <p className="text-[11px] text-text-secondary line-clamp-2 ml-1">{t.description}</p>
                       <div className="text-[9px] text-blue-400 truncate ml-1 font-mono">{t.link}</div>
                     </div>
                   ))}
@@ -2098,17 +2098,17 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
             </div>
             
             {requests.length === 0 ? (
-              <div className="bg-[var(--bg-secondary)] rounded-3xl border border-[var(--border-color)] p-16 flex flex-col items-center justify-center text-center">
-                <div className="w-20 h-20 bg-[var(--bg-tertiary)] rounded-full flex items-center justify-center mb-6 text-[var(--text-secondary)]">
+              <div className="bg-bg-secondary rounded-3xl border border-border-color p-16 flex flex-col items-center justify-center text-center">
+                <div className="w-20 h-20 bg-bg-tertiary rounded-full flex items-center justify-center mb-6 text-text-secondary">
                   <CreditCard size={40} />
                 </div>
-                <h3 className="text-lg font-bold text-[var(--text-primary)]">No Requests Found</h3>
-                <p className="text-sm text-[var(--text-secondary)] mt-2">All transactions have been processed.</p>
+                <h3 className="text-lg font-bold text-text-primary">No Requests Found</h3>
+                <p className="text-sm text-text-secondary mt-2">All transactions have been processed.</p>
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {requests.slice().reverse().map(req => (
-                  <div key={req.id} className="bg-[var(--bg-secondary)] rounded-3xl border border-[var(--border-color)] overflow-hidden shadow-xl flex flex-col">
+                  <div key={req.id} className="bg-bg-secondary rounded-3xl border border-border-color overflow-hidden shadow-xl flex flex-col">
                     <div className="p-5 flex-1">
                       <div className="flex justify-between items-start mb-4">
                         <div className="flex items-center gap-3">
@@ -2124,35 +2124,35 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                                 {req.status}
                               </span>
                             </div>
-                            <div className="text-xl font-black text-[var(--text-primary)] mt-1">Đ{req.amount.toLocaleString()}</div>
+                            <div className="text-xl font-black text-text-primary mt-1">Đ{req.amount.toLocaleString()}</div>
                           </div>
                         </div>
                         <div className="text-right">
-                          <div className="text-[10px] text-[var(--text-secondary)] font-bold">{new Date(req.timestamp).toLocaleDateString()}</div>
-                          <div className="text-[10px] text-[var(--text-secondary)] font-mono">{new Date(req.timestamp).toLocaleTimeString()}</div>
+                          <div className="text-[10px] text-text-secondary font-bold">{new Date(req.timestamp).toLocaleDateString()}</div>
+                          <div className="text-[10px] text-text-secondary font-mono">{new Date(req.timestamp).toLocaleTimeString()}</div>
                         </div>
                       </div>
                       
-                      <div className="bg-[var(--bg-primary)] p-4 rounded-2xl border border-[var(--border-color)] space-y-2 mb-4 shadow-inner">
+                      <div className="bg-bg-primary p-4 rounded-2xl border border-border-color space-y-2 mb-4 shadow-inner">
                         <div className="flex justify-between text-xs">
-                          <span className="text-[var(--text-secondary)] font-bold uppercase tracking-tighter">User</span>
-                          <span className="text-[var(--text-primary)] font-medium">{req.userEmail}</span>
+                          <span className="text-text-secondary font-bold uppercase tracking-tighter">User</span>
+                          <span className="text-text-primary font-medium">{req.userEmail}</span>
                         </div>
                         <div className="flex justify-between text-xs">
-                          <span className="text-[var(--text-secondary)] font-bold uppercase tracking-tighter">Method</span>
+                          <span className="text-text-secondary font-bold uppercase tracking-tighter">Method</span>
                           <span className="text-blue-400 font-black">{req.method}</span>
                         </div>
                         {req.details && (
-                          <div className="pt-2 border-t border-[var(--border-color)]">
-                            <div className="text-[10px] text-[var(--text-secondary)] font-bold uppercase mb-1">Details / Transaction ID</div>
-                            <div className="text-xs text-[var(--text-primary)] break-all font-mono bg-[var(--bg-secondary)] p-2 rounded-lg">{req.details}</div>
+                          <div className="pt-2 border-t border-border-color">
+                            <div className="text-[10px] text-text-secondary font-bold uppercase mb-1">Details / Transaction ID</div>
+                            <div className="text-xs text-text-primary break-all font-mono bg-bg-secondary p-2 rounded-lg">{req.details}</div>
                           </div>
                         )}
                       </div>
                     </div>
 
                     {req.status === 'PENDING' && (
-                      <div className="p-4 bg-[var(--bg-primary)]/50 border-t border-[var(--border-color)] flex gap-2">
+                      <div className="p-4 bg-bg-primary/50 border-t border-border-color flex gap-2">
                         <button 
                           onClick={() => handleUpdateRequestStatus(req.id, 'APPROVED')}
                           className="flex-1 bg-green-600 hover:bg-green-500 text-white py-3 rounded-2xl text-xs font-black uppercase tracking-widest transition-all shadow-lg shadow-green-600/20 active:scale-95 flex items-center justify-center gap-2"
@@ -2182,22 +2182,22 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
             <div className="flex justify-between items-center mb-2">
               <div className="flex items-center gap-3">
                 <h2 className="text-lg font-bold">Referral Program</h2>
-                <div className="flex bg-[var(--bg-secondary)] p-1 rounded-xl border border-[var(--border-color)]">
+                <div className="flex bg-bg-secondary p-1 rounded-xl border border-border-color">
                   <button 
                     onClick={() => setReferralSubTab('SETTINGS')}
-                    className={cn("px-4 py-1.5 rounded-lg text-xs font-bold transition", referralSubTab === 'SETTINGS' ? "bg-yellow-500 text-black" : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]")}
+                    className={cn("px-4 py-1.5 rounded-lg text-xs font-bold transition", referralSubTab === 'SETTINGS' ? "bg-yellow-500 text-black" : "text-text-secondary hover:text-text-primary")}
                   >
                     Settings
                   </button>
                   <button 
                     onClick={() => setReferralSubTab('AFFILIATES')}
-                    className={cn("px-4 py-1.5 rounded-lg text-xs font-bold transition", referralSubTab === 'AFFILIATES' ? "bg-yellow-500 text-black" : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]")}
+                    className={cn("px-4 py-1.5 rounded-lg text-xs font-bold transition", referralSubTab === 'AFFILIATES' ? "bg-yellow-500 text-black" : "text-text-secondary hover:text-text-primary")}
                   >
                     Affiliates
                   </button>
                   <button 
                     onClick={() => setReferralSubTab('WITHDRAWALS')}
-                    className={cn("px-4 py-1.5 rounded-lg text-xs font-bold transition", referralSubTab === 'WITHDRAWALS' ? "bg-yellow-500 text-black" : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]")}
+                    className={cn("px-4 py-1.5 rounded-lg text-xs font-bold transition", referralSubTab === 'WITHDRAWALS' ? "bg-yellow-500 text-black" : "text-text-secondary hover:text-text-primary")}
                   >
                     Withdrawals
                   </button>
@@ -2209,49 +2209,49 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
             </div>
             
             {referralSubTab === 'SETTINGS' && (
-              <div className="bg-[var(--bg-secondary)] p-8 rounded-3xl border border-[var(--border-color)] shadow-2xl max-w-2xl mx-auto">
+              <div className="bg-bg-secondary p-8 rounded-3xl border border-border-color shadow-2xl max-w-2xl mx-auto">
                 <div className="flex flex-col items-center text-center mb-8">
                   <div className="w-20 h-20 bg-yellow-500/10 rounded-full flex items-center justify-center text-yellow-500 mb-4 shadow-inner">
                     <Trophy size={40} />
                   </div>
-                  <h3 className="text-xl font-black text-[var(--text-primary)]">Reward Configuration</h3>
-                  <p className="text-sm text-[var(--text-secondary)] mt-2">Configure how users are rewarded for inviting others.</p>
+                  <h3 className="text-xl font-black text-text-primary">Reward Configuration</h3>
+                  <p className="text-sm text-text-secondary mt-2">Configure how users are rewarded for inviting others.</p>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
                   <div className="space-y-2">
-                    <label className="text-[10px] font-black text-[var(--text-secondary)] uppercase tracking-widest ml-1">Fixed Bonus (Đ)</label>
+                    <label className="text-[10px] font-black text-text-secondary uppercase tracking-widest ml-1">Fixed Bonus (Đ)</label>
                     <div className="relative">
                       <div className="absolute left-4 top-1/2 -translate-y-1/2 text-yellow-500 font-black">Đ</div>
                       <input 
                         type="number" 
                         value={referralSettings.bonusAmount}
                         onChange={(e) => setReferralSettings(prev => ({ ...prev, bonusAmount: parseFloat(e.target.value) }))}
-                        className="w-full bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-2xl pl-10 pr-4 py-4 text-lg font-black text-[var(--text-primary)] outline-none focus:border-yellow-500 transition shadow-inner"
+                        className="w-full bg-bg-primary border border-border-color rounded-2xl pl-10 pr-4 py-4 text-lg font-black text-text-primary outline-none focus:border-yellow-500 transition shadow-inner"
                       />
                     </div>
                   </div>
                   <div className="space-y-2">
-                    <label className="text-[10px] font-black text-[var(--text-secondary)] uppercase tracking-widest ml-1">Commission (%)</label>
+                    <label className="text-[10px] font-black text-text-secondary uppercase tracking-widest ml-1">Commission (%)</label>
                     <div className="relative">
                       <div className="absolute right-4 top-1/2 -translate-y-1/2 text-yellow-500 font-black">%</div>
                       <input 
                         type="number" 
                         value={referralSettings.referralPercentage}
                         onChange={(e) => setReferralSettings(prev => ({ ...prev, referralPercentage: parseFloat(e.target.value) }))}
-                        className="w-full bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-2xl px-4 py-4 text-lg font-black text-[var(--text-primary)] outline-none focus:border-yellow-500 transition shadow-inner"
+                        className="w-full bg-bg-primary border border-border-color rounded-2xl px-4 py-4 text-lg font-black text-text-primary outline-none focus:border-yellow-500 transition shadow-inner"
                       />
                     </div>
                   </div>
                   <div className="md:col-span-2 space-y-2">
-                    <label className="text-[10px] font-black text-[var(--text-secondary)] uppercase tracking-widest ml-1">Minimum Deposit Required (Đ)</label>
+                    <label className="text-[10px] font-black text-text-secondary uppercase tracking-widest ml-1">Minimum Deposit Required (Đ)</label>
                     <div className="relative">
-                      <div className="absolute left-4 top-1/2 -translate-y-1/2 text-[var(--text-secondary)] font-black"><Target size={18} /></div>
+                      <div className="absolute left-4 top-1/2 -translate-y-1/2 text-text-secondary font-black"><Target size={18} /></div>
                       <input 
                         type="number" 
                         value={referralSettings.minDepositForBonus}
                         onChange={(e) => setReferralSettings(prev => ({ ...prev, minDepositForBonus: parseFloat(e.target.value) }))}
-                        className="w-full bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-2xl pl-12 pr-4 py-4 text-lg font-black text-[var(--text-primary)] outline-none focus:border-yellow-500 transition shadow-inner"
+                        className="w-full bg-bg-primary border border-border-color rounded-2xl pl-12 pr-4 py-4 text-lg font-black text-text-primary outline-none focus:border-yellow-500 transition shadow-inner"
                       />
                     </div>
                   </div>
@@ -2268,15 +2268,15 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
 
             {referralSubTab === 'AFFILIATES' && (
               <div className="space-y-4">
-                <div className="bg-[var(--bg-secondary)] p-6 rounded-3xl border border-[var(--border-color)]">
+                <div className="bg-bg-secondary p-6 rounded-3xl border border-border-color">
                   <div className="flex justify-between items-center mb-6">
                     <h3 className="font-bold">Top Affiliates</h3>
                     <div className="relative">
-                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-secondary)]" size={14} />
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-text-secondary" size={14} />
                       <input 
                         type="text" 
                         placeholder="Search affiliates..." 
-                        className="bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-xl py-2 pl-9 pr-4 text-xs outline-none focus:border-yellow-500 transition"
+                        className="bg-bg-primary border border-border-color rounded-xl py-2 pl-9 pr-4 text-xs outline-none focus:border-yellow-500 transition"
                       />
                     </div>
                   </div>
@@ -2284,21 +2284,21 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                   <div className="overflow-x-auto">
                     <table className="w-full text-left border-collapse">
                       <thead>
-                        <tr className="border-b border-[var(--border-color)]">
-                          <th className="pb-4 text-[10px] font-black text-[var(--text-secondary)] uppercase tracking-widest">Affiliate</th>
-                          <th className="pb-4 text-[10px] font-black text-[var(--text-secondary)] uppercase tracking-widest">Referrals</th>
-                          <th className="pb-4 text-[10px] font-black text-[var(--text-secondary)] uppercase tracking-widest">Earnings</th>
-                          <th className="pb-4 text-[10px] font-black text-[var(--text-secondary)] uppercase tracking-widest">Rate</th>
-                          <th className="pb-4 text-[10px] font-black text-[var(--text-secondary)] uppercase tracking-widest">Actions</th>
+                        <tr className="border-b border-border-color">
+                          <th className="pb-4 text-[10px] font-black text-text-secondary uppercase tracking-widest">Affiliate</th>
+                          <th className="pb-4 text-[10px] font-black text-text-secondary uppercase tracking-widest">Referrals</th>
+                          <th className="pb-4 text-[10px] font-black text-text-secondary uppercase tracking-widest">Earnings</th>
+                          <th className="pb-4 text-[10px] font-black text-text-secondary uppercase tracking-widest">Rate</th>
+                          <th className="pb-4 text-[10px] font-black text-text-secondary uppercase tracking-widest">Actions</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-[var(--border-color)]">
+                      <tbody className="divide-y divide-[var(--color-border-color)]">
                         {[
                           { email: 'admin@onyx.com', refs: 124, earnings: 4250.00, rate: 15 },
                           { email: 'top_trader@gmail.com', refs: 85, earnings: 2140.50, rate: 10 },
                           { email: 'partner_01@yahoo.com', refs: 42, earnings: 850.20, rate: 5 },
                         ].map((aff, i) => (
-                          <tr key={i} className="group hover:bg-[var(--bg-primary)]/50 transition">
+                          <tr key={i} className="group hover:bg-bg-primary/50 transition">
                             <td className="py-4">
                               <div className="flex items-center gap-3">
                                 <div className="w-8 h-8 rounded-full bg-yellow-500/10 flex items-center justify-center text-yellow-500 font-bold text-xs">
@@ -2317,7 +2317,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                               <span className="text-xs font-bold px-2 py-1 bg-yellow-500/10 text-yellow-500 rounded-lg">{aff.rate}%</span>
                             </td>
                             <td className="py-4">
-                              <button className="p-2 hover:bg-yellow-500/10 text-[var(--text-secondary)] hover:text-yellow-500 rounded-lg transition">
+                              <button className="p-2 hover:bg-yellow-500/10 text-text-secondary hover:text-yellow-500 rounded-lg transition">
                                 <Settings size={16} />
                               </button>
                             </td>
@@ -2332,13 +2332,13 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
 
             {referralSubTab === 'WITHDRAWALS' && (
               <div className="space-y-4">
-                <div className="bg-[var(--bg-secondary)] p-6 rounded-3xl border border-[var(--border-color)]">
+                <div className="bg-bg-secondary p-6 rounded-3xl border border-border-color">
                   <h3 className="font-bold mb-6">Commission Withdrawal Requests</h3>
                   <div className="flex flex-col items-center justify-center py-12 text-center">
-                    <div className="w-16 h-16 bg-[var(--bg-tertiary)] rounded-full flex items-center justify-center mb-4 text-[var(--text-secondary)]">
+                    <div className="w-16 h-16 bg-bg-tertiary rounded-full flex items-center justify-center mb-4 text-text-secondary">
                       <Wallet size={24} />
                     </div>
-                    <p className="text-sm text-[var(--text-secondary)]">No pending commission withdrawals.</p>
+                    <p className="text-sm text-text-secondary">No pending commission withdrawals.</p>
                   </div>
                 </div>
               </div>
@@ -2348,27 +2348,27 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
 
         {tab === 'REWARDS' && (
           <div className="space-y-6 pb-10">
-            <div className="bg-[var(--bg-secondary)] rounded-3xl border border-[var(--border-color)] p-6 shadow-xl">
+            <div className="bg-bg-secondary rounded-3xl border border-border-color p-6 shadow-xl">
               <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
                 <Plus size={20} className="text-blue-500" /> Create New Reward
               </h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <label className="text-[10px] font-black text-[var(--text-secondary)] uppercase tracking-widest">Title</label>
+                  <label className="text-[10px] font-black text-text-secondary uppercase tracking-widest">Title</label>
                   <input 
                     type="text" 
                     value={newReward.title}
                     onChange={(e) => setNewReward({...newReward, title: e.target.value})}
                     placeholder="e.g. 100% Deposit Bonus"
-                    className="w-full bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-blue-500 transition"
+                    className="w-full bg-bg-primary border border-border-color rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-blue-500 transition"
                   />
                 </div>
                 <div className="space-y-2">
-                  <label className="text-[10px] font-black text-[var(--text-secondary)] uppercase tracking-widest">Category</label>
+                  <label className="text-[10px] font-black text-text-secondary uppercase tracking-widest">Category</label>
                   <select 
                     value={newReward.category}
                     onChange={(e) => setNewReward({...newReward, category: e.target.value})}
-                    className="w-full bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-blue-500 transition"
+                    className="w-full bg-bg-primary border border-border-color rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-blue-500 transition"
                   >
                     <option>Promo Code</option>
                     <option>Cashback</option>
@@ -2377,33 +2377,33 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                   </select>
                 </div>
                 <div className="space-y-2">
-                  <label className="text-[10px] font-black text-[var(--text-secondary)] uppercase tracking-widest">Value / Code</label>
+                  <label className="text-[10px] font-black text-text-secondary uppercase tracking-widest">Value / Code</label>
                   <input 
                     type="text" 
                     value={newReward.value}
                     onChange={(e) => setNewReward({...newReward, value: e.target.value})}
                     placeholder="e.g. SAVE100"
-                    className="w-full bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-blue-500 transition"
+                    className="w-full bg-bg-primary border border-border-color rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-blue-500 transition"
                   />
                 </div>
                 <div className="space-y-2">
-                  <label className="text-[10px] font-black text-[var(--text-secondary)] uppercase tracking-widest">Badge (e.g. 110%)</label>
+                  <label className="text-[10px] font-black text-text-secondary uppercase tracking-widest">Badge (e.g. 110%)</label>
                   <input 
                     type="text" 
                     value={newReward.badge}
                     onChange={(e) => setNewReward({...newReward, badge: e.target.value})}
                     placeholder="e.g. 110%"
-                    className="w-full bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-blue-500 transition"
+                    className="w-full bg-bg-primary border border-border-color rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-blue-500 transition"
                   />
                 </div>
                 <div className="md:col-span-2 space-y-2">
-                  <label className="text-[10px] font-black text-[var(--text-secondary)] uppercase tracking-widest">Description</label>
+                  <label className="text-[10px] font-black text-text-secondary uppercase tracking-widest">Description</label>
                   <textarea 
                     value={newReward.description}
                     onChange={(e) => setNewReward({...newReward, description: e.target.value})}
                     placeholder="Describe the reward and how to get it..."
                     rows={2}
-                    className="w-full bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-blue-500 transition resize-none"
+                    className="w-full bg-bg-primary border border-border-color rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-blue-500 transition resize-none"
                   />
                 </div>
               </div>
@@ -2417,7 +2417,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {rewards.map(reward => (
-                <div key={reward.id} className="bg-[var(--bg-secondary)] rounded-3xl border border-[var(--border-color)] p-5 shadow-xl relative overflow-hidden group">
+                <div key={reward.id} className="bg-bg-secondary rounded-3xl border border-border-color p-5 shadow-xl relative overflow-hidden group">
                   <div className="flex justify-between items-start mb-4">
                     <div className="w-10 h-10 rounded-xl bg-blue-500/10 text-blue-500 flex items-center justify-center">
                       <Gift size={20} />
@@ -2440,11 +2440,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                         </span>
                       )}
                     </div>
-                    <h4 className="font-bold text-[var(--text-primary)]">{reward.title}</h4>
-                    <p className="text-xs text-[var(--text-secondary)] line-clamp-2">{reward.description}</p>
+                    <h4 className="font-bold text-text-primary">{reward.title}</h4>
+                    <p className="text-xs text-text-secondary line-clamp-2">{reward.description}</p>
                   </div>
-                  <div className="bg-[var(--bg-primary)] rounded-xl p-3 border border-[var(--border-color)] flex justify-between items-center">
-                    <span className="text-[10px] font-mono text-[var(--text-secondary)] uppercase">Value:</span>
+                  <div className="bg-bg-primary rounded-xl p-3 border border-border-color flex justify-between items-center">
+                    <span className="text-[10px] font-mono text-text-secondary uppercase">Value:</span>
                     <span className="text-xs font-black text-blue-500">{reward.value}</span>
                   </div>
                 </div>
@@ -2455,12 +2455,12 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
 
         {tab === 'DEPOSITS' && (
           <div className="space-y-6 pb-10">
-            <div className="bg-[var(--bg-secondary)] rounded-3xl border border-[var(--border-color)] p-6 shadow-xl">
+            <div className="bg-bg-secondary rounded-3xl border border-border-color p-6 shadow-xl">
               <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
                 <h3 className="text-lg font-bold flex items-center gap-2">
                   <Wallet size={20} className="text-blue-500" /> Deposit Control Center
                 </h3>
-                <div className="flex bg-[var(--bg-primary)] p-1 rounded-xl border border-[var(--border-color)] overflow-x-auto no-scrollbar">
+                <div className="flex bg-bg-primary p-1 rounded-xl border border-border-color overflow-x-auto no-scrollbar">
                   {[
                     { id: 'GENERAL', name: 'General', icon: Settings },
                     { id: 'MOBILE', name: 'Mobile Banking', icon: Smartphone },
@@ -2474,7 +2474,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                         "flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition whitespace-nowrap",
                         depositSubTab === sTab.id 
                           ? "bg-blue-600 text-white shadow-lg shadow-blue-600/20" 
-                          : "text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-secondary)]"
+                          : "text-text-secondary hover:text-text-primary hover:bg-bg-secondary"
                       )}
                     >
                       <sTab.icon size={14} />
@@ -2488,55 +2488,55 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                 {depositSubTab === 'GENERAL' && (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
                     <div className="space-y-4">
-                      <div className="bg-[var(--bg-primary)] p-5 rounded-2xl border border-[var(--border-color)] space-y-4">
+                      <div className="bg-bg-primary p-5 rounded-2xl border border-border-color space-y-4">
                         <h4 className="text-sm font-bold flex items-center gap-2">
                           <DollarSign size={16} className="text-green-500" /> Currency & Rates
                         </h4>
                         <div className="space-y-2">
-                          <label className="text-[10px] font-black text-[var(--text-secondary)] uppercase tracking-widest">Exchange Rate (1 USD = ? BDT)</label>
+                          <label className="text-[10px] font-black text-text-secondary uppercase tracking-widest">Exchange Rate (1 USD = ? BDT)</label>
                           <div className="relative">
                             <input 
                               type="number" 
                               value={depositSettings.exchangeRate || 120}
                               onChange={(e) => setDepositSettings(prev => ({ ...prev, exchangeRate: parseFloat(e.target.value) }))}
-                              className="w-full bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-blue-500 transition pl-10"
+                              className="w-full bg-bg-secondary border border-border-color rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-blue-500 transition pl-10"
                             />
-                            <div className="absolute left-4 top-1/2 -translate-y-1/2 text-[var(--text-secondary)] text-[10px] font-bold">BDT </div>
+                            <div className="absolute left-4 top-1/2 -translate-y-1/2 text-text-secondary text-[10px] font-bold">BDT </div>
                           </div>
                         </div>
                       </div>
 
-                      <div className="bg-[var(--bg-primary)] p-5 rounded-2xl border border-[var(--border-color)] space-y-4">
+                      <div className="bg-bg-primary p-5 rounded-2xl border border-border-color space-y-4">
                         <h4 className="text-sm font-bold flex items-center gap-2">
                           <Gift size={16} className="text-purple-500" /> Bonus Configuration
                         </h4>
                         <div className="grid grid-cols-1 gap-4">
                           <div className="space-y-2">
-                            <label className="text-[10px] font-black text-[var(--text-secondary)] uppercase tracking-widest">Min Deposit for Bonus (USD)</label>
+                            <label className="text-[10px] font-black text-text-secondary uppercase tracking-widest">Min Deposit for Bonus (USD)</label>
                             <input 
                               type="number" 
                               value={depositSettings.minDepositForBonus || 50}
                               onChange={(e) => setDepositSettings(prev => ({ ...prev, minDepositForBonus: parseFloat(e.target.value) }))}
-                              className="w-full bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-blue-500 transition"
+                              className="w-full bg-bg-secondary border border-border-color rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-blue-500 transition"
                             />
                           </div>
                           <div className="grid grid-cols-2 gap-4">
                             <div className="space-y-2">
-                              <label className="text-[10px] font-black text-[var(--text-secondary)] uppercase tracking-widest">Bonus (%)</label>
+                              <label className="text-[10px] font-black text-text-secondary uppercase tracking-widest">Bonus (%)</label>
                               <input 
                                 type="number" 
                                 value={depositSettings.bonusPercentage || 10}
                                 onChange={(e) => setDepositSettings(prev => ({ ...prev, bonusPercentage: parseFloat(e.target.value) }))}
-                                className="w-full bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-blue-500 transition"
+                                className="w-full bg-bg-secondary border border-border-color rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-blue-500 transition"
                               />
                             </div>
                             <div className="space-y-2">
-                              <label className="text-[10px] font-black text-[var(--text-secondary)] uppercase tracking-widest">Turnover X</label>
+                              <label className="text-[10px] font-black text-text-secondary uppercase tracking-widest">Turnover X</label>
                               <input 
                                 type="number" 
                                 value={depositSettings.turnoverMultiplier || 3}
                                 onChange={(e) => setDepositSettings(prev => ({ ...prev, turnoverMultiplier: parseFloat(e.target.value) }))}
-                                className="w-full bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-blue-500 transition"
+                                className="w-full bg-bg-secondary border border-border-color rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-blue-500 transition"
                               />
                             </div>
                           </div>
@@ -2544,16 +2544,16 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                       </div>
                     </div>
 
-                    <div className="bg-[var(--bg-primary)] p-5 rounded-2xl border border-[var(--border-color)] space-y-4">
+                    <div className="bg-bg-primary p-5 rounded-2xl border border-border-color space-y-4">
                       <h4 className="text-sm font-bold flex items-center gap-2">
                         <FileText size={16} className="text-orange-500" /> Deposit Instructions
                       </h4>
                       <div className="space-y-2 h-full">
-                        <label className="text-[10px] font-black text-[var(--text-secondary)] uppercase tracking-widest">Global Note / Instructions</label>
+                        <label className="text-[10px] font-black text-text-secondary uppercase tracking-widest">Global Note / Instructions</label>
                         <textarea 
                           value={depositSettings.depositNote}
                           onChange={(e) => setDepositSettings(prev => ({ ...prev, depositNote: e.target.value }))}
-                          className="w-full bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-blue-500 transition h-[210px] resize-none"
+                          className="w-full bg-bg-secondary border border-border-color rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-blue-500 transition h-[210px] resize-none"
                           placeholder="Enter instructions that will be shown to all users on the deposit page..."
                         />
                       </div>
@@ -2570,8 +2570,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                       { id: 'rocket_p2c', name: 'Rocket', key: 'rocketNumbers', color: 'bg-purple-600' },
                       { id: 'upay_p2c', name: 'Upay', key: 'upayNumbers', color: 'bg-blue-500' }
                     ].map(method => (
-                      <div key={method.id} className="bg-[var(--bg-primary)] rounded-2xl border border-[var(--border-color)] overflow-hidden flex flex-col shadow-sm hover:shadow-md transition-shadow">
-                        <div className="p-4 border-b border-[var(--border-color)] flex items-center justify-between bg-[var(--bg-secondary)]/30">
+                      <div key={method.id} className="bg-bg-primary rounded-2xl border border-border-color overflow-hidden flex flex-col shadow-sm hover:shadow-md transition-shadow">
+                        <div className="p-4 border-b border-border-color flex items-center justify-between bg-bg-secondary/30">
                           <div className="flex items-center gap-3">
                             <div className={cn("w-8 h-8 rounded-lg flex items-center justify-center text-white font-bold text-xs shadow-sm", method.color)}>
                               {method.name[0]}
@@ -2581,7 +2581,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                           <div className="flex items-center gap-2">
                             <span className={cn(
                               "text-[9px] font-black uppercase tracking-widest transition-colors",
-                              (depositSettings.enabledMethods || []).includes(method.id) ? "text-green-500" : "text-[var(--text-secondary)]"
+                              (depositSettings.enabledMethods || []).includes(method.id) ? "text-green-500" : "text-text-secondary"
                             )}>
                               {(depositSettings.enabledMethods || []).includes(method.id) ? 'ON' : 'OFF'}
                             </span>
@@ -2601,13 +2601,13 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                                   });
                                 }}
                               />
-                              <div className="w-11 h-6 bg-[var(--bg-secondary)] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-500 border border-[var(--border-color)]"></div>
+                              <div className="w-11 h-6 bg-bg-secondary peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-500 border border-border-color"></div>
                             </label>
                           </div>
                         </div>
                         <div className="p-4 space-y-4 flex-1">
                           <div className="space-y-2">
-                            <label className="text-[10px] font-black text-[var(--text-secondary)] uppercase tracking-widest">Logo URL</label>
+                            <label className="text-[10px] font-black text-text-secondary uppercase tracking-widest">Logo URL</label>
                             <input 
                               type="text" 
                               value={depositSettings.methodLogos?.[method.id] || ''}
@@ -2616,17 +2616,17 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                                 setDepositSettings(prev => ({ ...prev, methodLogos: newLogos }));
                               }}
                               placeholder="https://..."
-                              className="w-full bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-blue-500 transition"
+                              className="w-full bg-bg-secondary border border-border-color rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-blue-500 transition"
                             />
                           </div>
                           <div className="space-y-2">
-                            <label className="text-[10px] font-black text-[var(--text-secondary)] uppercase tracking-widest">Payment Accounts</label>
+                            <label className="text-[10px] font-black text-text-secondary uppercase tracking-widest">Payment Accounts</label>
                             <div className="space-y-3 max-h-[300px] overflow-y-auto pr-1 custom-scrollbar">
                               {(depositSettings[method.key as keyof typeof depositSettings] as any[] || []).map((acc, idx) => (
-                                <div key={idx} className="p-3 bg-[var(--bg-secondary)] rounded-xl border border-[var(--border-color)] space-y-3">
+                                <div key={idx} className="p-3 bg-bg-secondary rounded-xl border border-border-color space-y-3">
                                   <div className="flex gap-2">
                                     <div className="flex-1 space-y-1">
-                                      <label className="text-[8px] font-bold text-[var(--text-secondary)] uppercase">Number</label>
+                                      <label className="text-[8px] font-bold text-text-secondary uppercase">Number</label>
                                       <input 
                                         type="text" 
                                         value={typeof acc === 'string' ? acc : acc.number}
@@ -2639,7 +2639,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                                           }
                                           setDepositSettings(prev => ({ ...prev, [method.key]: newAccs }));
                                         }}
-                                        className="w-full bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-blue-500 transition"
+                                        className="w-full bg-bg-primary border border-border-color rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-blue-500 transition"
                                         placeholder="017..."
                                       />
                                     </div>
@@ -2655,7 +2655,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                                   </div>
                                   <div className="grid grid-cols-2 gap-2">
                                     <div className="space-y-1">
-                                      <label className="text-[8px] font-bold text-[var(--text-secondary)] uppercase">Label (e.g. Agent)</label>
+                                      <label className="text-[8px] font-bold text-text-secondary uppercase">Label (e.g. Agent)</label>
                                       <input 
                                         type="text" 
                                         value={acc.label || ''}
@@ -2664,12 +2664,12 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                                           newAccs[idx] = { ...(typeof acc === 'string' ? { number: acc } : acc), label: e.target.value };
                                           setDepositSettings(prev => ({ ...prev, [method.key]: newAccs }));
                                         }}
-                                        className="w-full bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-lg px-3 py-2 text-[10px] focus:outline-none focus:border-blue-500 transition"
+                                        className="w-full bg-bg-primary border border-border-color rounded-lg px-3 py-2 text-[10px] focus:outline-none focus:border-blue-500 transition"
                                         placeholder="Agent / Personal"
                                       />
                                     </div>
                                     <div className="space-y-1">
-                                      <label className="text-[8px] font-bold text-[var(--text-secondary)] uppercase">Type</label>
+                                      <label className="text-[8px] font-bold text-text-secondary uppercase">Type</label>
                                       <select 
                                         value={acc.type || 'Cash Out'}
                                         onChange={(e) => {
@@ -2677,7 +2677,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                                           newAccs[idx] = { ...(typeof acc === 'string' ? { number: acc } : acc), type: e.target.value };
                                           setDepositSettings(prev => ({ ...prev, [method.key]: newAccs }));
                                         }}
-                                        className="w-full bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-lg px-3 py-2 text-[10px] focus:outline-none focus:border-blue-500 transition"
+                                        className="w-full bg-bg-primary border border-border-color rounded-lg px-3 py-2 text-[10px] focus:outline-none focus:border-blue-500 transition"
                                       >
                                         <option value="Cash Out">Cash Out</option>
                                         <option value="Send Money">Send Money</option>
@@ -2689,7 +2689,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                             </div>
                             <button 
                               onClick={() => setDepositSettings(prev => ({ ...prev, [method.key]: [...(prev[method.key as keyof typeof prev] as any[] || []), { number: '', type: 'Cash Out', label: 'Agent' }] }))}
-                              className="w-full py-2 border border-dashed border-[var(--border-color)] rounded-xl text-[10px] font-bold text-blue-500 hover:bg-blue-500/5 transition flex items-center justify-center gap-1"
+                              className="w-full py-2 border border-dashed border-border-color rounded-xl text-[10px] font-bold text-blue-500 hover:bg-blue-500/5 transition flex items-center justify-center gap-1"
                             >
                               <Plus size={12} /> Add Account
                             </button>
@@ -2724,8 +2724,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       {(depositSettings.customMethods || []).filter(m => m.category === 'MOBILE').map((method, mIdx) => (
-                        <div key={method.id} className="bg-[var(--bg-primary)] rounded-2xl border border-[var(--border-color)] overflow-hidden flex flex-col">
-                          <div className="p-4 border-b border-[var(--border-color)] flex items-center justify-between bg-[var(--bg-secondary)]/30">
+                        <div key={method.id} className="bg-bg-primary rounded-2xl border border-border-color overflow-hidden flex flex-col">
+                          <div className="p-4 border-b border-border-color flex items-center justify-between bg-bg-secondary/30">
                             <div className="flex items-center gap-3 flex-1">
                               <input 
                                 type="text" 
@@ -2756,7 +2756,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                                     });
                                   }}
                                 />
-                                <div className="w-11 h-6 bg-[var(--bg-secondary)] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                                <div className="w-11 h-6 bg-bg-secondary peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
                               </label>
                               <button 
                                 onClick={() => {
@@ -2771,7 +2771,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                           </div>
                           <div className="p-4 space-y-4 flex-1">
                             <div className="space-y-2">
-                              <label className="text-[10px] font-black text-[var(--text-secondary)] uppercase tracking-widest">Logo URL</label>
+                              <label className="text-[10px] font-black text-text-secondary uppercase tracking-widest">Logo URL</label>
                               <input 
                                 type="text" 
                                 value={method.logo || ''}
@@ -2781,17 +2781,17 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                                   setDepositSettings(prev => ({ ...prev, customMethods: newCustom }));
                                 }}
                                 placeholder="https://..."
-                                className="w-full bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-blue-500 transition"
+                                className="w-full bg-bg-secondary border border-border-color rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-blue-500 transition"
                               />
                             </div>
                             <div className="space-y-2">
-                              <label className="text-[10px] font-black text-[var(--text-secondary)] uppercase tracking-widest">Payment Accounts</label>
+                              <label className="text-[10px] font-black text-text-secondary uppercase tracking-widest">Payment Accounts</label>
                               <div className="space-y-3 max-h-[300px] overflow-y-auto pr-1 custom-scrollbar">
                                 {(method.accounts || []).map((acc: any, aIdx: number) => (
-                                  <div key={aIdx} className="p-3 bg-[var(--bg-secondary)] rounded-xl border border-[var(--border-color)] space-y-3">
+                                  <div key={aIdx} className="p-3 bg-bg-secondary rounded-xl border border-border-color space-y-3">
                                     <div className="flex gap-2">
                                       <div className="flex-1 space-y-1">
-                                        <label className="text-[8px] font-bold text-[var(--text-secondary)] uppercase">Number</label>
+                                        <label className="text-[8px] font-bold text-text-secondary uppercase">Number</label>
                                         <input 
                                           type="text" 
                                           value={acc.number}
@@ -2802,7 +2802,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                                             newCustom[mIdx] = { ...method, accounts: newAccs };
                                             setDepositSettings(prev => ({ ...prev, customMethods: newCustom }));
                                           }}
-                                          className="w-full bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-blue-500 transition"
+                                          className="w-full bg-bg-primary border border-border-color rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-blue-500 transition"
                                           placeholder="017..."
                                         />
                                       </div>
@@ -2820,7 +2820,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                                     </div>
                                     <div className="grid grid-cols-2 gap-2">
                                       <div className="space-y-1">
-                                        <label className="text-[8px] font-bold text-[var(--text-secondary)] uppercase">Label</label>
+                                        <label className="text-[8px] font-bold text-text-secondary uppercase">Label</label>
                                         <input 
                                           type="text" 
                                           value={acc.label || ''}
@@ -2831,12 +2831,12 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                                             newCustom[mIdx] = { ...method, accounts: newAccs };
                                             setDepositSettings(prev => ({ ...prev, customMethods: newCustom }));
                                           }}
-                                          className="w-full bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-lg px-3 py-2 text-[10px] focus:outline-none focus:border-blue-500 transition"
+                                          className="w-full bg-bg-primary border border-border-color rounded-lg px-3 py-2 text-[10px] focus:outline-none focus:border-blue-500 transition"
                                           placeholder="Agent / Personal"
                                         />
                                       </div>
                                       <div className="space-y-1">
-                                        <label className="text-[8px] font-bold text-[var(--text-secondary)] uppercase">Type</label>
+                                        <label className="text-[8px] font-bold text-text-secondary uppercase">Type</label>
                                         <select 
                                           value={acc.type || 'Cash Out'}
                                           onChange={(e) => {
@@ -2846,7 +2846,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                                             newCustom[mIdx] = { ...method, accounts: newAccs };
                                             setDepositSettings(prev => ({ ...prev, customMethods: newCustom }));
                                           }}
-                                          className="w-full bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-lg px-3 py-2 text-[10px] focus:outline-none focus:border-blue-500 transition"
+                                          className="w-full bg-bg-primary border border-border-color rounded-lg px-3 py-2 text-[10px] focus:outline-none focus:border-blue-500 transition"
                                         >
                                           <option value="Cash Out">Cash Out</option>
                                           <option value="Send Money">Send Money</option>
@@ -2863,7 +2863,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                                   newCustom[mIdx] = { ...method, accounts: newAccs };
                                   setDepositSettings(prev => ({ ...prev, customMethods: newCustom }));
                                 }}
-                                className="w-full py-2 border border-dashed border-[var(--border-color)] rounded-xl text-[10px] font-bold text-blue-500 hover:bg-blue-500/5 transition flex items-center justify-center gap-1"
+                                className="w-full py-2 border border-dashed border-border-color rounded-xl text-[10px] font-bold text-blue-500 hover:bg-blue-500/5 transition flex items-center justify-center gap-1"
                               >
                                 <Plus size={12} /> Add Account
                               </button>
@@ -2892,8 +2892,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                       { id: 'dogecoin', name: 'Dogecoin (DOGE)', key: 'dogeAddress', icon: Bitcoin, color: 'text-yellow-700' },
                       { id: 'usdt_ton', name: 'USDT (TON)', key: 'usdtTonAddress', icon: Shield, color: 'text-blue-500' }
                     ].map(method => (
-                      <div key={method.id} className="bg-[var(--bg-primary)] rounded-2xl border border-[var(--border-color)] overflow-hidden flex flex-col shadow-sm hover:shadow-md transition-shadow">
-                        <div className="p-4 border-b border-[var(--border-color)] flex items-center justify-between bg-[var(--bg-secondary)]/30">
+                      <div key={method.id} className="bg-bg-primary rounded-2xl border border-border-color overflow-hidden flex flex-col shadow-sm hover:shadow-md transition-shadow">
+                        <div className="p-4 border-b border-border-color flex items-center justify-between bg-bg-secondary/30">
                           <div className="flex items-center gap-3">
                             <method.icon size={18} className={method.color} />
                             <span className="font-bold text-sm tracking-tight">{method.name}</span>
@@ -2901,7 +2901,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                           <div className="flex items-center gap-2">
                             <span className={cn(
                               "text-[9px] font-black uppercase tracking-widest transition-colors",
-                              (depositSettings.enabledMethods || []).includes(method.id) ? "text-green-500" : "text-[var(--text-secondary)]"
+                              (depositSettings.enabledMethods || []).includes(method.id) ? "text-green-500" : "text-text-secondary"
                             )}>
                               {(depositSettings.enabledMethods || []).includes(method.id) ? 'ON' : 'OFF'}
                             </span>
@@ -2921,13 +2921,13 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                                   });
                                 }}
                               />
-                              <div className="w-11 h-6 bg-[var(--bg-secondary)] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-500 border border-[var(--border-color)]"></div>
+                              <div className="w-11 h-6 bg-bg-secondary peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-500 border border-border-color"></div>
                             </label>
                           </div>
                         </div>
                         <div className="p-4 space-y-3">
                           <div className="space-y-1">
-                            <label className="text-[9px] font-black text-[var(--text-secondary)] uppercase tracking-widest">Logo URL</label>
+                            <label className="text-[9px] font-black text-text-secondary uppercase tracking-widest">Logo URL</label>
                             <input 
                               type="text" 
                               value={depositSettings.methodLogos?.[method.id] || ''}
@@ -2935,20 +2935,20 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                                 const newLogos = { ...(depositSettings.methodLogos || {}), [method.id]: e.target.value };
                                 setDepositSettings(prev => ({ ...prev, methodLogos: newLogos }));
                               }}
-                              className="w-full bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-lg px-3 py-2 text-[10px] focus:outline-none focus:border-blue-500 transition"
+                              className="w-full bg-bg-secondary border border-border-color rounded-lg px-3 py-2 text-[10px] focus:outline-none focus:border-blue-500 transition"
                             />
                           </div>
                           <div className="space-y-1">
-                            <label className="text-[9px] font-black text-[var(--text-secondary)] uppercase tracking-widest">Address / ID</label>
+                            <label className="text-[9px] font-black text-text-secondary uppercase tracking-widest">Address / ID</label>
                             <input 
                               type="text" 
                               value={(depositSettings[method.key as keyof typeof depositSettings] as string) || ''}
                               onChange={(e) => setDepositSettings(prev => ({ ...prev, [method.key]: e.target.value }))}
-                              className="w-full bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-lg px-3 py-2 text-[10px] focus:outline-none focus:border-blue-500 transition font-mono"
+                              className="w-full bg-bg-secondary border border-border-color rounded-lg px-3 py-2 text-[10px] focus:outline-none focus:border-blue-500 transition font-mono"
                             />
                           </div>
                           <div className="space-y-1">
-                            <label className="text-[9px] font-black text-[var(--text-secondary)] uppercase tracking-widest">QR Code URL</label>
+                            <label className="text-[9px] font-black text-text-secondary uppercase tracking-widest">QR Code URL</label>
                             <input 
                               type="text" 
                               value={depositSettings.cryptoQrCodes?.[method.id] || (method.id === 'binance_pay' ? depositSettings.binancePayQrCode : '') || ''}
@@ -2960,7 +2960,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                                   ...(method.id === 'binance_pay' ? { binancePayQrCode: e.target.value } : {})
                                 }));
                               }}
-                              className="w-full bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-lg px-3 py-2 text-[10px] focus:outline-none focus:border-blue-500 transition font-mono"
+                              className="w-full bg-bg-secondary border border-border-color rounded-lg px-3 py-2 text-[10px] focus:outline-none focus:border-blue-500 transition font-mono"
                               placeholder="https://example.com/qr.png"
                             />
                           </div>
@@ -2985,8 +2985,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                       { id: 'onyx_option_pay', name: 'Onyx Option Pay', key: 'onyxOptionPayNumbers', isList: true, color: 'text-black' },
                       { id: 'hamproo_pay', name: 'Hamproo Pay', key: 'hamprooPayNumbers', isList: true, color: 'text-pink-600' }
                     ].map(method => (
-                      <div key={method.id} className="bg-[var(--bg-primary)] rounded-2xl border border-[var(--border-color)] overflow-hidden flex flex-col shadow-sm hover:shadow-md transition-shadow">
-                        <div className="p-4 border-b border-[var(--border-color)] flex items-center justify-between bg-[var(--bg-secondary)]/30">
+                      <div key={method.id} className="bg-bg-primary rounded-2xl border border-border-color overflow-hidden flex flex-col shadow-sm hover:shadow-md transition-shadow">
+                        <div className="p-4 border-b border-border-color flex items-center justify-between bg-bg-secondary/30">
                           <div className="flex items-center gap-3">
                             <Globe size={18} className={method.color} />
                             <span className="font-bold text-sm tracking-tight">{method.name}</span>
@@ -2994,7 +2994,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                           <div className="flex items-center gap-2">
                             <span className={cn(
                               "text-[9px] font-black uppercase tracking-widest transition-colors",
-                              (depositSettings.enabledMethods || []).includes(method.id) ? "text-green-500" : "text-[var(--text-secondary)]"
+                              (depositSettings.enabledMethods || []).includes(method.id) ? "text-green-500" : "text-text-secondary"
                             )}>
                               {(depositSettings.enabledMethods || []).includes(method.id) ? 'ON' : 'OFF'}
                             </span>
@@ -3014,13 +3014,13 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                                   });
                                 }}
                               />
-                              <div className="w-11 h-6 bg-[var(--bg-secondary)] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-500 border border-[var(--border-color)]"></div>
+                              <div className="w-11 h-6 bg-bg-secondary peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-500 border border-border-color"></div>
                             </label>
                           </div>
                         </div>
                         <div className="p-4 space-y-3">
                           <div className="space-y-1">
-                            <label className="text-[9px] font-black text-[var(--text-secondary)] uppercase tracking-widest">Logo URL</label>
+                            <label className="text-[9px] font-black text-text-secondary uppercase tracking-widest">Logo URL</label>
                             <input 
                               type="text" 
                               value={depositSettings.methodLogos?.[method.id] || ''}
@@ -3028,15 +3028,15 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                                 const newLogos = { ...(depositSettings.methodLogos || {}), [method.id]: e.target.value };
                                 setDepositSettings(prev => ({ ...prev, methodLogos: newLogos }));
                               }}
-                              className="w-full bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-lg px-3 py-2 text-[10px] focus:outline-none focus:border-blue-500 transition"
+                              className="w-full bg-bg-secondary border border-border-color rounded-lg px-3 py-2 text-[10px] focus:outline-none focus:border-blue-500 transition"
                             />
                           </div>
                           <div className="space-y-1">
-                            <label className="text-[9px] font-black text-[var(--text-secondary)] uppercase tracking-widest">{method.isList ? 'Payment Accounts' : 'Email / ID'}</label>
+                            <label className="text-[9px] font-black text-text-secondary uppercase tracking-widest">{method.isList ? 'Payment Accounts' : 'Email / ID'}</label>
                             {method.isList ? (
                               <div className="space-y-2">
                                 {(depositSettings[method.key as keyof typeof depositSettings] as any[] || []).map((acc, idx) => (
-                                  <div key={idx} className="p-2 bg-[var(--bg-secondary)] rounded-lg border border-[var(--border-color)] space-y-2">
+                                  <div key={idx} className="p-2 bg-bg-secondary rounded-lg border border-border-color space-y-2">
                                     <div className="flex gap-2">
                                       <input 
                                         type="text" 
@@ -3050,7 +3050,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                                           }
                                           setDepositSettings(prev => ({ ...prev, [method.key]: newAccs }));
                                         }}
-                                        className="flex-1 bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-lg px-2 py-1.5 text-[10px] focus:outline-none focus:border-blue-500 transition"
+                                        className="flex-1 bg-bg-primary border border-border-color rounded-lg px-2 py-1.5 text-[10px] focus:outline-none focus:border-blue-500 transition"
                                         placeholder="Number"
                                       />
                                       <button 
@@ -3072,7 +3072,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                                           newAccs[idx] = { ...(typeof acc === 'string' ? { number: acc } : acc), label: e.target.value };
                                           setDepositSettings(prev => ({ ...prev, [method.key]: newAccs }));
                                         }}
-                                        className="w-full bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-lg px-2 py-1.5 text-[9px] focus:outline-none focus:border-blue-500 transition"
+                                        className="w-full bg-bg-primary border border-border-color rounded-lg px-2 py-1.5 text-[9px] focus:outline-none focus:border-blue-500 transition"
                                         placeholder="Label"
                                       />
                                       <select 
@@ -3082,7 +3082,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                                           newAccs[idx] = { ...(typeof acc === 'string' ? { number: acc } : acc), type: e.target.value };
                                           setDepositSettings(prev => ({ ...prev, [method.key]: newAccs }));
                                         }}
-                                        className="w-full bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-lg px-2 py-1.5 text-[9px] focus:outline-none focus:border-blue-500 transition"
+                                        className="w-full bg-bg-primary border border-border-color rounded-lg px-2 py-1.5 text-[9px] focus:outline-none focus:border-blue-500 transition"
                                       >
                                         <option value="Cash Out">Cash Out</option>
                                         <option value="Send Money">Send Money</option>
@@ -3092,7 +3092,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                                 ))}
                                 <button 
                                   onClick={() => setDepositSettings(prev => ({ ...prev, [method.key]: [...(prev[method.key as keyof typeof prev] as any[] || []), { number: '', type: 'Cash Out', label: 'Agent' }] }))}
-                                  className="w-full py-1.5 border border-dashed border-[var(--border-color)] rounded-lg text-[9px] font-bold text-blue-500 hover:bg-blue-500/5 transition flex items-center justify-center gap-1"
+                                  className="w-full py-1.5 border border-dashed border-border-color rounded-lg text-[9px] font-bold text-blue-500 hover:bg-blue-500/5 transition flex items-center justify-center gap-1"
                                 >
                                   <Plus size={10} /> Add Account
                                 </button>
@@ -3102,7 +3102,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                                 type="text" 
                                 value={(depositSettings[method.key as keyof typeof depositSettings] as string) || ''}
                                 onChange={(e) => setDepositSettings(prev => ({ ...prev, [method.key]: e.target.value }))}
-                                className="w-full bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-lg px-3 py-2 text-[10px] focus:outline-none focus:border-blue-500 transition"
+                                className="w-full bg-bg-secondary border border-border-color rounded-lg px-3 py-2 text-[10px] focus:outline-none focus:border-blue-500 transition"
                               />
                             )}
                           </div>
@@ -3112,7 +3112,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                   </div>
                 )}
 
-                <div className="pt-6 border-t border-[var(--border-color)] flex gap-4">
+                <div className="pt-6 border-t border-border-color flex gap-4">
                   <button 
                     onClick={() => {
                       if (socket) {
@@ -3173,7 +3173,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                         }
                       }
                     }}
-                    className="px-6 bg-[var(--bg-primary)] border border-[var(--border-color)] text-[var(--text-secondary)] hover:text-red-500 hover:border-red-500/30 font-bold py-4 rounded-xl transition uppercase tracking-widest text-[10px]"
+                    className="px-6 bg-bg-primary border border-border-color text-text-secondary hover:text-red-500 hover:border-red-500/30 font-bold py-4 rounded-xl transition uppercase tracking-widest text-[10px]"
                   >
                     Reset
                   </button>
@@ -3183,12 +3183,12 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
 
             {/* Deposits and Withdrawals Tables */}
             <div className="space-y-6 mt-8">
-              <div className="bg-[var(--bg-secondary)] p-6 rounded-3xl border border-[var(--border-color)] shadow-xl">
-                <h3 className="font-black text-[10px] uppercase tracking-[0.2em] text-[var(--text-secondary)] mb-6">Deposit Requests</h3>
+              <div className="bg-bg-secondary p-6 rounded-3xl border border-border-color shadow-xl">
+                <h3 className="font-black text-[10px] uppercase tracking-[0.2em] text-text-secondary mb-6">Deposit Requests</h3>
                 <div className="overflow-x-auto">
                   <table className="w-full text-left text-sm">
                     <thead>
-                      <tr className="border-b border-[var(--border-color)] text-[var(--text-secondary)]">
+                      <tr className="border-b border-border-color text-text-secondary">
                         <th className="pb-3 font-medium">Email</th>
                         <th className="pb-3 font-medium">Amount</th>
                         <th className="pb-3 font-medium">Method</th>
@@ -3198,9 +3198,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                         <th className="pb-3 font-medium text-right">Actions</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-[var(--border-color)]">
+                    <tbody className="divide-y divide-[var(--color-border-color)]">
                       {deposits.map((deposit) => (
-                        <tr key={deposit.id} className="text-[var(--text-primary)]">
+                        <tr key={deposit.id} className="text-text-primary">
                           <td className="py-4">{deposit.email}</td>
                           <td className="py-4 font-bold">{deposit.currency} {deposit.amount}</td>
                           <td className="py-4">{deposit.method}</td>
@@ -3214,7 +3214,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                               {deposit.status}
                             </span>
                           </td>
-                          <td className="py-4 text-xs text-[var(--text-secondary)]">
+                          <td className="py-4 text-xs text-text-secondary">
                             {new Date(deposit.submittedAt).toLocaleString()}
                           </td>
                           <td className="py-4 text-right">
@@ -3239,7 +3239,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                       ))}
                       {deposits.length === 0 && (
                         <tr>
-                          <td colSpan={7} className="py-8 text-center text-[var(--text-secondary)]">No deposit requests found</td>
+                          <td colSpan={7} className="py-8 text-center text-text-secondary">No deposit requests found</td>
                         </tr>
                       )}
                     </tbody>
@@ -3247,12 +3247,12 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                 </div>
               </div>
 
-              <div className="bg-[var(--bg-secondary)] p-6 rounded-3xl border border-[var(--border-color)] shadow-xl">
-                <h3 className="font-black text-[10px] uppercase tracking-[0.2em] text-[var(--text-secondary)] mb-6">Withdrawal Requests</h3>
+              <div className="bg-bg-secondary p-6 rounded-3xl border border-border-color shadow-xl">
+                <h3 className="font-black text-[10px] uppercase tracking-[0.2em] text-text-secondary mb-6">Withdrawal Requests</h3>
                 <div className="overflow-x-auto">
                   <table className="w-full text-left text-sm">
                     <thead>
-                      <tr className="border-b border-[var(--border-color)] text-[var(--text-secondary)]">
+                      <tr className="border-b border-border-color text-text-secondary">
                         <th className="pb-3 font-medium">Email</th>
                         <th className="pb-3 font-medium">Amount</th>
                         <th className="pb-3 font-medium">Method</th>
@@ -3262,9 +3262,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                         <th className="pb-3 font-medium text-right">Actions</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-[var(--border-color)]">
+                    <tbody className="divide-y divide-[var(--color-border-color)]">
                       {withdrawals.map((withdraw) => (
-                        <tr key={withdraw.id} className="text-[var(--text-primary)]">
+                        <tr key={withdraw.id} className="text-text-primary">
                           <td className="py-4">{withdraw.email}</td>
                           <td className="py-4 font-bold">{withdraw.currency} {withdraw.amount}</td>
                           <td className="py-4">{withdraw.method}</td>
@@ -3278,7 +3278,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                               {withdraw.status}
                             </span>
                           </td>
-                          <td className="py-4 text-xs text-[var(--text-secondary)]">
+                          <td className="py-4 text-xs text-text-secondary">
                             {new Date(withdraw.submittedAt).toLocaleString()}
                           </td>
                           <td className="py-4 text-right">
@@ -3297,7 +3297,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                       ))}
                       {withdrawals.length === 0 && (
                         <tr>
-                          <td colSpan={7} className="py-8 text-center text-[var(--text-secondary)]">No withdrawal requests found</td>
+                          <td colSpan={7} className="py-8 text-center text-text-secondary">No withdrawal requests found</td>
                         </tr>
                       )}
                     </tbody>
@@ -3317,7 +3317,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                 </div>
                 <div>
                   <h2 className="text-lg font-bold">Live Account Professional Audit</h2>
-                  <p className="text-[9px] text-[var(--text-secondary)] uppercase font-black tracking-widest">Daily Calculation & Market Control</p>
+                  <p className="text-[9px] text-text-secondary uppercase font-black tracking-widest">Daily Calculation & Market Control</p>
                 </div>
               </div>
               <button 
@@ -3331,61 +3331,61 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
             <div className="space-y-6">
               {/* Daily Summary Cards */}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                <div className="bg-[var(--bg-secondary)] p-5 rounded-3xl border border-[var(--border-color)] shadow-xl relative overflow-hidden group">
+                <div className="bg-bg-secondary p-5 rounded-3xl border border-border-color shadow-xl relative overflow-hidden group">
                   <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:scale-110 transition-transform"><ArrowUp size={40} /></div>
-                  <div className="text-[10px] font-black text-[var(--text-secondary)] uppercase tracking-widest mb-1">Live Volume</div>
-                  <div className="text-2xl font-black text-[var(--text-primary)]">Đ{stats.dailyStats.volume.toLocaleString()}</div>
+                  <div className="text-[10px] font-black text-text-secondary uppercase tracking-widest mb-1">Live Volume</div>
+                  <div className="text-2xl font-black text-text-primary">Đ{stats.dailyStats.volume.toLocaleString()}</div>
                   <div className="text-[10px] text-blue-500 font-bold mt-1">{stats.dailyStats.trades} Live Entries Today</div>
                 </div>
-                <div className="bg-[var(--bg-secondary)] p-5 rounded-3xl border border-[var(--border-color)] shadow-xl relative overflow-hidden group">
+                <div className="bg-bg-secondary p-5 rounded-3xl border border-border-color shadow-xl relative overflow-hidden group">
                   <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:scale-110 transition-transform text-red-500"><TrendingUp size={40} /></div>
-                  <div className="text-[10px] font-black text-[var(--text-secondary)] uppercase tracking-widest mb-1">User Payouts</div>
+                  <div className="text-[10px] font-black text-text-secondary uppercase tracking-widest mb-1">User Payouts</div>
                   <div className="text-2xl font-black text-red-500">Đ{stats.dailyStats.profit.toLocaleString()}</div>
-                  <div className="text-[10px] text-[var(--text-secondary)] font-bold mt-1">Platform Expense (Wins)</div>
+                  <div className="text-[10px] text-text-secondary font-bold mt-1">Platform Expense (Wins)</div>
                 </div>
-                <div className="bg-[var(--bg-secondary)] p-5 rounded-3xl border border-[var(--border-color)] shadow-xl relative overflow-hidden group">
+                <div className="bg-bg-secondary p-5 rounded-3xl border border-border-color shadow-xl relative overflow-hidden group">
                   <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:scale-110 transition-transform text-green-500"><TrendingDown size={40} /></div>
-                  <div className="text-[10px] font-black text-[var(--text-secondary)] uppercase tracking-widest mb-1">User Losses</div>
+                  <div className="text-[10px] font-black text-text-secondary uppercase tracking-widest mb-1">User Losses</div>
                   <div className="text-2xl font-black text-green-500">Đ{stats.dailyStats.loss.toLocaleString()}</div>
-                  <div className="text-[10px] text-[var(--text-secondary)] font-bold mt-1">Platform Revenue (Losses)</div>
+                  <div className="text-[10px] text-text-secondary font-bold mt-1">Platform Revenue (Losses)</div>
                 </div>
-                <div className="bg-[var(--bg-secondary)] p-5 rounded-3xl border border-[var(--border-color)] shadow-xl border-blue-500/30 relative overflow-hidden group">
+                <div className="bg-bg-secondary p-5 rounded-3xl border border-border-color shadow-xl border-blue-500/30 relative overflow-hidden group">
                   <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:scale-110 transition-transform text-blue-500"><Target size={40} /></div>
                   <div className="text-[10px] font-black text-blue-500 uppercase tracking-widest mb-1">Daily Net Profit</div>
                   <div className={`text-2xl font-black ${(stats.dailyStats.loss - stats.dailyStats.profit) >= 0 ? 'text-green-500' : 'text-red-500'}`}>
                     Đ{(stats.dailyStats.loss - stats.dailyStats.profit).toLocaleString()}
                   </div>
-                  <div className="text-[10px] text-[var(--text-secondary)] font-bold mt-1">Professional House Edge</div>
+                  <div className="text-[10px] text-text-secondary font-bold mt-1">Professional House Edge</div>
                 </div>
               </div>
 
               {/* Market Percentage Control Section */}
-              <div className="bg-[var(--bg-secondary)] p-6 rounded-3xl border border-[var(--border-color)] shadow-xl">
+              <div className="bg-bg-secondary p-6 rounded-3xl border border-border-color shadow-xl">
                 <div className="flex items-center justify-between mb-6">
-                  <h3 className="font-black text-[10px] uppercase tracking-[0.2em] text-[var(--text-secondary)]">Global Market Percentage Control</h3>
+                  <h3 className="font-black text-[10px] uppercase tracking-[0.2em] text-text-secondary">Global Market Percentage Control</h3>
                   <span className="text-[9px] font-black bg-blue-500/10 text-blue-500 px-2 py-1 rounded border border-blue-500/20">AUTO-SYNC ENABLED</span>
                 </div>
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                   <div className="space-y-4">
-                    <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
+                    <p className="text-xs text-text-secondary leading-relaxed">
                       Adjust the global payout percentage to control platform profitability. A lower percentage increases the house edge, while a higher percentage attracts more traders.
                     </p>
                     <div className="flex items-center gap-4">
-                      <div className="flex-1 h-2 bg-[var(--bg-primary)] rounded-full overflow-hidden">
+                      <div className="flex-1 h-2 bg-bg-primary rounded-full overflow-hidden">
                         <div 
                           className="h-full bg-blue-500 transition-all duration-500" 
                           style={{ width: `${tradeSettings.payoutPercentage}%` }} 
                         />
                       </div>
-                      <span className="text-xl font-black text-[var(--text-primary)]">{tradeSettings.payoutPercentage}%</span>
+                      <span className="text-xl font-black text-text-primary">{tradeSettings.payoutPercentage}%</span>
                     </div>
                     <div className="flex gap-2">
                       {[80, 85, 90, 92, 95].map(p => (
                         <button 
                           key={p}
                           onClick={() => handleUpdateTradeSettings({ payoutPercentage: p })}
-                          className={`flex-1 py-2 rounded-xl text-[10px] font-black border transition-all ${tradeSettings.payoutPercentage === p ? 'bg-blue-500 text-white border-blue-500 shadow-lg shadow-blue-500/20' : 'bg-[var(--bg-primary)] text-[var(--text-secondary)] border-[var(--border-color)] hover:border-blue-500/30'}`}
+                          className={`flex-1 py-2 rounded-xl text-[10px] font-black border transition-all ${tradeSettings.payoutPercentage === p ? 'bg-blue-500 text-white border-blue-500 shadow-lg shadow-blue-500/20' : 'bg-bg-primary text-text-secondary border-border-color hover:border-blue-500/30'}`}
                         >
                           {p}%
                         </button>
@@ -3393,12 +3393,12 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                     </div>
                   </div>
 
-                  <div className="bg-[var(--bg-primary)] p-5 rounded-2xl border border-[var(--border-color)] flex flex-col justify-center text-center">
-                    <div className="text-[10px] font-black text-[var(--text-secondary)] uppercase tracking-widest mb-2">Recommended Payout</div>
+                  <div className="bg-bg-primary p-5 rounded-2xl border border-border-color flex flex-col justify-center text-center">
+                    <div className="text-[10px] font-black text-text-secondary uppercase tracking-widest mb-2">Recommended Payout</div>
                     <div className="text-4xl font-black text-blue-500 mb-1">
                       {stats.dailyStats.loss > stats.dailyStats.profit ? '92%' : '85%'}
                     </div>
-                    <p className="text-[9px] text-[var(--text-secondary)] font-bold italic">
+                    <p className="text-[9px] text-text-secondary font-bold italic">
                       Based on today's Live Balance performance
                     </p>
                   </div>
@@ -3406,14 +3406,14 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
               </div>
 
               {/* Professional Calculation Table */}
-              <div className="bg-[var(--bg-secondary)] rounded-3xl border border-[var(--border-color)] overflow-hidden shadow-xl">
-                <div className="p-5 border-b border-[var(--border-color)] bg-[var(--bg-tertiary)]/30 flex items-center justify-between">
-                  <h3 className="font-black text-[10px] uppercase tracking-widest text-[var(--text-primary)]">Detailed Live Accounting Statement</h3>
-                  <div className="text-[9px] font-black text-[var(--text-secondary)] uppercase tracking-widest">Date: {new Date().toLocaleDateString()}</div>
+              <div className="bg-bg-secondary rounded-3xl border border-border-color overflow-hidden shadow-xl">
+                <div className="p-5 border-b border-border-color bg-bg-tertiary/30 flex items-center justify-between">
+                  <h3 className="font-black text-[10px] uppercase tracking-widest text-text-primary">Detailed Live Accounting Statement</h3>
+                  <div className="text-[9px] font-black text-text-secondary uppercase tracking-widest">Date: {new Date().toLocaleDateString()}</div>
                 </div>
                 <div className="overflow-x-auto">
                   <table className="w-full text-left text-xs">
-                    <thead className="bg-[var(--bg-primary)] text-[var(--text-secondary)] font-black uppercase tracking-tighter">
+                    <thead className="bg-bg-primary text-text-secondary font-black uppercase tracking-tighter">
                       <tr>
                         <th className="px-6 py-4">Accounting Metric</th>
                         <th className="px-6 py-4">Live Value</th>
@@ -3421,30 +3421,30 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                         <th className="px-6 py-4">Analysis</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-[var(--border-color)]">
+                    <tbody className="divide-y divide-[var(--color-border-color)]">
                       <tr>
                         <td className="px-6 py-4 font-bold">Total Live Entries</td>
                         <td className="px-6 py-4 font-mono text-lg">{stats.totalTrades}</td>
                         <td className="px-6 py-4"><span className="px-2 py-1 bg-blue-500/10 text-blue-500 rounded text-[9px] font-black">OPERATIONAL</span></td>
-                        <td className="px-6 py-4 text-[var(--text-secondary)] font-bold">Active market participation</td>
+                        <td className="px-6 py-4 text-text-secondary font-bold">Active market participation</td>
                       </tr>
                       <tr>
                         <td className="px-6 py-4 font-bold">Total Capital Staked</td>
                         <td className="px-6 py-4 font-mono text-lg text-blue-500">Đ{stats.totalVolume.toLocaleString()}</td>
                         <td className="px-6 py-4"><span className="px-2 py-1 bg-blue-500/10 text-blue-500 rounded text-[9px] font-black">GROSS VOLUME</span></td>
-                        <td className="px-6 py-4 text-[var(--text-secondary)] font-bold">Total risk exposure</td>
+                        <td className="px-6 py-4 text-text-secondary font-bold">Total risk exposure</td>
                       </tr>
                       <tr>
                         <td className="px-6 py-4 font-bold">Total User Payouts</td>
                         <td className="px-6 py-4 font-mono text-lg text-red-500">Đ{stats.totalProfit.toLocaleString()}</td>
                         <td className="px-6 py-4"><span className="px-2 py-1 bg-red-500/10 text-red-500 rounded text-[9px] font-black">PLATFORM EXPENSE</span></td>
-                        <td className="px-6 py-4 text-[var(--text-secondary)] font-bold">Capital returned to winners</td>
+                        <td className="px-6 py-4 text-text-secondary font-bold">Capital returned to winners</td>
                       </tr>
                       <tr>
                         <td className="px-6 py-4 font-bold">Total User Losses</td>
                         <td className="px-6 py-4 font-mono text-lg text-green-500">Đ{stats.totalLoss.toLocaleString()}</td>
                         <td className="px-6 py-4"><span className="px-2 py-1 bg-green-500/10 text-green-500 rounded text-[9px] font-black">PLATFORM REVENUE</span></td>
-                        <td className="px-6 py-4 text-[var(--text-secondary)] font-bold">Retained capital from losses</td>
+                        <td className="px-6 py-4 text-text-secondary font-bold">Retained capital from losses</td>
                       </tr>
                       <tr className="bg-blue-500/5">
                         <td className="px-6 py-4 font-black uppercase text-sm">Net Platform Profit</td>
@@ -3458,10 +3458,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                         </td>
                         <td className="px-6 py-4">
                           <div className="flex flex-col">
-                            <span className="text-[10px] font-black text-[var(--text-primary)]">
+                            <span className="text-[10px] font-black text-text-primary">
                               Margin: {((stats.netPlatformProfit / (stats.totalVolume || 1)) * 100).toFixed(2)}%
                             </span>
-                            <span className="text-[9px] text-[var(--text-secondary)] font-bold">Professional House Edge</span>
+                            <span className="text-[9px] text-text-secondary font-bold">Professional House Edge</span>
                           </div>
                         </td>
                       </tr>
@@ -3471,33 +3471,33 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
               </div>
 
               {/* Lifetime Summary */}
-              <div className="bg-[var(--bg-secondary)] p-6 rounded-3xl border border-[var(--border-color)] shadow-xl">
-                <h3 className="font-black text-[10px] uppercase tracking-[0.2em] text-[var(--text-secondary)] mb-6">Platform Lifetime Performance (Live Balance)</h3>
+              <div className="bg-bg-secondary p-6 rounded-3xl border border-border-color shadow-xl">
+                <h3 className="font-black text-[10px] uppercase tracking-[0.2em] text-text-secondary mb-6">Platform Lifetime Performance (Live Balance)</h3>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
                   <div className="space-y-2">
-                    <div className="flex justify-between text-[10px] font-bold uppercase text-[var(--text-secondary)]">
+                    <div className="flex justify-between text-[10px] font-bold uppercase text-text-secondary">
                       <span>Total Volume</span>
-                      <span className="text-[var(--text-primary)]">Đ{stats.totalVolume.toLocaleString()}</span>
+                      <span className="text-text-primary">Đ{stats.totalVolume.toLocaleString()}</span>
                     </div>
-                    <div className="h-2 bg-[var(--bg-primary)] rounded-full overflow-hidden">
+                    <div className="h-2 bg-bg-primary rounded-full overflow-hidden">
                       <div className="h-full bg-blue-500" style={{ width: '100%' }} />
                     </div>
                   </div>
                   <div className="space-y-2">
-                    <div className="flex justify-between text-[10px] font-bold uppercase text-[var(--text-secondary)]">
+                    <div className="flex justify-between text-[10px] font-bold uppercase text-text-secondary">
                       <span>User Profit Rate</span>
                       <span className="text-red-500">{((stats.totalProfit / (stats.totalVolume || 1)) * 100).toFixed(1)}%</span>
                     </div>
-                    <div className="h-2 bg-[var(--bg-primary)] rounded-full overflow-hidden">
+                    <div className="h-2 bg-bg-primary rounded-full overflow-hidden">
                       <div className="h-full bg-red-500" style={{ width: `${(stats.totalProfit / (stats.totalVolume || 1)) * 100}%` }} />
                     </div>
                   </div>
                   <div className="space-y-2">
-                    <div className="flex justify-between text-[10px] font-bold uppercase text-[var(--text-secondary)]">
+                    <div className="flex justify-between text-[10px] font-bold uppercase text-text-secondary">
                       <span>Platform Margin</span>
                       <span className="text-green-500">{((stats.netPlatformProfit / (stats.totalVolume || 1)) * 100).toFixed(1)}%</span>
                     </div>
-                    <div className="h-2 bg-[var(--bg-primary)] rounded-full overflow-hidden">
+                    <div className="h-2 bg-bg-primary rounded-full overflow-hidden">
                       <div className="h-full bg-green-500" style={{ width: `${(stats.netPlatformProfit / (stats.totalVolume || 1)) * 100}%` }} />
                     </div>
                   </div>
@@ -3516,11 +3516,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
               </div>
             </div>
 
-            <div className="bg-[var(--bg-secondary)] p-6 rounded-3xl border border-[var(--border-color)] shadow-xl">
+            <div className="bg-bg-secondary p-6 rounded-3xl border border-border-color shadow-xl">
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-sm">
                   <thead>
-                    <tr className="border-b border-[var(--border-color)] text-[var(--text-secondary)]">
+                    <tr className="border-b border-border-color text-text-secondary">
                       <th className="pb-3 font-medium">Email</th>
                       <th className="pb-3 font-medium">Amount</th>
                       <th className="pb-3 font-medium">Method</th>
@@ -3530,9 +3530,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                       <th className="pb-3 font-medium text-right">Actions</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-[var(--border-color)]">
+                  <tbody className="divide-y divide-[var(--color-border-color)]">
                     {withdrawals.map((withdraw) => (
-                      <tr key={withdraw.id} className="text-[var(--text-primary)]">
+                      <tr key={withdraw.id} className="text-text-primary">
                         <td className="py-4">{withdraw.email}</td>
                         <td className="py-4 font-bold">{withdraw.currency} {withdraw.amount}</td>
                         <td className="py-4">{withdraw.method}</td>
@@ -3551,7 +3551,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                             </div>
                           )}
                         </td>
-                        <td className="py-4 text-[10px] text-[var(--text-secondary)]">
+                        <td className="py-4 text-[10px] text-text-secondary">
                           {new Date(withdraw.submittedAt).toLocaleString()}
                         </td>
                         <td className="py-4 text-right">
@@ -3564,6 +3564,18 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                               >
                                 <Check size={14} />
                               </button>
+                              <button 
+                                onClick={() => {
+                                  const reason = window.prompt('Enter rejection reason (optional):');
+                                  if (reason !== null) {
+                                    handleUpdateWithdrawStatus(withdraw.id, 'REJECTED', reason);
+                                  }
+                                }}
+                                className="p-2 bg-red-500/10 text-red-500 rounded-lg hover:bg-red-500 hover:text-white transition"
+                                title="Reject"
+                              >
+                                <X size={14} />
+                              </button>
                             </div>
                           )}
                         </td>
@@ -3571,7 +3583,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                     ))}
                     {withdrawals.length === 0 && (
                       <tr>
-                        <td colSpan={7} className="py-10 text-center text-[var(--text-secondary)]">No withdrawal requests found</td>
+                        <td colSpan={7} className="py-10 text-center text-text-secondary">No withdrawal requests found</td>
                       </tr>
                     )}
                   </tbody>
@@ -3586,7 +3598,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
             <div className="flex justify-between items-center mb-2">
               <div>
                 <h2 className="text-lg font-bold">System Activity Logs</h2>
-                <p className="text-[10px] text-[var(--text-secondary)] font-bold uppercase tracking-widest">Global audit trail of all user actions</p>
+                <p className="text-[10px] text-text-secondary font-bold uppercase tracking-widest">Global audit trail of all user actions</p>
               </div>
               <button 
                 onClick={() => socket?.emit('admin-get-all-logs')}
@@ -3596,11 +3608,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
               </button>
             </div>
 
-            <div className="bg-[var(--bg-secondary)] rounded-3xl border border-[var(--border-color)] overflow-hidden shadow-xl">
+            <div className="bg-bg-secondary rounded-3xl border border-border-color overflow-hidden shadow-xl">
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-sm">
                   <thead>
-                    <tr className="border-b border-[var(--border-color)] text-[var(--text-secondary)]">
+                    <tr className="border-b border-border-color text-text-secondary">
                       <th className="p-4 font-medium">User</th>
                       <th className="p-4 font-medium">Action</th>
                       <th className="p-4 font-medium">Details</th>
@@ -3608,27 +3620,27 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                       <th className="p-4 font-medium text-right">Timestamp</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-[var(--border-color)]">
+                  <tbody className="divide-y divide-[var(--color-border-color)]">
                     {allLogs.map((log, idx) => (
-                      <tr key={idx} className="text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)]/30 transition-colors">
+                      <tr key={idx} className="text-text-primary hover:bg-bg-tertiary/30 transition-colors">
                         <td className="p-4 font-medium text-xs">{log.email}</td>
                         <td className="p-4">
                           <span className="px-2 py-0.5 rounded bg-blue-500/10 text-blue-500 text-[10px] font-black uppercase tracking-wider">
                             {log.action}
                           </span>
                         </td>
-                        <td className="p-4 text-xs text-[var(--text-secondary)] max-w-xs truncate" title={log.details}>
+                        <td className="p-4 text-xs text-text-secondary max-w-xs truncate" title={log.details}>
                           {log.details}
                         </td>
-                        <td className="p-4 font-mono text-[10px] text-[var(--text-secondary)]">{log.ip || 'N/A'}</td>
-                        <td className="p-4 text-right text-[10px] text-[var(--text-secondary)]">
+                        <td className="p-4 font-mono text-[10px] text-text-secondary">{log.ip || 'N/A'}</td>
+                        <td className="p-4 text-right text-[10px] text-text-secondary">
                           {new Date(log.timestamp).toLocaleString()}
                         </td>
                       </tr>
                     ))}
                     {allLogs.length === 0 && (
                       <tr>
-                        <td colSpan={5} className="py-20 text-center text-[var(--text-secondary)]">
+                        <td colSpan={5} className="py-20 text-center text-text-secondary">
                           <div className="flex flex-col items-center gap-2">
                             <FileText size={48} className="opacity-10" />
                             <p className="font-bold">No activity logs found</p>
@@ -3651,13 +3663,13 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
 
         {tab === 'TOURNAMENTS' && (
           <div className="space-y-6 pb-20 p-4">
-            <div className="flex justify-between items-center bg-[var(--bg-secondary)] p-6 rounded-[24px] border border-[var(--border-color)] shadow-sm">
+            <div className="flex justify-between items-center bg-bg-secondary p-6 rounded-[24px] border border-border-color shadow-sm">
               <div>
                 <h2 className="text-xl font-black flex items-center gap-2 underline decoration-red-500 decoration-4 underline-offset-8 mb-2">
                   <Trophy size={24} className="text-yellow-500" />
                   Tournament Management
                 </h2>
-                <p className="text-[10px] text-[var(--text-secondary)] font-bold uppercase tracking-widest">Create and manage professional trading events</p>
+                <p className="text-[10px] text-text-secondary font-bold uppercase tracking-widest">Create and manage professional trading events</p>
               </div>
               <button 
                 onClick={() => {
@@ -3676,14 +3688,14 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                   initial={{ opacity: 0, y: -20 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -20 }}
-                  className="bg-[var(--bg-secondary)] p-8 rounded-[32px] border border-blue-500/30 shadow-2xl relative overflow-hidden"
+                  className="bg-bg-secondary p-8 rounded-[32px] border border-blue-500/30 shadow-2xl relative overflow-hidden"
                 >
                   <div className="absolute top-0 left-0 w-1.5 h-full bg-blue-600" />
                   <div className="flex justify-between items-center mb-8">
                     <h3 className="font-black text-xl uppercase tracking-tighter italic">
                       {editingTournament ? 'Edit Tournament' : 'Setup New Tournament'}
                     </h3>
-                    <button onClick={() => { setIsAddingTournament(false); setEditingTournament(null); }} className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center text-white/40 hover:text-white transition active:scale-90">
+                    <button onClick={() => { setIsAddingTournament(false); setEditingTournament(null); }} className="w-10 h-10 rounded-full bg-bg-secondary flex items-center justify-center text-text-secondary/40 hover:text-text-primary transition active:scale-90">
                       <X size={20} />
                     </button>
                   </div>
@@ -3691,41 +3703,41 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                     <div className="space-y-5">
                       <div>
-                        <label className="text-[10px] font-black text-[var(--text-secondary)] uppercase mb-2 block tracking-widest">Tournament Title</label>
+                        <label className="text-[10px] font-black text-text-secondary uppercase mb-2 block tracking-widest">Tournament Title</label>
                         <input 
                           type="text" 
                           value={editingTournament ? editingTournament.title : newTournament.title}
                           onChange={(e) => editingTournament ? setEditingTournament({...editingTournament, title: e.target.value}) : setNewTournament({...newTournament, title: e.target.value})}
-                          className="w-full bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-2xl px-5 py-4 text-sm font-bold outline-none focus:border-blue-500 transition shadow-inner"
+                          className="w-full bg-bg-primary border border-border-color rounded-2xl px-5 py-4 text-sm font-bold outline-none focus:border-blue-500 transition shadow-inner"
                           placeholder="e.g. Weekend Cup"
                         />
                       </div>
                       <div>
-                        <label className="text-[10px] font-black text-[var(--text-secondary)] uppercase mb-2 block tracking-widest">Image URL (Banner)</label>
+                        <label className="text-[10px] font-black text-text-secondary uppercase mb-2 block tracking-widest">Image URL (Banner)</label>
                         <input 
                           type="text" 
                           value={editingTournament ? editingTournament.imageUrl : newTournament.imageUrl}
                           onChange={(e) => editingTournament ? setEditingTournament({...editingTournament, imageUrl: e.target.value}) : setNewTournament({...newTournament, imageUrl: e.target.value})}
-                          className="w-full bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-2xl px-5 py-4 text-sm font-bold outline-none focus:border-blue-500 transition shadow-inner"
+                          className="w-full bg-bg-primary border border-border-color rounded-2xl px-5 py-4 text-sm font-bold outline-none focus:border-blue-500 transition shadow-inner"
                           placeholder="https://example.com/banner.jpg"
                         />
                       </div>
                       <div className="grid grid-cols-2 gap-4">
                         <div>
-                          <label className="text-[10px] font-black text-[var(--text-secondary)] uppercase mb-2 block tracking-widest">Prize Fund ($)</label>
+                          <label className="text-[10px] font-black text-text-secondary uppercase mb-2 block tracking-widest">Prize Fund ($)</label>
                           <input 
                             type="number" 
                             value={editingTournament ? editingTournament.prizeFund : newTournament.prizeFund}
                             onChange={(e) => editingTournament ? setEditingTournament({...editingTournament, prizeFund: parseFloat(e.target.value)}) : setNewTournament({...newTournament, prizeFund: parseFloat(e.target.value)})}
-                            className="w-full bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-2xl px-5 py-4 text-sm font-bold outline-none focus:border-blue-500 transition shadow-inner"
+                            className="w-full bg-bg-primary border border-border-color rounded-2xl px-5 py-4 text-sm font-bold outline-none focus:border-blue-500 transition shadow-inner"
                           />
                         </div>
                         <div>
-                          <label className="text-[10px] font-black text-[var(--text-secondary)] uppercase mb-2 block tracking-widest">Access Policy</label>
+                          <label className="text-[10px] font-black text-text-secondary uppercase mb-2 block tracking-widest">Access Policy</label>
                           <select 
                             value={editingTournament ? (editingTournament.isLocked ? 'LOCKED' : 'OPEN') : (newTournament.isLocked ? 'LOCKED' : 'OPEN')}
                             onChange={(e) => editingTournament ? setEditingTournament({...editingTournament, isLocked: e.target.value === 'LOCKED'}) : setNewTournament({...newTournament, isLocked: e.target.value === 'LOCKED'})}
-                            className="w-full bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-2xl px-5 py-4 text-sm font-bold outline-none focus:border-blue-500 transition shadow-inner"
+                            className="w-full bg-bg-primary border border-border-color rounded-2xl px-5 py-4 text-sm font-bold outline-none focus:border-blue-500 transition shadow-inner"
                           >
                             <option value="OPEN">Public / Free</option>
                             <option value="LOCKED">Locked / Invitation</option>
@@ -3737,31 +3749,31 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                     <div className="space-y-5">
                       <div className="grid grid-cols-2 gap-4">
                         <div>
-                          <label className="text-[10px] font-black text-[var(--text-secondary)] uppercase mb-2 block tracking-widest">Start Date/Time</label>
+                          <label className="text-[10px] font-black text-text-secondary uppercase mb-2 block tracking-widest">Start Date/Time</label>
                           <input 
                             type="datetime-local" 
                             value={editingTournament ? new Date(editingTournament.startTime).toISOString().slice(0, 16) : newTournament.startTime}
                             onChange={(e) => editingTournament ? setEditingTournament({...editingTournament, startTime: new Date(e.target.value).getTime()}) : setNewTournament({...newTournament, startTime: e.target.value})}
-                            className="w-full bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-2xl px-5 py-4 text-sm font-bold outline-none focus:border-blue-500 transition shadow-inner"
+                            className="w-full bg-bg-primary border border-border-color rounded-2xl px-5 py-4 text-sm font-bold outline-none focus:border-blue-500 transition shadow-inner"
                           />
                         </div>
                         <div>
-                          <label className="text-[10px] font-black text-[var(--text-secondary)] uppercase mb-2 block tracking-widest">End Date/Time</label>
+                          <label className="text-[10px] font-black text-text-secondary uppercase mb-2 block tracking-widest">End Date/Time</label>
                           <input 
                             type="datetime-local" 
                             value={editingTournament ? new Date(editingTournament.endTime).toISOString().slice(0, 16) : newTournament.endTime}
                             onChange={(e) => editingTournament ? setEditingTournament({...editingTournament, endTime: new Date(e.target.value).getTime()}) : setNewTournament({...newTournament, endTime: e.target.value})}
-                            className="w-full bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-2xl px-5 py-4 text-sm font-bold outline-none focus:border-blue-500 transition shadow-inner"
+                            className="w-full bg-bg-primary border border-border-color rounded-2xl px-5 py-4 text-sm font-bold outline-none focus:border-blue-500 transition shadow-inner"
                           />
                         </div>
                       </div>
                       <div>
-                        <label className="text-[10px] font-black text-[var(--text-secondary)] uppercase mb-2 block tracking-widest">Description & Rules</label>
+                        <label className="text-[10px] font-black text-text-secondary uppercase mb-2 block tracking-widest">Description & Rules</label>
                         <textarea 
                           rows={4}
                           value={editingTournament ? editingTournament.description : newTournament.description}
                           onChange={(e) => editingTournament ? setEditingTournament({...editingTournament, description: e.target.value}) : setNewTournament({...newTournament, description: e.target.value})}
-                          className="w-full bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-2xl px-5 py-4 text-sm font-bold outline-none focus:border-blue-500 transition resize-none shadow-inner"
+                          className="w-full bg-bg-primary border border-border-color rounded-2xl px-5 py-4 text-sm font-bold outline-none focus:border-blue-500 transition resize-none shadow-inner"
                           placeholder="Rules, participation criteria, leaderboard info..."
                         />
                       </div>
@@ -3791,7 +3803,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                     </button>
                     <button 
                       onClick={() => { setIsAddingTournament(false); setEditingTournament(null); }}
-                      className="px-10 bg-white/5 border border-white/10 rounded-2xl font-black text-[10px] uppercase tracking-[3px] hover:bg-white/10 transition"
+                      className="px-10 bg-bg-secondary border border-border-color rounded-2xl font-black text-[10px] uppercase tracking-[3px] hover:bg-bg-tertiary transition"
                     >
                       Discard
                     </button>
@@ -3802,10 +3814,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
               {tournaments.map((t) => (
-                <div key={t.id} className="bg-[var(--bg-secondary)] rounded-[32px] border border-[var(--border-color)] overflow-hidden flex flex-col group hover:border-blue-500/50 shadow-lg hover:shadow-blue-500/10 transition-all duration-300">
+                <div key={t.id} className="bg-bg-secondary rounded-[32px] border border-border-color overflow-hidden flex flex-col group hover:border-blue-500/50 shadow-lg hover:shadow-blue-500/10 transition-all duration-300">
                   <div className="relative h-48 overflow-hidden">
                     <img src={t.imageUrl || 'https://images.unsplash.com/photo-1621416848469-e01dae52899d?q=80&w=2070&auto=format&fit=crop'} alt="" className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
-                    <div className="absolute inset-0 bg-gradient-to-t from-[var(--bg-secondary)] via-transparent to-transparent" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-[var(--color-bg-secondary)] via-transparent to-transparent" />
                     <div className="absolute top-5 left-5 flex gap-2">
                       <span className={cn(
                         "text-[9px] font-black px-3 py-1.5 rounded-xl border backdrop-blur-xl uppercase tracking-[2px]",
@@ -3823,28 +3835,28 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                     <div className="flex justify-between items-start mb-3">
                       <h3 className="font-black text-xl tracking-tight leading-tight">{t.title}</h3>
                       <div className="flex gap-2">
-                        <button onClick={() => setEditingTournament(t)} className="w-10 h-10 bg-white/5 text-blue-400 hover:bg-blue-400 hover:text-white rounded-xl transition-all flex items-center justify-center active:scale-90"><Edit size={16} /></button>
-                        <button onClick={() => { if(window.confirm('IRREVERSIBLE: Delete this tournament?')) socket?.emit('admin-delete-tournament', t.id); }} className="w-10 h-10 bg-white/5 text-red-400 hover:bg-red-400 hover:text-white rounded-xl transition-all flex items-center justify-center active:scale-90"><Trash2 size={16} /></button>
+                        <button onClick={() => setEditingTournament(t)} className="w-10 h-10 bg-bg-secondary text-blue-400 hover:bg-blue-400 hover:text-white rounded-xl transition-all flex items-center justify-center active:scale-90"><Edit size={16} /></button>
+                        <button onClick={() => { if(window.confirm('IRREVERSIBLE: Delete this tournament?')) socket?.emit('admin-delete-tournament', t.id); }} className="w-10 h-10 bg-bg-secondary text-red-400 hover:bg-red-400 hover:text-white rounded-xl transition-all flex items-center justify-center active:scale-90"><Trash2 size={16} /></button>
                       </div>
                     </div>
                     
-                    <p className="text-[11px] text-[var(--text-secondary)] font-medium mb-6 line-clamp-3 leading-relaxed">
+                    <p className="text-[11px] text-text-secondary font-medium mb-6 line-clamp-3 leading-relaxed">
                       {t.description || 'Global trading challenge open for all valid users. Join now to claim your share of the prize pool.'}
                     </p>
                     
-                    <div className="mt-auto pt-6 border-t border-[var(--border-color)] space-y-4">
+                    <div className="mt-auto pt-6 border-t border-border-color space-y-4">
                       <div className="flex justify-between items-end">
                         <div>
-                          <p className="text-[9px] font-black text-[var(--text-secondary)] uppercase tracking-[2px] mb-1">Prize Fund</p>
+                          <p className="text-[9px] font-black text-text-secondary uppercase tracking-[2px] mb-1">Prize Fund</p>
                           <p className="text-2xl font-black text-green-500 font-mono tracking-tighter italic">${t.prizeFund.toLocaleString()}</p>
                         </div>
                         <div className="text-right">
-                          <p className="text-[9px] font-black text-[var(--text-secondary)] uppercase tracking-[2px] mb-1 italic">Status</p>
-                          <p className="text-[10px] font-black text-[var(--text-primary)] uppercase tracking-widest">{t.status === 'active' ? 'Ends' : 'Starts'}: {new Date(t.status === 'active' ? t.endTime : t.startTime).toLocaleDateString()}</p>
+                          <p className="text-[9px] font-black text-text-secondary uppercase tracking-[2px] mb-1 italic">Status</p>
+                          <p className="text-[10px] font-black text-text-primary uppercase tracking-widest">{t.status === 'active' ? 'Ends' : 'Starts'}: {new Date(t.status === 'active' ? t.endTime : t.startTime).toLocaleDateString()}</p>
                         </div>
                       </div>
                       
-                      <div className="h-1.5 w-full bg-white/5 rounded-full overflow-hidden shadow-inner">
+                      <div className="h-1.5 w-full bg-bg-secondary rounded-full overflow-hidden shadow-inner">
                         <motion.div 
                           initial={{ width: 0 }}
                           animate={{ width: t.status === 'active' ? '65%' : (t.status === 'finished' ? '100%' : '15%') }}
@@ -3860,8 +3872,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                 </div>
               ))}
               {tournaments.length === 0 && (
-                <div className="col-span-full border-4 border-dashed border-[var(--border-color)] rounded-[48px] py-32 flex flex-col items-center justify-center text-center opacity-30">
-                  <Trophy size={80} strokeWidth={1} className="mb-6 text-[var(--text-secondary)]" />
+                <div className="col-span-full border-4 border-dashed border-border-color rounded-[48px] py-32 flex flex-col items-center justify-center text-center opacity-30">
+                  <Trophy size={80} strokeWidth={1} className="mb-6 text-text-secondary" />
                   <p className="font-black text-2xl uppercase tracking-[5px] mb-2 italic">Zero Arena Data</p>
                   <p className="text-[11px] font-bold uppercase tracking-widest">No active or upcoming tournaments in the database</p>
                 </div>
@@ -3875,7 +3887,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
             <div className="flex justify-between items-center mb-2">
               <div>
                 <h2 className="text-lg font-bold">Deposit Bonus & Promo Codes</h2>
-                <p className="text-[10px] text-[var(--text-secondary)] font-bold uppercase tracking-widest">Manage specific promo codes and default bonus rules</p>
+                <p className="text-[10px] text-text-secondary font-bold uppercase tracking-widest">Manage specific promo codes and default bonus rules</p>
               </div>
               <button 
                 onClick={() => {
@@ -3899,51 +3911,51 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
             </div>
 
             {/* Default Bonus Rules Section */}
-            <div className="bg-[var(--bg-secondary)] rounded-3xl border border-[var(--border-color)] p-6 shadow-xl">
+            <div className="bg-bg-secondary rounded-3xl border border-border-color p-6 shadow-xl">
               <div className="flex items-center gap-3 mb-6">
                 <div className="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center text-blue-500">
                   <ShieldCheck size={20} />
                 </div>
                 <div>
-                  <h3 className="font-bold text-[var(--text-primary)]">Default Bonus Rules</h3>
-                  <p className="text-[10px] text-[var(--text-secondary)] font-bold uppercase tracking-widest">Applied when no promo code is used</p>
+                  <h3 className="font-bold text-text-primary">Default Bonus Rules</h3>
+                  <p className="text-[10px] text-text-secondary font-bold uppercase tracking-widest">Applied when no promo code is used</p>
                 </div>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div className="space-y-2">
-                  <label className="text-[10px] font-black uppercase text-[var(--text-secondary)] ml-1">Min Deposit for Bonus</label>
+                  <label className="text-[10px] font-black uppercase text-text-secondary ml-1">Min Deposit for Bonus</label>
                   <div className="relative">
-                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-[var(--text-secondary)] font-bold">Đ</span>
+                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-text-secondary font-bold">Đ</span>
                     <input 
                       type="number" 
                       value={depositSettings.minDepositForBonus || 50}
                       onChange={(e) => setDepositSettings(prev => ({ ...prev, minDepositForBonus: parseInt(e.target.value) }))}
-                      className="w-full bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-2xl px-8 py-3.5 text-sm font-bold text-[var(--text-primary)] outline-none focus:border-blue-500 transition"
+                      className="w-full bg-bg-primary border border-border-color rounded-2xl px-8 py-3.5 text-sm font-bold text-text-primary outline-none focus:border-blue-500 transition"
                     />
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <label className="text-[10px] font-black uppercase text-[var(--text-secondary)] ml-1">Default Bonus %</label>
+                  <label className="text-[10px] font-black uppercase text-text-secondary ml-1">Default Bonus %</label>
                   <div className="relative">
-                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[var(--text-secondary)] font-bold">%</span>
+                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-text-secondary font-bold">%</span>
                     <input 
                       type="number" 
                       value={depositSettings.bonusPercentage || 10}
                       onChange={(e) => setDepositSettings(prev => ({ ...prev, bonusPercentage: parseInt(e.target.value) }))}
-                      className="w-full bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-2xl px-5 py-3.5 text-sm font-bold text-[var(--text-primary)] outline-none focus:border-blue-500 transition"
+                      className="w-full bg-bg-primary border border-border-color rounded-2xl px-5 py-3.5 text-sm font-bold text-text-primary outline-none focus:border-blue-500 transition"
                     />
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <label className="text-[10px] font-black uppercase text-[var(--text-secondary)] ml-1">Default Turnover (x)</label>
+                  <label className="text-[10px] font-black uppercase text-text-secondary ml-1">Default Turnover (x)</label>
                   <div className="relative">
-                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[var(--text-secondary)] font-bold">x</span>
+                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-text-secondary font-bold">x</span>
                     <input 
                       type="number" 
                       value={depositSettings.turnoverMultiplier || 3}
                       onChange={(e) => setDepositSettings(prev => ({ ...prev, turnoverMultiplier: parseInt(e.target.value) }))}
-                      className="w-full bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-2xl px-5 py-3.5 text-sm font-bold text-[var(--text-primary)] outline-none focus:border-blue-500 transition"
+                      className="w-full bg-bg-primary border border-border-color rounded-2xl px-5 py-3.5 text-sm font-bold text-text-primary outline-none focus:border-blue-500 transition"
                     />
                   </div>
                 </div>
@@ -3964,16 +3976,16 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
 
             <div className="relative py-4">
               <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-[var(--border-color)]"></div>
+                <div className="w-full border-t border-border-color"></div>
               </div>
               <div className="relative flex justify-center">
-                <span className="bg-[var(--bg-primary)] px-4 text-[10px] font-black uppercase tracking-[0.3em] text-[var(--text-secondary)]">Specific Promo Codes</span>
+                <span className="bg-bg-primary px-4 text-[10px] font-black uppercase tracking-[0.3em] text-text-secondary">Specific Promo Codes</span>
               </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {promoCodes.map((promo: any) => (
-                <div key={promo.id} className="bg-[var(--bg-secondary)] rounded-2xl border border-[var(--border-color)] overflow-hidden shadow-xl">
+                <div key={promo.id} className="bg-bg-secondary rounded-2xl border border-border-color overflow-hidden shadow-xl">
                   <div className="p-5">
                     <div className="flex justify-between items-start mb-4">
                       <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 flex items-center justify-center text-emerald-500">
@@ -4007,21 +4019,21 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                         </button>
                       </div>
                     </div>
-                    <h3 className="text-xl font-bold text-[var(--text-primary)] mb-1">{promo.code}</h3>
-                    <p className="text-xs text-[var(--text-secondary)] mb-4">{promo.description}</p>
+                    <h3 className="text-xl font-bold text-text-primary mb-1">{promo.code}</h3>
+                    <p className="text-xs text-text-secondary mb-4">{promo.description}</p>
                     
                     <div className="grid grid-cols-2 gap-3 mb-4">
-                      <div className="bg-[var(--bg-primary)] p-3 rounded-xl border border-[var(--border-color)]">
-                        <div className="text-[9px] text-[var(--text-secondary)] font-bold uppercase mb-0.5">Bonus</div>
+                      <div className="bg-bg-primary p-3 rounded-xl border border-border-color">
+                        <div className="text-[9px] text-text-secondary font-bold uppercase mb-0.5">Bonus</div>
                         <div className="text-sm font-black text-emerald-500">{promo.bonusPercentage}%</div>
                       </div>
-                      <div className="bg-[var(--bg-primary)] p-3 rounded-xl border border-[var(--border-color)]">
-                        <div className="text-[9px] text-[var(--text-secondary)] font-bold uppercase mb-0.5">Turnover</div>
+                      <div className="bg-bg-primary p-3 rounded-xl border border-border-color">
+                        <div className="text-[9px] text-text-secondary font-bold uppercase mb-0.5">Turnover</div>
                         <div className="text-sm font-black text-blue-500">{promo.turnoverMultiplier}x</div>
                       </div>
                     </div>
 
-                    <div className="flex justify-between items-center text-[10px] text-[var(--text-secondary)] font-bold uppercase">
+                    <div className="flex justify-between items-center text-[10px] text-text-secondary font-bold uppercase">
                       <span>Min: Đ{promo.minDeposit}</span>
                       <span>Exp: {new Date(promo.expiresAt).toLocaleDateString()}</span>
                     </div>
@@ -4034,13 +4046,13 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
 
         {tab === 'ANNOUNCEMENTS' && (
           <div className="space-y-6 pb-20 p-4">
-            <div className="flex justify-between items-center bg-[var(--bg-secondary)] p-6 rounded-[24px] border border-[var(--border-color)] shadow-sm">
+            <div className="flex justify-between items-center bg-bg-secondary p-6 rounded-[24px] border border-border-color shadow-sm">
               <div>
                 <h2 className="text-xl font-black flex items-center gap-2 mb-2">
                   <Megaphone size={24} className="text-yellow-500" />
                   Announcements (What's new?)
                 </h2>
-                <p className="text-[10px] text-[var(--text-secondary)] font-bold uppercase tracking-widest">Manage platform announcements shown to users</p>
+                <p className="text-[10px] text-text-secondary font-bold uppercase tracking-widest">Manage platform announcements shown to users</p>
               </div>
               <button 
                 onClick={() => {
@@ -4059,13 +4071,13 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                   initial={{ opacity: 0, y: -20 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -20 }}
-                  className="bg-[var(--bg-secondary)] p-8 rounded-[32px] border border-yellow-500/30 shadow-2xl relative overflow-hidden"
+                  className="bg-bg-secondary p-8 rounded-[32px] border border-yellow-500/30 shadow-2xl relative overflow-hidden"
                 >
                   <div className="flex justify-between items-center mb-8">
                     <h3 className="font-black text-xl uppercase tracking-tighter italic">
                       {editingAnnouncement ? 'Edit Announcement' : 'Setup New Announcement'}
                     </h3>
-                    <button onClick={() => { setIsAddingAnnouncement(false); setEditingAnnouncement(null); }} className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center text-white/40 hover:text-white transition active:scale-90">
+                    <button onClick={() => { setIsAddingAnnouncement(false); setEditingAnnouncement(null); }} className="w-10 h-10 rounded-full bg-bg-secondary flex items-center justify-center text-text-secondary/40 hover:text-text-primary transition active:scale-90">
                       <X size={20} />
                     </button>
                   </div>
@@ -4073,43 +4085,43 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                     <div className="space-y-5">
                       <div>
-                        <label className="text-[10px] font-black text-[var(--text-secondary)] uppercase mb-2 block tracking-widest">Title</label>
+                        <label className="text-[10px] font-black text-text-secondary uppercase mb-2 block tracking-widest">Title</label>
                         <input 
                           type="text" 
                           value={editingAnnouncement ? editingAnnouncement.title : newAnnouncement.title}
                           onChange={(e) => editingAnnouncement ? setEditingAnnouncement({...editingAnnouncement, title: e.target.value}) : setNewAnnouncement({...newAnnouncement, title: e.target.value})}
-                          className="w-full bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-2xl px-5 py-4 text-sm font-bold outline-none focus:border-yellow-500 transition shadow-inner"
+                          className="w-full bg-bg-primary border border-border-color rounded-2xl px-5 py-4 text-sm font-bold outline-none focus:border-yellow-500 transition shadow-inner"
                           placeholder="e.g. New Feature Released"
                         />
                       </div>
                       <div>
-                        <label className="text-[10px] font-black text-[var(--text-secondary)] uppercase mb-2 block tracking-widest">Image URL (Optional)</label>
+                        <label className="text-[10px] font-black text-text-secondary uppercase mb-2 block tracking-widest">Image URL (Optional)</label>
                         <input 
                           type="text" 
                           value={editingAnnouncement ? editingAnnouncement.imageUrl : newAnnouncement.imageUrl}
                           onChange={(e) => editingAnnouncement ? setEditingAnnouncement({...editingAnnouncement, imageUrl: e.target.value}) : setNewAnnouncement({...newAnnouncement, imageUrl: e.target.value})}
-                          className="w-full bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-2xl px-5 py-4 text-sm font-bold outline-none focus:border-yellow-500 transition shadow-inner"
+                          className="w-full bg-bg-primary border border-border-color rounded-2xl px-5 py-4 text-sm font-bold outline-none focus:border-yellow-500 transition shadow-inner"
                           placeholder="https://example.com/banner.jpg"
                         />
                       </div>
                       <div>
-                        <label className="text-[10px] font-black text-[var(--text-secondary)] uppercase mb-2 block tracking-widest">Read More Link (Optional)</label>
+                        <label className="text-[10px] font-black text-text-secondary uppercase mb-2 block tracking-widest">Read More Link (Optional)</label>
                         <input 
                           type="text" 
                           value={editingAnnouncement ? editingAnnouncement.linkUrl : newAnnouncement.linkUrl}
                           onChange={(e) => editingAnnouncement ? setEditingAnnouncement({...editingAnnouncement, linkUrl: e.target.value}) : setNewAnnouncement({...newAnnouncement, linkUrl: e.target.value})}
-                          className="w-full bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-2xl px-5 py-4 text-sm font-bold outline-none focus:border-yellow-500 transition shadow-inner"
+                          className="w-full bg-bg-primary border border-border-color rounded-2xl px-5 py-4 text-sm font-bold outline-none focus:border-yellow-500 transition shadow-inner"
                           placeholder="https://..."
                         />
                       </div>
                     </div>
                     <div className="space-y-5 flex flex-col justify-between">
                       <div className="flex-1 flex flex-col">
-                        <label className="text-[10px] font-black text-[var(--text-secondary)] uppercase mb-2 block tracking-widest">Content / Message (HTML allowed)</label>
+                        <label className="text-[10px] font-black text-text-secondary uppercase mb-2 block tracking-widest">Content / Message (HTML allowed)</label>
                         <textarea 
                           value={editingAnnouncement ? editingAnnouncement.message : newAnnouncement.message}
                           onChange={(e) => editingAnnouncement ? setEditingAnnouncement({...editingAnnouncement, message: e.target.value}) : setNewAnnouncement({...newAnnouncement, message: e.target.value})}
-                          className="w-full flex-1 bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-2xl px-5 py-4 text-sm outline-none focus:border-yellow-500 transition shadow-inner min-h-[120px] resize-none"
+                          className="w-full flex-1 bg-bg-primary border border-border-color rounded-2xl px-5 py-4 text-sm outline-none focus:border-yellow-500 transition shadow-inner min-h-[120px] resize-none"
                           placeholder="Write the announcement description..."
                         />
                       </div>
@@ -4137,29 +4149,29 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {announcements.map((announcement, idx) => (
-                <div key={idx} className="bg-[var(--bg-secondary)] p-5 rounded-2xl border border-[var(--border-color)] flex flex-col gap-3">
+                <div key={idx} className="bg-bg-secondary p-5 rounded-2xl border border-border-color flex flex-col gap-3">
                   <div className="flex gap-4">
                     {announcement.imageUrl ? (
                       <img src={announcement.imageUrl} alt={announcement.title} className="w-16 h-16 object-cover rounded-xl shrink-0" />
                     ) : (
-                      <div className="w-16 h-16 bg-[var(--bg-primary)] rounded-xl shrink-0 flex items-center justify-center text-gray-500">
+                      <div className="w-16 h-16 bg-bg-primary rounded-xl shrink-0 flex items-center justify-center text-gray-500">
                         <Megaphone size={24} />
                       </div>
                     )}
                     <div className="flex-1">
                       <h3 className="font-bold text-lg leading-tight mb-1">{announcement.title}</h3>
-                      <p className="text-xs text-[var(--text-secondary)] line-clamp-2">{announcement.message}</p>
+                      <p className="text-xs text-text-secondary line-clamp-2">{announcement.message}</p>
                     </div>
                   </div>
-                  <div className="flex items-center justify-between mt-2 pt-3 border-t border-[var(--border-color)]">
-                    <span className="text-[10px] text-[var(--text-secondary)]">Likes: {announcement.likes || 0} | Dislikes: {announcement.dislikes || 0}</span>
+                  <div className="flex items-center justify-between mt-2 pt-3 border-t border-border-color">
+                    <span className="text-[10px] text-text-secondary">Likes: {announcement.likes || 0} | Dislikes: {announcement.dislikes || 0}</span>
                     <div className="flex gap-2">
                       <button 
                         onClick={() => {
                           setEditingAnnouncement(announcement);
                           setIsAddingAnnouncement(true);
                         }}
-                        className="p-2 hover:bg-[var(--bg-primary)] rounded-full transition text-[var(--text-secondary)] hover:text-blue-400"
+                        className="p-2 hover:bg-bg-primary rounded-full transition text-text-secondary hover:text-blue-400"
                       >
                         <Edit size={16} />
                       </button>
@@ -4169,7 +4181,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                             socket?.emit('admin-delete-announcement', announcement.id);
                           }
                         }}
-                        className="p-2 hover:bg-[var(--bg-primary)] rounded-full transition text-[var(--text-secondary)] hover:text-red-400"
+                        className="p-2 hover:bg-bg-primary rounded-full transition text-text-secondary hover:text-red-400"
                       >
                         <Trash2 size={16} />
                       </button>
@@ -4178,7 +4190,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                 </div>
               ))}
               {announcements.length === 0 && (
-                <div className="col-span-full p-8 rounded-2xl border border-dashed border-[var(--border-color)] flex flex-col items-center justify-center text-[var(--text-secondary)] text-sm">
+                <div className="col-span-full p-8 rounded-2xl border border-dashed border-border-color flex flex-col items-center justify-center text-text-secondary text-sm">
                   <Megaphone size={32} className="mb-2 opacity-50" />
                   No announcements yet.
                 </div>
@@ -4189,13 +4201,13 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
 
         {tab === 'ADS' && (
           <div className="space-y-6 pb-20 p-4">
-            <div className="flex justify-between items-center bg-[var(--bg-secondary)] p-6 rounded-[24px] border border-[var(--border-color)] shadow-sm">
+            <div className="flex justify-between items-center bg-bg-secondary p-6 rounded-[24px] border border-border-color shadow-sm">
               <div>
                 <h2 className="text-xl font-black flex items-center gap-2 mb-2">
                   <Layout size={24} className="text-red-500" />
-                  Ads & Banners Management
+                  Profile History Management
                 </h2>
-                <p className="text-[10px] text-[var(--text-secondary)] font-bold uppercase tracking-widest">Manage banner ads shown directly in the app</p>
+                <p className="text-[10px] text-text-secondary font-bold uppercase tracking-widest">Manage story-style history entries shown at the top of user profiles</p>
               </div>
               <button 
                 onClick={() => {
@@ -4204,7 +4216,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                 }}
                 className="bg-blue-600 hover:bg-blue-500 text-white px-5 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest flex items-center gap-2 transition shadow-lg shadow-blue-600/20 active:scale-95"
               >
-                <Plus size={16} /> New Ad
+                <Plus size={16} /> New History
               </button>
             </div>
 
@@ -4214,13 +4226,13 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                   initial={{ opacity: 0, y: -20 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -20 }}
-                  className="bg-[var(--bg-secondary)] p-8 rounded-[32px] border border-blue-500/30 shadow-2xl relative overflow-hidden"
+                  className="bg-bg-secondary p-8 rounded-[32px] border border-blue-500/30 shadow-2xl relative overflow-hidden"
                 >
                   <div className="flex justify-between items-center mb-8">
                     <h3 className="font-black text-xl uppercase tracking-tighter italic">
-                      {editingAd ? 'Edit Ad' : 'Setup New Ad'}
+                      {editingAd ? 'Edit History' : 'Setup New History'}
                     </h3>
-                    <button onClick={() => { setIsAddingAd(false); setEditingAd(null); }} className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center text-white/40 hover:text-white transition active:scale-90">
+                    <button onClick={() => { setIsAddingAd(false); setEditingAd(null); }} className="w-10 h-10 rounded-full bg-bg-secondary flex items-center justify-center text-text-secondary/40 hover:text-text-primary transition active:scale-90">
                       <X size={20} />
                     </button>
                   </div>
@@ -4228,53 +4240,53 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                     <div className="space-y-5">
                       <div>
-                        <label className="text-[10px] font-black text-[var(--text-secondary)] uppercase mb-2 block tracking-widest">Title</label>
+                        <label className="text-[10px] font-black text-text-secondary uppercase mb-2 block tracking-widest">Title</label>
                         <input 
                           type="text" 
                           value={editingAd ? editingAd.title : newAd.title}
                           onChange={(e) => editingAd ? setEditingAd({...editingAd, title: e.target.value}) : setNewAd({...newAd, title: e.target.value})}
-                          className="w-full bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-2xl px-5 py-4 text-sm font-bold outline-none focus:border-blue-500 transition shadow-inner"
+                          className="w-full bg-bg-primary border border-border-color rounded-2xl px-5 py-4 text-sm font-bold outline-none focus:border-blue-500 transition shadow-inner"
                           placeholder="e.g. VIP Deposit Bonus"
                         />
                       </div>
                       <div>
-                        <label className="text-[10px] font-black text-[var(--text-secondary)] uppercase mb-2 block tracking-widest">Image URL</label>
+                        <label className="text-[10px] font-black text-text-secondary uppercase mb-2 block tracking-widest">Image URL</label>
                         <input 
                           type="text" 
                           value={editingAd ? editingAd.imageUrl : newAd.imageUrl}
                           onChange={(e) => editingAd ? setEditingAd({...editingAd, imageUrl: e.target.value}) : setNewAd({...newAd, imageUrl: e.target.value})}
-                          className="w-full bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-2xl px-5 py-4 text-sm font-bold outline-none focus:border-blue-500 transition shadow-inner"
+                          className="w-full bg-bg-primary border border-border-color rounded-2xl px-5 py-4 text-sm font-bold outline-none focus:border-blue-500 transition shadow-inner"
                           placeholder="https://example.com/banner.jpg"
                         />
                       </div>
                       <div>
-                        <label className="text-[10px] font-black text-[var(--text-secondary)] uppercase mb-2 block tracking-widest">Link target URL</label>
+                        <label className="text-[10px] font-black text-text-secondary uppercase mb-2 block tracking-widest">Link target URL</label>
                         <input 
                           type="text" 
                           value={editingAd ? editingAd.linkUrl : newAd.linkUrl}
                           onChange={(e) => editingAd ? setEditingAd({...editingAd, linkUrl: e.target.value}) : setNewAd({...newAd, linkUrl: e.target.value})}
-                          className="w-full bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-2xl px-5 py-4 text-sm font-bold outline-none focus:border-blue-500 transition shadow-inner"
+                          className="w-full bg-bg-primary border border-border-color rounded-2xl px-5 py-4 text-sm font-bold outline-none focus:border-blue-500 transition shadow-inner"
                           placeholder="/deposit or https://..."
                         />
                       </div>
                     </div>
                     <div className="space-y-5">
                       <div>
-                        <label className="text-[10px] font-black text-[var(--text-secondary)] uppercase mb-2 block tracking-widest">Display Order</label>
+                        <label className="text-[10px] font-black text-text-secondary uppercase mb-2 block tracking-widest">Display Order</label>
                         <input 
                           type="number" 
                           value={editingAd ? editingAd.displayOrder : newAd.order}
                           onChange={(e) => editingAd ? setEditingAd({...editingAd, displayOrder: parseInt(e.target.value) || 0}) : setNewAd({...newAd, order: parseInt(e.target.value) || 0})}
-                          className="w-full bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-2xl px-5 py-4 text-sm font-bold outline-none focus:border-blue-500 transition shadow-inner"
+                          className="w-full bg-bg-primary border border-border-color rounded-2xl px-5 py-4 text-sm font-bold outline-none focus:border-blue-500 transition shadow-inner"
                           placeholder="0"
                         />
                       </div>
                       <div>
-                        <label className="text-[10px] font-black text-[var(--text-secondary)] uppercase mb-2 block tracking-widest">Status</label>
+                        <label className="text-[10px] font-black text-text-secondary uppercase mb-2 block tracking-widest">Status</label>
                         <select 
                           value={editingAd ? editingAd.status : (newAd as any).status || 'active'}
                           onChange={(e) => editingAd ? setEditingAd({...editingAd, status: e.target.value}) : setNewAd({...newAd, status: e.target.value} as any)}
-                          className="w-full bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-2xl px-5 py-4 text-sm font-bold outline-none focus:border-blue-500 transition shadow-inner"
+                          className="w-full bg-bg-primary border border-border-color rounded-2xl px-5 py-4 text-sm font-bold outline-none focus:border-blue-500 transition shadow-inner"
                         >
                           <option value="active">Active</option>
                           <option value="inactive">Inactive</option>
@@ -4310,13 +4322,13 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
 
             <div className="grid grid-cols-1 gap-4">
               {ads.map((ad, idx) => (
-                <div key={idx} className="bg-[var(--bg-secondary)] p-4 rounded-xl border border-[var(--border-color)] flex items-center gap-4">
+                <div key={idx} className="bg-bg-secondary p-4 rounded-xl border border-border-color flex items-center gap-4">
                   {ad.imageUrl && (
                     <img src={ad.imageUrl} alt={ad.title} className="w-32 h-16 object-cover rounded-lg" />
                   )}
                   <div className="flex-1">
                     <h3 className="font-bold">{ad.title}</h3>
-                    <p className="text-xs text-[var(--text-secondary)]">{ad.linkUrl}</p>
+                    <p className="text-xs text-text-secondary">{ad.linkUrl}</p>
                   </div>
                   <div className="flex gap-2">
                     <span className={`px-2 py-1 text-xs rounded-full ${ad.status === 'active' ? 'bg-green-500/20 text-green-500' : 'bg-red-500/20 text-red-500'}`}>
@@ -4324,18 +4336,18 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                     </span>
                   </div>
                   <div className="flex gap-2">
-                    <button onClick={() => setEditingAd(ad)} className="p-2 cursor-pointer hover:bg-[var(--bg-primary)] rounded-lg">
+                    <button onClick={() => setEditingAd(ad)} className="p-2 cursor-pointer hover:bg-bg-primary rounded-lg">
                       <Edit size={16} className="text-blue-500" />
                     </button>
-                    <button onClick={() => socket?.emit('admin-delete-ad', ad.id)} className="p-2 cursor-pointer hover:bg-[var(--bg-primary)] rounded-lg">
+                    <button onClick={() => socket?.emit('admin-delete-ad', ad.id)} className="p-2 cursor-pointer hover:bg-bg-primary rounded-lg">
                       <Trash2 size={16} className="text-red-500" />
                     </button>
                   </div>
                 </div>
               ))}
               {ads.length === 0 && (
-                <div className="col-span-full border-4 border-dashed border-[var(--border-color)] rounded-[48px] py-32 flex flex-col items-center justify-center text-center opacity-30">
-                  <Layout size={80} strokeWidth={1} className="mb-6 text-[var(--text-secondary)]" />
+                <div className="col-span-full border-4 border-dashed border-border-color rounded-[48px] py-32 flex flex-col items-center justify-center text-center opacity-30">
+                  <Layout size={80} strokeWidth={1} className="mb-6 text-text-secondary" />
                   <p className="font-black text-2xl uppercase tracking-[5px] mb-2 italic">Zero Ads Data</p>
                   <p className="text-[11px] font-bold uppercase tracking-widest">No active ads in the database</p>
                 </div>
@@ -4354,8 +4366,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
             </div>
             
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <div className="bg-[var(--bg-secondary)] p-8 rounded-3xl border border-[var(--border-color)] shadow-xl space-y-6">
-                <h3 className="font-black text-[10px] uppercase tracking-[0.2em] text-[var(--text-secondary)]">Broadcast New Alert</h3>
+              <div className="bg-bg-secondary p-8 rounded-3xl border border-border-color shadow-xl space-y-6">
+                <h3 className="font-black text-[10px] uppercase tracking-[0.2em] text-text-secondary">Broadcast New Alert</h3>
                 
                 <div className="space-y-4">
                   <input 
@@ -4363,27 +4375,27 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                     placeholder="User Email (Leave empty for ALL)"
                     value={newNotification.email}
                     onChange={(e) => setNewNotification(prev => ({ ...prev, email: e.target.value }))}
-                    className="w-full bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-2xl px-5 py-4 text-sm font-bold text-[var(--text-primary)] outline-none focus:border-blue-500 transition shadow-inner"
+                    className="w-full bg-bg-primary border border-border-color rounded-2xl px-5 py-4 text-sm font-bold text-text-primary outline-none focus:border-blue-500 transition shadow-inner"
                   />
                   <input 
                     type="text" 
                     placeholder="Alert Headline"
                     value={newNotification.title}
                     onChange={(e) => setNewNotification(prev => ({ ...prev, title: e.target.value }))}
-                    className="w-full bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-2xl px-5 py-4 text-sm font-bold text-[var(--text-primary)] outline-none focus:border-blue-500 transition shadow-inner"
+                    className="w-full bg-bg-primary border border-border-color rounded-2xl px-5 py-4 text-sm font-bold text-text-primary outline-none focus:border-blue-500 transition shadow-inner"
                   />
                   <textarea 
                     placeholder="Detailed message for all users..."
                     value={newNotification.message}
                     onChange={(e) => setNewNotification(prev => ({ ...prev, message: e.target.value }))}
-                    className="w-full bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-2xl px-5 py-4 text-sm text-[var(--text-primary)] outline-none h-32 resize-none focus:border-blue-500 transition shadow-inner"
+                    className="w-full bg-bg-primary border border-border-color rounded-2xl px-5 py-4 text-sm text-text-primary outline-none h-32 resize-none focus:border-blue-500 transition shadow-inner"
                   />
                   <div className="flex gap-2">
                     {(['INFO', 'SUCCESS', 'WARNING', 'DANGER'] as const).map(type => (
                       <button 
                         key={type}
                         onClick={() => setNewNotification(prev => ({ ...prev, type }))}
-                        className={`flex-1 py-3 rounded-xl text-[9px] font-black transition-all border uppercase tracking-widest ${newNotification.type === type ? 'bg-white text-black border-white shadow-lg' : 'bg-[var(--bg-primary)] text-[var(--text-secondary)] border-[var(--border-color)] hover:border-[var(--text-secondary)]/20'}`}
+                        className={`flex-1 py-3 rounded-xl text-[9px] font-black transition-all border uppercase tracking-widest ${newNotification.type === type ? 'bg-white text-black border-white shadow-lg' : 'bg-bg-primary text-text-secondary border-border-color hover:border-[var(--color-text-secondary)]/20'}`}
                       >
                         {type}
                       </button>
@@ -4399,28 +4411,28 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
               </div>
 
               <div className="space-y-4">
-                <h3 className="font-black text-[10px] uppercase tracking-[0.2em] text-[var(--text-secondary)] ml-2">Broadcast History</h3>
+                <h3 className="font-black text-[10px] uppercase tracking-[0.2em] text-text-secondary ml-2">Broadcast History</h3>
                 <div className="space-y-3 max-h-[600px] overflow-y-auto pr-2 no-scrollbar">
                   {notifications.length === 0 ? (
-                    <div className="bg-[var(--bg-secondary)] rounded-3xl border border-[var(--border-color)] p-12 text-center">
-                      <p className="text-[var(--text-secondary)] text-sm font-bold">No history available.</p>
+                    <div className="bg-bg-secondary rounded-3xl border border-border-color p-12 text-center">
+                      <p className="text-text-secondary text-sm font-bold">No history available.</p>
                     </div>
                   ) : (
                     notifications.slice().reverse().map(n => (
-                      <div key={n.id} className="bg-[var(--bg-secondary)] p-5 rounded-2xl border border-[var(--border-color)] shadow-lg group hover:border-[var(--border-color)] transition-colors">
+                      <div key={n.id} className="bg-bg-secondary p-5 rounded-2xl border border-border-color shadow-lg group hover:border-border-color transition-colors">
                         <div className="flex justify-between items-start mb-2">
                           <div className="flex items-center gap-2">
                             <div className={`w-2 h-2 rounded-full ${n.type === 'DANGER' ? 'bg-red-500' : n.type === 'WARNING' ? 'bg-yellow-500' : n.type === 'SUCCESS' ? 'bg-green-500' : 'bg-blue-500'}`} />
-                            <span className="font-black text-sm text-[var(--text-primary)]">{n.title}</span>
+                            <span className="font-black text-sm text-text-primary">{n.title}</span>
                           </div>
-                          <span className="text-[9px] text-[var(--text-secondary)] font-bold">{new Date(n.timestamp).toLocaleTimeString()}</span>
+                          <span className="text-[9px] text-text-secondary font-bold">{new Date(n.timestamp).toLocaleTimeString()}</span>
                         </div>
-                        <p className="text-xs text-[var(--text-secondary)] leading-relaxed">{n.message}</p>
-                        <div className="mt-3 pt-3 border-t border-[var(--border-color)] flex justify-between items-center">
+                        <p className="text-xs text-text-secondary leading-relaxed">{n.message}</p>
+                        <div className="mt-3 pt-3 border-t border-border-color flex justify-between items-center">
                            <span className={`text-[8px] font-black px-1.5 py-0.5 rounded uppercase tracking-widest ${n.type === 'DANGER' ? 'bg-red-500/10 text-red-500' : n.type === 'WARNING' ? 'bg-yellow-500/10 text-yellow-500' : n.type === 'SUCCESS' ? 'bg-green-500/10 text-green-500' : 'bg-blue-500/10 text-blue-500'}`}>
                             {n.type}
                           </span>
-                          <span className="text-[8px] text-[var(--text-secondary)] font-bold uppercase">{new Date(n.timestamp).toLocaleDateString()}</span>
+                          <span className="text-[8px] text-text-secondary font-bold uppercase">{new Date(n.timestamp).toLocaleDateString()}</span>
                         </div>
                       </div>
                     ))
@@ -4439,9 +4451,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-[var(--bg-secondary)] rounded-3xl border border-[var(--border-color)] w-full max-w-md overflow-hidden shadow-2xl"
+              className="bg-bg-secondary rounded-3xl border border-border-color w-full max-w-md overflow-hidden shadow-2xl"
             >
-              <div className="p-6 border-b border-[var(--border-color)] flex justify-between items-center">
+              <div className="p-6 border-b border-border-color flex justify-between items-center">
                 <h3 className="text-lg font-bold">{editingPromo ? 'Edit Promo Code' : 'Create Promo Code'}</h3>
                 <button onClick={() => {
                   setIsAddingPromo(false);
@@ -4456,66 +4468,66 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                     title: 'Deposit Bonus',
                     icon: 'Gift'
                   });
-                }} className="text-[var(--text-secondary)] hover:text-[var(--text-primary)]"><X size={20} /></button>
+                }} className="text-text-secondary hover:text-text-primary"><X size={20} /></button>
               </div>
               <div className="p-6 space-y-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-1.5">
-                    <label className="text-[10px] font-black uppercase text-[var(--text-secondary)]">Code</label>
+                    <label className="text-[10px] font-black uppercase text-text-secondary">Code</label>
                     <input 
                       type="text" 
                       value={newPromo.code}
                       onChange={(e) => setNewPromo({...newPromo, code: e.target.value.toUpperCase()})}
-                      className="w-full bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-xl px-4 py-2.5 text-sm focus:border-blue-500 outline-none"
+                      className="w-full bg-bg-primary border border-border-color rounded-xl px-4 py-2.5 text-sm focus:border-blue-500 outline-none"
                       placeholder="WELCOME100"
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-[10px] font-black uppercase text-[var(--text-secondary)]">Bonus %</label>
+                    <label className="text-[10px] font-black uppercase text-text-secondary">Bonus %</label>
                     <input 
                       type="number" 
                       value={newPromo.bonusPercentage}
                       onChange={(e) => setNewPromo({...newPromo, bonusPercentage: parseInt(e.target.value)})}
-                      className="w-full bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-xl px-4 py-2.5 text-sm focus:border-blue-500 outline-none"
+                      className="w-full bg-bg-primary border border-border-color rounded-xl px-4 py-2.5 text-sm focus:border-blue-500 outline-none"
                     />
                   </div>
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-[10px] font-black uppercase text-[var(--text-secondary)]">Description</label>
+                  <label className="text-[10px] font-black uppercase text-text-secondary">Description</label>
                   <textarea 
                     value={newPromo.description}
                     onChange={(e) => setNewPromo({...newPromo, description: e.target.value})}
-                    className="w-full bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-xl px-4 py-2.5 text-sm focus:border-blue-500 outline-none h-20 resize-none"
+                    className="w-full bg-bg-primary border border-border-color rounded-xl px-4 py-2.5 text-sm focus:border-blue-500 outline-none h-20 resize-none"
                     placeholder="Get 100% bonus on your first deposit..."
                   />
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-1.5">
-                    <label className="text-[10px] font-black uppercase text-[var(--text-secondary)]">Min Deposit</label>
+                    <label className="text-[10px] font-black uppercase text-text-secondary">Min Deposit</label>
                     <input 
                       type="number" 
                       value={newPromo.minDeposit}
                       onChange={(e) => setNewPromo({...newPromo, minDeposit: parseInt(e.target.value)})}
-                      className="w-full bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-xl px-4 py-2.5 text-sm focus:border-blue-500 outline-none"
+                      className="w-full bg-bg-primary border border-border-color rounded-xl px-4 py-2.5 text-sm focus:border-blue-500 outline-none"
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-[10px] font-black uppercase text-[var(--text-secondary)]">Turnover (x)</label>
+                    <label className="text-[10px] font-black uppercase text-text-secondary">Turnover (x)</label>
                     <input 
                       type="number" 
                       value={newPromo.turnoverMultiplier}
                       onChange={(e) => setNewPromo({...newPromo, turnoverMultiplier: parseInt(e.target.value)})}
-                      className="w-full bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-xl px-4 py-2.5 text-sm focus:border-blue-500 outline-none"
+                      className="w-full bg-bg-primary border border-border-color rounded-xl px-4 py-2.5 text-sm focus:border-blue-500 outline-none"
                     />
                   </div>
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-[10px] font-black uppercase text-[var(--text-secondary)]">Expiry Date</label>
+                  <label className="text-[10px] font-black uppercase text-text-secondary">Expiry Date</label>
                   <input 
                     type="date" 
                     value={newPromo.expiresAt}
                     onChange={(e) => setNewPromo({...newPromo, expiresAt: e.target.value})}
-                    className="w-full bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-xl px-4 py-2.5 text-sm focus:border-blue-500 outline-none"
+                    className="w-full bg-bg-primary border border-border-color rounded-xl px-4 py-2.5 text-sm focus:border-blue-500 outline-none"
                   />
                 </div>
                 <button 
@@ -4563,21 +4575,21 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                 initial={{ opacity: 0, scale: 0.9, y: 20 }}
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.9, y: 20 }}
-                className="relative w-full max-w-lg bg-[var(--bg-secondary)] rounded-3xl border border-[var(--border-color)] shadow-2xl overflow-hidden"
+                className="relative w-full max-w-lg bg-bg-secondary rounded-3xl border border-border-color shadow-2xl overflow-hidden"
               >
-                <div className="p-6 border-b border-[var(--border-color)] flex justify-between items-center bg-gradient-to-r from-blue-600/10 to-purple-600/10">
+                <div className="p-6 border-b border-border-color flex justify-between items-center bg-gradient-to-r from-blue-600/10 to-purple-600/10">
                   <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-black text-xl shadow-lg">
+                    <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-text-primary font-black text-xl shadow-lg">
                       {selectedUser.name ? selectedUser.name[0].toUpperCase() : selectedUser.email[0].toUpperCase()}
                     </div>
                     <div>
-                      <h3 className="font-black text-[var(--text-primary)]">{selectedUser.name || 'Anonymous'}</h3>
-                      <p className="text-[10px] text-[var(--text-secondary)] font-bold uppercase tracking-widest">{selectedUser.email}</p>
+                      <h3 className="font-black text-text-primary">{selectedUser.name || 'Anonymous'}</h3>
+                      <p className="text-[10px] text-text-secondary font-bold uppercase tracking-widest">{selectedUser.email}</p>
                     </div>
                   </div>
                   <button 
                     onClick={() => setIsUserModalOpen(false)}
-                    className="w-10 h-10 rounded-xl bg-[var(--bg-tertiary)] flex items-center justify-center text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition"
+                    className="w-10 h-10 rounded-xl bg-bg-tertiary flex items-center justify-center text-text-secondary hover:text-text-primary transition"
                   >
                     <X size={20} />
                   </button>
@@ -4585,12 +4597,12 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
 
                 <div className="p-6 space-y-6 max-h-[70vh] overflow-y-auto no-scrollbar">
                   {/* Modal Tabs */}
-                  <div className="flex bg-[var(--bg-primary)] rounded-xl p-1 gap-1 overflow-x-auto no-scrollbar">
+                  <div className="flex bg-bg-primary rounded-xl p-1 gap-1 overflow-x-auto no-scrollbar">
                     {['OVERVIEW', 'CONTROLS', 'ACTIVITY'].map(tab => (
                       <button
                         key={tab}
                         onClick={() => setUserModalTab(tab as any)}
-                        className={`flex-1 px-3 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition ${userModalTab === tab ? 'bg-blue-600 text-white' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'}`}
+                        className={`flex-1 px-3 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition ${userModalTab === tab ? 'bg-blue-600 text-white' : 'text-text-secondary hover:text-text-primary'}`}
                       >
                         {tab}
                       </button>
@@ -4601,33 +4613,33 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2">
                       {/* Balance Controls */}
                       <div className="space-y-4">
-                        <h4 className="text-[10px] font-black text-[var(--text-secondary)] uppercase tracking-[0.2em]">Balance Management</h4>
+                        <h4 className="text-[10px] font-black text-text-secondary uppercase tracking-[0.2em]">Balance Management</h4>
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                           <div className="space-y-2">
-                            <label className="text-[10px] font-bold text-[var(--text-secondary)] uppercase">Real Balance (Đ)</label>
+                            <label className="text-[10px] font-bold text-text-secondary uppercase">Real Balance (Đ)</label>
                             <input 
                               type="number" 
                               defaultValue={selectedUser.balance}
                               onBlur={(e) => handleUpdateUserBalance(selectedUser.email, parseFloat(e.target.value), 'REAL')}
-                              className="w-full bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-xl px-4 py-2 text-sm font-bold focus:border-blue-500 outline-none transition"
+                              className="w-full bg-bg-primary border border-border-color rounded-xl px-4 py-2 text-sm font-bold focus:border-blue-500 outline-none transition"
                             />
                           </div>
                           <div className="space-y-2">
-                            <label className="text-[10px] font-bold text-[var(--text-secondary)] uppercase">Bonus Balance (Đ)</label>
+                            <label className="text-[10px] font-bold text-text-secondary uppercase">Bonus Balance (Đ)</label>
                             <input 
                               type="number" 
                               defaultValue={selectedUser.bonus_balance || 0}
                               onBlur={(e) => handleUpdateUserBalance(selectedUser.email, parseFloat(e.target.value), 'BONUS')}
-                              className="w-full bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-xl px-4 py-2 text-sm font-bold focus:border-blue-500 outline-none transition"
+                              className="w-full bg-bg-primary border border-border-color rounded-xl px-4 py-2 text-sm font-bold focus:border-blue-500 outline-none transition"
                             />
                           </div>
                           <div className="space-y-2">
-                            <label className="text-[10px] font-bold text-[var(--text-secondary)] uppercase">Demo Balance (Đ)</label>
+                            <label className="text-[10px] font-bold text-text-secondary uppercase">Demo Balance (Đ)</label>
                             <input 
                               type="number" 
                               defaultValue={selectedUser.demoBalance}
                               onBlur={(e) => handleUpdateUserBalance(selectedUser.email, parseFloat(e.target.value), 'DEMO')}
-                              className="w-full bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-xl px-4 py-2 text-sm font-bold focus:border-blue-500 outline-none transition"
+                              className="w-full bg-bg-primary border border-border-color rounded-xl px-4 py-2 text-sm font-bold focus:border-blue-500 outline-none transition"
                             />
                           </div>
                         </div>
@@ -4635,7 +4647,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
 
                       {/* Status Controls */}
                       <div className="space-y-4">
-                        <h4 className="text-[10px] font-black text-[var(--text-secondary)] uppercase tracking-[0.2em]">Account Status</h4>
+                        <h4 className="text-[10px] font-black text-text-secondary uppercase tracking-[0.2em]">Account Status</h4>
                         <div className="flex gap-3">
                           <button 
                             onClick={() => handleUpdateUserStatus(selectedUser.email, 'ACTIVE')}
@@ -4654,10 +4666,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
 
                       {/* Account Details */}
                       <div className="space-y-4">
-                        <h4 className="text-[10px] font-black text-[var(--text-secondary)] uppercase tracking-[0.2em]">Account Info</h4>
-                        <div className="bg-[var(--bg-primary)] rounded-2xl p-4 space-y-3 border border-[var(--border-color)]">
+                        <h4 className="text-[10px] font-black text-text-secondary uppercase tracking-[0.2em]">Account Info</h4>
+                        <div className="bg-bg-primary rounded-2xl p-4 space-y-3 border border-border-color">
                           <div className="flex justify-between items-center">
-                            <span className="text-[10px] font-bold text-[var(--text-secondary)] uppercase">KYC Status</span>
+                            <span className="text-[10px] font-bold text-text-secondary uppercase">KYC Status</span>
                             <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded ${
                               selectedUser.kycStatus === 'APPROVED' ? 'bg-green-500/20 text-green-500' :
                               selectedUser.kycStatus === 'REJECTED' ? 'bg-red-500/20 text-red-500' :
@@ -4667,14 +4679,14 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                             </span>
                           </div>
                           <div className="flex justify-between items-center">
-                            <span className="text-[10px] font-bold text-[var(--text-secondary)] uppercase">Joined On</span>
-                            <span className="text-[10px] font-mono text-[var(--text-primary)]">
+                            <span className="text-[10px] font-bold text-text-secondary uppercase">Joined On</span>
+                            <span className="text-[10px] font-mono text-text-primary">
                               {selectedUser.createdAt ? new Date(selectedUser.createdAt).toLocaleDateString() : 'N/A'}
                             </span>
                           </div>
                           <div className="flex justify-between items-center">
-                            <span className="text-[10px] font-bold text-[var(--text-secondary)] uppercase">Last Login</span>
-                            <span className="text-[10px] font-mono text-[var(--text-primary)]">
+                            <span className="text-[10px] font-bold text-text-secondary uppercase">Last Login</span>
+                            <span className="text-[10px] font-mono text-text-primary">
                               {selectedUser.lastLogin ? new Date(selectedUser.lastLogin).toLocaleString() : 'N/A'}
                             </span>
                           </div>
@@ -4687,24 +4699,24 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2">
                       {/* Add/Deduct Balance */}
                       <div className="space-y-4">
-                        <h4 className="text-[10px] font-black text-[var(--text-secondary)] uppercase tracking-[0.2em]">Add/Deduct Balance</h4>
-                        <div className="bg-[var(--bg-primary)] rounded-2xl p-4 space-y-4 border border-[var(--border-color)]">
+                        <h4 className="text-[10px] font-black text-text-secondary uppercase tracking-[0.2em]">Add/Deduct Balance</h4>
+                        <div className="bg-bg-primary rounded-2xl p-4 space-y-4 border border-border-color">
                           <div className="grid grid-cols-2 gap-4">
                             <div className="space-y-2">
-                              <label className="text-[10px] font-bold text-[var(--text-secondary)] uppercase">Amount</label>
+                              <label className="text-[10px] font-bold text-text-secondary uppercase">Amount</label>
                               <input 
                                 type="number" 
                                 value={userControlForm.amount}
                                 onChange={(e) => setUserControlForm(prev => ({ ...prev, amount: parseFloat(e.target.value) || 0 }))}
-                                className="w-full bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-xl px-4 py-2 text-sm font-bold focus:border-blue-500 outline-none transition"
+                                className="w-full bg-bg-secondary border border-border-color rounded-xl px-4 py-2 text-sm font-bold focus:border-blue-500 outline-none transition"
                               />
                             </div>
                             <div className="space-y-2">
-                              <label className="text-[10px] font-bold text-[var(--text-secondary)] uppercase">Type</label>
+                              <label className="text-[10px] font-bold text-text-secondary uppercase">Type</label>
                               <select 
                                 value={userControlForm.type}
                                 onChange={(e) => setUserControlForm(prev => ({ ...prev, type: e.target.value as 'REAL' | 'DEMO' | 'BONUS' }))}
-                                className="w-full bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-xl px-4 py-2 text-sm font-bold focus:border-blue-500 outline-none transition"
+                                className="w-full bg-bg-secondary border border-border-color rounded-xl px-4 py-2 text-sm font-bold focus:border-blue-500 outline-none transition"
                               >
                                 <option value="REAL">Real Balance</option>
                                 <option value="BONUS">Bonus Balance</option>
@@ -4713,13 +4725,13 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                             </div>
                           </div>
                           <div className="space-y-2">
-                            <label className="text-[10px] font-bold text-[var(--text-secondary)] uppercase">Reason (Optional)</label>
+                            <label className="text-[10px] font-bold text-text-secondary uppercase">Reason (Optional)</label>
                             <input 
                               type="text" 
                               placeholder="e.g., Bonus, Refund, Penalty"
                               value={userControlForm.reason}
                               onChange={(e) => setUserControlForm(prev => ({ ...prev, reason: e.target.value }))}
-                              className="w-full bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-xl px-4 py-2 text-sm focus:border-blue-500 outline-none transition"
+                              className="w-full bg-bg-secondary border border-border-color rounded-xl px-4 py-2 text-sm focus:border-blue-500 outline-none transition"
                             />
                           </div>
                           <div className="flex gap-3">
@@ -4747,35 +4759,35 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
 
                       {/* User Details */}
                       <div className="space-y-4">
-                        <h4 className="text-[10px] font-black text-[var(--text-secondary)] uppercase tracking-[0.2em]">Edit Details</h4>
-                        <div className="bg-[var(--bg-primary)] rounded-2xl p-4 space-y-4 border border-[var(--border-color)]">
+                        <h4 className="text-[10px] font-black text-text-secondary uppercase tracking-[0.2em]">Edit Details</h4>
+                        <div className="bg-bg-primary rounded-2xl p-4 space-y-4 border border-border-color">
                           <div className="space-y-2">
-                            <label className="text-[10px] font-bold text-[var(--text-secondary)] uppercase">Full Name</label>
+                            <label className="text-[10px] font-bold text-text-secondary uppercase">Full Name</label>
                             <input 
                               type="text" 
                               defaultValue={selectedUser.name}
                               onBlur={(e) => handleUpdateUserDetails(selectedUser.email, e.target.value, selectedUser.isBoosted, selectedUser.allowed_withdrawal_methods)}
-                              className="w-full bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-xl px-4 py-2 text-sm focus:border-blue-500 outline-none transition"
+                              className="w-full bg-bg-secondary border border-border-color rounded-xl px-4 py-2 text-sm focus:border-blue-500 outline-none transition"
                             />
                           </div>
                           <div className="space-y-2">
-                            <label className="text-[10px] font-bold text-[var(--text-secondary)] uppercase">Allowed Withdrawal Methods (Comma separated)</label>
+                            <label className="text-[10px] font-bold text-text-secondary uppercase">Allowed Withdrawal Methods (Comma separated)</label>
                             <input 
                               type="text" 
                               defaultValue={selectedUser.allowed_withdrawal_methods || ''}
                               placeholder="e.g., bkash, nagad, binance"
                               onBlur={(e) => handleUpdateUserDetails(selectedUser.email, selectedUser.name, selectedUser.isBoosted, e.target.value)}
-                              className="w-full bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-xl px-4 py-2 text-sm focus:border-blue-500 outline-none transition"
+                              className="w-full bg-bg-secondary border border-border-color rounded-xl px-4 py-2 text-sm focus:border-blue-500 outline-none transition"
                             />
                           </div>
-                          <div className="flex items-center justify-between p-3 bg-[var(--bg-secondary)] rounded-xl border border-[var(--border-color)]">
+                          <div className="flex items-center justify-between p-3 bg-bg-secondary rounded-xl border border-border-color">
                             <div>
-                              <div className="text-sm font-bold text-[var(--text-primary)]">Boost Status</div>
-                              <div className="text-[10px] text-[var(--text-secondary)]">Give user priority support & fast withdrawals</div>
+                              <div className="text-sm font-bold text-text-primary">Boost Status</div>
+                              <div className="text-[10px] text-text-secondary">Give user priority support & fast withdrawals</div>
                             </div>
                             <button 
                               onClick={() => handleUpdateUserDetails(selectedUser.email, selectedUser.name, !selectedUser.isBoosted, selectedUser.allowed_withdrawal_methods)}
-                              className={`w-12 h-6 rounded-full transition-colors relative ${selectedUser.isBoosted ? 'bg-blue-500' : 'bg-[var(--border-color)]'}`}
+                              className={`w-12 h-6 rounded-full transition-colors relative ${selectedUser.isBoosted ? 'bg-blue-500' : 'bg-[var(--color-border-color)]'}`}
                             >
                               <div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-all ${selectedUser.isBoosted ? 'left-7' : 'left-1'}`} />
                             </button>
@@ -4785,25 +4797,25 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
 
                       {/* Turnover Control */}
                       <div className="space-y-4">
-                        <h4 className="text-[10px] font-black text-[var(--text-secondary)] uppercase tracking-[0.2em]">Turnover Control</h4>
-                        <div className="bg-[var(--bg-primary)] rounded-2xl p-4 space-y-4 border border-[var(--border-color)]">
+                        <h4 className="text-[10px] font-black text-text-secondary uppercase tracking-[0.2em]">Turnover Control</h4>
+                        <div className="bg-bg-primary rounded-2xl p-4 space-y-4 border border-border-color">
                           <div className="grid grid-cols-2 gap-4">
                             <div className="space-y-2">
-                              <label className="text-[10px] font-bold text-[var(--text-secondary)] uppercase">Required (Đ)</label>
+                              <label className="text-[10px] font-bold text-text-secondary uppercase">Required (Đ)</label>
                               <input 
                                 type="number" 
                                 defaultValue={selectedUser.turnover_required || 0}
                                 onBlur={(e) => handleUpdateUserTurnover(selectedUser.email, parseFloat(e.target.value), selectedUser.turnover_achieved || 0)}
-                                className="w-full bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-xl px-4 py-2 text-sm font-bold focus:border-blue-500 outline-none transition"
+                                className="w-full bg-bg-secondary border border-border-color rounded-xl px-4 py-2 text-sm font-bold focus:border-blue-500 outline-none transition"
                               />
                             </div>
                             <div className="space-y-2">
-                              <label className="text-[10px] font-bold text-[var(--text-secondary)] uppercase">Achieved (Đ)</label>
+                              <label className="text-[10px] font-bold text-text-secondary uppercase">Achieved (Đ)</label>
                               <input 
                                 type="number" 
                                 defaultValue={selectedUser.turnover_achieved || 0}
                                 onBlur={(e) => handleUpdateUserTurnover(selectedUser.email, selectedUser.turnover_required || 0, parseFloat(e.target.value))}
-                                className="w-full bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-xl px-4 py-2 text-sm font-bold focus:border-blue-500 outline-none transition"
+                                className="w-full bg-bg-secondary border border-border-color rounded-xl px-4 py-2 text-sm font-bold focus:border-blue-500 outline-none transition"
                               />
                             </div>
                           </div>
@@ -4812,7 +4824,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
 
                       {/* KYC Control */}
                       <div className="space-y-4">
-                        <h4 className="text-[10px] font-black text-[var(--text-secondary)] uppercase tracking-[0.2em]">Manual KYC Control</h4>
+                        <h4 className="text-[10px] font-black text-text-secondary uppercase tracking-[0.2em]">Manual KYC Control</h4>
                         <div className="flex gap-2">
                           <button 
                             onClick={() => handleUpdateUserKyc(selectedUser.email, 'APPROVED')}
@@ -4837,26 +4849,26 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
 
                       {/* Send Notification */}
                       <div className="space-y-4">
-                        <h4 className="text-[10px] font-black text-[var(--text-secondary)] uppercase tracking-[0.2em]">Send Direct Message</h4>
-                        <div className="bg-[var(--bg-primary)] rounded-2xl p-4 space-y-4 border border-[var(--border-color)]">
+                        <h4 className="text-[10px] font-black text-text-secondary uppercase tracking-[0.2em]">Send Direct Message</h4>
+                        <div className="bg-bg-primary rounded-2xl p-4 space-y-4 border border-border-color">
                           <div className="space-y-2">
-                            <label className="text-[10px] font-bold text-[var(--text-secondary)] uppercase">Title</label>
+                            <label className="text-[10px] font-bold text-text-secondary uppercase">Title</label>
                             <input 
                               type="text" 
                               value={userControlForm.notifTitle}
                               onChange={(e) => setUserControlForm(prev => ({ ...prev, notifTitle: e.target.value }))}
                               placeholder="Message Title"
-                              className="w-full bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-xl px-4 py-2 text-sm focus:border-blue-500 outline-none transition"
+                              className="w-full bg-bg-secondary border border-border-color rounded-xl px-4 py-2 text-sm focus:border-blue-500 outline-none transition"
                             />
                           </div>
                           <div className="space-y-2">
-                            <label className="text-[10px] font-bold text-[var(--text-secondary)] uppercase">Message</label>
+                            <label className="text-[10px] font-bold text-text-secondary uppercase">Message</label>
                             <textarea 
                               value={userControlForm.notifMessage}
                               onChange={(e) => setUserControlForm(prev => ({ ...prev, notifMessage: e.target.value }))}
                               placeholder="Type your message here..."
                               rows={3}
-                              className="w-full bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-xl px-4 py-2 text-sm focus:border-blue-500 outline-none transition resize-none"
+                              className="w-full bg-bg-secondary border border-border-color rounded-xl px-4 py-2 text-sm focus:border-blue-500 outline-none transition resize-none"
                             />
                           </div>
                           <button 
@@ -4878,15 +4890,15 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
 
                   {userModalTab === 'ACTIVITY' && (
                     <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2">
-                      <h4 className="text-[10px] font-black text-[var(--text-secondary)] uppercase tracking-[0.2em]">User Activity</h4>
+                      <h4 className="text-[10px] font-black text-text-secondary uppercase tracking-[0.2em]">User Activity</h4>
                       
                       {/* Tabs */}
-                      <div className="flex bg-[var(--bg-primary)] rounded-xl p-1 gap-1 overflow-x-auto no-scrollbar">
+                      <div className="flex bg-bg-primary rounded-xl p-1 gap-1 overflow-x-auto no-scrollbar">
                         {['ACTIVITY', 'TRADES', 'DEPOSITS', 'WITHDRAWALS', 'KYC'].map(tab => (
                           <button
                             key={tab}
                             onClick={() => setActiveLogTab(tab as any)}
-                            className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition ${activeLogTab === tab ? 'bg-blue-600 text-white' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'}`}
+                            className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition ${activeLogTab === tab ? 'bg-blue-600 text-white' : 'text-text-secondary hover:text-text-primary'}`}
                           >
                             {tab}
                           </button>
@@ -4900,32 +4912,42 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                               placeholder="Filter logs..."
                               value={logFilter}
                               onChange={(e) => setLogFilter(e.target.value)}
-                              className="flex-1 bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-xl px-3 py-2 text-xs text-[var(--text-primary)]"
+                              className="flex-1 bg-bg-primary border border-border-color rounded-xl px-3 py-2 text-xs text-text-primary"
                           />
                           <button 
                               onClick={() => setLogSort(prev => prev === 'NEWEST' ? 'OLDEST' : 'NEWEST')}
-                              className="bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-xl px-3 py-2 text-xs text-[var(--text-primary)]"
+                              className="bg-bg-primary border border-border-color rounded-xl px-3 py-2 text-xs text-text-primary"
                           >
                               {logSort}
                           </button>
                       </div>
 
-                      <div className="bg-[var(--bg-primary)] rounded-2xl overflow-hidden border border-[var(--border-color)]">
+                      <div className="bg-bg-primary rounded-2xl overflow-hidden border border-border-color">
                         <div className="max-h-[300px] overflow-y-auto">
                           {isLoadingLogs ? (
-                            <div className="p-8 flex flex-col items-center justify-center gap-3">
-                              <RefreshCw className="animate-spin text-blue-500" size={24} />
-                              <span className="text-[10px] font-black text-[var(--text-secondary)] uppercase tracking-widest">Loading Logs...</span>
+                            <div className="p-12 flex flex-col items-center justify-center bg-[#1a1c1e] relative overflow-hidden">
+                              <div className="relative">
+                                {/* Static track */}
+                                <div className="absolute inset-0 rounded-full border-2 border-border-color" />
+                                
+                                {/* Animated Gradient Spinner */}
+                                <motion.div
+                                  animate={{ rotate: 360 }}
+                                  transition={{ duration: 0.8, repeat: Infinity, ease: "linear" }}
+                                  className="w-10 h-10 rounded-full border-2 border-transparent border-t-blue-500 border-r-blue-500/30 shadow-[0_0_15px_rgba(59,130,246,0.2)]"
+                                />
+                              </div>
+                              <span className="mt-4 text-[9px] font-black text-blue-400 uppercase tracking-[0.2em] animate-pulse">Synchronizing Logs</span>
                             </div>
                           ) : userData ? (
-                            <div className="divide-y divide-[var(--border-color)]">
+                            <div className="divide-y divide-[var(--color-border-color)]">
                               {/* Render content based on activeLogTab */}
                               {renderLogs()}
                             </div>
                           ) : (
                             <div className="p-8 text-center">
-                              <Activity className="mx-auto text-[var(--text-secondary)] mb-2 opacity-20" size={24} />
-                              <p className="text-[10px] font-bold text-[var(--text-secondary)] uppercase">No logs found</p>
+                              <Activity className="mx-auto text-text-secondary mb-2 opacity-20" size={24} />
+                              <p className="text-[10px] font-bold text-text-secondary uppercase">No logs found</p>
                             </div>
                           )}
                         </div>
@@ -4934,10 +4956,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                   )}
                 </div>
 
-                <div className="p-6 bg-[var(--bg-tertiary)] flex gap-3">
+                <div className="p-6 bg-bg-tertiary flex gap-3">
                   <button 
                     onClick={() => setIsUserModalOpen(false)}
-                    className="flex-1 py-4 rounded-2xl font-black text-xs uppercase tracking-widest text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition"
+                    className="flex-1 py-4 rounded-2xl font-black text-xs uppercase tracking-widest text-text-secondary hover:text-text-primary transition"
                   >
                     Close
                   </button>
@@ -4977,7 +4999,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
               <img src={selectedImage} className="w-full h-full object-contain" />
               <button 
                 onClick={() => setSelectedImage(null)}
-                className="absolute top-4 right-4 w-10 h-10 bg-black/50 backdrop-blur-md text-white rounded-full flex items-center justify-center hover:bg-black/70 transition"
+                className="absolute top-4 right-4 w-10 h-10 bg-black/50 backdrop-blur-md text-text-primary rounded-full flex items-center justify-center hover:bg-black/70 transition"
               >
                 <X size={20} />
               </button>

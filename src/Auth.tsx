@@ -5,7 +5,8 @@ import {
   signInWithPopup, 
   GoogleAuthProvider,
   FacebookAuthProvider,
-  sendPasswordResetEmail
+  sendPasswordResetEmail,
+  sendEmailVerification
 } from 'firebase/auth';
 import { auth, db, handleFirestoreError, OperationType } from './firebase';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
@@ -17,6 +18,8 @@ import {
   LockKeyhole, Globe2, Shield, CreditCard, Activity
 } from 'lucide-react';
 import { cn } from './utils';
+import { useTranslation } from './i18n';
+import EmailVerificationSheet from './EmailVerificationSheet';
 
 const COUNTRIES = [
   { code: 'US', name: 'United States', currency: 'USD', symbol: '$' },
@@ -38,6 +41,7 @@ interface AuthProps {
 type AuthView = 'login' | 'signup' | 'forgot-password';
 
 export default function Auth({ onSuccess }: AuthProps) {
+  const { t } = useTranslation();
   const [view, setView] = useState<AuthView>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -59,11 +63,11 @@ export default function Auth({ onSuccess }: AuthProps) {
     if (referralToUse) {
       setReferralCode(referralToUse);
       if (refCodeFromUrl) localStorage.setItem('onyx_referral_code', refCodeFromUrl);
-      if (view === 'login') setView('signup'); // Auto-switch to signup if ref code is present
+      setView('signup'); // Ensure it switches to signup
     }
 
-    // Check if URL is /register
-    if (window.location.pathname === '/register') {
+    // Check if URL is /register or /signup
+    if (window.location.pathname === '/register' || window.location.pathname === '/signup') {
       setView('signup');
     }
   }, []);
@@ -72,7 +76,9 @@ export default function Auth({ onSuccess }: AuthProps) {
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
   const [acceptedTerms, setAcceptedTerms] = useState(false);
+  const [isVerificationOpen, setIsVerificationOpen] = useState(false);
   const [passwordStrength, setPasswordStrength] = useState(0);
+
   const [liveActivity, setLiveActivity] = useState([
     { id: 1, user: 'Alex M.', action: 'Profit', amount: 450.20, asset: 'BTC/USD', time: 'Just now' },
     { id: 2, user: 'Sarah K.', action: 'Profit', amount: 120.50, asset: 'ETH/USD', time: '2m ago' },
@@ -129,6 +135,96 @@ export default function Auth({ onSuccess }: AuthProps) {
     }
   }, [password]);
 
+  const createFirestoreProfile = async (user: any) => {
+    const newUserReferralCode = Math.floor(1000000 + Math.random() * 9000000).toString();
+    try {
+      let finalReferredByUid = null;
+      if (referralCode) {
+        try {
+          const { collection, query, where, getDocs, limit, addDoc } = await import('firebase/firestore');
+          const q = query(collection(db, 'users'), where('referralCode', '==', referralCode), limit(1));
+          const snapshot = await getDocs(q);
+          if (!snapshot.empty) {
+            finalReferredByUid = snapshot.docs[0].id;
+          }
+        } catch(e) {
+          console.error("Error fetching referrer:", e);
+        }
+      }
+
+      await setDoc(doc(db, 'users', user.uid), {
+        uid: user.uid,
+        email: user.email,
+        name: name || user.displayName || 'Operative',
+        balance: 0,
+        demoBalance: 10000,
+        bonusBalance: 0,
+        kycStatus: 'NOT_SUBMITTED',
+        referralCode: newUserReferralCode,
+        referredBy: finalReferredByUid || referralCode || null,
+        createdAt: Date.now(),
+        country: country,
+        currency: selectedCountryData.currency,
+        currencySymbol: selectedCountryData.symbol,
+        role: 'user',
+        preferences: {
+          language: 'en',
+          theme: 'onyx',
+          chartType: 'candles',
+          timeframe: '1m'
+        },
+        extraAccounts: []
+      });
+
+      if (finalReferredByUid) {
+        try {
+          const { collection, addDoc } = await import('firebase/firestore');
+          await addDoc(collection(db, 'referrals'), {
+            referrerId: finalReferredByUid,
+            referredUserId: user.uid,
+            referredUserName: name || user.displayName || 'Operative',
+            referredUserEmail: user.email,
+            status: 'REGISTERED',
+            earnings: 0,
+            timestamp: Date.now()
+          });
+        } catch(e) {
+          console.error("Error creating referral record:", e);
+        }
+      }
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, `users/${user.uid}`);
+    }
+  };
+
+  const handleRegister = async () => {
+    setLoading(true);
+    setError('');
+    try {
+        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+        const user = userCredential.user;
+        
+        // Send actual verification email via Firebase
+        await sendEmailVerification(user);
+        
+        // Create user profile in Firestore
+        await createFirestoreProfile(user);
+        
+        // Open the wait screen
+        setIsVerificationOpen(true);
+    } catch (err: any) {
+        console.error('Auth error:', err);
+        let message = err.message;
+        if (err.code === 'auth/email-already-in-use') {
+            message = 'An account already exists with this email. Please login instead.';
+            setView('login');
+        }
+        setError(message || 'An unexpected error occurred.');
+    } finally {
+        setLoading(false);
+    }
+  };
+
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
@@ -162,42 +258,7 @@ export default function Auth({ onSuccess }: AuthProps) {
         await signInWithEmailAndPassword(auth, email, password);
         onSuccess();
       } else if (view === 'signup') {
-        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-        const user = userCredential.user;
-        
-        // Generate a unique referral code for the new user
-        const newUserReferralCode = Math.random().toString(36).substring(2, 8).toUpperCase();
-        
-        // Create user profile in Firestore
-        try {
-          await setDoc(doc(db, 'users', user.uid), {
-            uid: user.uid,
-            email: user.email,
-            name: name || user.displayName || 'Operative',
-            balance: 0,
-            demoBalance: 10000,
-            bonusBalance: 0,
-            kycStatus: 'NOT_SUBMITTED',
-            referralCode: newUserReferralCode,
-            referredBy: referralCode || null,
-            createdAt: Date.now(),
-            country: country,
-            currency: selectedCountryData.currency,
-            currencySymbol: selectedCountryData.symbol,
-            role: 'user',
-            preferences: {
-              language: 'en',
-              theme: 'onyx',
-              chartType: 'candles',
-              timeframe: '1m'
-            },
-            extraAccounts: []
-          });
-        } catch (error) {
-          handleFirestoreError(error, OperationType.WRITE, `users/${user.uid}`);
-        }
-        
-        onSuccess();
+        await handleRegister();
       } else if (view === 'forgot-password') {
         await sendPasswordResetEmail(auth, email);
         setSuccess('If an account exists for this email, you will receive reset instructions.');
@@ -209,19 +270,16 @@ export default function Auth({ onSuccess }: AuthProps) {
       if (err.code === 'auth/wrong-password') message = 'Incorrect password.';
       if (err.code === 'auth/email-already-in-use') {
         message = 'An account already exists with this email. Please login instead.';
-        setView('login'); // Automatically switch to login view
-      }
-      if (err.code === 'auth/unauthorized-domain') {
-        message = 'This domain is not authorized for authentication. Please add it to your Firebase Console (Authentication > Settings > Authorized domains).';
-      }
-      if (err.code === 'auth/operation-not-allowed') {
-        message = 'Authentication provider (Google/Email) is not enabled in Firebase Console. Please enable it in Authentication > Sign-in method.';
+        setView('login');
       }
       setError(message || 'An unexpected error occurred.');
     } finally {
-      setLoading(false);
+      if(view !== 'signup') {
+        setLoading(false);
+      }
     }
   };
+
 
   const handleGoogleSignIn = async () => {
     setLoading(true);
@@ -231,7 +289,6 @@ export default function Auth({ onSuccess }: AuthProps) {
       const result = await signInWithPopup(auth, provider);
       const user = result.user;
       
-      // Check if user exists in Firestore
       let userDoc;
       try {
         userDoc = await getDoc(doc(db, 'users', user.uid));
@@ -240,24 +297,7 @@ export default function Auth({ onSuccess }: AuthProps) {
       }
 
       if (userDoc && !userDoc.exists()) {
-        // Create user profile if it doesn't exist
-        try {
-          await setDoc(doc(db, 'users', user.uid), {
-            uid: user.uid,
-            email: user.email,
-            name: user.displayName || 'Operative',
-            balance: 0,
-            demoBalance: 10000,
-            createdAt: Date.now(),
-            country: 'US', // Default
-            currency: 'USD',
-            currencySymbol: '$',
-            referralCode: Math.random().toString(36).substring(2, 8).toUpperCase(),
-            referredBy: referralCode || null
-          });
-        } catch (error) {
-          handleFirestoreError(error, OperationType.WRITE, `users/${user.uid}`);
-        }
+        await createFirestoreProfile(user);
       }
       onSuccess();
     } catch (err: any) {
@@ -283,7 +323,6 @@ export default function Auth({ onSuccess }: AuthProps) {
       const result = await signInWithPopup(auth, provider);
       const user = result.user;
       
-      // Check if user exists in Firestore
       let userDoc;
       try {
         userDoc = await getDoc(doc(db, 'users', user.uid));
@@ -292,23 +331,7 @@ export default function Auth({ onSuccess }: AuthProps) {
       }
 
       if (userDoc && !userDoc.exists()) {
-        try {
-          await setDoc(doc(db, 'users', user.uid), {
-            uid: user.uid,
-            email: user.email || `${user.uid}@facebook.auth`,
-            name: user.displayName || 'Operative',
-            balance: 0,
-            demoBalance: 10000,
-            createdAt: Date.now(),
-            country: 'US', // Default
-            currency: 'USD',
-            currencySymbol: '$',
-            referralCode: Math.random().toString(36).substring(2, 8).toUpperCase(),
-            referredBy: referralCode || null
-          });
-        } catch (error) {
-          handleFirestoreError(error, OperationType.WRITE, `users/${user.uid}`);
-        }
+        await createFirestoreProfile(user);
       }
       onSuccess();
     } catch (err: any) {
@@ -327,10 +350,10 @@ export default function Auth({ onSuccess }: AuthProps) {
     <div className="min-h-[100dvh] bg-[#0a0a0a] flex items-center justify-center p-4 font-sans selection:bg-[#22c55e]/30">
       <div className="w-full max-w-[400px]">
         <div className="flex items-center justify-between mb-6">
-          <h1 className="text-[28px] font-bold text-white tracking-tight">Authorization</h1>
+          <h1 className="text-[28px] font-bold text-white tracking-tight">{t('auth.authorization')}</h1>
         </div>
 
-        <div className="bg-[#151515] border border-white/5 rounded-3xl p-5 shadow-2xl">
+        <div className="bg-[#151515] border border-border-color rounded-3xl p-5 shadow-2xl">
            <div className="bg-[#2a2a2a] rounded-xl flex p-1 mb-6">
               <button 
                 type="button"
@@ -339,10 +362,10 @@ export default function Auth({ onSuccess }: AuthProps) {
                   "flex-1 py-3 text-sm font-bold rounded-lg transition-colors",
                   view === 'signup' 
                     ? "bg-[#353535] text-white shadow-sm" 
-                    : "text-white/40 hover:text-white/60"
+                    : "text-text-secondary/40 hover:text-text-secondary/60"
                 )}
               >
-                Registration
+                {t('auth.registration')}
               </button>
               <button 
                 type="button"
@@ -351,10 +374,10 @@ export default function Auth({ onSuccess }: AuthProps) {
                   "flex-1 py-3 text-sm font-bold rounded-lg transition-colors",
                   view === 'login' 
                     ? "bg-white text-black shadow-sm" 
-                    : "text-white/40 hover:text-white/60"
+                    : "text-text-secondary/40 hover:text-text-secondary/60"
                 )}
               >
-                Login
+                {t('auth.login_title')}
               </button>
            </div>
 
@@ -379,7 +402,7 @@ export default function Auth({ onSuccess }: AuthProps) {
                    value={email}
                    onChange={e => setEmail(e.target.value)}
                    placeholder="Email" 
-                   className="w-full bg-[#1a1a1a] border border-white/5 focus:border-[#22c55e]/50 rounded-xl px-4 py-4 text-white placeholder-white/40 text-sm outline-none transition-all group-hover:border-white/10" 
+                   className="w-full bg-bg-tertiary border border-border-color focus:border-[#22c55e]/50 rounded-xl px-4 py-4 text-white placeholder-white/40 text-sm outline-none transition-all group-hover:border-border-color" 
                  />
               </div>
 
@@ -391,15 +414,30 @@ export default function Auth({ onSuccess }: AuthProps) {
                      value={password}
                      onChange={e => setPassword(e.target.value)}
                      placeholder="Password" 
-                     className="w-full bg-[#1a1a1a] border border-white/5 focus:border-[#22c55e]/50 rounded-xl pl-4 pr-12 py-4 text-white placeholder-white/40 text-sm outline-none transition-all group-hover:border-white/10" 
+                     className="w-full bg-bg-tertiary border border-border-color focus:border-[#22c55e]/50 rounded-xl pl-4 pr-12 py-4 text-white placeholder-white/40 text-sm outline-none transition-all group-hover:border-border-color" 
                    />
                    <button 
                      type="button"
                      onClick={() => setShowPassword(!showPassword)}
-                     className="absolute right-4 top-1/2 -translate-y-1/2 text-white/30 hover:text-white transition-colors"
+                     className="absolute right-4 top-1/2 -translate-y-1/2 text-text-secondary/30 hover:text-white transition-colors"
                    >
                      {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
                    </button>
+                </div>
+              )}
+
+              {view === 'signup' && (
+                <div className="relative group">
+                   <input 
+                     type="text" 
+                     value={referralCode}
+                     onChange={e => setReferralCode(e.target.value)}
+                     placeholder={t('auth.promo_code')} 
+                     className="w-full bg-bg-tertiary border border-border-color focus:border-[#22c55e]/50 rounded-xl px-4 py-4 text-white placeholder-white/40 text-sm outline-none transition-all group-hover:border-border-color" 
+                   />
+                   <div className="absolute right-4 top-1/2 -translate-y-1/2 text-text-secondary/20">
+                     <Zap size={18} />
+                   </div>
                 </div>
               )}
 
@@ -412,8 +450,8 @@ export default function Auth({ onSuccess }: AuthProps) {
                    >
                      {acceptedTerms && <CheckCircle2 size={14} className="text-black" />}
                    </button>
-                   <p className="text-[12px] text-white/50 leading-relaxed">
-                     I confirm that I am of legal age, I have read and agree to the <a href="#" className="underline hover:text-white transition-colors">Service agreement</a>.
+                   <p className="text-[12px] text-text-secondary/50 leading-relaxed">
+                     {t('auth.terms_confirm')} <a href="#" className="underline hover:text-white transition-colors">{t('auth.service_agreement')}</a>.
                    </p>
                 </div>
               )}
@@ -424,7 +462,7 @@ export default function Auth({ onSuccess }: AuthProps) {
                 className="w-full bg-[#22c55e] hover:bg-[#22c55e]/90 text-black font-bold py-4 rounded-xl mt-6 text-[15px] flex items-center justify-center transition-all active:scale-[0.98] shadow-[0_4px_20px_rgba(34,197,94,0.2)] disabled:opacity-50 disabled:active:scale-100"
               >
                 {loading ? <div className="w-5 h-5 border-2 border-black/20 border-t-black rounded-full animate-spin" /> : (
-                   view === 'forgot-password' ? 'Reset Password' : (view === 'login' ? 'Login' : 'Register')
+                   view === 'forgot-password' ? t('auth.reset_password') : (view === 'login' ? t('auth.login_title') : t('auth.registration'))
                 )}
               </button>
 
@@ -448,9 +486,9 @@ export default function Auth({ onSuccess }: AuthProps) {
              <>
                <div className="mt-8 mb-6 flex items-center justify-center relative">
                   <div className="absolute inset-0 flex items-center flex-1 w-2/3 mx-auto">
-                    <div className="w-full border-t border-white/5"></div>
+                    <div className="w-full border-t border-border-color"></div>
                   </div>
-                  <span className="relative px-4 text-[13px] text-white/40 bg-[#151515]">Sign up with</span>
+                  <span className="relative px-4 text-[13px] text-text-secondary/40 bg-[#151515]">{t('auth.sign_up_with')}</span>
                </div>
 
                <div className="flex justify-center gap-4 mt-6">
@@ -470,6 +508,12 @@ export default function Auth({ onSuccess }: AuthProps) {
                </div>
              </>
            )}
+           <EmailVerificationSheet 
+                email={email} 
+                isOpen={isVerificationOpen} 
+                onClose={() => setIsVerificationOpen(false)}
+                onSuccess={onSuccess}
+            />
         </div>
       </div>
     </div>

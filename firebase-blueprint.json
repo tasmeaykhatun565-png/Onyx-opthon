@@ -82,6 +82,20 @@
         "earnings": { "type": "number" }
       },
       "required": ["referrerId", "referredUserId", "status"]
+    },
+    "Promotion": {
+      "title": "Profile Promotion Story",
+      "description": "Featured content shown in the profile page as stories",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "imageUrl": { "type": "string" },
+        "link": { "type": "string" },
+        "order": { "type": "number" },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["title", "imageUrl"]
     }
   },
   "firestore": {
@@ -104,6 +118,10 @@
     "/referrals/{referralId}": {
       "schema": "Referral",
       "description": "Tracks all referrals"
+    },
+    "/promotions/{promoId}": {
+      "schema": "Promotion",
+      "description": "Featured promotional stories"
     }
   }
 }

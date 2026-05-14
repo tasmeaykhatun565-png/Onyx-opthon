@@ -69,16 +69,16 @@ export default function IndicatorSheet({ isOpen, onClose, onSelectIndicator, act
   const renderSection = (title: string, icon: React.ReactNode, items: { id: string, name: string }[]) => {
     const isExpanded = expandedSection === title;
     return (
-      <div className="border-b border-white/5 last:border-0">
+      <div className="border-b border-border-color last:border-0">
         <button
           onClick={() => toggleSection(title)}
-          className="w-full flex items-center justify-between py-5 px-4 hover:bg-white/[0.02] transition-colors"
+          className="w-full flex items-center justify-between py-5 px-4 hover:bg-text-secondary/5 transition-colors"
         >
           <div className="flex items-center gap-3">
-            <div className="text-white/40">{icon}</div>
-            <span className="text-[17px] font-bold text-white tracking-tight">{title}</span>
+            <div className="text-text-secondary">{icon}</div>
+            <span className="text-[17px] font-bold text-text-primary tracking-tight">{title}</span>
           </div>
-          <ChevronDown size={18} className={cn("text-white/20 transition-transform duration-300", isExpanded && "rotate-180")} />
+          <ChevronDown size={18} className={cn("text-text-secondary transition-transform duration-300", isExpanded && "rotate-180")} />
         </button>
         <AnimatePresence initial={false}>
           {isExpanded && (
@@ -126,20 +126,20 @@ export default function IndicatorSheet({ isOpen, onClose, onSelectIndicator, act
                       }}
                       className={cn(
                         "w-full flex items-center justify-between p-4 rounded-xl border transition-all active:scale-[0.98] text-left",
-                        isActive ? "bg-blue-600 border-blue-500 text-white" : cn("border-white/[0.03] bg-white/[0.02]", "hover:border-white/10 hover:bg-white/5")
+                        isActive ? "bg-blue-600 border-blue-500 text-white" : "border-border-color bg-bg-primary hover:border-text-secondary/20"
                       )}
                     >
                       <div className="flex items-center gap-3">
-                         <div className={cn("w-2 h-2 rounded-full", isActive ? "bg-white" : "bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.5)]")} />
-                         <span className="text-[15px] font-bold">{item.name}</span>
+                         <div className={cn("w-2 h-2 rounded-full", isActive ? "bg-white" : "bg-accent-color")} />
+                         <span className="text-[15px] font-bold text-text-primary">{item.name}</span>
                       </div>
                       {isActive ? (
                          <div className="bg-white/20 p-1.5 rounded-lg">
                            <X size={14} className="text-white" />
                          </div>
                       ) : (
-                         <div className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                            <ChevronDown size={14} className="-rotate-90 text-white/40" />
+                         <div className="w-8 h-8 rounded-lg bg-bg-tertiary flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                            <ChevronDown size={14} className="-rotate-90 text-text-secondary" />
                          </div>
                       )}
                     </button>
@@ -154,7 +154,7 @@ export default function IndicatorSheet({ isOpen, onClose, onSelectIndicator, act
   };
 
   const content = (
-    <div className="flex flex-col h-full bg-[#1c1c1e] text-white border-r border-white/5 shadow-2xl relative overflow-hidden">
+    <div className="flex flex-col h-full bg-bg-secondary text-white border-r border-border-color shadow-2xl relative overflow-hidden">
       {/* Settings Overlay */}
       <AnimatePresence>
         {editingIndicator && (
@@ -163,11 +163,11 @@ export default function IndicatorSheet({ isOpen, onClose, onSelectIndicator, act
             animate={{ x: 0 }}
             exit={{ x: '100%' }}
             transition={{ type: "spring", damping: 25, stiffness: 200 }}
-            className="absolute inset-0 z-50 bg-[#1c1c1e] flex flex-col"
+            className="absolute inset-0 z-50 bg-bg-secondary flex flex-col"
           >
-            <div className="flex items-center justify-between px-6 py-5 border-b border-white/5">
+            <div className="flex items-center justify-between px-6 py-5 border-b border-border-color">
               <h3 className="text-lg font-bold">{editingIndicator.name} Settings</h3>
-              <button onClick={() => setEditingIndicator(null)} className="text-white/40 hover:text-white"><X size={20} /></button>
+              <button onClick={() => setEditingIndicator(null)} className="text-text-secondary/40 hover:text-white"><X size={20} /></button>
             </div>
             
             <div className="flex-1 p-6 space-y-6">
@@ -176,7 +176,7 @@ export default function IndicatorSheet({ isOpen, onClose, onSelectIndicator, act
                 <div className="space-y-4">
                   {Object.entries(editingIndicator.params).map(([key, value]) => (
                     <div key={key} className="space-y-2">
-                      <label className="text-xs font-bold text-white/50 uppercase tracking-wider">{key}</label>
+                      <label className="text-xs font-bold text-text-secondary/50 uppercase tracking-wider">{key}</label>
                       <input 
                         type="number"
                         value={value}
@@ -184,18 +184,18 @@ export default function IndicatorSheet({ isOpen, onClose, onSelectIndicator, act
                           ...editingIndicator,
                           params: { ...editingIndicator.params, [key]: parseFloat(e.target.value) }
                         })}
-                        className="w-full bg-[#2c2c2e] border border-white/5 rounded-lg px-4 py-3 focus:outline-none focus:border-blue-500 transition-colors"
+                        className="w-full bg-[#2c2c2e] border border-border-color rounded-lg px-4 py-3 focus:outline-none focus:border-blue-500 transition-colors"
                       />
                     </div>
                   ))}
                 </div>
               ) : (
-                <div className="text-center py-10 text-white/30 text-sm">No adjustable parameters for this tool.</div>
+                <div className="text-center py-10 text-text-secondary/30 text-sm">No adjustable parameters for this tool.</div>
               )}
 
               {/* Color Picker (Simplified) */}
               <div className="space-y-3">
-                <label className="text-xs font-bold text-white/50 uppercase tracking-wider">Line Color</label>
+                <label className="text-xs font-bold text-text-secondary/50 uppercase tracking-wider">Line Color</label>
                 <div className="flex flex-wrap gap-3">
                   {['#3b82f6', '#ef4444', '#22c55e', '#f59e0b', '#9C27B0', '#ffffff'].map(c => (
                     <button 
@@ -212,7 +212,7 @@ export default function IndicatorSheet({ isOpen, onClose, onSelectIndicator, act
               </div>
             </div>
 
-            <div className="p-6 border-t border-white/5 flex gap-3">
+            <div className="p-6 border-t border-border-color flex gap-3">
               <button 
                 onClick={() => {
                   onSelectIndicator(editingIndicator);
@@ -239,25 +239,25 @@ export default function IndicatorSheet({ isOpen, onClose, onSelectIndicator, act
       </AnimatePresence>
 
       {/* Main List */}
-      <div className="flex items-center justify-between px-6 py-5 border-b border-white/5">
+      <div className="flex items-center justify-between px-6 py-5 border-b border-border-color">
         <h2 className="text-xl font-bold tracking-tight">Technical Analysis</h2>
         <button 
           onClick={onClose}
-          className="text-white/40 hover:text-white transition-colors p-1"
+          className="text-text-secondary/40 hover:text-white transition-colors p-1"
         >
           <X size={20} />
         </button>
       </div>
 
       <div className="px-6 py-4">
-        <div className="bg-[#2c2c2e] rounded-lg flex items-center gap-3 px-4 py-2.5 border border-white/5 focus-within:border-white/20 transition-all">
-          <Search size={18} className="text-white/40" />
+        <div className="bg-bg-primary rounded-lg flex items-center gap-3 px-4 py-2.5 border border-border-color focus-within:border-accent-color transition-all">
+          <Search size={18} className="text-text-secondary" />
           <input 
             type="text"
             placeholder="Search"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="bg-transparent text-white text-[14px] focus:outline-none w-full placeholder:text-white/30"
+            className="bg-transparent text-text-primary text-[14px] focus:outline-none w-full placeholder:text-text-secondary"
           />
         </div>
       </div>
@@ -267,7 +267,7 @@ export default function IndicatorSheet({ isOpen, onClose, onSelectIndicator, act
         {renderSection('Oscillators', <BarChart2 size={18} />, OSCILLATORS)}
         {renderSection('Strategies', <TrendingUp size={18} />, STRATEGIES)}
         
-        <div className="px-2 py-8 text-white/30 text-[12px] leading-relaxed font-medium">
+        <div className="px-2 py-8 text-text-secondary/30 text-[12px] leading-relaxed font-medium">
           All the features offered by the platform can be used for technical analysis. Traders make all trading decisions independently.
         </div>
       </div>
@@ -278,7 +278,7 @@ export default function IndicatorSheet({ isOpen, onClose, onSelectIndicator, act
     <>
       {/* Mobile Mode (Bottom Sheet) */}
       <div className="md:hidden">
-        <BottomSheet isOpen={isOpen} onClose={onClose} className="h-[85vh] bg-[#1c1c1e]">
+        <BottomSheet isOpen={isOpen} onClose={onClose} className="h-[85vh] bg-bg-secondary">
            {content}
         </BottomSheet>
       </div>

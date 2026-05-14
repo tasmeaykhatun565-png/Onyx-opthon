@@ -63,7 +63,7 @@ const TournamentsPage: React.FC<TournamentsPageProps> = ({ isOpen, onClose, sock
           className="fixed inset-0 bg-[#121418] z-[500] flex flex-col pt-safe"
         >
           {/* Header */}
-          <div className="flex items-center px-6 py-4 border-b border-white/5">
+          <div className="flex items-center px-6 py-4 border-b border-border-color">
             <button onClick={onClose} className="p-2 -ml-2 text-gray-400 hover:text-white transition-colors">
               <ArrowLeft size={24} strokeWidth={2.5} />
             </button>
@@ -78,7 +78,7 @@ const TournamentsPage: React.FC<TournamentsPageProps> = ({ isOpen, onClose, sock
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: idx * 0.05 }}
-                  className="bg-[#1e1e1e] rounded-[24px] overflow-hidden border border-white/5 shadow-2xl group flex flex-col"
+                  className="bg-bg-tertiary rounded-[24px] overflow-hidden border border-border-color shadow-2xl group flex flex-col"
                 >
                    {/* Banner Area */}
                    <div className="h-44 relative bg-[#2a2a2a] overflow-hidden">
@@ -91,22 +91,22 @@ const TournamentsPage: React.FC<TournamentsPageProps> = ({ isOpen, onClose, sock
                       
                       <div className="absolute top-5 left-6">
                          <h3 className="text-3xl font-black text-white italic tracking-tighter drop-shadow-xl">{t.title}</h3>
-                         <div className="mt-3 inline-flex items-center gap-2 bg-black/40 backdrop-blur-xl px-3 py-1.5 rounded-xl border border-white/10 shadow-lg">
+                         <div className="mt-3 inline-flex items-center gap-2 bg-bg-secondary backdrop-blur-xl px-3 py-1.5 rounded-xl border border-border-color shadow-lg">
                             <Clock size={12} className="text-yellow-500" strokeWidth={3} />
-                            <span className="text-[10px] font-black uppercase tracking-widest text-white/90">
+                            <span className="text-[10px] font-black uppercase tracking-widest text-text-primary/90">
                                {t.status === 'active' ? 'Until end' : 'Until start'}: {getTimeRemaining(t.status === 'active' ? t.endTime : t.startTime)}
                             </span>
                          </div>
                       </div>
 
                       {t.isLocked && (
-                         <div className="absolute top-6 right-6 w-10 h-10 rounded-2xl bg-black/60 backdrop-blur-xl border border-white/10 flex items-center justify-center text-orange-500 shadow-xl">
+                         <div className="absolute top-6 right-6 w-10 h-10 rounded-2xl bg-black/60 backdrop-blur-xl border border-border-color flex items-center justify-center text-orange-500 shadow-xl">
                             <Shield size={20} strokeWidth={2.5} />
                          </div>
                       )}
 
                       {/* Line Progress */}
-                      <div className="absolute bottom-0 left-0 w-full h-[3px] bg-white/5">
+                      <div className="absolute bottom-0 left-0 w-full h-[3px] bg-bg-secondary">
                          <motion.div 
                            initial={{ width: 0 }}
                            animate={{ width: `${getProgress(t.startTime, t.endTime)}%` }}
@@ -117,7 +117,7 @@ const TournamentsPage: React.FC<TournamentsPageProps> = ({ isOpen, onClose, sock
                    </div>
 
                    {/* Footer Info */}
-                   <div className="p-5 flex justify-between items-center bg-[#1e1e1e]">
+                   <div className="p-5 flex justify-between items-center bg-bg-tertiary">
                       <div>
                          <p className="text-[10px] font-black text-gray-500 uppercase tracking-[2px] mb-1 italic">Prize fund</p>
                          <p className="text-2xl font-black text-yellow-500 font-mono italic tracking-tighter">
@@ -136,7 +136,7 @@ const TournamentsPage: React.FC<TournamentsPageProps> = ({ isOpen, onClose, sock
 
              {tournaments.length === 0 && (
                 <div className="py-24 flex flex-col items-center justify-center text-center opacity-30">
-                   <div className="w-20 h-20 bg-white/5 rounded-full flex items-center justify-center mb-6">
+                   <div className="w-20 h-20 bg-bg-secondary rounded-full flex items-center justify-center mb-6">
                       <Trophy size={40} className="text-gray-400" />
                    </div>
                    <p className="font-black text-xl italic tracking-tighter uppercase text-white">Zero Arena Data</p>
@@ -155,7 +155,7 @@ const TournamentsPage: React.FC<TournamentsPageProps> = ({ isOpen, onClose, sock
                  transition={{ type: 'spring', damping: 25, stiffness: 200 }}
                  className="fixed inset-0 bg-[#121418] z-[600] flex flex-col pt-safe"
                >
-                  <div className="flex items-center px-6 py-4 border-b border-white/5 bg-[#121418]">
+                  <div className="flex items-center px-6 py-4 border-b border-border-color bg-[#121418]">
                     <button onClick={() => setSelectedTournament(null)} className="p-2 -ml-2 text-gray-400 hover:text-white transition-colors">
                       <ArrowLeft size={24} strokeWidth={2.5} />
                     </button>
@@ -187,12 +187,12 @@ const TournamentsPage: React.FC<TournamentsPageProps> = ({ isOpen, onClose, sock
 
                      <div className="px-6 pb-32">
                         <div className="grid grid-cols-2 gap-4 mb-10">
-                           <div className="bg-[#1e1e1e] p-5 rounded-[24px] border border-white/5 shadow-xl">
+                           <div className="bg-bg-tertiary p-5 rounded-[24px] border border-border-color shadow-xl">
                               <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1.5 italic">Total Prize Pool</p>
                               <p className="text-2xl font-black text-yellow-500 font-mono tracking-tighter italic">{currencySymbol}{selectedTournament.prizeFund.toLocaleString()}</p>
                            </div>
-                           <div className="bg-[#1e1e1e] p-5 rounded-[24px] border border-white/5 shadow-xl flex flex-col justify-center">
-                              <p className="text-[10px] font-black text-white/40 uppercase tracking-widest mb-1.5 italic">Entry Rule</p>
+                           <div className="bg-bg-tertiary p-5 rounded-[24px] border border-border-color shadow-xl flex flex-col justify-center">
+                              <p className="text-[10px] font-black text-text-secondary/40 uppercase tracking-widest mb-1.5 italic">Entry Rule</p>
                               <p className="text-[11px] font-black text-white uppercase italic tracking-wider flex items-center gap-2">
                                  {selectedTournament.isLocked ? <><Shield size={14} className="text-orange-500" /> PRO PASS REQUIRED</> : "FREE TO ALL TRADERS"}
                               </p>
@@ -215,7 +215,7 @@ const TournamentsPage: React.FC<TournamentsPageProps> = ({ isOpen, onClose, sock
                               <h3 className="text-[13px] font-black text-white uppercase tracking-[3px] mb-5 flex items-center gap-3">
                                  <Info size={18} className="text-blue-500" strokeWidth={3} /> Arena Regulations
                               </h3>
-                              <div className="bg-[#1e1e1e] rounded-[24px] p-6 border border-white/5 space-y-5 shadow-2xl">
+                              <div className="bg-bg-tertiary rounded-[24px] p-6 border border-border-color space-y-5 shadow-2xl">
                                  {selectedTournament.rules ? (
                                     <p className="text-gray-400 text-sm whitespace-pre-wrap leading-loose font-medium italic ">{selectedTournament.rules}</p>
                                  ) : (
@@ -240,7 +240,7 @@ const TournamentsPage: React.FC<TournamentsPageProps> = ({ isOpen, onClose, sock
                      </div>
                   </div>
 
-                  <div className="p-6 bg-[#121418] border-t border-white/5 pb-safe">
+                  <div className="p-6 bg-[#121418] border-t border-border-color pb-safe">
                      <button className="w-full bg-yellow-500 h-16 rounded-[24px] font-black text-[14px] uppercase tracking-[6px] italic shadow-2xl shadow-yellow-500/20 active:scale-[0.98] transition-all hover:bg-yellow-400">
                         Join Arena
                      </button>

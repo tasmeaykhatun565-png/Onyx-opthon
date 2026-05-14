@@ -1,12 +1,17 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
-import { getFirestore, doc, getDocFromServer } from 'firebase/firestore';
+import { initializeFirestore, doc, getDocFromServer } from 'firebase/firestore';
 import firebaseConfig from '../firebase-applet-config.json';
 import { safeStringify } from './utils';
 
 const app = initializeApp(firebaseConfig);
 const dbId = (firebaseConfig as any).firestoreDatabaseId;
-export const db = dbId && dbId !== '(default)' ? getFirestore(app, dbId) : getFirestore(app);
+
+// Use initializeFirestore to enable long polling which is more reliable in some cloud environments
+export const db = initializeFirestore(app, {
+  experimentalForceLongPolling: true,
+}, dbId && dbId !== '(default)' ? dbId : undefined);
+
 export const auth = getAuth(app);
 
 // Test connection to Firestore

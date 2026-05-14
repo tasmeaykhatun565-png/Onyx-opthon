@@ -57,22 +57,22 @@ export default function RiskManagementSheet({ isOpen, onClose, balance, currency
           className="w-full bg-[#1e222d] rounded-t-2xl pointer-events-auto flex flex-col max-h-[85vh]"
         >
           {/* Header */}
-          <div className="flex items-center justify-between p-4 border-b border-[var(--border-color)]">
+          <div className="flex items-center justify-between p-4 border-b border-border-color">
             <div className="flex items-center gap-2">
               <Shield className="text-[#3b82f6]" size={20} />
-              <h2 className="text-lg font-bold text-[var(--text-primary)]">Risk Management</h2>
+              <h2 className="text-lg font-bold text-text-primary">Risk Management</h2>
             </div>
-            <button onClick={onClose} className="text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition p-1 rounded-full hover:bg-[var(--text-primary)]/10">
+            <button onClick={onClose} className="text-text-secondary hover:text-text-primary transition p-1 rounded-full hover:bg-[var(--color-text-primary)]/10">
               <X size={20} />
             </button>
           </div>
 
           {/* Content */}
           <div className="p-4 overflow-y-auto flex-1 space-y-6">
-            <div className="bg-[var(--bg-tertiary)] rounded-xl p-4 border border-[var(--border-color)]">
+            <div className="bg-bg-tertiary rounded-xl p-4 border border-border-color">
               <div className="flex items-start gap-3 mb-2">
                 <AlertTriangle className="text-[#ff9f43] shrink-0 mt-0.5" size={18} />
-                <p className="text-sm text-[var(--text-secondary)] leading-relaxed">
+                <p className="text-sm text-text-secondary leading-relaxed">
                   Protect your capital by setting daily limits. Trading will be restricted if these limits are reached.
                 </p>
               </div>
@@ -81,12 +81,12 @@ export default function RiskManagementSheet({ isOpen, onClose, balance, currency
             <div className="space-y-4">
               {/* Daily Stop Loss */}
               <div className="space-y-2">
-                <label className="text-sm font-medium text-[var(--text-secondary)] flex justify-between">
+                <label className="text-sm font-medium text-text-secondary flex justify-between">
                   <span>Daily Stop Loss</span>
-                  <span className="text-[var(--text-primary)]">{currencySymbol}{dailyStopLoss}</span>
+                  <span className="text-text-primary">{currencySymbol}{dailyStopLoss}</span>
                 </label>
                 <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-secondary)]">{currencySymbol}</span>
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-text-secondary">{currencySymbol}</span>
                   <input 
                     type="number" 
                     value={dailyStopLoss || ''}
@@ -102,20 +102,20 @@ export default function RiskManagementSheet({ isOpen, onClose, balance, currency
                       }
                     }}
                     placeholder="0.00"
-                    className="w-full bg-[var(--bg-primary)] text-[var(--text-primary)] pl-8 pr-4 py-3 rounded-xl border border-[var(--border-color)] focus:outline-none focus:border-[#3b82f6] transition"
+                    className="w-full bg-bg-primary text-text-primary pl-8 pr-4 py-3 rounded-xl border border-border-color focus:outline-none focus:border-[#3b82f6] transition"
                   />
                 </div>
-                <p className="text-xs text-[var(--text-secondary)]">Maximum amount you are willing to lose in a day.</p>
+                <p className="text-xs text-text-secondary">Maximum amount you are willing to lose in a day.</p>
               </div>
 
               {/* Daily Take Profit */}
               <div className="space-y-2">
-                <label className="text-sm font-medium text-[var(--text-secondary)] flex justify-between">
+                <label className="text-sm font-medium text-text-secondary flex justify-between">
                   <span>Daily Take Profit</span>
-                  <span className="text-[var(--text-primary)]">{currencySymbol}{dailyTakeProfit}</span>
+                  <span className="text-text-primary">{currencySymbol}{dailyTakeProfit}</span>
                 </label>
                 <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-secondary)]">{currencySymbol}</span>
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-text-secondary">{currencySymbol}</span>
                   <input 
                     type="number" 
                     value={dailyTakeProfit || ''}
@@ -131,20 +131,20 @@ export default function RiskManagementSheet({ isOpen, onClose, balance, currency
                       }
                     }}
                     placeholder="0.00"
-                    className="w-full bg-[var(--bg-primary)] text-[var(--text-primary)] pl-8 pr-4 py-3 rounded-xl border border-[var(--border-color)] focus:outline-none focus:border-[#22c55e] transition"
+                    className="w-full bg-bg-primary text-text-primary pl-8 pr-4 py-3 rounded-xl border border-border-color focus:outline-none focus:border-[#22c55e] transition"
                   />
                 </div>
-                <p className="text-xs text-[var(--text-secondary)]">Target profit to stop trading for the day.</p>
+                <p className="text-xs text-text-secondary">Target profit to stop trading for the day.</p>
               </div>
 
               {/* Max Trade Amount */}
               <div className="space-y-2">
-                <label className="text-sm font-medium text-[var(--text-secondary)] flex justify-between">
+                <label className="text-sm font-medium text-text-secondary flex justify-between">
                   <span>Max Trade Amount</span>
-                  <span className="text-[var(--text-primary)]">{currencySymbol}{maxTradeAmount}</span>
+                  <span className="text-text-primary">{currencySymbol}{maxTradeAmount}</span>
                 </label>
                 <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-secondary)]">{currencySymbol}</span>
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-text-secondary">{currencySymbol}</span>
                   <input 
                     type="number" 
                     value={maxTradeAmount || ''}
@@ -160,10 +160,10 @@ export default function RiskManagementSheet({ isOpen, onClose, balance, currency
                       }
                     }}
                     placeholder="0.00"
-                    className="w-full bg-[var(--bg-primary)] text-[var(--text-primary)] pl-8 pr-4 py-3 rounded-xl border border-[var(--border-color)] focus:outline-none focus:border-[#3b82f6] transition"
+                    className="w-full bg-bg-primary text-text-primary pl-8 pr-4 py-3 rounded-xl border border-border-color focus:outline-none focus:border-[#3b82f6] transition"
                   />
                 </div>
-                <p className="text-xs text-[var(--text-secondary)]">Maximum amount allowed per single trade.</p>
+                <p className="text-xs text-text-secondary">Maximum amount allowed per single trade.</p>
               </div>
             </div>
 

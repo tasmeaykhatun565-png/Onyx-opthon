@@ -1,30 +1,236 @@
-108:  balance: number;
-743:  const [balance, setBalance] = useState<number>(0);
-873:  const balanceRef = useRef(balance);
-889:    balanceRef.current = balance;
-895:  }, [balance, demoBalance, trades, data, user, selectedAsset]);
-941:        if (userData.balance !== undefined) setBalance(prev => prev === userData.balance ? prev : userData.balance);
-985:      socket.emit('refill-demo-balance', { email: user.email });
-1018:      return balance * rate;
-1022:      return extra.balance;
-1025:  }, [balance, demoBalance, activeAccount, currency, extraAccounts]);
-1353:    socket.on('balance-updated', ({ balance: newBalance, type }) => {
-1383:      socket.off('balance-updated');
-1440:      // Calculate new balance
-1447:          const newRealBalance = balanceRef.current + trade.amount + profit;
-1452:              const newBalance = a.balance + trade.amount + profit;
-1453:              return { ...a, balance: newBalance };
-1503:      currentBalance = balance;
-1509:        currentBalance = extra.balance;
-1517:      alert(`Insufficient ${accountName} balance. You need ${displayCurrencySymbol}${(investmentInUSD * rate).toFixed(2)} but have ${displayCurrencySymbol}${(currentBalance * rate).toFixed(2)}.`);
-1573:      setExtraAccounts(prev => prev.map(a => a.id === activeAccount ? { ...a, balance: newBalance } : a));
-1693:        balance={balance}
-1889:          { id: 'DEMO', name: 'Demo', currency: currency.code, symbol: currency.symbol, balance: demoBalance * (EXCHANGE_RATES[currency.code] || 1), type: 'DEMO', flag: currency.flag },
-1890:          { id: 'REAL', name: `${currency.code} Account`, currency: currency.code, symbol: currency.symbol, balance: balance * (EXCHANGE_RATES[currency.code] || 1), type: 'REAL', flag: currency.flag },
-1990:            balance={balance}
-2223:        balance={displayBalance}
-2224:        rawBalance={balance}
-2274:        balance={displayBalance}
-2828:function ProfilePage({ onBack, onSettings, user, onAdmin, setView, balance, currency, notifications, onNotificationsClick }: { 
-2834:  balance: number,
-2841:  const exp = Math.floor(balance * 10); // 10 EXP per 1 USD/unit of balance
+134:    <div className="fixed inset-0 z-[2000] bg-[var(--bg-primary)] flex flex-col items-center justify-center overflow-hidden">
+137:        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full h-full bg-[var(--accent-color)]/5 blur-[120px] rounded-full" />
+155:            className="absolute inset-[-20px] rounded-full bg-[var(--accent-color)]/20 blur-2xl"
+165:            className="absolute inset-0 rounded-full border-[2px] border-transparent border-t-[var(--accent-color)] border-r-[var(--accent-color)]/40 shadow-[0_0_20px_var(--accent-color)]/40"
+175:            className="absolute inset-[30%] rounded-full bg-gradient-to-tr from-[var(--accent-color)] to-white/40 blur-sm shadow-[0_0_15px_var(--accent-color)]/60"
+202:            className="absolute inset-[-4px] rounded-full bg-[var(--accent-color)]/15 blur-xl"
+424:      <div className={cn("rounded-full bg-white flex items-center justify-center border border-[var(--border-color)] shadow-sm overflow-hidden", containerSize)}>
+483:    <div className={cn("rounded-full bg-[var(--bg-tertiary)] flex items-center justify-center border border-[var(--border-color)] shadow-sm", containerSize, fontSize)}>
+528:    <div className="w-full h-full bg-[var(--bg-primary)] font-sans flex flex-col text-white">
+538:       <div className="flex items-center px-6 border-b border-[var(--border-color)] mb-4">
+546:                         ? "text-[var(--text-primary)]" 
+554:                     className="absolute bottom-0 left-0 right-0 h-0.5 bg-[var(--accent-color)] rounded-full"
+567:                className="w-full bg-[var(--bg-secondary)] text-[var(--text-primary)] pl-4 pr-10 py-3 rounded-xl border border-[var(--border-color)] focus:outline-none focus:border-[var(--accent-color)] transition placeholder:text-gray-600 font-medium"
+571:            <Search className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-600 group-focus-within:text-[var(--text-secondary)] transition" size={20} />
+577:          <button className="flex items-center gap-2 bg-[var(--bg-secondary)] px-4 py-2 rounded-xl border border-[var(--border-color)] text-[13px] font-bold text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)] transition">
+578:            <AlignLeft size={16} className="text-[var(--text-secondary)]/40" />
+580:            <ChevronDown size={16} className="text-[var(--text-secondary)]/40" />
+582:          <button className="bg-[var(--bg-secondary)] px-4 py-2 rounded-xl border border-[var(--border-color)] text-[13px] font-bold text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)] transition">
+585:          <button className="flex items-center gap-2 bg-[var(--bg-secondary)] px-4 py-2 rounded-xl border border-[var(--border-color)] text-[13px] font-bold text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)] transition">
+587:            <ChevronDown size={14} className="text-[var(--text-secondary)]/40" />
+593:          <span className="text-[11px] font-bold text-[var(--text-secondary)]/20 uppercase tracking-widest">Name</span>
+595:            <span className="text-[11px] font-bold text-[var(--text-secondary)]/20 uppercase tracking-widest">Profitability</span>
+596:            <HelpCircle size={14} className="text-[var(--text-secondary)]/10 group-hover:text-[var(--text-secondary)]/30 transition" />
+617:                          "flex items-center justify-between px-4 py-3.5 rounded-xl hover:bg-[var(--text-primary)]/[0.03] cursor-pointer transition-all active:scale-[0.98]",
+618:                          asset.id === currentAssetId && "bg-[var(--text-primary)]/[0.05]",
+714:        inSidebar ? "h-full flex flex-col w-full bg-[var(--bg-primary)]" : "fixed inset-0 z-[60] bg-[var(--bg-primary)] flex flex-col"
+717:      <div className="flex items-center justify-between p-4 border-b border-[var(--border-color)]">
+719:          <button onClick={onClose} className="p-2 -ml-2 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition">
+722:          <h2 className="text-xl font-bold text-[var(--text-primary)]">Trade History</h2>
+727:      <div className="flex px-4 border-b border-[var(--border-color)]">
+732:            activeTab === 'CLOSED' ? "text-[var(--color-success)]" : "text-[var(--text-secondary)]/40"
+736:          {activeTab === 'CLOSED' && <motion.div layoutId="history-tab-underline" className="absolute bottom-0 left-0 right-0 h-0.5 bg-[var(--color-success)]" />}
+742:            activeTab === 'PENDING' ? "text-[var(--color-success)]" : "text-[var(--text-secondary)]/40"
+746:          {activeTab === 'PENDING' && <motion.div layoutId="history-tab-underline" className="absolute bottom-0 left-0 right-0 h-0.5 bg-[var(--color-success)]" />}
+754:              <div className="bg-[var(--bg-secondary)] p-4 rounded-2xl border border-[var(--border-color)] flex items-center gap-4 mb-4 shadow-xl">
+758:                    background: `conic-gradient(var(--color-success) ${winRate * 3.6}deg, rgba(255,255,255,0.05) 0deg)`
+761:                  <div className="absolute inset-[3px] bg-[var(--bg-secondary)] rounded-full flex flex-col items-center justify-center">
+762:                    <span className="text-[10px] font-black text-[var(--color-success)]">{winRate}%</span>
+3988:    <div className="flex h-[100dvh] bg-[var(--bg-primary)] text-[var(--text-primary)] font-sans overflow-hidden select-none">
+4069:            <header className="hidden md:flex items-center justify-between px-6 bg-[var(--bg-primary)] z-20 h-[72px] shrink-0 relative border-b border-[var(--border-color)]">
+4072:                 <button className="w-10 h-10 bg-[var(--bg-secondary)] hover:bg-[var(--bg-tertiary)] rounded-lg flex items-center justify-center text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition">
+4077:                   className="flex items-center gap-4 px-4 h-12 bg-[var(--bg-secondary)] hover:bg-[var(--bg-tertiary)] rounded-xl active:scale-95 transition shrink-0 cursor-pointer text-left border border-[var(--border-color)]"
+4083:                      <div className="text-[var(--text-primary)] font-bold text-[12px] leading-none mb-0.5">{selectedAsset.name.split('(')[0].trim()}</div>
+4084:                      <div className="text-[10px] text-[var(--text-secondary)] font-medium leading-none">FT • <span className="text-[var(--text-primary)]/80">{selectedAsset.payout}%</span></div>
+4092:                 <div className="hidden lg:flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-[var(--bg-secondary)] border border-[var(--border-color)]">
+4097:                    <span className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-widest leading-none">
+4110:                       <span className="text-[var(--text-primary)] font-black text-[16px] tracking-tight">
+4114:                    <div className={cn("flex items-center gap-1 text-[11px] font-bold uppercase tracking-wider transition-colors", activeAccount === 'DEMO' ? 'text-[#f59e0b]' : 'text-[var(--text-secondary)]')}>
+4143:            <header className="md:hidden flex items-center justify-between px-3 bg-[var(--bg-primary)] z-20 border-b border-[var(--border-color)] h-14">
+4148:                  className="w-[38px] h-[38px] rounded-full border-2 border-[var(--border-color)] bg-[var(--bg-secondary)] flex items-center justify-center cursor-pointer active:scale-95 transition hover:bg-[var(--bg-tertiary)] overflow-hidden"
+4229:          <div className="md:hidden flex items-center px-2 bg-[var(--bg-primary)] gap-1 overflow-x-auto scrollbar-hide border-b border-[var(--border-color)] h-11">
+4232:               className="flex items-center gap-2 px-2.5 h-8 bg-[var(--text-primary)]/[0.03] rounded-lg border border-[var(--text-primary)]/5 active:scale-95 transition shrink-0 cursor-pointer"
+4238:                   <span className="text-[var(--text-primary)] font-bold text-[12px] truncate max-w-[80px]">{selectedAsset.name.split('(')[0].trim()}</span>
+4239:                   <span className="text-[var(--color-success)] text-[11px] font-black">{selectedAsset.payout}%</span>
+4240:                   <ChevronDown size={10} className="text-[var(--text-secondary)]" />
+4247:                  className="w-10 h-10 flex items-center justify-center text-[var(--text-secondary)]/80 hover:text-[var(--text-primary)] transition group relative ml-1 rounded-sm border-r border-[var(--border-color)] bg-transparent"
+4259:                  className="px-2 h-8 flex items-center justify-center gap-1 transition bg-[var(--text-primary)]/5 rounded-md border border-[var(--text-primary)]/5"
+4261:                   <span className="text-[11px] font-black text-[var(--text-primary)]/90">{chartTimeFrame}</span>
+4262:                   <ChevronDown size={10} className="text-[var(--text-secondary)]/40" />
+4266:                  className="w-8 h-8 flex items-center justify-center text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition group"
+4315:      <div className="flex-1 flex relative bg-[var(--bg-primary)] overflow-hidden">
+4413:                <aside className="hidden md:flex flex-col w-80 border-r border-[var(--border-color)] bg-[var(--bg-primary)] p-4 overflow-y-auto scrollbar-hide z-20">
+4416:                    <button onClick={() => setIsRewardsOpen(false)} className="text-[var(--text-secondary)] hover:text-white">
+4438:                <aside className="hidden md:flex flex-col w-80 border-r border-[var(--border-color)] bg-[var(--bg-primary)] overflow-hidden z-20">
+4958:        <div className="md:hidden bg-[var(--bg-primary)] px-3 pt-1.5 pb-[calc(env(safe-area-inset-bottom)+4px)] z-20 border-t border-[var(--border-color)] flex flex-col gap-2 relative overflow-hidden">
+4960:            <div className="absolute inset-0 z-50 bg-[var(--bg-primary)]/95 backdrop-blur-xl flex flex-col items-center justify-center p-6 text-center animate-in fade-in duration-500">
+4961:               <div className="w-20 h-20 bg-[var(--text-primary)]/[0.03] rounded-[24px] flex items-center justify-center mb-6 border border-[var(--text-primary)]/5 relative shadow-2xl">
+4962:                  <div className="absolute inset-0 bg-[var(--text-primary)]/5 blur-2xl rounded-full" />
+4963:                  <Lock size={36} className="text-[var(--text-secondary)]/60 relative z-10" />
+4965:               <h3 className="text-[var(--text-primary)] font-black text-lg mb-1 tracking-tight uppercase">Trading is closed</h3>
+4966:               <p className="text-[var(--text-secondary)] text-[12px] mb-8 max-w-[240px] leading-relaxed font-medium">
+4971:                  <span className="text-[var(--color-success)] font-bold">Bitcoin OTC</span> is currently available.
+4975:                 className="w-full h-14 bg-[var(--bg-secondary)] border border-[var(--border-color)] shadow-xl rounded-2xl flex items-center justify-between px-6 active:scale-[0.98] transition-transform"
+4977:                 <span className="text-[var(--text-primary)] font-extrabold text-[15px]">Enable Orders</span>
+4978:                 <div className="w-8 h-8 rounded-full bg-[var(--text-primary)]/5 flex items-center justify-center">
+4979:                    <Clock size={16} className="text-[var(--text-secondary)]/80" />
+4987:              <div className="flex justify-between items-center text-[11px] text-[var(--text-secondary)] px-1">
+4993:                    <span className="text-[var(--text-primary)] font-bold">+{displayCurrencySymbol}{potentialProfit}</span>
+5002:                    <div className="flex items-center bg-[var(--bg-secondary)] rounded-xl border border-[var(--border-color)] overflow-hidden h-10">
+5012:                         className="w-9 h-full flex items-center justify-center text-[var(--text-secondary)] hover:text-[var(--text-primary)] active:bg-[var(--text-primary)]/5 transition"
+5020:                          <span className="text-[var(--text-primary)] font-bold text-[14px] whitespace-nowrap">
+5033:                         className="w-9 h-full flex items-center justify-center text-[var(--text-secondary)] hover:text-[var(--text-primary)] active:bg-[var(--text-primary)]/5 transition"
+5042:                    <div className="flex items-center bg-[var(--bg-secondary)] rounded-xl border border-[var(--border-color)] overflow-hidden h-10">
+5048:                         className="w-9 h-full flex items-center justify-center text-[var(--text-secondary)] hover:text-[var(--text-primary)] active:bg-[var(--text-primary)]/5 transition border-r border-[var(--border-color)]"
+5053:                          <span className="absolute left-2.5 text-[var(--text-secondary)]/50 font-bold text-[10px] pointer-events-none">{currency.symbol}</span>
+5066:                            className="w-full h-full bg-transparent text-center font-bold text-[14px] focus:outline-none text-[var(--text-primary)] px-5"
+5071:                         className="w-9 h-full flex items-center justify-center text-[var(--text-secondary)] hover:text-[var(--text-primary)] active:bg-[var(--text-primary)]/5 transition border-l border-[var(--border-color)]"
+5091:                   className="w-11 h-[50px] bg-[var(--bg-secondary)] rounded-xl flex items-center justify-center text-[var(--text-secondary)]/40 hover:text-[var(--text-primary)] active:scale-95 transition border border-[var(--border-color)]"
+5110:      <nav className="md:hidden bg-[var(--bg-primary)] border-t border-[var(--border-color)] px-4 pt-1.5 pb-[calc(env(safe-area-inset-bottom)+2px)] flex justify-between items-center">
+5380:            className="fixed bottom-0 left-0 right-0 bg-[var(--bg-primary)] rounded-t-[32px] z-[70] flex flex-col max-h-[85vh] border-t border-[var(--border-color)]"
+5382:            <div className="w-12 h-1.5 bg-[var(--bg-tertiary)] rounded-full mx-auto mt-3 mb-4" />
+5386:                <h2 className="text-2xl font-black text-[var(--text-primary)]">Notifications</h2>
+5387:                <p className="text-xs text-[var(--text-secondary)] font-bold uppercase tracking-widest">
+5393:                className="w-10 h-10 rounded-full bg-[var(--bg-secondary)] flex items-center justify-center text-[var(--text-primary)] border border-[var(--border-color)]"
+5409:                          ? "bg-[var(--bg-secondary)] border-[var(--border-color)] opacity-60" 
+5410:                          : "bg-[var(--bg-secondary)] border-blue-500/30 shadow-lg"
+5417:                        <h3 className={cn("font-bold text-sm", !notif.isRead ? "text-[var(--text-primary)]" : "text-[var(--text-secondary)]")}>
+5420:                        <span className="text-[10px] text-[var(--text-secondary)] font-bold">
+5424:                      <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
+5436:                        <span className="text-[9px] text-[var(--text-secondary)] font-bold">
+5445:                  <div className="w-20 h-20 bg-[var(--bg-secondary)] rounded-full flex items-center justify-center mb-4 border border-dashed border-[var(--border-color)]">
+5446:                    <Bell size={32} className="text-[var(--text-secondary)] opacity-20" />
+5448:                  <h3 className="font-bold text-[var(--text-primary)] mb-1">No notifications yet</h3>
+5449:                  <p className="text-xs text-[var(--text-secondary)] max-w-[200px]">
+5468:      active ? "text-[var(--text-primary)]" : "hover:text-[var(--text-secondary)]"
+5470:      <div className={cn("p-0.5 rounded-md", active && "bg-[var(--text-primary)]/10")}>
+5475:        <span className="absolute top-0 right-1 w-3.5 h-3.5 bg-red-500 text-white text-[8px] flex items-center justify-center rounded-full border border-[var(--bg-primary)]">
+5844:      "bg-[var(--bg-primary)] text-[var(--text-primary)] font-sans flex flex-col h-full",
+5857:          <button onClick={onClose} className="p-2 text-[var(--text-secondary)] hover:text-white transition">
+5864:      <div className="flex border-b border-[var(--border-color)] px-4 mb-4">
+5865:        <button className="px-4 py-2 border-b-2 border-blue-500 font-bold text-sm text-[var(--text-primary)]">Fixed Time</button>
+5878:              className="w-full bg-[var(--bg-secondary)] text-[var(--text-primary)] font-bold py-4 rounded-2xl border border-[var(--border-color)] hover:bg-[var(--bg-tertiary)] transition-colors"
+5887:                <span className="text-xs font-normal text-[var(--text-secondary)]">{activeTrades.length} Active</span>
+5908:            className="text-xs text-[var(--text-secondary)] flex items-center gap-1 hover:text-[var(--text-primary)] transition-colors font-medium"
+5916:            <div className="bg-[var(--bg-secondary)] p-4 rounded-2xl border border-[var(--border-color)] flex items-center gap-4">
+5919:                   <div className="text-xs text-[var(--text-secondary)] font-medium">Today's success</div>
+5928:                 className="bg-[var(--bg-secondary)] p-4 rounded-2xl border border-[var(--border-color)] flex items-center gap-4 mb-4 cursor-pointer hover:bg-[var(--bg-tertiary)] transition-colors group"
+5936:                    <div className="absolute inset-[3px] bg-[var(--bg-secondary)] rounded-full flex items-center justify-center">
+5941:                     <div className="text-[10px] text-[var(--text-secondary)] font-black uppercase tracking-widest mb-1">Today's success</div>
+5944:                       <span className="text-[10px] text-[var(--text-secondary)] font-normal">Success rate: {winRate}%</span>
+5947:                  <ChevronRight size={18} className="text-[var(--text-secondary)] group-hover:text-[var(--text-primary)] transition-colors" />
+5995:  let profitColor = 'text-[var(--text-secondary)]';
+6041:      profitColor = 'text-[var(--text-secondary)]';
+6048:      className="bg-[var(--bg-secondary)] p-3 rounded-xl border border-[var(--border-color)] flex items-center justify-between cursor-pointer active:scale-[0.98] transition hover:bg-[var(--bg-tertiary)]"
+6057:          <div className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-[var(--bg-secondary)] flex items-center justify-center border border-[var(--bg-secondary)] z-30">
+6066:            <span className="text-[var(--text-primary)] font-bold text-sm">{trade.assetShortName}</span>
+6067:            <span className="text-xs text-[var(--text-secondary)]">· {isActive ? `${trade.payout}%` : 'Fixed Time'}</span>
+6069:          <div className="flex items-center gap-1 text-xs text-[var(--text-primary)] font-medium">
+6077:        <span className={cn("text-[10px] mb-0.5 font-medium", isActive ? "text-[#3b82f6]" : "text-[var(--text-secondary)]")}>
+6281:    <div className="h-full overflow-y-auto p-4 pb-20 bg-[var(--bg-primary)]">
+6282:      <h1 className="text-lg font-bold mb-4 text-[var(--text-primary)] text-center">Market</h1>
+6285:      <button className="w-full bg-[var(--bg-secondary)] rounded-xl p-4 flex items-center justify-between mb-6 active:scale-[0.98] transition border border-[var(--border-color)]">
+6286:        <span className="font-bold text-[var(--text-primary)] text-sm">My Purchases & Rewards</span>
+6287:        <ChevronRight size={20} className="text-[var(--text-secondary)]" />
+6306:        <div className="min-w-[100%] bg-[var(--bg-secondary)] rounded-2xl p-5 relative overflow-hidden h-32 flex flex-col justify-center border border-[var(--border-color)] snap-center">
+6307:          <h3 className="font-bold text-xl text-[var(--text-primary)] z-10 mb-1">Forex</h3>
+6308:          <p className="text-xs text-[var(--text-secondary)] z-10 max-w-[65%] leading-relaxed">Professional tools to help you predict market trends</p>
+6320:        <div className="w-1.5 h-1.5 rounded-full bg-[var(--bg-tertiary)]"></div>
+6352:    <div className="bg-[var(--bg-secondary)] rounded-2xl p-6 flex flex-col border border-[var(--border-color)] active:scale-[0.98] transition cursor-pointer min-h-[200px] relative overflow-hidden">
+6354:         <div className="w-24 h-24 rounded-[2rem] bg-[var(--bg-primary)] flex items-center justify-center border border-[var(--border-color)] shadow-inner">
+6359:        <h3 className="text-lg font-bold text-[var(--text-primary)] mb-2">{title}</h3>
+6360:        <p className="text-sm text-[var(--text-secondary)] leading-relaxed">{description}</p>
+6393:    <div className="h-full w-full overflow-y-auto p-4 pb-24 bg-[var(--bg-primary)]">
+6396:          <button onClick={onBack} className="md:hidden p-2 -ml-2 text-[var(--text-secondary)] hover:text-white transition-colors">
+6400:        <h1 className="text-2xl font-black text-[var(--text-primary)]">Bonuses</h1>
+6405:        <div className="bg-[var(--bg-secondary)] rounded-3xl p-6 mb-8 border border-[var(--border-color)] relative overflow-hidden">
+6409:              <h2 className="text-lg font-black text-[var(--text-primary)] mb-1 uppercase tracking-tight">Active Bonus</h2>
+6410:              <p className="text-xs text-[var(--text-secondary)] font-medium">Complete turnover to unlock withdrawals</p>
+6420:                <span className="text-[10px] text-[var(--text-secondary)] font-black uppercase tracking-widest">Progress</span>
+6421:                <div className="text-2xl font-black text-[var(--text-primary)]">{bonusProgress.toFixed(1)}%</div>
+6424:                <span className="text-[10px] text-[var(--text-secondary)] font-black uppercase tracking-widest">Remaining</span>
+6429:            <div className="h-3 bg-[var(--bg-primary)] rounded-full overflow-hidden border border-[var(--border-color)]">
+6438:              <div className="bg-[var(--bg-primary)]/50 rounded-2xl p-3 border border-[var(--border-color)]">
+6439:                <div className="text-[9px] text-[var(--text-secondary)] font-black uppercase tracking-widest mb-1">Required</div>
+6440:                <div className="text-sm font-black text-[var(--text-primary)]">{currencySymbol}{turnoverRequired.toLocaleString()}</div>
+6442:              <div className="bg-[var(--bg-primary)]/50 rounded-2xl p-3 border border-[var(--border-color)]">
+6443:                <div className="text-[9px] text-[var(--text-secondary)] font-black uppercase tracking-widest mb-1">Achieved</div>
+6452:        <h2 className="font-bold text-lg text-[var(--text-primary)]">Bonus History</h2>
+6457:          <div className="bg-[var(--bg-secondary)] rounded-2xl p-6 border border-[var(--border-color)] text-center">
+6458:            <p className="text-xs text-[var(--text-secondary)]">No bonus history found.</p>
+6462:            <div key={idx} className="bg-[var(--bg-secondary)] rounded-2xl p-4 border border-[var(--border-color)] flex justify-between items-center">
+6464:                <div className="text-xs font-bold text-[var(--text-primary)] mb-0.5">
+6467:                <div className="text-[10px] text-[var(--text-secondary)]">
+6473:                <div className="text-[9px] text-[var(--text-secondary)] font-bold uppercase">Turnover: {currencySymbol}{bonus.turnoverRequired?.toLocaleString() || '0'}</div>
+6481:        <h2 className="font-bold text-lg text-[var(--text-primary)]">Tasks & Rewards</h2>
+6482:        <div className="flex items-center gap-1 text-xs text-[var(--text-secondary)]">
+6491:          <div className="w-full bg-[var(--bg-secondary)] rounded-2xl p-8 border border-[var(--border-color)] text-center">
+6492:            <Gift className="mx-auto mb-3 text-[var(--text-secondary)] opacity-20" size={40} />
+6493:            <p className="text-sm text-[var(--text-secondary)] font-medium">No active rewards at the moment.</p>
+6497:            <div key={reward.id} className="min-w-[280px] bg-[var(--bg-secondary)] rounded-2xl p-6 border border-[var(--border-color)] relative group overflow-hidden">
+6510:                  <p className="text-sm font-bold pr-8 text-[var(--text-primary)]">{reward.title}</p>
+6513:              <p className="text-xs text-[var(--text-secondary)] mb-6 line-clamp-2">{reward.description}</p>
+6516:                className="w-full bg-[var(--bg-tertiary)] py-3 rounded-xl text-xs font-black text-[var(--text-primary)] hover:bg-[#343a46] transition border border-[var(--border-color)] active:scale-95"
+6526:        <h2 className="font-bold text-lg text-[var(--text-primary)]">My Trading Stats</h2>
+6530:        <div className="bg-[var(--bg-secondary)] p-4 rounded-2xl border border-[var(--border-color)]">
+6531:          <span className="text-[10px] text-[var(--text-secondary)] uppercase font-black">Total Trades</span>
+6532:          <div className="text-2xl font-black text-[var(--text-primary)] mt-1">{trades.length}</div>
+6534:        <div className="bg-[var(--bg-secondary)] p-4 rounded-2xl border border-[var(--border-color)]">
+6535:          <span className="text-[10px] text-[var(--text-secondary)] uppercase font-black">Win Rate</span>
+6540:        <div className="bg-[var(--bg-secondary)] p-4 rounded-2xl border border-[var(--border-color)]">
+6541:          <span className="text-[10px] text-[var(--text-secondary)] uppercase font-black">Wins</span>
+6544:        <div className="bg-[var(--bg-secondary)] p-4 rounded-2xl border border-[var(--border-color)]">
+6545:          <span className="text-[10px] text-[var(--text-secondary)] uppercase font-black">Losses</span>
+6804:    <aside className="hidden md:flex flex-col w-80 border-r border-[var(--border-color)] bg-[var(--bg-primary)] p-4 overflow-y-auto z-20">
+6807:        <button onClick={onClose} className="text-[var(--text-secondary)] hover:text-white">
+6818:    <aside className="hidden md:flex flex-col w-80 border-r border-[var(--border-color)] bg-[var(--bg-primary)] overflow-y-auto z-20 scrollbar-hide">
+6837:    <aside className="hidden md:flex flex-col w-80 border-r border-[var(--border-color)] bg-[var(--bg-primary)] z-20 overflow-hidden">
+6852:    <aside className="hidden md:flex flex-col w-80 border-r border-[var(--border-color)] bg-[var(--bg-primary)] p-4 overflow-y-auto z-20 scrollbar-hide">
+6855:        <button onClick={onClose} className="text-[var(--text-secondary)] hover:text-white">
+6866:    <aside className="hidden md:flex flex-col w-[400px] border-r border-[var(--border-color)] bg-[var(--bg-primary)] overflow-hidden z-20">
+6868:        <h2 className="text-[32px] font-bold text-[var(--text-primary)] tracking-tight">Accounts</h2>
+6869:        <button onClick={onClose} className="text-[var(--text-secondary)] hover:text-white transition p-2">
+6882:                        isActive ? "bg-[var(--bg-secondary)] border border-[var(--border-color)]" : "hover:bg-white/[0.03]"
+6894:                            <div className="w-10 h-10 rounded-xl bg-[var(--bg-secondary)] border border-[var(--border-color)] flex items-center justify-center shadow-lg relative overflow-hidden">
+6904:                           <span className="text-[var(--text-secondary)] font-bold text-sm leading-tight mb-1">
+6907:                           <span className="text-[var(--text-primary)] font-bold text-[18px] tracking-tight">
+6914:                        <MoreVertical size={24} className="text-[var(--text-secondary)] group-hover:text-white transition" />
+6925:            <div className="w-10 h-10 flex items-center justify-center text-[var(--text-secondary)] group-hover:text-white transition">
+6928:            <span className="text-[17px] font-bold text-[var(--text-primary)] transition">Add Account</span>
+6939:    <aside className="hidden md:flex flex-col w-[360px] border-r border-[var(--border-color)] bg-[var(--bg-primary)] p-6 overflow-y-auto z-20">
+6941:        <h2 className="text-xl font-bold tracking-tight text-[var(--text-primary)]">Profile</h2>
+6943:          <button onClick={onNotificationsClick} className="p-2 -mr-2 text-[var(--text-secondary)] relative hover:text-white transition">
+6946:               <div className="absolute top-1 right-2 w-4 h-4 bg-red-500 rounded-full border-2 border-[var(--bg-primary)] flex items-center justify-center text-[9px] font-black text-white">
+6951:          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-full bg-white/5 hover:bg-white/10 text-[var(--text-secondary)] hover:text-white transition">
+6960:          <div className="w-16 h-16 rounded-full bg-[var(--bg-secondary)] flex items-center justify-center border border-[var(--border-color)] overflow-hidden shadow-xl">
+6964:              <User size={24} className="text-[var(--text-secondary)]" />
+6969:           <h1 className="text-[17px] font-bold mb-0.5 tracking-tight text-[var(--text-primary)]">{user.displayName || user.email?.split('@')[0]}</h1>
+6970:           <div className="flex items-center gap-2 text-[var(--text-secondary)] text-[13px] font-medium tracking-wide">
+6985:      <div className="bg-[var(--bg-secondary)] rounded-2xl p-5 mb-5 border border-[var(--border-color)] relative overflow-hidden">
+6987:          <span className="text-[var(--text-secondary)] text-[11px] font-bold uppercase tracking-widest">Live Balance</span>
+6992:        <div className="text-3xl font-black text-[var(--text-primary)] mb-6 tabular-nums tracking-tight">
+6997:          <div className="bg-[var(--bg-primary)] rounded-xl p-3 border border-[var(--border-color)]">
+6998:            <div className="text-[var(--text-secondary)] text-[10px] font-bold uppercase tracking-widest mb-1.5">Real</div>
+6999:            <div className="text-[var(--text-primary)] font-bold text-sm tracking-wide">{currency.symbol}{balance.toFixed(2)}</div>
+7001:          <div className="bg-[var(--bg-primary)] rounded-xl p-3 border border-[var(--border-color)]">
+7002:            <div className="text-[var(--text-secondary)] text-[10px] font-bold uppercase tracking-widest mb-1.5">Bonus</div>
+7003:            <div className="text-[var(--text-primary)] font-bold text-sm tracking-wide">{currency.symbol}{bonusBalance.toFixed(2)}</div>
+7008:          <div className="mt-5 pt-5 border-t border-[var(--border-color)] relative z-10">
+7010:              <span className="text-[var(--text-secondary)] text-[10px] font-bold uppercase tracking-widest">Turnover Progress</span>
+7015:            <div className="h-2 bg-[var(--bg-primary)] rounded-full overflow-hidden mb-2.5 shadow-inner">
+7024:              <span className="text-[var(--text-secondary)]">Target: {currency.symbol}{turnoverRequired.toFixed(2)}</span>
+7034:          className="bg-[var(--bg-secondary)] rounded-2xl p-4 flex flex-col items-start gap-4 border border-[var(--border-color)] hover:bg-[var(--bg-tertiary)] transition group shadow-sm"
+7039:          <span className="text-[11px] font-bold uppercase tracking-widest text-[var(--text-secondary)]">Bonuses</span>
+7043:          className="bg-[var(--bg-secondary)] rounded-2xl p-4 flex flex-col items-start gap-4 border border-[var(--border-color)] hover:bg-[var(--bg-tertiary)] transition group shadow-sm"
+7048:          <span className="text-[11px] font-bold uppercase tracking-widest text-[var(--text-secondary)]">Referrals</span>
+7052:      <button onClick={onSettings} className="w-full bg-[var(--bg-secondary)] rounded-xl p-3.5 flex items-center justify-center gap-2.5 font-bold border border-[var(--border-color)] hover:bg-[var(--bg-tertiary)] transition text-sm tracking-wide shadow-sm text-[var(--text-primary)]">
+7053:        <Settings size={16} className="text-[var(--text-secondary)]" />
+7064:    <aside className="hidden md:flex flex-col w-72 border-l border-[var(--border-color)] bg-[var(--bg-primary)] p-4 overflow-y-auto scrollbar-hide z-20 relative">
+7066:        <div className="absolute inset-0 z-50 bg-[var(--bg-primary)]/95 backdrop-blur-xl flex flex-col items-center justify-center p-8 text-center animate-in fade-in duration-500">
+7067:           <div className="w-24 h-24 bg-white/[0.03] rounded-[32px] flex items-center justify-center mb-8 border border-[var(--border-color)] relative shadow-2xl">
+7069:              <Lock size={42} className="text-[var(--text-secondary)] relative z-10" />
+7071:           <h3 className="text-[var(--text-primary)] font-black text-xl mb-2 tracking-tight uppercase">Trading is closed</h3>
+7072:           <p className="text-[var(--text-secondary)] text-[13px] mb-10 leading-relaxed font-medium">
+7081:             className="w-full h-14 bg-[var(--bg-secondary)] border border-[var(--border-color)] shadow-xl rounded-2xl flex items-center justify-between px-6 active:scale-[0.98] transition-transform"
+7083:             <span className="text-[var(--text-primary)] font-extrabold text-[15px]">Enable Orders</span>
+7085:                <Clock size={16} className="text-[var(--text-secondary)]" />

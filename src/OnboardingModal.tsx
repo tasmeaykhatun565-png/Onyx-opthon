@@ -9,9 +9,9 @@ interface OnboardingModalProps {
 
 const STEPS = [
   {
-    title: 'Welcome to Onyx Option',
+    title: 'Welcome to Onyx Elite',
     description: 'Your professional binary options trading platform. Let\'s get you started with a quick tour of the core features.',
-    icon: <div className="w-16 h-16 rounded-full flex items-center justify-center overflow-hidden mb-4 shadow-xl border-2 border-white/10">
+    icon: <div className="w-16 h-16 rounded-full flex items-center justify-center overflow-hidden mb-4 shadow-xl border-2 border-border-color">
             <img src="https://i.imghippo.com/files/Gtw3911Dmk.jpg" alt="Logo" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
           </div>
   },
@@ -58,11 +58,11 @@ export default function OnboardingModal({ isOpen, onClose }: OnboardingModalProp
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
           exit={{ opacity: 0, scale: 0.95 }}
-          className="bg-[var(--bg-secondary)] w-full max-w-md rounded-3xl shadow-2xl overflow-hidden border border-[var(--border-color)]"
+          className="bg-bg-secondary w-full max-w-md rounded-3xl shadow-2xl overflow-hidden border border-border-color"
         >
-          <div className="flex justify-between items-center p-4 border-b border-[var(--border-color)]">
-            <h3 className="font-bold text-[var(--text-primary)]">Quick Tour</h3>
-            <button onClick={onClose} className="p-2 bg-[var(--bg-tertiary)] rounded-full text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors">
+          <div className="flex justify-between items-center p-4 border-b border-border-color">
+            <h3 className="font-bold text-text-primary">Quick Tour</h3>
+            <button onClick={onClose} className="p-2 bg-bg-tertiary rounded-full text-text-secondary hover:text-text-primary transition-colors">
               <X size={16} />
             </button>
           </div>
@@ -78,20 +78,20 @@ export default function OnboardingModal({ isOpen, onClose }: OnboardingModalProp
                 className="flex flex-col items-center"
               >
                 {STEPS[currentStep].icon}
-                <h2 className="text-2xl font-extrabold text-[var(--text-primary)] mb-3">{STEPS[currentStep].title}</h2>
-                <p className="text-[var(--text-secondary)] leading-relaxed">
+                <h2 className="text-2xl font-extrabold text-text-primary mb-3">{STEPS[currentStep].title}</h2>
+                <p className="text-text-secondary leading-relaxed">
                   {STEPS[currentStep].description}
                 </p>
               </motion.div>
             </AnimatePresence>
           </div>
 
-          <div className="p-4 bg-[var(--bg-tertiary)]/30 border-t border-[var(--border-color)] flex items-center justify-between">
+          <div className="p-4 bg-bg-tertiary/30 border-t border-border-color flex items-center justify-between">
             <div className="flex gap-1.5">
               {STEPS.map((_, idx) => (
                 <div 
                   key={idx} 
-                  className={`h-1.5 rounded-full transition-all duration-300 ${idx === currentStep ? 'w-6 bg-blue-500' : 'w-1.5 bg-[var(--border-color)]'}`}
+                  className={`h-1.5 rounded-full transition-all duration-300 ${idx === currentStep ? 'w-6 bg-blue-500' : 'w-1.5 bg-[var(--color-border-color)]'}`}
                 />
               ))}
             </div>
@@ -100,7 +100,7 @@ export default function OnboardingModal({ isOpen, onClose }: OnboardingModalProp
               {currentStep > 0 && (
                 <button 
                   onClick={handlePrev}
-                  className="px-4 py-2 rounded-xl font-bold text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)] transition-colors"
+                  className="px-4 py-2 rounded-xl font-bold text-text-secondary hover:bg-bg-tertiary transition-colors"
                 >
                   Back
                 </button>

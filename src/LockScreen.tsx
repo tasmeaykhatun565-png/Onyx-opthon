@@ -39,7 +39,7 @@ export const LockScreen: React.FC<LockScreenProps> = ({ onUnlock }) => {
   };
 
   return (
-    <div className="fixed inset-0 z-[9999] bg-[var(--bg-primary)] flex flex-col items-center justify-center font-sans">
+    <div className="fixed inset-0 z-[9999] bg-bg-primary flex flex-col items-center justify-center font-sans">
       <motion.div 
         initial={{ opacity: 0, scale: 0.9 }}
         animate={{ opacity: 1, scale: 1 }}
@@ -50,8 +50,8 @@ export const LockScreen: React.FC<LockScreenProps> = ({ onUnlock }) => {
             <Lock size={40} strokeWidth={2.5} />
           </div>
           <div className="text-center">
-            <h1 className="text-2xl font-black text-[var(--text-primary)]">App Locked</h1>
-            <p className="text-sm text-[var(--text-secondary)] mt-1 font-medium">Enter your 4-digit PIN to unlock</p>
+            <h1 className="text-2xl font-black text-text-primary">App Locked</h1>
+            <p className="text-sm text-text-secondary mt-1 font-medium">Enter your 4-digit PIN to unlock</p>
           </div>
         </div>
 
@@ -67,7 +67,7 @@ export const LockScreen: React.FC<LockScreenProps> = ({ onUnlock }) => {
                 "w-4 h-4 rounded-full border-2 transition-all duration-300",
                 pin.length > i 
                   ? "bg-blue-500 border-blue-500 scale-125 shadow-[0_0_15px_rgba(59,130,246,0.5)]" 
-                  : "border-[var(--border-color)] bg-transparent"
+                  : "border-border-color bg-transparent"
               )}
             />
           ))}
@@ -89,23 +89,23 @@ export const LockScreen: React.FC<LockScreenProps> = ({ onUnlock }) => {
             <button
               key={num}
               onClick={() => handleKeyPress(num.toString())}
-              className="h-20 rounded-2xl bg-[var(--bg-secondary)] hover:bg-[var(--bg-tertiary)] border border-[var(--border-color)] text-2xl font-black text-[var(--text-primary)] transition active:scale-90 flex items-center justify-center shadow-lg"
+              className="h-20 rounded-2xl bg-bg-secondary hover:bg-bg-tertiary border border-border-color text-2xl font-black text-text-primary transition active:scale-90 flex items-center justify-center shadow-lg"
             >
               {num}
             </button>
           ))}
           <div className="flex items-center justify-center">
-            <Fingerprint size={32} className="text-[var(--text-secondary)] opacity-20" />
+            <Fingerprint size={32} className="text-text-secondary opacity-20" />
           </div>
           <button
             onClick={() => handleKeyPress("0")}
-            className="h-20 rounded-2xl bg-[var(--bg-secondary)] hover:bg-[var(--bg-tertiary)] border border-[var(--border-color)] text-2xl font-black text-[var(--text-primary)] transition active:scale-90 flex items-center justify-center shadow-lg"
+            className="h-20 rounded-2xl bg-bg-secondary hover:bg-bg-tertiary border border-border-color text-2xl font-black text-text-primary transition active:scale-90 flex items-center justify-center shadow-lg"
           >
             0
           </button>
           <button
             onClick={handleDelete}
-            className="h-20 rounded-2xl bg-[var(--bg-secondary)] hover:bg-[var(--bg-tertiary)] border border-[var(--border-color)] text-[var(--text-secondary)] transition active:scale-90 flex items-center justify-center shadow-lg"
+            className="h-20 rounded-2xl bg-bg-secondary hover:bg-bg-tertiary border border-border-color text-text-secondary transition active:scale-90 flex items-center justify-center shadow-lg"
           >
             <Delete size={28} />
           </button>

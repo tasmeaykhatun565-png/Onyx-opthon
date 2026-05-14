@@ -6,13 +6,13 @@ import { format } from 'date-fns';
 import { AdminPanel } from './AdminPanel';
 import { 
   ArrowUp, ArrowDown, Wallet, History, Settings, Bell, Menu, X, 
-  User, ChevronDown, ChevronUp, Signal, BarChart2, HelpCircle, 
+  User, ChevronDown, ChevronUp, Signal, BarChart2, BarChart, HelpCircle, AlertCircle, 
   Briefcase, Gift, LayoutGrid, Plus, Minus, Divide, Clock, Percent,
   ChevronLeft, Copy, Box, Link as LinkIcon, CalendarDays, ChevronRight,
-  Shuffle, Target, ChevronsUp, GraduationCap, MessageCircle, BookOpen,
-  Trophy, ShoppingBag, ArrowUpDown, Mail, UserCheck, Key, Shield, ShieldCheck, Zap, Check, Grid, Image, Activity, LogOut,
-  Search, Info, AlignLeft, Star, MoreVertical, Lock, Video, FileText, Phone, Youtube, Globe, Send, Bitcoin, Gem, TrendingUp, RefreshCw, Users, Newspaper,
-  Coins, Droplets, Flame, Pencil, PencilLine, CandlestickChart, Radio, Compass, Headphones, ArrowRight, Layers, Twitter, Facebook, Instagram, Download, Smartphone, Apple, PlayCircle
+  Shuffle, Target, ChevronsUp, GraduationCap, MessageCircle, MessageSquare, BookOpen,
+  Trophy, ShoppingBag, ArrowUpDown, Mail, UserCheck, Key, Shield, ShieldCheck, Zap, Check, Grid, Image, Activity, LogOut, Camera, Calendar,
+  Search, Info, AlignLeft, Star, MoreVertical, Lock, Video, FileText, Phone, Youtube, Globe, Send, Bitcoin, Gem, TrendingUp, RefreshCw, Users, Newspaper, BadgeCheck,
+  Coins, Droplets, Flame, Pencil, PencilLine, CandlestickChart, Radio, Compass, Headphones, ArrowRight, Layers, Twitter, Facebook, Instagram, Download, Smartphone, Apple, PlayCircle, DollarSign
 } from 'lucide-react';
 import { playSound } from './sounds';
 import { cn, deepEqual, safeStringify } from './utils';
@@ -26,6 +26,7 @@ import TradeInputSheet from './TradeInputSheet';
 import RiskManagementSheet from './RiskManagementSheet';
 import { TradingChart } from './TradingChart';
 import Auth from './Auth';
+import EmailVerificationSheet from './EmailVerificationSheet';
 import { LockScreen } from './LockScreen';
 import { 
   TradingPlatformSettings, AppearanceSettings, NotificationSettings,
@@ -43,6 +44,10 @@ import { LeaderboardPage } from './LeaderboardPage';
 import WhatsNewSheet from './WhatsNewSheet';
 import IndicatorSheet from './IndicatorSheet';
 import ServiceAgreementSheet from './ServiceAgreementSheet';
+import LanguageSheet from './LanguageSheet';
+import AppearanceSheet from './AppearanceSheet';
+import CurrencySheet from './CurrencySheet';
+import TradingPlatformSheet from './TradingPlatformSheet';
 import ActivitiesSheet from './ActivitiesSheet';
 import { EconomicCalendar } from './EconomicCalendar';
 import TournamentsPage from './TournamentsPage';
@@ -50,9 +55,9 @@ import OnboardingModal from './OnboardingModal';
 import PendingOrderSheet from './PendingOrderSheet';
 
 import { io, Socket } from 'socket.io-client';
-import { ToastProvider } from './Toast';
-import { useToast } from './Toast';
+import { ToastProvider, useToast } from './Toast';
 import { useTranslation } from './i18n';
+import { useNavigate, useLocation, Routes, Route } from 'react-router-dom';
 
 // --- Types ---
 type OHLCData = {
@@ -111,6 +116,11 @@ type Asset = {
   volatility: number;
   isFrozen?: boolean;
   isOTC?: boolean;
+  isRealMarket?: boolean;
+  precision?: number;
+  liveTargetPrice?: number;
+  lastRealUpdate?: number;
+  priceSource?: string;
 };
 
 type Account = {
@@ -124,6 +134,38 @@ type Account = {
 };
 
 // --- Constants ---
+// --- Components ---
+const LoadingOverlay = ({ message }: { message?: string }) => {
+  return (
+    <div className="fixed inset-0 z-[2000] bg-bg-primary flex flex-col items-center justify-center">
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.95 }}
+        transition={{ duration: 0.3 }}
+        className="flex flex-col items-center gap-6"
+      >
+        <div className="relative flex items-center justify-center">
+          <motion.div 
+            animate={{ rotate: 360 }}
+            transition={{ duration: 1.5, repeat: Infinity, ease: "linear" }}
+            className="w-12 h-12 rounded-full border-2 border-border-color border-t-[var(--color-accent-color)]"
+          />
+        </div>
+        {message && (
+          <motion.p
+            animate={{ opacity: [0.5, 1, 0.5] }}
+            transition={{ duration: 2, repeat: Infinity }}
+            className="text-text-secondary text-sm font-medium tracking-widest uppercase mt-4"
+          >
+            {message}
+          </motion.p>
+        )}
+      </motion.div>
+    </div>
+  );
+};
+
 const ASSETS: Asset[] = [
   // Forex
   { id: 'eur_usd_otc', name: 'EUR/USD OTC', shortName: 'EUR/USD OTC', payout: 92, category: 'Forex', flag: '🇪🇺🇺🇸', basePrice: 1.0850, volatility: 0.00008, isOTC: true },
@@ -190,15 +232,31 @@ const ASSETS: Asset[] = [
   { id: 'pypl_stock', name: 'PayPal', shortName: 'PYPL', payout: 85, category: 'Stocks', flag: '💳', basePrice: 65.00, volatility: 1.2, isOTC: false },
   
   // Real Markets (Non-OTC replacements or additional)
-  { id: 'eur_usd', name: 'EUR/USD', shortName: 'EUR/USD', payout: 85, category: 'Forex', flag: '🇪🇺🇺🇸', basePrice: 1.08, volatility: 0.0006, isOTC: false },
-  { id: 'gbp_usd', name: 'GBP/USD', shortName: 'GBP/USD', payout: 85, category: 'Forex', flag: '🇬🇧🇺🇸', basePrice: 1.25, volatility: 0.0006, isOTC: false },
-  { id: 'usd_jpy', name: 'USD/JPY', shortName: 'USD/JPY', payout: 85, category: 'Forex', flag: '🇺🇸🇯🇵', basePrice: 155, volatility: 0.1, isOTC: false },
-  { id: 'usd_cad', name: 'USD/CAD', shortName: 'USD/CAD', payout: 85, category: 'Forex', flag: '🇺🇸🇨🇦', basePrice: 1.35, volatility: 0.0005, isOTC: false },
-  { id: 'gbp_jpy', name: 'GBP/JPY', shortName: 'GBP/JPY', payout: 85, category: 'Forex', flag: '🇬🇧🇯🇵', basePrice: 195.5, volatility: 0.12, isOTC: false },
-  { id: 'eur_jpy', name: 'EUR/JPY', shortName: 'EUR/JPY', payout: 85, category: 'Forex', flag: '🇪🇺🇯🇵', basePrice: 168.0, volatility: 0.1, isOTC: false },
-  { id: 'aud_jpy', name: 'AUD/JPY', shortName: 'AUD/JPY', payout: 82, category: 'Forex', flag: '🇦🇺🇯🇵', basePrice: 101.5, volatility: 0.1, isOTC: false },
-  { id: 'gold', name: 'Gold', shortName: 'GOLD', payout: 85, category: 'Commodities', flag: '🟡', basePrice: 2300, volatility: 2.0, isOTC: false },
-  { id: 'oil', name: 'WTI Crude Oil', shortName: 'OIL', payout: 80, category: 'Commodities', flag: '🛢️', basePrice: 80, volatility: 0.5, isOTC: false },
+  { id: 'eur_usd', name: 'EUR/USD', shortName: 'EUR/USD', payout: 85, category: 'Forex', flag: '🇪🇺🇺🇸', basePrice: 1.08, volatility: 0.00015, isOTC: false, precision: 5 },
+  { id: 'gbp_usd', name: 'GBP/USD', shortName: 'GBP/USD', payout: 85, category: 'Forex', flag: '🇬🇧🇺🇸', basePrice: 1.25, volatility: 0.00018, isOTC: false, precision: 5 },
+  { id: 'usd_jpy', name: 'USD/JPY', shortName: 'USD/JPY', payout: 85, category: 'Forex', flag: '🇺🇸🇯🇵', basePrice: 155, volatility: 0.02, isOTC: false, precision: 3 },
+  { id: 'usd_cad', name: 'USD/CAD', shortName: 'USD/CAD', payout: 85, category: 'Forex', flag: '🇺🇸🇨🇦', basePrice: 1.35, volatility: 0.00015, isOTC: false, precision: 5 },
+  { id: 'gbp_jpy', name: 'GBP/JPY', shortName: 'GBP/JPY', payout: 85, category: 'Forex', flag: '🇬🇧🇯🇵', basePrice: 195.5, volatility: 0.025, isOTC: false, precision: 3 },
+  { id: 'eur_jpy', name: 'EUR/JPY', shortName: 'EUR/JPY', payout: 85, category: 'Forex', flag: '🇪🇺🇯🇵', basePrice: 168.0, volatility: 0.02, isOTC: false, precision: 3 },
+  { id: 'aud_jpy', name: 'AUD/JPY', shortName: 'AUD/JPY', payout: 82, category: 'Forex', flag: '🇦🇺🇯🇵', basePrice: 101.5, volatility: 0.02, isOTC: false, precision: 3 },
+  { id: 'aud_usd', name: 'AUD/USD', shortName: 'AUD/USD', payout: 85, category: 'Forex', flag: '🇦🇺🇺🇸', basePrice: 0.66, volatility: 0.00015, isOTC: false, precision: 5 },
+  { id: 'nzd_usd', name: 'NZD/USD', shortName: 'NZD/USD', payout: 85, category: 'Forex', flag: '🇳🇿🇺🇸', basePrice: 0.60, volatility: 0.00015, isOTC: false, precision: 5 },
+  { id: 'usd_chf', name: 'USD/CHF', shortName: 'USD/CHF', payout: 85, category: 'Forex', flag: '🇺🇸🇨🇭', basePrice: 0.90, volatility: 0.00015, isOTC: false, precision: 5 },
+  { id: 'eur_gbp', name: 'EUR/GBP', shortName: 'EUR/GBP', payout: 85, category: 'Forex', flag: '🇪🇺🇬🇧', basePrice: 0.86, volatility: 0.0001, isOTC: false, precision: 5 },
+  { id: 'eur_aud', name: 'EUR/AUD', shortName: 'EUR/AUD', payout: 85, category: 'Forex', flag: '🇪🇺🇦🇺', basePrice: 1.63, volatility: 0.0002, isOTC: false, precision: 5 },
+  { id: 'eur_cad', name: 'EUR/CAD', shortName: 'EUR/CAD', payout: 85, category: 'Forex', flag: '🇪🇺🇨🇦', basePrice: 1.47, volatility: 0.0002, isOTC: false, precision: 5 },
+  { id: 'gbp_cad', name: 'GBP/CAD', shortName: 'GBP/CAD', payout: 85, category: 'Forex', flag: '🇬🇧🇨🇦', basePrice: 1.71, volatility: 0.0002, isOTC: false, precision: 5 },
+  { id: 'aud_cad', name: 'AUD/CAD', shortName: 'AUD/CAD', payout: 85, category: 'Forex', flag: '🇦🇺🇨🇦', basePrice: 0.90, volatility: 0.00015, isOTC: false, precision: 5 },
+  { id: 'nzd_jpy', name: 'NZD/JPY', shortName: 'NZD/JPY', payout: 85, category: 'Forex', flag: '🇳🇿🇯🇵', basePrice: 93.5, volatility: 0.015, isOTC: false, precision: 3 },
+  { id: 'chf_jpy', name: 'CHF/JPY', shortName: 'CHF/JPY', payout: 85, category: 'Forex', flag: '🇨🇭🇯🇵', basePrice: 171.5, volatility: 0.015, isOTC: false, precision: 3 },
+  { id: 'cad_jpy', name: 'CAD/JPY', shortName: 'CAD/JPY', payout: 85, category: 'Forex', flag: '🇨🇦🇯🇵', basePrice: 112.5, volatility: 0.015, isOTC: false, precision: 3 },
+  { id: 'gbp_aud', name: 'GBP/AUD', shortName: 'GBP/AUD', payout: 85, category: 'Forex', flag: '🇬🇧🇦🇺', basePrice: 1.89, volatility: 0.0002, isOTC: false, precision: 5 },
+  { id: 'gbp_nzd', name: 'GBP/NZD', shortName: 'GBP/NZD', payout: 85, category: 'Forex', flag: '🇬🇧🇳🇿', basePrice: 2.07, volatility: 0.0002, isOTC: false, precision: 5 },
+  { id: 'aud_nzd', name: 'AUD/NZD', shortName: 'AUD/NZD', payout: 85, category: 'Forex', flag: '🇦🇺🇳🇿', basePrice: 1.09, volatility: 0.00015, isOTC: false, precision: 5 },
+  { id: 'eur_nzd', name: 'EUR/NZD', shortName: 'EUR/NZD', payout: 85, category: 'Forex', flag: '🇪🇺🇳🇿', basePrice: 1.78, volatility: 0.0002, isOTC: false, precision: 5 },
+  { id: 'gold', name: 'Gold', shortName: 'GOLD', payout: 85, category: 'Commodities', flag: '🟡', basePrice: 2300, volatility: 2.0, isOTC: false, precision: 2 },
+  { id: 'silver', name: 'Silver', shortName: 'SILVER', payout: 88, category: 'Commodities', flag: '💍', basePrice: 28.0, volatility: 0.05, isOTC: false, precision: 3 },
+  { id: 'oil', name: 'WTI Crude Oil', shortName: 'OIL', payout: 80, category: 'Commodities', flag: '🛢️', basePrice: 80, volatility: 0.5, isOTC: false, precision: 2 },
 ];
 
 const INITIAL_BALANCE = 12273.67;
@@ -338,7 +396,7 @@ const AssetIcon = ({
 
   if (logoUrl && !imgError) {
     return (
-      <div className={cn("rounded-full bg-white flex items-center justify-center border border-[var(--border-color)] shadow-sm overflow-hidden", containerSize)}>
+      <div className={cn("rounded-full bg-white flex items-center justify-center border border-border-color shadow-sm overflow-hidden", containerSize)}>
         <img 
           src={logoUrl} 
           alt={shortName} 
@@ -397,7 +455,7 @@ const AssetIcon = ({
   }
   
   return (
-    <div className={cn("rounded-full bg-[var(--bg-tertiary)] flex items-center justify-center border border-[var(--border-color)] shadow-sm", containerSize, fontSize)}>
+    <div className={cn("rounded-full bg-bg-tertiary flex items-center justify-center border border-border-color shadow-sm", containerSize, fontSize)}>
       {flag}
     </div>
   );
@@ -421,186 +479,170 @@ function AssetSelector({
 }) {
   const [activeTab, setActiveTab] = useState('Fixed Time');
   const [searchQuery, setSearchQuery] = useState('');
-  const [openSections, setOpenSections] = useState<Record<string, boolean>>({
-    'Forex': true,
-    'Crypto': true,
-    'Stocks': true,
-    'Commodities': true
-  });
-
-  const toggleSection = (category: string) => {
-    setOpenSections(prev => ({ ...prev, [category]: !prev[category] }));
-  };
-
+  
   const filteredAssets = ASSETS.filter(asset => {
     const dynamicAsset = marketAssets[asset.shortName];
     if (dynamicAsset && dynamicAsset.isVisible === false) return false;
 
-    const matchesSearch = asset.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                          asset.shortName.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesSearch;
+    const cleanQuery = searchQuery.toLowerCase().replace(/[^a-z0-9]/g, '');
+    if (cleanQuery) {
+      const cleanName = asset.name.toLowerCase().replace(/[^a-z0-9]/g, '');
+      const cleanShortName = asset.shortName.toLowerCase().replace(/[^a-z0-9]/g, '');
+      return cleanName.includes(cleanQuery) || cleanShortName.includes(cleanQuery);
+    }
+
+    // Filtering by active tab (roughly mapping categories to tabs)
+    if (activeTab === 'Fixed Time' && asset.category !== 'Crypto' && asset.category !== 'Forex' && asset.category !== 'Stocks' && asset.category !== 'Commodities') return false; 
+    // In many platforms, "Fixed Time" includes many categories but with a fixed expiration
+    // For simplicity, we'll show based on category for other tabs
+    if (activeTab === 'Forex' && asset.category !== 'Forex') return false;
+    if (activeTab === 'Stocks' && asset.category !== 'Stocks') return false;
+    if (activeTab === 'Crypto' && asset.category !== 'Crypto') return false;
+
+    return true;
   });
-
-  const groupedAssets = useMemo(() => {
-    const groups: Record<string, Asset[]> = {
-      'Forex': [],
-      'Crypto': [],
-      'Stocks': [],
-      'Commodities': []
-    };
-    filteredAssets.forEach(asset => {
-      if (groups[asset.category]) {
-        groups[asset.category].push(asset);
-      }
-    });
-    return groups;
-  }, [filteredAssets]);
-
-  const categoryIcons: Record<string, React.ReactNode> = {
-    'Forex': <Globe size={18} className="text-blue-400" />,
-    'Crypto': <Bitcoin size={18} className="text-orange-400" />,
-    'Stocks': <TrendingUp size={18} className="text-green-400" />,
-    'Commodities': <Gem size={18} className="text-yellow-400" />
-  };
 
   if (!isOpen) return null;
 
   return (
-    <div className="w-full h-full bg-[var(--bg-primary)] font-sans flex flex-col">
+    <div className="w-full h-full bg-bg-primary font-sans flex flex-col text-text-primary">
        {/* Header */}
-       <div className="flex items-center justify-between p-4 border-b border-[var(--border-color)]">
-         <h2 className="text-xl font-bold text-[var(--text-primary)]">Assets</h2>
-         <button onClick={onClose} className="text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition p-1 rounded-full hover:bg-[var(--bg-tertiary)]">
-            <X size={24} />
+       <div className="flex items-center justify-between px-6 pt-6 pb-4">
+         <h2 className="text-[28px] font-bold">Assets</h2>
+         <button onClick={onClose} className="text-gray-400 hover:text-text-primary transition p-1">
+            <X size={28} strokeWidth={2.5} />
          </button>
        </div>
 
-       {/* Search */}
-       <div className="px-4 py-3">
-         <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-secondary)]" size={18} />
-            <input 
-                type="text" 
-                placeholder="Search by name or ticker" 
-                className="w-full bg-[var(--bg-secondary)] text-[var(--text-primary)] pl-10 pr-4 py-3 rounded-xl border border-[var(--border-color)] focus:outline-none focus:border-blue-500 transition placeholder:text-[var(--text-secondary)]"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-            />
-         </div>
-       </div>
-
        {/* Tabs */}
-       <div className="flex items-center px-4 gap-2 mb-2 overflow-x-auto scrollbar-hide py-2">
-           {['Fixed Time', 'Forex', 'Stocks', 'Crypto'].map(tab => (
+       <div className="flex items-center px-6 border-b border-border-color mb-4">
+           {['Fixed Time', 'Forex', 'Stocks'].map(tab => (
                <button
                  key={tab}
                  onClick={() => setActiveTab(tab)}
                  className={cn(
-                     "px-4 py-2 rounded-lg text-sm font-semibold whitespace-nowrap transition",
+                     "px-0 py-3 mr-8 text-[15px] font-bold whitespace-nowrap transition relative",
                      activeTab === tab 
-                         ? "bg-[var(--bg-tertiary)] text-[var(--text-primary)]" 
-                         : "text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-secondary)]"
+                         ? "text-text-primary" 
+                         : "text-gray-500 hover:text-gray-300"
                  )}
                >
                  {tab}
+                 {activeTab === tab && (
+                   <motion.div 
+                     layoutId="asset-tab-indicator"
+                     className="absolute bottom-0 left-0 right-0 h-0.5 bg-accent-color rounded-full"
+                   />
+                 )}
                </button>
            ))}
        </div>
 
-       {/* List Header */}
-       <div className="flex-1 overflow-y-auto pb-20">
-          {(Object.entries(groupedAssets) as [string, Asset[]][]).map(([category, assets]) => (
-            <div key={category} className="mb-2">
-              {assets.length > 0 && (
-                <>
-                  <button 
-                      onClick={() => toggleSection(category)}
-                      className="w-full flex items-center justify-between px-4 py-3 bg-[var(--bg-secondary)] hover:bg-[var(--bg-tertiary)] transition border-b border-[var(--border-color)]"
-                  >
-                      <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-lg bg-[var(--bg-primary)] flex items-center justify-center border border-[var(--border-color)]">
-                            {categoryIcons[category]}
-                          </div>
-                          <span className="font-semibold text-sm text-[var(--text-primary)]">{category}</span>
-                          <span className="text-[10px] bg-[var(--bg-primary)] px-2 py-0.5 rounded-full text-[var(--text-secondary)] border border-[var(--border-color)]">{assets.length}</span>
-                      </div>
-                      {openSections[category] ? <ChevronUp size={16} className="text-[var(--text-secondary)]" /> : <ChevronDown size={16} className="text-[var(--text-secondary)]" />}
-                  </button>
+       {/* Search Bar */}
+       <div className="px-6 mb-4">
+         <div className="relative group">
+            <input 
+                type="text" 
+                placeholder="Search" 
+                className="w-full bg-bg-secondary text-text-primary pl-4 pr-10 py-3 rounded-xl border border-border-color focus:outline-none focus:border-accent-color transition placeholder:text-gray-600 font-medium"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+            />
+            <Search className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-600 group-focus-within:text-text-secondary transition" size={20} />
+         </div>
+       </div>
 
-                  {openSections[category] && (
-                      <div className="divide-y divide-[var(--border-color)]">
-                          {assets.map(asset => {
-                              const dynamicAsset = marketAssets[asset.shortName];
-                              const isFrozen = dynamicAsset?.isFrozen;
-                              
-                              return (
-                                  <div 
-                                      key={asset.id}
-                                      onClick={() => {
-                                          if (isFrozen) return;
-                                          setIsLoading(true);
-                                          onSelect(asset);
-                                          onClose();
-                                      }}
-                                      className={cn(
-                                          "flex items-center justify-between p-3 rounded-lg hover:bg-[var(--bg-tertiary)] cursor-pointer transition",
-                                          asset.id === currentAssetId && "bg-[var(--bg-tertiary)]",
-                                          isFrozen && "opacity-50 cursor-not-allowed"
-                                      )}
-                                  >
-                                      <div className="flex items-center">
-                                          <div className="mr-3 relative">
-                                              <AssetIcon 
-                                                  shortName={asset.shortName} 
-                                                  category={asset.category} 
-                                                  flag={asset.flag} 
-                                              />
-                                              {isFrozen && (
-                                                  <div className="absolute -top-1 -right-1 bg-red-500 rounded-full p-0.5 border border-[var(--bg-primary)]">
-                                                      <Lock size={8} className="text-white" />
-                                                  </div>
-                                              )}
-                                          </div>
-                                          <div className="flex flex-col">
-                                              <div className="flex items-center gap-2">
-                                                <span className="text-[var(--text-primary)] font-bold text-sm">{asset.name.split('(')[0].trim()}</span>
-                                                <span className="text-[10px] bg-blue-500/10 text-blue-500 font-bold px-1.5 py-0.5 rounded">
-                                                    {dynamicAsset?.payout || asset.payout}%
-                                                </span>
-                                                {asset.isOTC && (
-                                                  <span className="text-[10px] text-[var(--text-secondary)] font-medium">OTC</span>
-                                                )}
-                                              </div>
-                                              <div className="flex items-center gap-2">
-                                                {isFrozen ? (
-                                                  <span className="text-[10px] text-red-500 font-bold uppercase">Closed</span>
-                                                ) : (
-                                                  <span className="text-[10px] text-[var(--text-secondary)] font-mono">Market Open</span>
-                                                )}
-                                              </div>
-                                          </div>
-                                      </div>
-                                      
-                                      <div className="flex items-center gap-3">
-                                          {isFrozen ? (
-                                              <Lock size={16} className="text-[var(--text-secondary)]" />
-                                          ) : (
-                                              <div className="flex flex-col items-end">
-                                              </div>
-                                          )}
-                                          <button className="text-[var(--text-secondary)] hover:text-[var(--text-primary)] p-1">
-                                             <Star size={16} />
-                                          </button>
-                                      </div>
+       {/* Filters */}
+       <div className="flex items-center px-6 gap-2 mb-6">
+          <button className="flex items-center gap-2 bg-bg-secondary px-4 py-2 rounded-xl border border-border-color text-[13px] font-bold text-text-secondary hover:bg-bg-tertiary transition">
+            <AlignLeft size={16} className="text-text-secondary/40" />
+            Profitability
+            <ChevronDown size={16} className="text-text-secondary/40" />
+          </button>
+          <button className="bg-bg-secondary px-4 py-2 rounded-xl border border-border-color text-[13px] font-bold text-text-secondary hover:bg-bg-tertiary transition">
+            Favorites
+          </button>
+          <button className="flex items-center gap-2 bg-bg-secondary px-4 py-2 rounded-xl border border-border-color text-[13px] font-bold text-text-secondary hover:bg-bg-tertiary transition">
+            Any profitability
+            <ChevronDown size={14} className="text-text-secondary/40" />
+          </button>
+       </div>
+
+       {/* List Header Labels */}
+       <div className="px-6 flex justify-between items-center mb-2">
+          <span className="text-[11px] font-bold text-text-secondary/20 uppercase tracking-widest">Name</span>
+          <div className="flex items-center gap-1 cursor-help group">
+            <span className="text-[11px] font-bold text-text-secondary/20 uppercase tracking-widest">Profitability</span>
+            <HelpCircle size={14} className="text-text-secondary/10 group-hover:text-text-secondary/30 transition" />
+          </div>
+       </div>
+
+       {/* Asset List */}
+       <div className="flex-1 overflow-y-auto px-2 pb-24 space-y-0.5 custom-scrollbar">
+          {filteredAssets.map(asset => {
+              const dynamicAsset = marketAssets[asset.shortName];
+              const isFrozen = dynamicAsset?.isFrozen;
+              const payout = dynamicAsset?.payout || asset.payout;
+              
+              return (
+                  <div 
+                      key={asset.id}
+                      onClick={() => {
+                          if (isFrozen) return;
+                          setIsLoading(true);
+                          onSelect(asset);
+                          onClose();
+                      }}
+                      className={cn(
+                          "flex items-center justify-between px-4 py-3.5 rounded-xl hover:bg-[var(--color-text-primary)]/[0.03] cursor-pointer transition-all active:scale-[0.98]",
+                          asset.id === currentAssetId && "bg-[var(--color-text-primary)]/[0.05]",
+                          isFrozen && "opacity-40 grayscale"
+                      )}
+                  >
+                      <div className="flex items-center gap-4">
+                          <div className="relative">
+                              <AssetIcon 
+                                  shortName={asset.shortName} 
+                                  category={asset.category} 
+                                  flag={asset.flag} 
+                                  size="md"
+                              />
+                              {isFrozen && (
+                                  <div className="absolute -top-1 -right-1 bg-red-500 rounded-full p-0.5 border border-black shadow-lg">
+                                      <Lock size={8} className="text-text-primary" />
                                   </div>
-                              );
-                          })}
+                              )}
+                          </div>
+                          <div className="flex flex-col">
+                              <span className="text-text-primary font-bold text-[15px] leading-tight">
+                                {asset.name.split(' (')[0]}
+                              </span>
+                              {asset.name.includes('Equity') && (
+                                <span className="text-[10px] text-gray-500 font-bold uppercase tracking-wider mt-0.5">Stock Market</span>
+                              )}
+                              {asset.isOTC && !asset.name.toLowerCase().includes('quickler') && (
+                                <span className="text-[10px] text-gray-500 font-bold uppercase tracking-wider mt-0.5">Over-the-counter</span>
+                              )}
+                              {asset.name.toLowerCase().includes('quickler') && (
+                                <span className="text-[10px] text-gray-500 font-bold uppercase tracking-wider mt-0.5">5 Second Trading</span>
+                              )}
+                          </div>
                       </div>
-                  )}
-                </>
-              )}
-            </div>
-          ))}
+                      
+                      <div className="flex items-center gap-4">
+                          <span className={cn(
+                            "text-[15px] font-bold",
+                            payout >= 90 ? "text-[#22c55e]" : "text-[#22c55e]/80"
+                          )}>
+                              {payout}%
+                          </span>
+                          <button className="text-gray-600 hover:text-text-primary transition p-1">
+                             <Info size={18} />
+                          </button>
+                      </div>
+                  </div>
+              );
+          })}
        </div>
     </div>
   );
@@ -627,6 +669,7 @@ function TradeHistoryLog({
   timezoneOffset?: number,
   inSidebar?: boolean
 }) {
+  const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<'CLOSED' | 'PENDING'>('CLOSED');
 
   // Calculate today's stats for current timezone
@@ -649,39 +692,39 @@ function TradeHistoryLog({
       exit={{ opacity: 0, x: inSidebar ? "0" : "100%" }}
       transition={{ type: "spring", damping: 25, stiffness: 200 }}
       className={cn(
-        inSidebar ? "h-full flex flex-col w-full bg-[var(--bg-primary)]" : "fixed inset-0 z-[60] bg-[#0a0a0a] flex flex-col"
+        inSidebar ? "h-full flex flex-col w-full bg-bg-primary" : "fixed inset-0 z-[60] bg-bg-primary flex flex-col"
       )}
     >
-      <div className="flex items-center justify-between p-4 border-b border-white/10">
-        <div className="flex items-center gap-2">
-          <button onClick={onClose} className="p-2 -ml-2 text-white/60 hover:text-white transition">
-            <ChevronLeft size={24} />
+      {!inSidebar && (
+        <div className="flex items-center justify-between p-4 border-b border-border-color">
+          <h2 className="text-xl font-bold text-text-primary">Trades</h2>
+          <button onClick={onClose} className="p-2 -mr-2 text-text-secondary hover:text-text-primary transition">
+            <X size={24} />
           </button>
-          <h2 className="text-xl font-bold text-white">Trade History</h2>
         </div>
-      </div>
+      )}
 
       {/* Tabs */}
-      <div className="flex px-4 border-b border-white/10">
+      <div className="flex px-4 border-b border-border-color">
         <button 
           onClick={() => setActiveTab('CLOSED')}
           className={cn(
             "flex-1 py-3 text-sm font-bold transition relative",
-            activeTab === 'CLOSED' ? "text-[#22c55e]" : "text-white/40"
+            activeTab === 'CLOSED' ? "text-[var(--color-success)]" : "text-text-secondary/40"
           )}
         >
           Closed
-          {activeTab === 'CLOSED' && <motion.div layoutId="history-tab-underline" className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#22c55e]" />}
+          {activeTab === 'CLOSED' && <motion.div layoutId="history-tab-underline" className="absolute bottom-0 left-0 right-0 h-0.5 bg-[var(--color-success)]" />}
         </button>
         <button 
           onClick={() => setActiveTab('PENDING')}
           className={cn(
             "flex-1 py-3 text-sm font-bold transition relative",
-            activeTab === 'PENDING' ? "text-[#22c55e]" : "text-white/40"
+            activeTab === 'PENDING' ? "text-[var(--color-success)]" : "text-text-secondary/40"
           )}
         >
           Pending
-          {activeTab === 'PENDING' && <motion.div layoutId="history-tab-underline" className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#22c55e]" />}
+          {activeTab === 'PENDING' && <motion.div layoutId="history-tab-underline" className="absolute bottom-0 left-0 right-0 h-0.5 bg-[var(--color-success)]" />}
         </button>
       </div>
       
@@ -689,23 +732,23 @@ function TradeHistoryLog({
         {activeTab === 'CLOSED' ? (
           <>
             {totalToday > 0 && (
-              <div className="bg-[#1a1b1e] p-4 rounded-2xl border border-white/5 flex items-center gap-4 mb-4 shadow-xl">
+              <div className="bg-bg-secondary p-4 rounded-2xl border border-border-color flex items-center gap-4 mb-4 shadow-xl">
                 <div 
                   className="w-12 h-12 rounded-full flex items-center justify-center relative flex-shrink-0"
                   style={{ 
-                    background: `conic-gradient(#22c55e ${winRate * 3.6}deg, rgba(255,255,255,0.05) 0deg)`
+                    background: `conic-gradient(var(--color-success) ${winRate * 3.6}deg, rgba(255,255,255,0.05) 0deg)`
                   }}
                 >
-                  <div className="absolute inset-[3px] bg-[#1a1b1e] rounded-full flex flex-col items-center justify-center">
-                    <span className="text-[10px] font-black text-[#22c55e]">{winRate}%</span>
+                  <div className="absolute inset-[3px] bg-bg-secondary rounded-full flex flex-col items-center justify-center">
+                    <span className="text-[10px] font-black text-[var(--color-success)]">{winRate}%</span>
                   </div>
                 </div>
                 <div className="flex-1">
-                  <div className="text-[10px] text-white/40 font-black uppercase tracking-widest mb-1">Today's Success</div>
-                  <div className="text-sm font-bold text-white flex items-center gap-2">
+                  <div className="text-[10px] text-text-secondary/40 font-black uppercase tracking-widest mb-1">Today's Success</div>
+                  <div className="text-sm font-bold text-text-primary flex items-center gap-2">
                     <span className="text-[#22c55e]">{winsToday} Wins</span>
                     <span className="w-1 h-1 bg-white/20 rounded-full" />
-                    <span className="text-white/60">{totalToday} Total Trades</span>
+                    <span className="text-text-secondary/60">{totalToday} {t('common.total_trades')}</span>
                   </div>
                 </div>
               </div>
@@ -713,8 +756,8 @@ function TradeHistoryLog({
             
             {trades.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-20 text-center">
-              <History size={48} className="text-white/10 mb-4" />
-              <p className="text-white/40 text-sm">No trade history yet</p>
+              <History size={48} className="text-text-secondary/10 mb-4" />
+              <p className="text-text-secondary/40 text-sm">No trade history yet</p>
             </div>
           ) : (
             trades.map(trade => (
@@ -731,16 +774,16 @@ function TradeHistoryLog({
         ) : (
           pendingOrders.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-20 text-center">
-              <Clock size={48} className="text-white/10 mb-4" />
-              <p className="text-white/40 text-sm">No pending orders</p>
+              <Clock size={48} className="text-text-secondary/10 mb-4" />
+              <p className="text-text-secondary/40 text-sm">No pending orders</p>
             </div>
           ) : (
             pendingOrders.map(order => (
-              <div key={order.id} className="bg-white/5 rounded-xl p-4 border border-white/10">
+              <div key={order.id} className="bg-bg-secondary rounded-xl p-4 border border-border-color">
                 <div className="flex justify-between items-start mb-2">
                   <div>
-                    <div className="text-white font-bold text-sm">{order.assetName}</div>
-                    <div className="text-[10px] text-white/40 uppercase font-bold tracking-wider">
+                    <div className="text-text-primary font-bold text-sm">{order.assetName}</div>
+                    <div className="text-[10px] text-text-secondary/40 uppercase font-bold tracking-wider">
                       {order.type === 'PRICE' ? `Price: ${order.triggerValue}` : `Time: ${formatWithOffset(Number(order.triggerValue), 'HH:mm:ss', timezoneOffset)}`}
                     </div>
                   </div>
@@ -752,7 +795,7 @@ function TradeHistoryLog({
                   </div>
                 </div>
                 <div className="flex justify-between items-center">
-                  <div className="text-xs text-white/60">
+                  <div className="text-xs text-text-secondary/60">
                     {currencySymbol}{(order.amount * exchangeRate).toFixed(2)}
                   </div>
                   <button 
@@ -767,6 +810,17 @@ function TradeHistoryLog({
           )
         )}
       </div>
+
+      {!inSidebar && (
+        <div className="p-4 border-t border-border-color bg-bg-secondary/30 backdrop-blur-md">
+          <button 
+            onClick={onClose}
+            className="w-full bg-bg-secondary text-text-primary font-bold py-4 rounded-xl border border-border-color hover:bg-bg-tertiary transition active:scale-95 shadow-xl"
+          >
+            {t('common.close') || 'Close'}
+          </button>
+        </div>
+      )}
     </motion.div>
   );
 }
@@ -783,7 +837,12 @@ function SettingsPage({
   user,
   chatBackground,
   setChatBackground,
-  savePreferences
+  savePreferences,
+  isAppearanceSheetOpen,         // Added
+  isCurrencySheetOpen,
+  setIsAppearanceSheetOpen,
+  setIsCurrencySheetOpen,
+  setIsTradingPlatformOpen
 }: { 
   onBack: () => void, 
   onLogout: () => void, 
@@ -795,107 +854,120 @@ function SettingsPage({
   user: FirebaseUser,
   chatBackground: string | null,
   setChatBackground: (b: string | null) => void,
-  savePreferences: (prefs: any) => void
+  savePreferences: (prefs: any) => void,
+  isAppearanceSheetOpen: boolean,// Added
+  isCurrencySheetOpen: boolean,
+  setIsAppearanceSheetOpen: (v: boolean) => void,
+  setIsCurrencySheetOpen: (v: boolean) => void,
+  setIsTradingPlatformOpen: (v: boolean) => void
 }) {
   const { t } = useTranslation();
   const [activeSubPage, setActiveSubPage] = useState<string | null>(null);
 
   return (
-    <div className="min-h-[100dvh] bg-[var(--bg-primary)] text-[var(--text-primary)] font-sans flex flex-col relative overflow-hidden">
-      {/* Header */}
-      <div className="flex items-center gap-4 p-4 border-b border-[var(--border-color)]">
-        <button onClick={onBack} className="text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)] p-1 rounded-full transition">
+    <div className="min-h-[100dvh] bg-bg-primary text-text-primary font-sans flex flex-col relative overflow-x-hidden">
+      {/* Sheets moved here */}
+      <CurrencySheet 
+        isOpen={isCurrencySheetOpen}
+        onClose={() => setIsCurrencySheetOpen(false)}
+        currency={currency}
+        setCurrency={setCurrency}
+      />
+      <AppearanceSheet 
+        isOpen={isAppearanceSheetOpen} 
+        onClose={() => setIsAppearanceSheetOpen(false)} 
+      />
+      <div className="flex items-center justify-between p-4 border-b border-border-color">
+        <button onClick={onBack} className="text-text-secondary/70 hover:text-text-primary transition">
           <ChevronLeft size={28} />
         </button>
-        <h1 className="text-xl font-bold">{t('settings.title')}</h1>
+        <h1 className="text-[17px] font-bold text-text-primary absolute left-1/2 -translate-x-1/2 tracking-tight">{t('nav.settings')}</h1>
+        <button onClick={onBack} className="text-text-secondary/70 hover:text-text-primary transition">
+          <X size={28} />
+        </button>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-4 space-y-6">
-        {/* PROFILE */}
-        <section>
-          <h2 className="text-xs font-bold text-[var(--text-secondary)] mb-2 uppercase tracking-wider">{t('settings.profile')}</h2>
-          <div className="bg-[var(--bg-secondary)] rounded-xl overflow-hidden border border-[var(--border-color)]">
+      <div className="flex-1 overflow-y-auto px-4 pb-12 space-y-8 no-scrollbar pt-4">
+        {/* PROFILE SECTION */}
+        <section className="space-y-4">
+          <h2 className="text-[14px] font-bold px-2 text-text-secondary/40 uppercase tracking-widest">{t('settings.profile')}</h2>
+          <div className="space-y-2">
             <SettingsItem 
-              icon={<User size={20} />} 
-              label="Personal Information" 
+              icon={<User size={18} />} 
+              label={t('settings.personal_info')} 
               onClick={() => setActiveSubPage('PERSONAL')}
             />
             <SettingsItem 
-              icon={<Mail size={20} />} 
-              label="Contacts" 
-              isLast
+              icon={<Mail size={18} />} 
+              label={t('settings.contacts')} 
               onClick={() => setActiveSubPage('CONTACTS')}
             />
-          </div>
-        </section>
-
-        {/* SECURITY */}
-        <section>
-          <h2 className="text-xs font-bold text-[var(--text-secondary)] mb-2 uppercase tracking-wider">{t('settings.security')}</h2>
-          <div className="bg-[var(--bg-secondary)] rounded-xl overflow-hidden border border-[var(--border-color)]">
             <SettingsItem 
-              icon={<Key size={20} />} 
-              label="Password" 
-              onClick={() => setActiveSubPage('PASSWORD')}
-            />
-            <SettingsItem 
-              icon={<Shield size={20} />} 
-              label="Two-Factor Authentication" 
+              icon={<Smartphone size={18} />} 
+              label={t('settings.2fa')} 
+              subtitle={t('settings.2fa_desc')}
               onClick={() => setActiveSubPage('2FA')}
             />
             <SettingsItem 
-              icon={<Grid size={20} />} 
-              label="App PIN" 
-              isLast 
-              onClick={() => setActiveSubPage('PIN')}
+              icon={<Key size={18} />} 
+              label={t('auth.password')} 
+              subtitle={t('settings.password_desc')}
+              onClick={() => setActiveSubPage('PASSWORD')}
             />
           </div>
         </section>
 
-        {/* GENERAL */}
-        <section>
-          <h2 className="text-xs font-bold text-[var(--text-secondary)] mb-2 uppercase tracking-wider">General</h2>
-          <div className="bg-[var(--bg-secondary)] rounded-xl overflow-hidden border border-[var(--border-color)]">
+        {/* SETUP SECTION */}
+        <section className="space-y-4">
+          <h2 className="text-[14px] font-bold px-2 text-text-secondary/40 uppercase tracking-widest">{t('settings.setup')}</h2>
+          <div className="space-y-2">
             <SettingsItem 
-              icon={<Image size={20} />} 
-              label={t('nav.terminal')} 
-              onClick={() => setActiveSubPage('TRADING')}
+              icon={<DollarSign size={18} />} 
+              label={t('settings.currency') || 'Currency'} 
+              subtitle={currency.code}
+              onClick={() => setIsCurrencySheetOpen(true)}
             />
             <SettingsItem 
-              icon={<Activity size={20} />} 
+              icon={<Image size={18} />} 
               label={t('settings.appearance')} 
-              onClick={() => setActiveSubPage('APPEARANCE')}
+              subtitle={t('settings.appearance_desc')}
+              onClick={() => setIsAppearanceSheetOpen(true)}
             />
             <SettingsItem 
-              icon={<Bell size={20} />} 
+              icon={<Activity size={18} />} 
+              label={t('settings.trading_platform')} 
+              subtitle={t('settings.trading_platform_desc')}
+              onClick={() => setIsTradingPlatformOpen(true)}
+            />
+            <SettingsItem 
+              icon={<Bell size={18} />} 
               label={t('settings.notifications')} 
+              subtitle={t('settings.notifications_desc')}
               onClick={() => setActiveSubPage('NOTIFICATIONS')}
-              isLast 
             />
           </div>
         </section>
 
-        {/* Footer Actions */}
-        <div className="space-y-3 pt-4 pb-8">
-            <button 
-              onClick={onLogout}
-              className="w-full bg-[var(--bg-secondary)] text-[#ff4757] font-bold py-3 rounded-xl flex items-center justify-center gap-2 border border-[var(--border-color)] hover:bg-[var(--bg-tertiary)] transition active:scale-[0.98]"
-            >
-                <LogOut size={20} />
-                <span>{t('settings.logout')}</span>
-            </button>
+        {/* LOGOUT BUTTON */}
+        <div className="pt-2">
+          <button 
+            onClick={onLogout}
+            className="w-full bg-[#ff3b30]/5 hover:bg-[#ff3b30]/10 text-[#ff3b30] font-bold py-4 rounded-[14px] flex items-center justify-center gap-2 transition active:scale-[0.98] border border-[#ff3b30]/10"
+          >
+            <LogOut size={18} />
+            <span className="text-base uppercase tracking-wider font-black">{t('settings.logout')}</span>
+          </button>
         </div>
       </div>
 
-
-
       {/* Sub-Pages Overlay */}
-      <AnimatePresence>
+      <AnimatePresence mode="wait">
         {activeSubPage === 'TRADING' && (
-          <TradingPlatformSettings onBack={() => setActiveSubPage(null)} />
+          <TradingPlatformSettings key="trading" onBack={() => setActiveSubPage(null)} />
         )}
         {activeSubPage === 'APPEARANCE' && (
           <AppearanceSettings 
+            key="appearance"
             onBack={() => setActiveSubPage(null)} 
             timezoneOffset={timezoneOffset}
             setTimezoneOffset={setTimezoneOffset}
@@ -907,58 +979,380 @@ function SettingsPage({
           />
         )}
         {activeSubPage === 'NOTIFICATIONS' && (
-          <NotificationSettings onBack={() => setActiveSubPage(null)} />
-        )}
-        {activeSubPage === 'PERSONAL' && (
-          <PersonalInformationSettings 
-            onBack={() => setActiveSubPage(null)} 
-            timezoneOffset={timezoneOffset}
-            setTimezoneOffset={setTimezoneOffset}
-            user={user}
-            currency={currency}
-            setCurrency={setCurrency}
-          />
-        )}
-        {activeSubPage === 'CONTACTS' && (
-          <ContactSettings onBack={() => setActiveSubPage(null)} />
+          <NotificationSettings key="notifications" onBack={() => setActiveSubPage(null)} />
         )}
         {activeSubPage === 'PASSWORD' && (
-          <PasswordSettings onBack={() => setActiveSubPage(null)} />
+          <PasswordSettings key="password" onBack={() => setActiveSubPage(null)} />
         )}
         {activeSubPage === '2FA' && (
           <TwoFactorSettings 
+            key="2fa"
             onBack={() => setActiveSubPage(null)} 
             socket={socket}
             userEmail={user.email || ''}
           />
         )}
-        {activeSubPage === 'PIN' && (
-          <AppPinSettings onBack={() => setActiveSubPage(null)} />
+        {activeSubPage === 'PERSONAL' && (
+          <PersonalInformationPage 
+            key="personal-page"
+            onBack={() => setActiveSubPage(null)} 
+            user={user} 
+          />
+        )}
+        {activeSubPage === 'CONTACTS' && (
+          <ContactsPage 
+            key="contacts-page"
+            onBack={() => setActiveSubPage(null)} 
+            user={user} 
+          />
+        )}
+        {/* Removed Language as requested */}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+function PersonalInformationPage({ onBack, user }: { onBack: () => void, user: any }) {
+  const [nickname, setNickname] = useState(() => localStorage.getItem('user-name') || user.displayName || '');
+  const [dob, setDob] = useState(() => localStorage.getItem('user-dob') || '');
+
+  return (
+    <div className="fixed inset-0 z-[100] bg-bg-primary text-text-primary font-sans flex flex-col overflow-hidden">
+      {/* Header */}
+      <div className="flex items-center justify-between p-6">
+        <button onClick={onBack} className="text-text-secondary/70 hover:text-text-primary transition">
+          <ChevronLeft size={28} />
+        </button>
+        <button onClick={onBack} className="text-text-secondary/70 hover:text-text-primary transition">
+          <X size={28} />
+        </button>
+      </div>
+
+      <div className="px-6 flex flex-col h-full">
+        <h1 className="text-3xl font-bold tracking-tight mb-8">Personal Information</h1>
+
+        {/* Profile Image Circle */}
+        <div className="flex justify-center mb-10">
+          <button className="w-32 h-32 rounded-full bg-bg-secondary flex items-center justify-center relative overflow-hidden group border border-border-color shadow-xl">
+             {user?.photoURL ? (
+               <img src={user.photoURL} alt="Profile" className="w-full h-full object-cover opacity-60" />
+             ) : (
+               <div className="w-full h-full bg-bg-tertiary" />
+             )}
+             <div className="absolute inset-0 bg-bg-tertiary flex items-center justify-center group-hover:bg-bg-secondary transition">
+               <Camera size={32} className="text-text-primary/80" />
+             </div>
+          </button>
+        </div>
+
+        {/* Form Fields */}
+        <div className="space-y-4 flex-1">
+          {/* Name Field */}
+          <div className="bg-bg-secondary rounded-[14px] p-1.5 px-4 flex items-center gap-4 border border-border-color">
+            <div className="text-text-secondary/30"><Pencil size={20} /></div>
+            <div className="flex-1 py-1">
+              <label className="block text-[11px] font-medium text-text-secondary/30 uppercase tracking-wider">Name or nickname</label>
+              <input 
+                type="text" 
+                value={nickname}
+                onChange={(e) => setNickname(e.target.value)}
+                placeholder="Enter nickname"
+                className="w-full bg-transparent border-none text-base font-bold text-text-primary focus:ring-0 p-0 placeholder:text-text-secondary/10"
+              />
+            </div>
+          </div>
+
+          {/* DOB Field */}
+          <div className="bg-bg-secondary rounded-[14px] p-1.5 px-4 flex items-center gap-4 border border-border-color">
+            <div className="text-text-secondary/30"><Calendar size={20} /></div>
+            <div className="flex-1 py-1">
+              <label className="block text-[11px] font-medium text-text-secondary/30 uppercase tracking-wider">Date of birth</label>
+              <input 
+                type="text"
+                value={dob}
+                onChange={(e) => setDob(e.target.value)}
+                placeholder="Not specified"
+                className="w-full bg-transparent border-none text-base font-bold text-text-primary focus:ring-0 p-0 placeholder:text-text-secondary/10"
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Save Button */}
+        <div className="pb-10 pt-4">
+          <button 
+            onClick={() => {
+              localStorage.setItem('user-name', nickname);
+              localStorage.setItem('user-dob', dob);
+              onBack();
+            }}
+            className="w-full bg-[#0ecb81] hover:bg-[#0da669] text-black font-black py-5 rounded-[16px] text-lg transition shadow-lg shadow-[#0ecb81]/20 active:scale-[0.98] focus:outline-none"
+          >
+            Save
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ContactsPage({ onBack, user }: { onBack: () => void, user: any }) {
+  const [confirmSubPage, setConfirmSubPage] = useState<'EMAIL' | 'PHONE' | null>(null);
+
+  return (
+    <div className="fixed inset-0 z-[100] bg-bg-primary text-text-primary font-sans flex flex-col overflow-hidden">
+      {/* Header */}
+      <div className="flex items-center justify-between p-6">
+        <button onClick={onBack} className="text-text-secondary/70 hover:text-text-primary transition">
+          <ChevronLeft size={28} />
+        </button>
+        <button onClick={onBack} className="text-text-secondary/70 hover:text-text-primary transition">
+          <X size={28} />
+        </button>
+      </div>
+
+      <div className="px-6 flex flex-col h-full overflow-y-auto no-scrollbar">
+        <h1 className="text-3xl font-bold tracking-tight mb-8">Contacts</h1>
+
+        {/* CONTACTS SECTION */}
+        <section className="mb-8 space-y-4">
+          <h2 className="text-xl font-bold text-text-primary/90">Contacts</h2>
+          <div className="space-y-2">
+            <button 
+              onClick={() => setConfirmSubPage('EMAIL')}
+              className="w-full bg-bg-secondary rounded-[14px] p-4 flex items-center justify-between border border-border-color hover:bg-bg-tertiary transition active:scale-[0.98]"
+            >
+              <span className="text-[15px] font-bold text-text-primary/90">{user.email || 'user@example.com'}</span>
+              
+              {user.emailVerified ? (
+                <div className="w-5 h-5 rounded-full border border-green-500 flex items-center justify-center">
+                  <Check size={12} className="text-green-500" />
+                </div>
+              ) : (
+                <div className="w-5 h-5 rounded-full border border-[#ff9f0a] flex items-center justify-center">
+                  <span className="text-[#ff9f0a] text-[10px] font-bold">!</span>
+                </div>
+              )}
+            </button>
+            <button 
+              onClick={() => setConfirmSubPage('PHONE')}
+              className="w-full bg-bg-secondary rounded-[14px] p-4 flex items-center justify-between border border-border-color hover:bg-bg-tertiary transition active:scale-[0.98]"
+            >
+              <span className="text-[15px] font-bold text-text-secondary/40">Phone number</span>
+              <div className="w-5 h-5 rounded-full border border-[#ff9f0a] flex items-center justify-center">
+                <span className="text-[#ff9f0a] text-[10px] font-bold">!</span>
+              </div>
+            </button>
+          </div>
+        </section>
+
+        {/* SOCIAL SECTION */}
+        <section className="space-y-4">
+          <h2 className="text-xl font-bold text-text-primary/90">Social</h2>
+          <div className="space-y-2">
+            <SocialConnectButton icon={<Apple size={20} />} label="Connect Apple" />
+            <SocialConnectButton icon={<Facebook size={20} className="fill-blue-600 text-blue-600" />} label="Connect Facebook" />
+            <SocialConnectButton 
+              icon={
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+                  <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+                  <path d="M5.84 14.1c-.22-.66-.35-1.36-.35-2.1s.13-1.44.35-2.1V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.83z" fill="#FBBC05"/>
+                  <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.83c.87-2.6 3.3-4.52 6.16-4.52z" fill="#EA4335"/>
+                </svg>
+              } 
+              label="Google Connected" 
+              isConnected 
+            />
+          </div>
+        </section>
+      </div>
+
+      {/* Sub-Overlays */}
+      <AnimatePresence>
+        {confirmSubPage === 'EMAIL' && (
+          <ConfirmEmailOverlay 
+            user={user} 
+            onBack={() => setConfirmSubPage(null)} 
+          />
+        )}
+        {confirmSubPage === 'PHONE' && (
+          <ConfirmPhoneOverlay 
+            onBack={() => setConfirmSubPage(null)} 
+          />
         )}
       </AnimatePresence>
     </div>
   );
 }
 
-function SettingsItem({ icon, label, isLast, onClick }: { icon: React.ReactNode, label: string, isLast?: boolean, onClick?: () => void }) {
+function SocialConnectButton({ icon, label, isConnected }: { icon: React.ReactNode, label: string, isConnected?: boolean }) {
   return (
-    <div 
-      onClick={onClick}
-      className={cn(
-        "flex items-center justify-between p-4 cursor-pointer hover:bg-[var(--bg-tertiary)] transition active:bg-[var(--bg-tertiary)]/80",
-        !isLast && "border-b border-[var(--border-color)]"
-      )}
-    >
-      <div className="flex items-center gap-3 text-[var(--text-secondary)]">
+    <button className="w-full bg-bg-secondary rounded-[14px] p-4 flex items-center justify-between border border-border-color hover:bg-bg-tertiary transition active:scale-[0.98]">
+      <div className="flex items-center gap-4 text-text-primary/80">
         {icon}
-        <span className="text-sm font-medium text-[var(--text-primary)]">{label}</span>
+        <span className="text-[15px] font-bold">{label}</span>
       </div>
-      <ChevronRight size={16} className="text-[var(--text-secondary)]" />
-    </div>
+      {isConnected && (
+        <Check size={20} className="text-[#0ecb81]" />
+      )}
+    </button>
   );
 }
 
-const CURRENCIES = [
+function ConfirmEmailOverlay({ user, onBack }: { user: any, onBack: () => void }) {
+  return (
+    <motion.div 
+      initial={{ x: '100%' }}
+      animate={{ x: 0 }}
+      exit={{ x: '100%' }}
+      transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+      className="fixed inset-0 z-[110] bg-bg-primary text-text-primary font-sans flex flex-col overflow-hidden"
+    >
+      <div className="flex items-center justify-between p-6">
+        <button onClick={onBack} className="text-text-secondary/70 hover:text-text-primary transition">
+          <ChevronLeft size={28} />
+        </button>
+        <button onClick={onBack} className="text-text-secondary/70 hover:text-text-primary transition">
+          <X size={28} />
+        </button>
+      </div>
+
+      <div className="px-6 flex flex-col h-full">
+        <h1 className="text-3xl font-bold tracking-tight mb-4">Confirm Email</h1>
+        <p className="text-lg text-text-primary/90 leading-tight mb-8">
+          Let's make sure we can contact you at {user.email || 'tasmeaykhatun565@gmail.com'}.
+        </p>
+        <p className="text-base text-text-secondary/50 leading-snug mb-10">
+          Confirming your email address helps us keep your profile safe and ensures that you'll never miss important updates about your money.
+        </p>
+
+        <div className="mt-auto pb-10">
+          <button 
+            onClick={onBack}
+            className="w-full bg-[#0ecb81] hover:bg-[#0da669] text-black font-black py-5 rounded-[16px] text-lg transition shadow-lg shadow-[#0ecb81]/20 active:scale-[0.98]"
+          >
+            Get Email Code
+          </button>
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
+function ConfirmPhoneOverlay({ onBack }: { onBack: () => void }) {
+  const [phoneNumber, setPhoneNumber] = useState('');
+
+  return (
+    <motion.div 
+      initial={{ x: '100%' }}
+      animate={{ x: 0 }}
+      exit={{ x: '100%' }}
+      transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+      className="fixed inset-0 z-[110] bg-bg-primary text-text-primary font-sans flex flex-col overflow-hidden"
+    >
+      <div className="flex items-center justify-between p-6">
+        <button onClick={onBack} className="text-text-secondary/70 hover:text-text-primary transition">
+          <ChevronLeft size={28} />
+        </button>
+        <button onClick={onBack} className="text-text-secondary/70 hover:text-text-primary transition">
+          <X size={28} />
+        </button>
+      </div>
+
+      <div className="px-6 flex flex-col h-full">
+        <h1 className="text-3xl font-bold tracking-tight mb-4">Confirm Phone Number</h1>
+        <p className="text-base text-text-secondary/70 leading-snug mb-8">
+          Your phone number will only be used to ensure your profile's security
+        </p>
+
+        <div className="space-y-4">
+          <div className="bg-bg-secondary rounded-[14px] p-5 border border-border-color">
+            <input 
+              type="tel"
+              value={phoneNumber}
+              onChange={(e) => setPhoneNumber(e.target.value)}
+              placeholder="Mobile phone number"
+              className="w-full bg-transparent border-none text-lg font-bold text-text-primary focus:ring-0 p-0 placeholder:text-text-secondary/20"
+            />
+          </div>
+
+          {/* Fake ReCAPTCHA */}
+          <div className="bg-bg-secondary rounded-[14px] p-4 flex items-center justify-between border border-border-color">
+            <div className="flex items-center gap-3">
+              <div className="w-6 h-6 border-2 border-white/20 rounded bg-bg-secondary" />
+              <span className="text-sm font-medium text-text-primary/80">I'm not a robot</span>
+            </div>
+            <div className="flex flex-col items-center">
+               <div className="w-10 h-10 flex items-center justify-center">
+                 <RefreshCw size={24} className="text-blue-500" />
+               </div>
+               <span className="text-[10px] text-text-secondary/30 uppercase font-black tracking-tighter">reCAPTCHA</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-auto pb-10">
+          <button 
+            disabled={!phoneNumber}
+            onClick={onBack}
+            className={cn(
+              "w-full font-black py-5 rounded-[16px] text-lg transition active:scale-[0.98]",
+              phoneNumber ? "bg-[#0ecb81] text-black shadow-lg shadow-[#0ecb81]/20" : "bg-bg-secondary text-text-secondary/20"
+            )}
+          >
+            Get SMS Code
+          </button>
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
+function SettingsItem({ 
+  icon, 
+  label, 
+  subtitle, 
+  showWarning, 
+  onClick 
+}: { 
+  icon: React.ReactNode, 
+  label: string, 
+  subtitle?: string,
+  showWarning?: boolean,
+  onClick?: () => void 
+}) {
+  return (
+    <button 
+      onClick={onClick}
+      className="w-full bg-bg-secondary rounded-2xl p-4 flex items-center justify-between transition active:scale-[0.99] group"
+    >
+      <div className="flex items-center gap-4">
+        <div className="w-6 h-6 flex items-center justify-center text-text-secondary/40 group-hover:text-text-primary transition">
+          {icon}
+        </div>
+        <div className="text-left">
+          <span className="block text-[15px] font-medium text-text-primary/90 leading-snug">{label}</span>
+          {subtitle && (
+            <span className="block text-[13px] font-normal text-text-secondary/40 leading-tight mt-0.5">{subtitle}</span>
+          )}
+        </div>
+      </div>
+      
+      <div className="flex items-center gap-2">
+        {showWarning && (
+           <div className="w-5 h-5 rounded-full bg-orange-500/10 flex items-center justify-center text-orange-500">
+             <AlertCircle size={14} />
+           </div>
+        )}
+        <ChevronLeft size={20} className="text-text-secondary/20 rotate-180" />
+      </div>
+    </button>
+  );
+}
+
+
+export const CURRENCIES = [
   { code: 'USD', symbol: '$', name: 'US Dollar', flag: '🇺🇸' },
   { code: 'BDT', symbol: '৳', name: 'Bangladeshi Taka', flag: '🇧🇩' },
   { code: 'EUR', symbol: '€', name: 'Euro', flag: '🇪🇺' },
@@ -991,22 +1385,21 @@ const EXCHANGE_RATES: Record<string, number> = {
 };
 
 export default function TradingPlatform() {
+  const navigate = useNavigate();
+  const location = useLocation();
   const { t } = useTranslation();
   const { showToast } = useToast();
-  // --- Theme Initialization ---
-  useEffect(() => {
-    const savedTheme = localStorage.getItem('app-theme') || 'dark';
-    document.documentElement.setAttribute('data-theme', savedTheme);
-  }, []);
 
   // State
   const [socket, setSocket] = useState<Socket | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
   const [user, setUser] = useState<FirebaseUser | null>(null);
   const [preferences, setPreferences] = useState({
-    language: 'en',
-    currency: 'USD',
-    timeframe: '1m',
-    chartType: 'candles'
+    language: localStorage.getItem('app-language') || 'en',
+    currency: localStorage.getItem('app-currency') || 'USD',
+    timeframe: localStorage.getItem('app-timeframe') || '1m',
+    chartType: localStorage.getItem('app-chartType') || 'candles',
+    theme: localStorage.getItem('app-theme') || 'dark'
   });
 
   const savePreferences = useCallback(async (newPrefs: Partial<typeof preferences>) => {
@@ -1026,9 +1419,8 @@ export default function TradingPlatform() {
     } catch (error) {
       console.error('Error saving preferences:', error);
     }
-  }, [user?.email]);
+  }, [user]);
   const { language, setLanguage } = useTranslation();
-  const [authLoading, setAuthLoading] = useState(true);
 
   useEffect(() => {
     if (preferences.language && preferences.language !== language) {
@@ -1142,6 +1534,7 @@ export default function TradingPlatform() {
   }, [selectedAsset]);
   const [marketAssets, setMarketAssets] = useState<Record<string, any>>({});
   const [isAssetSelectorOpen, setIsAssetSelectorOpen] = useState(false);
+  const [activeSidePanel, setActiveSidePanel] = useState<'TRADES' | 'MARKET' | 'HELP' | 'REWARDS' | 'INDICATORS' | null>(null);
   const [isLoading, setIsLoadingState] = useState(false);
   const isLoadingRef = useRef(false);
   const loadingStartTimeRef = useRef(Date.now());
@@ -1220,9 +1613,16 @@ export default function TradingPlatform() {
 
   // Smooth local clock that syncs with server
   useEffect(() => {
+    let lastUpdate = 0;
     const timer = setInterval(() => {
-      setCurrentTime(Date.now() + serverTimeOffset);
-    }, 1000); // Update every 1000ms to prevent UI freezing
+      const now = Date.now();
+      // Throttle state updates for clock to every 1000ms if needed, 
+      // though setInterval is already 1000ms.
+      if (now - lastUpdate >= 1000) {
+        setCurrentTime(now + serverTimeOffset);
+        lastUpdate = now;
+      }
+    }, 1000); 
     return () => clearInterval(timer);
   }, [serverTimeOffset]);
 
@@ -1327,9 +1727,11 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
   const tradesRef = useRef(trades);
   const resolvedTradeIdsRef = useRef<Set<string>>(new Set());
   const dataRef = useRef(data);
+  const historyCacheRef = useRef<Record<string, any>>({});
   const lastChartUpdateRef = useRef(0);
   const userRef = useRef(user);
   const selectedAssetRef = useRef(selectedAsset);
+  const lastAssetIdRef = useRef(selectedAsset.id);
 
   // Removed redundant localStorage sync as we use Firestore now
 
@@ -1359,7 +1761,7 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
 
       if (firebaseUser?.email) {
         try {
-          const response = await fetch(`${window.location.origin}/api/user?email=${encodeURIComponent(firebaseUser.email)}`);
+          const response = await fetch(`/api/user?email=${encodeURIComponent(firebaseUser.email)}`);
           if (response.status === 404) {
              // User not yet synced to backend, normal for first-time login
              setAuthLoading(false);
@@ -1368,16 +1770,33 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
           if (!response.ok) {
             throw new Error(`Server responded with ${response.status}: ${response.statusText}`);
           }
+          const contentType = response.headers.get('content-type');
+          if (!contentType || !contentType.includes('application/json')) {
+            const text = await response.text();
+            throw new Error(`Expected JSON but received ${contentType || 'unknown'}. Body: ${text.substring(0, 100)}...`);
+          }
           const userData = await response.json();
-          if (userData.language || userData.currency || userData.timeframe || userData.chartType) {
+          if (userData.language || userData.currency || userData.timeframe || userData.chartType || userData.theme) {
             setPreferences(prev => {
               const updates: any = {};
               if (userData.language && userData.language !== prev.language) updates.language = userData.language;
               if (userData.currency && userData.currency !== prev.currency) updates.currency = userData.currency;
               if (userData.timeframe && userData.timeframe !== prev.timeframe) updates.timeframe = userData.timeframe;
               if (userData.chartType && userData.chartType !== prev.chartType) updates.chartType = userData.chartType;
+              if (userData.theme && userData.theme !== prev.theme) updates.theme = userData.theme;
               
               if (Object.keys(updates).length === 0) return prev;
+              
+              // Persist to localStorage as well for instant load on next refresh
+              Object.entries(updates).forEach(([key, val]) => {
+                if (key === 'theme') {
+                  localStorage.setItem('app-theme', val as string);
+                  document.documentElement.setAttribute('data-theme', val as string);
+                } else {
+                  localStorage.setItem(`app-${key}`, val as string);
+                }
+              });
+              
               return { ...prev, ...updates };
             });
           }
@@ -1434,7 +1853,7 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
           if (realAccount) balanceToSet = realAccount.balance;
         }
         if (balanceToSet !== undefined) setBalance(prev => Math.abs(prev - balanceToSet) < 0.000001 ? prev : balanceToSet);
-        if (userData.bonusBalance !== undefined) setBonusBalance(prev => Math.abs(prev - userData.bonusBalance) < 0.000001 ? prev : userData.bonusBalance);
+        if (userData.bonus_balance !== undefined) setBonusBalance(prev => Math.abs(prev - userData.bonus_balance) < 0.000001 ? prev : userData.bonus_balance);
         if (userData.demoBalance !== undefined) setDemoBalance(prev => Math.abs(prev - userData.demoBalance) < 0.000001 ? prev : userData.demoBalance);
         if (userData.kycStatus !== undefined) setKycStatus(prev => prev === userData.kycStatus ? prev : userData.kycStatus);
         if (userData.turnover_required !== undefined) setTurnoverRequired(prev => prev === userData.turnover_required ? prev : userData.turnover_required);
@@ -1478,11 +1897,16 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
     };
   }, [user]);
 
+  const currentTimeRef = useRef(currentTime);
+  useEffect(() => {
+    currentTimeRef.current = currentTime;
+  }, [currentTime]);
+
   // Force candle update on interval
   useEffect(() => {
     const timer = setInterval(() => {
       const tfMs = getTimeFrameInMs(chartTimeFrame);
-      const currentTimeAligned = Math.floor(currentTime / tfMs) * tfMs;
+      const currentTimeAligned = Math.floor(currentTimeRef.current / tfMs) * tfMs;
       
       setData(prev => {
         if (prev.length === 0) return prev;
@@ -1504,7 +1928,7 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
       });
     }, 1000);
     return () => clearInterval(timer);
-  }, [currentTime, chartTimeFrame, timezoneOffset]);
+  }, [chartTimeFrame, timezoneOffset]);
 
   const refillDemoBalance = () => {
     if (socket && user) {
@@ -1565,12 +1989,65 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
     }
   }, [socket, user, view]);
   const [isPaymentsOpen, setIsPaymentsOpen] = useState(false);
+  const [isCurrencySheetOpen, setIsCurrencySheetOpen] = useState(false);
+  const [isAppearanceSheetOpen, setIsAppearanceSheetOpen] = useState(false);
+  const [isTradingPlatformOpen, setIsTradingPlatformOpen] = useState(false);
   const [paymentsInitialView, setPaymentsInitialView] = useState<'DEPOSIT' | 'WITHDRAW' | 'TRANSFER' | 'HISTORY' | null>(null);
 
   const handleOpenPayments = useCallback((view: 'DEPOSIT' | 'WITHDRAW' | 'TRANSFER' | 'HISTORY' | null = null) => {
     setPaymentsInitialView(view);
     setIsPaymentsOpen(true);
   }, []);
+
+  // Route Synchronization Effect
+  useEffect(() => {
+    const path = location.pathname;
+    
+    // Handle specific views
+    if (path === '/') setView('HOME');
+    else if (path === '/trade' || path === '/trade/live' || path === '/trading' || path === '/trading/live') {
+      setView('TRADING');
+      setActiveAccount('REAL');
+    }
+    else if (path === '/trade/demo' || path === '/trading/demo') {
+      setView('TRADING');
+      setActiveAccount('DEMO');
+    }
+    else if (path === '/profile') setView('PROFILE');
+    else if (path === '/market') setView('MARKET');
+    else if (path === '/rewards' || path === '/bonuses') setView('REWARDS');
+    else if (path === '/referral' || path === '/affiliate') setView('REFERRAL');
+    else if (path === '/support' || path === '/help') setView('HELP');
+    else if (path === '/trades') setView('TRADES');
+    else if (path === '/settings') setView('SETTINGS');
+    else if (path === '/admin') setView('ADMIN');
+    else if (path === '/leaderboard') setView('LEADERBOARD');
+    else if (path === '/calendar') setView('CALENDAR');
+
+    // Handle payment sheets
+    if (path === '/deposit') {
+      setView('TRADING');
+      handleOpenPayments('DEPOSIT');
+    } else if (path === '/withdraw') {
+      setView('TRADING');
+      handleOpenPayments('WITHDRAW');
+    } else if (path === '/transfer') {
+      setView('TRADING');
+      handleOpenPayments('TRANSFER');
+    } else if (path === '/history') {
+      setView('TRADING');
+      handleOpenPayments('HISTORY');
+    }
+
+  }, [location.pathname, handleOpenPayments]);
+
+  // Auth Protection for secured routes
+  useEffect(() => {
+    const publicPaths = ['/', '/login', '/register', '/signup'];
+    if (!authLoading && !user && !publicPaths.includes(location.pathname)) {
+      navigate('/login');
+    }
+  }, [user, authLoading, location.pathname, navigate]);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [isMarketOpen, setIsMarketOpen] = useState(false);
@@ -1681,6 +2158,12 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
   }, [currency.code]);
 
   useEffect(() => {
+    if (!selectedAsset.isOTC && tradeMode === 'TIMER' && timerDuration < 60) {
+      setTimerDuration(60);
+    }
+  }, [selectedAsset.isOTC, tradeMode, timerDuration]);
+
+  useEffect(() => {
     localStorage.setItem('app-currency', safeStringify(currency));
   }, [currency]);
 
@@ -1721,13 +2204,9 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
 
   // Refs for Data
   const lastCloseRef = useRef(selectedAsset.basePrice);
-  // Force reset timeframe if invalid for non-OTC
+  // Force reset timeframe if invalid for non-OTC removed by user request
   useEffect(() => {
-    if (!selectedAsset.isOTC && ['5s', '10s', '15s', '20s', '30s'].includes(chartTimeFrame)) {
-      if (chartTimeFrame !== '1m') {
-        setChartTimeFrame('1m');
-      }
-    }
+    // Sub-minute timeframes now allowed for all assets
   }, [selectedAsset.isOTC, chartTimeFrame]);
   const trendRef = useRef(0); // Track trend for smoother movement
   const volatilityRef = useRef(1.0); // Dynamic volatility multiplier
@@ -1800,60 +2279,62 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
         if (currentCandle) candles.push(currentCandle);
       }
 
-      if (candles.length < 500 && !response.isOlder) {
-        // synthesize base candles only if this is the initial load and no data found
-        const basePrice = selectedAssetRef.current?.basePrice || 100;
-        const volatility = selectedAssetRef.current?.volatility || 1;
-        const startCandle = candles[0];
-        let lastPrice = startCandle ? startCandle.open : basePrice;
-        const now = startCandle ? startCandle.time : Date.now();
-      const needed = 500 - candles.length;
-      
-      const synthetic: OHLCData[] = [];
-      let trend = 0;
-      const tfScale = Math.max(1, Math.sqrt(tfMs / 60000));
-      
-      // Deterministic Random helper
-      const seededRandom = (seed: number) => {
-          const x = Math.sin(seed) * 10000;
-          return x - Math.floor(x);
-      };
-
-      const assetSeed = assetShortName.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
-
-      for (let i = needed; i >= 1; i--) {
-          const time = Math.floor((now - i * tfMs) / tfMs) * tfMs;
-          
-          // Use time and asset as seed for constant "synthetic" history
-          const seed = time + assetSeed;
-          const rnd1 = seededRandom(seed);
-          const rnd2 = seededRandom(seed + 1);
-          const rnd3 = seededRandom(seed + 2);
-          const rnd4 = seededRandom(seed + 3);
-
-          trend += (rnd1 - 0.5) * volatility * 0.5;
-          trend *= 0.95;
-          
-          const isPowerCandle = rnd2 < 0.1;
-          const multiplier = isPowerCandle ? (2 + rnd3 * 2) : 1;
-          
-          const open = lastPrice;
-          const move = (trend + (rnd4 - 0.5) * volatility * 12 * tfScale) * multiplier;
-          const close = open + move;
-          
-          const wickScale = volatility * 5 * tfScale;
-          const high = Math.max(open, close) + seededRandom(seed + 4) * wickScale;
-          const low = Math.min(open, close) - seededRandom(seed + 5) * wickScale;
-          
-          synthetic.push({
-              time, open, high, low, close,
-              volume: Math.floor(seededRandom(seed + 6) * 100) + 10,
-              formattedTime: formatWithOffset(time, 'HH:mm:ss', timezoneOffset)
-          });
-          lastPrice = close;
-      }
-      candles = [...synthetic, ...candles];
-      }
+      // SYTHETIC FALLBACK - If we still don't have enough data
+      const isRealMarket = marketAssets[assetShortName]?.isRealMarket || selectedAssetRef.current?.isRealMarket;
+      if (candles.length < 500 && !response.isOlder && !isRealMarket) {
+          // synthesize base candles only if this is the initial load and no data found
+          const basePrice = selectedAssetRef.current?.basePrice || 100;
+          const volatility = selectedAssetRef.current?.volatility || 1;
+          const startCandle = candles[0];
+          let lastPrice = startCandle ? startCandle.open : basePrice;
+          const now = startCandle ? startCandle.time : Date.now();
+        const needed = 500 - candles.length;
+        
+        const synthetic: OHLCData[] = [];
+        let trend = 0;
+        const tfScale = Math.max(1, Math.sqrt(tfMs / 60000));
+        
+        // Deterministic Random helper
+        const seededRandom = (seed: number) => {
+            const x = Math.sin(seed) * 10000;
+            return x - Math.floor(x);
+        };
+  
+        const assetSeed = assetShortName.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+  
+        for (let i = needed; i >= 1; i--) {
+            const time = Math.floor((now - i * tfMs) / tfMs) * tfMs;
+            
+            // Use time and asset as seed for constant "synthetic" history
+            const seed = time + assetSeed;
+            const rnd1 = seededRandom(seed);
+            const rnd2 = seededRandom(seed + 1);
+            const rnd3 = seededRandom(seed + 2);
+            const rnd4 = seededRandom(seed + 3);
+  
+            trend += (rnd1 - 0.5) * volatility * 0.5;
+            trend *= 0.95;
+            
+            const isPowerCandle = rnd2 < 0.1;
+            const multiplier = isPowerCandle ? (2 + rnd3 * 2) : 1;
+            
+            const open = lastPrice;
+            const move = (trend + (rnd4 - 0.5) * volatility * 12 * tfScale) * multiplier;
+            const close = open + move;
+            
+            const wickScale = volatility * 5 * tfScale;
+            const high = Math.max(open, close) + seededRandom(seed + 4) * wickScale;
+            const low = Math.min(open, close) - seededRandom(seed + 5) * wickScale;
+            
+            synthetic.push({
+                time, open, high, low, close,
+                volume: Math.floor(seededRandom(seed + 6) * 100) + 10,
+                formattedTime: formatWithOffset(time, 'HH:mm:ss', timezoneOffset)
+            });
+            lastPrice = close;
+        }
+        candles = [...synthetic, ...candles];
+        }
 
       if (response.isOlder) {
         setTickHistory(prev => {
@@ -1883,6 +2364,7 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
         setTickHistory(prev => ({ ...prev, [response.asset]: historyTicks }));
         setData(candles);
         dataRef.current = candles;
+        historyCacheRef.current[response.asset] = candles;
         if (candles.length > 0) {
           const last = candles[candles.length - 1];
           lastCloseRef.current = last.close;
@@ -1900,11 +2382,14 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
 
     socket.on('asset-history', handleHistory);
     
-    // Reset loading timer for professional delay
-    loadingStartTimeRef.current = Date.now();
+    // Clear data only if the asset ID changed (not just the timeframe)
+    if (selectedAsset.id !== lastAssetIdRef.current) {
+        setData([]);
+        dataRef.current = [];
+    }
+    lastAssetIdRef.current = selectedAsset.id;
+
     setIsLoading(true);
-    // REMOVED: setData([]); // Don't clear data immediately to avoid flash
-    // dataRef.current = [];
 
     // Add a small delay for the request to ensure the UI has cleared
     const requestTimeout = setTimeout(() => {
@@ -1954,7 +2439,8 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
       });
       
       const currentAsset = selectedAssetRef.current;
-      if (!currentAsset || isLoadingRef.current) return; // Ignore ticks while history is loading
+      // ONLY block ticks if we have ZERO data. If we have data, we want to see it move even if history is still syncing.
+      if (!currentAsset || (isLoadingRef.current && dataRef.current.length === 0)) return; 
 
       const tick = ticks[currentAsset.shortName];
       if (!tick) return;
@@ -1969,6 +2455,13 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
       });
       
       const newPrice = tick.price;
+
+      // Sanity check: prevent unrealistic spikes (e.g., > 20% jump on one tick) - Increased for gaps
+      if (lastCloseRef.current !== null && Math.abs(newPrice - lastCloseRef.current) / lastCloseRef.current > 0.20) {
+          console.warn("Unrealistic price jump ignored:", newPrice, lastCloseRef.current);
+          return;
+      }
+      
       const tfMs = getTimeFrameInMs(chartTimeFrameRef.current);
 
       setCurrentPrice(newPrice);
@@ -2011,11 +2504,14 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
             // Creating a 1-length array here causes the "single candle glitch"
             if (isLoadingRef.current) return prev;
 
+            const isMinuteTf = chartTimeFrameRef.current === '1m';
+            const useMinuteAcc = isMinuteTf && tick.minuteOpen !== undefined;
+
             const newCandle = {
                 time: currentTFStart,
-                open: newPrice,
-                high: Math.max(newPrice, tick.high || newPrice),
-                low: Math.min(newPrice, tick.low || newPrice),
+                open: useMinuteAcc ? tick.minuteOpen : newPrice,
+                high: useMinuteAcc ? tick.minuteHigh : Math.max(newPrice, tick.high || newPrice),
+                low: useMinuteAcc ? tick.minuteLow : Math.min(newPrice, tick.low || newPrice),
                 close: newPrice,
                 volume: Math.floor(Math.random() * 100) + 10,
                 formattedTime: formatWithOffset(currentTFStart, 'HH:mm:ss', timezoneOffset),
@@ -2036,35 +2532,39 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
         }
 
         let updatedData: OHLCData[];
+        const isMinuteTf = chartTimeFrameRef.current === '1m';
+        const useMinuteAcc = isMinuteTf && tick.minuteOpen !== undefined;
+
         if (lastCandle.time === currentTFStart) {
             // Update existing candle
             const updatedCandle = {
                 ...lastCandle,
+                open: useMinuteAcc ? tick.minuteOpen : lastCandle.open,
                 close: newPrice,
-                high: Math.max(lastCandle.high, tick.high || newPrice),
-                low: Math.min(lastCandle.low, tick.low || newPrice),
+                high: useMinuteAcc ? tick.minuteHigh : Math.max(lastCandle.high, tick.high || newPrice),
+                low: useMinuteAcc ? tick.minuteLow : Math.min(lastCandle.low, tick.low || newPrice),
                 volume: (lastCandle.volume || 0) + 1,
             };
             
             // Critical guard: Only update if anything changed
             if (lastCandle.close === updatedCandle.close && 
                 lastCandle.high === updatedCandle.high && 
-                lastCandle.low === updatedCandle.low) return prev;
+                lastCandle.low === updatedCandle.low &&
+                lastCandle.open === updatedCandle.open) return prev;
             
             updatedData = [...prev.slice(0, -1), updatedCandle];
         } else {
             // New candle started
             const newCandle = {
                 time: currentTFStart,
-                open: lastCandle.close,
-                high: Math.max(lastCandle.close, tick.high || newPrice),
-                low: Math.min(lastCandle.close, tick.low || newPrice),
+                open: useMinuteAcc ? tick.minuteOpen : lastCandle.close,
+                high: useMinuteAcc ? tick.minuteHigh : Math.max(lastCandle.close, tick.high || newPrice),
+                low: useMinuteAcc ? tick.minuteLow : Math.min(lastCandle.close, tick.low || newPrice),
                 close: newPrice,
                 volume: Math.floor(Math.random() * 10) + 1,
                 formattedTime: formatWithOffset(currentTFStart, 'HH:mm:ss', timezoneOffset),
             };
             updatedData = [...prev, newCandle];
-            console.log('New candle:', newCandle, 'Last candle:', lastCandle);
             if (updatedData.length > 5000) updatedData.shift();
         }
         
@@ -2103,8 +2603,43 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
       setTrades(prev => prev.map(t => t.id === id ? { ...t, startTime, endTime } : t));
     });
 
-    socket.on('market-tick', (ticks) => {
+    socket.on('initial-prices', (prices: Record<string, any>) => {
+      setMarketAssets(prev => {
+        const next = { ...prev };
+        Object.entries(prices).forEach(([symbol, price]) => {
+          next[symbol] = {
+            ...(prev[symbol] || {}),
+            price: Number(price),
+            isVisible: true,
+            isFrozen: false
+          };
+        });
+        return next;
+      });
+      
+      // Update current price if it matches selected asset to prevent jumps
+      if (selectedAsset && prices[selectedAsset.shortName]) {
+        const initialPrice = Number(prices[selectedAsset.shortName]);
+        setCurrentPrice(initialPrice);
+        lastCloseRef.current = initialPrice;
+      }
+    });
+
+    socket.on('market-tick', (ticks: Record<string, any>) => {
       handleTick(ticks);
+      
+      // Also update marketAssets so indicators/sidebars match
+      setMarketAssets(prev => {
+        let changed = false;
+        const next = { ...prev };
+        Object.entries(ticks).forEach(([symbol, tick]) => {
+          if (!next[symbol] || next[symbol].price !== tick.price) {
+            next[symbol] = { ...(next[symbol] || {}), price: tick.price };
+            changed = true;
+          }
+        });
+        return changed ? next : prev;
+      });
     });
     socket.on('asset-payout-updated', handlePayoutUpdate);
     socket.on('market-assets-updated', (updatedAssets: Record<string, any>) => {
@@ -2173,12 +2708,12 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
       }
     });
 
-    socket.on('withdrawal-cancelled', ({ id, newBalance, currency, bonusBalance: newBonusBalance }) => {
+    socket.on('withdrawal-cancelled', ({ id, newBalance, currency, bonus_balance: newBonusBalance }) => {
       if (currency === 'BDT') {
-        setExtraAccounts(prev => prev.map(a => a.currency === 'BDT' ? { ...a, balance: a.balance + newBalance } : a));
+        setExtraAccounts(prev => prev.map(a => a.currency === 'BDT' ? { ...a, balance: a.balance + (newBalance || 0) } : a));
       } else {
         if (newBalance !== undefined) setBalance(prev => Math.abs(prev - newBalance) < 0.000001 ? prev : newBalance);
-        if (newBonusBalance !== undefined) setBonusBalance(prev => Math.abs(prev - newBonusBalance) < 0.000001 ? prev : newBonusBalance);
+        if (newBonusBalance !== undefined) setBonusBalance(prev => Math.abs(prev - (newBonusBalance as number)) < 0.000001 ? prev : (newBonusBalance as number));
       }
     });
 
@@ -2267,6 +2802,7 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
       resolvedTradeIdsRef.current.add(result.id);
 
       const isWin = result.status === 'WIN';
+      const profit = result.profit !== undefined ? result.profit : (isWin ? trade.amount * (trade.payout / 100) : -trade.amount);
       
       if (isWin) {
         playSound('win');
@@ -2277,13 +2813,23 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
       // If trade is already updated by user-data-updated, don't update state again
       if (!trade || trade.status !== 'ACTIVE') return;
 
-      // Professional Firestore Update for Trade Result and Balance
+      // Update results locally for immediate feedback
+      if (isWin) {
+        if (trade.accountType === 'DEMO') {
+          setDemoBalance(prev => prev + trade.amount + profit);
+        } else if (trade.accountType === 'REAL') {
+          // Calculation might need care if multiple trades are active
+          // But usually the Firestore listener will correct it.
+          setBalance(prev => prev + (result.realReturn || (trade.amount + profit)));
+          if (result.bonusReturn) setBonusBalance(prev => prev + result.bonusReturn);
+        }
+      }
+
+      // Professional Firestore Update for Trade Result
       if (user) {
         try {
           // Update the specific trade document
           const tradeDocRef = doc(db, 'users', user.uid, 'trades', result.id);
-          const isWin = result.status === 'WIN';
-          const profit = result.profit !== undefined ? result.profit : (isWin ? trade.amount * (trade.payout / 100) : -trade.amount);
           
           setDoc(tradeDocRef, {
             status: result.status,
@@ -2291,27 +2837,8 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
             closePrice: result.closePrice,
             endTime: Date.now()
           }, { merge: true });
-
-          // Update balance in user doc if it was a win (investment was already deducted)
-          if (isWin) {
-             const userDocRef = doc(db, 'users', user.uid);
-             if (trade.accountType === 'DEMO') {
-               setDoc(userDocRef, { demoBalance: demoBalanceRef.current + trade.amount + profit }, { merge: true });
-             } else if (trade.accountType === 'REAL') {
-               setDoc(userDocRef, { balance: balanceRef.current + trade.amount + profit }, { merge: true });
-             } else {
-               // Handle extra accounts if necessary
-               const updatedExtraAccounts = extraAccounts.map(a => {
-                 if (a.id === trade.accountType) {
-                   return { ...a, balance: a.balance + trade.amount + profit };
-                 }
-                 return a;
-               });
-               setDoc(userDocRef, { extraAccounts: updatedExtraAccounts }, { merge: true });
-             }
-          }
         } catch (error) {
-          handleFirestoreError(error, OperationType.WRITE, `users/${user.uid}/trades/${result.id}`);
+          console.error("Error updating trade result:", error);
         }
       }
 
@@ -2361,7 +2888,7 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
   };
 
   const handleTrade = (type: 'UP' | 'DOWN') => {
-    if (selectedAsset.isFrozen) return showToast("Trading is currently closed for this asset.", "error");
+    if (selectedAsset.isFrozen) return showToast(t('trade.closed_assets'), "error");
     
     let currentBalance = 0;
     let rate = 1;
@@ -2392,7 +2919,7 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
     }
 
     if (totalAvailable < investmentInUSD - 0.00000001) {
-      showToast(`Insufficient Balance. You need ${displayCurrencySymbol}${(investmentInUSD * rate).toFixed(2)} but have ${displayCurrencySymbol}${(totalAvailable * rate).toFixed(2)}.`, "error");
+      showToast(`${t('trade.insufficient_balance')}. You need ${displayCurrencySymbol}${(investmentInUSD * rate).toFixed(2)} but have ${displayCurrencySymbol}${(totalAvailable * rate).toFixed(2)}.`, "error");
       return;
     }
 
@@ -2495,7 +3022,7 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
       duration: tradeDurationSeconds,
       status: 'ACTIVE',
       accountType: activeAccount,
-      payout: selectedAsset.payout,
+      payout: currentPayout,
       asset: selectedAsset.name,
       assetShortName: selectedAsset.shortName,
       assetFlag: selectedAsset.flag,
@@ -2504,45 +3031,32 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
       userId: user?.uid
     };
 
-    // Professional Firestore Update
-    if (user) {
-      try {
-        // We use local state updates for immediate feedback, but the source of truth is Firestore
-        if (activeAccount === 'DEMO') {
-          setDoc(doc(db, 'users', user.uid), { 
-            demoBalance: demoBalance - investmentInUSD,
-            currency: currency.code,
-            currencySymbol: currency.symbol,
-            currencyName: currency.name,
-            currencyFlag: currency.flag
-          }, { merge: true });
-        } else if (activeAccount === 'REAL') {
-          let remaining = investmentInUSD;
-          let newRealBalance = balance;
-          let newBonusBalance = bonusBalance;
-          
-          if (newRealBalance >= remaining) {
-            newRealBalance -= remaining;
-            remaining = 0;
-          } else {
-            remaining -= newRealBalance;
-            newRealBalance = 0;
-            newBonusBalance = Math.max(0, newBonusBalance - remaining);
-          }
-          setDoc(doc(db, 'users', user.uid), { 
-            balance: newRealBalance, 
-            bonusBalance: newBonusBalance,
-            turnover_achieved: (turnoverAchieved || 0) + investmentInUSD,
-            currency: currency.code,
-            currencySymbol: currency.symbol,
-            currencyName: currency.name,
-            currencyFlag: currency.flag
-          }, { merge: true });
-        }
-
-        // Add trade to subcollection
-        setDoc(doc(db, 'users', user.uid, 'trades', tradeId), newTrade);
-      } catch (error) {
+        // Professional Firestore Update
+        if (user) {
+          try {
+            // We use local state updates for immediate feedback
+            if (activeAccount === 'DEMO') {
+              setDemoBalance(prev => prev - investmentInUSD);
+            } else if (activeAccount === 'REAL') {
+              let remaining = investmentInUSD;
+              let newRealBalance = balance;
+              let newBonusBalance = bonusBalance;
+              
+              if (newRealBalance >= remaining) {
+                newRealBalance -= remaining;
+                remaining = 0;
+              } else {
+                remaining -= newRealBalance;
+                newRealBalance = 0;
+                newBonusBalance = Math.max(0, newBonusBalance - remaining);
+              }
+              setBalance(newRealBalance);
+              setBonusBalance(newBonusBalance);
+            }
+    
+            // Add trade to subcollection
+            setDoc(doc(db, 'users', user.uid, 'trades', tradeId), newTrade);
+          } catch (error) {
         handleFirestoreError(error, OperationType.WRITE, `users/${user.uid}/trades/${tradeId}`);
       }
     }
@@ -2589,73 +3103,13 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
     return trades.filter(t => t.status === 'ACTIVE' && t.assetShortName === selectedAsset.shortName && t.accountType === activeAccount);
   }, [trades, selectedAsset.shortName, activeAccount]);
 
-  // Client-side Trade Resolution Fallback (Fixes 00:00 stuck trades)
-  useEffect(() => {
-    if (!user || trades.length === 0) return;
-
-    const interval = setInterval(async () => {
-      const now = Date.now() + serverTimeOffset;
-      const activeTrades = trades.filter(t => t.status === 'ACTIVE');
-
-      for (const trade of activeTrades) {
-        // If trade expired more than 7 seconds ago and still active, Resolve it locally
-        if (now > (trade.endTime + 7000)) {
-          console.warn(`[Self-Resolution] Resolving stuck trade: ${trade.id}`);
-          
-          if (resolvedTradeIdsRef.current.has(trade.id)) continue;
-          resolvedTradeIdsRef.current.add(trade.id);
-
-          const currentPrice = lastCloseRef.current;
-          let isWin = false;
-          if (trade.type === 'UP') {
-            isWin = currentPrice > trade.entryPrice;
-          } else {
-            isWin = currentPrice < trade.entryPrice;
-          }
-
-          const status = isWin ? 'WIN' : 'LOSS';
-          const profit = isWin ? trade.amount * (trade.payout / 100) : -trade.amount;
-
-          try {
-            const tradeDocRef = doc(db, 'users', user.uid, 'trades', trade.id);
-            await setDoc(tradeDocRef, {
-              status: status,
-              profit: profit,
-              closePrice: currentPrice,
-              endTime: trade.endTime // Use original endTime
-            }, { merge: true });
-
-            if (isWin) {
-              const userDocRef = doc(db, 'users', user.uid);
-              if (trade.accountType === 'DEMO') {
-                await setDoc(userDocRef, { demoBalance: demoBalance + trade.amount + profit }, { merge: true });
-              } else if (trade.accountType === 'REAL') {
-                await setDoc(userDocRef, { 
-                    balance: balance + trade.amount + profit,
-                    // If win, we don't add to turnover (investment was already added when placed)
-                }, { merge: true });
-              }
-            }
-            
-            // Re-sync trades state locally if needed (Firestore listener will pick it up usually)
-            setTradeResults(r => [...r, { id: trade.id, profit: profit, isWin: isWin }]);
-            playSound(isWin ? 'win' : 'loss');
-            
-          } catch (error) {
-            console.error('Self-resolution failed:', error);
-          }
-        }
-      }
-    }, 2000);
-
-    return () => clearInterval(interval);
-  }, [user, trades, balance, demoBalance, serverTimeOffset]);
+// Client-side Trade Resolution Fallback removed to prevent syncing issues. Server is the source of truth.
 
   const appClosedTrades = useMemo(() => {
     return trades.filter(t => t.status !== 'ACTIVE' && t.accountType === activeAccount).sort((a, b) => b.endTime - a.endTime);
   }, [trades, activeAccount]);
 
-  const currentPayout = marketAssets[selectedAsset.shortName]?.payout || selectedAsset.payout;
+  const currentPayout = marketAssets[selectedAsset.shortName]?.payout || selectedAsset.payout || 90;
   const potentialProfit = (investment * currentPayout / 100).toFixed(2);
 
   // Handle Visibility Change for Chart Sync
@@ -2696,11 +3150,7 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
   }, [view, socket, selectedAsset.shortName, chartTimeFrame]);
 
   if (authLoading) {
-    return (
-      <div className="min-h-[100dvh] bg-[var(--bg-primary)] flex items-center justify-center">
-        <div className="w-12 h-12 border-4 border-blue-500/20 border-t-blue-500 rounded-full animate-spin"></div>
-      </div>
-    );
+    return <LoadingOverlay message="Initializing Onyx" />;
   }
 
   if (isLocked) {
@@ -2718,55 +3168,63 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
 
   if (view === 'HOME') {
     return (
-      <div className="min-h-screen bg-[#061626] text-white font-sans selection:bg-blue-500/30 overflow-x-hidden">
+      <div className="min-h-screen bg-bg-primary text-white font-sans selection:bg-blue-500/30 overflow-x-hidden">
         {/* Navigation */}
-        <nav className="fixed top-0 left-0 right-0 z-[100] px-6 md:px-12 py-5 flex items-center justify-between bg-[#061626]/80 backdrop-blur-lg border-b border-white/5">
-          <div className="flex items-center gap-3 cursor-pointer group" onClick={() => setView('HOME')}>
-            <div className="relative">
-              <div className="w-10 h-10 md:w-14 md:h-14 rounded-xl overflow-hidden border border-white/10 shadow-[0_8px_20px_rgba(37,99,235,0.2)] group-hover:scale-105 transition-transform duration-500 bg-white">
+        <nav className="fixed top-0 left-0 right-0 z-[100] px-4 md:px-12 h-16 md:h-24 flex items-center justify-between bg-bg-primary/80 backdrop-blur-lg border-b border-border-color">
+          <div className="flex items-center gap-2 md:gap-3 cursor-pointer group" onClick={() => navigate('/')}>
+            <div className="relative shrink-0">
+              <div className="w-10 h-10 md:w-14 md:h-14 rounded-xl overflow-hidden border border-border-color shadow-[0_8px_20px_rgba(37,99,235,0.2)] group-hover:scale-105 transition-transform duration-500 bg-white">
                 <img 
                   src="https://i.imghippo.com/files/Gtw3911Dmk.jpg" 
-                  alt="Onyx Option Logo" 
+                  alt="Onyx Elite Logo" 
                   className="w-full h-full object-cover"
                 />
               </div>
-              <div className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-emerald-500 rounded-full border-2 border-[#061626] shadow-[0_0_10px_rgba(16,185,129,0.5)]" />
+              <div className="absolute -top-1 -right-1 w-3 h-3 md:w-3.5 md:h-3.5 bg-emerald-500 rounded-full border-2 border-[#061626] shadow-[0_0_10px_rgba(16,185,129,0.5)]" />
             </div>
             <div className="flex flex-col">
               <div className="flex items-center gap-1.5">
-                <span className="text-xl md:text-2xl font-black tracking-tighter leading-none text-white flex items-center uppercase">
-                  ONYX<span className="text-blue-500 ml-0.5">OPTION</span>
+                <span className="text-lg sm:text-xl md:text-2xl font-black tracking-tighter leading-none text-text-primary flex items-center uppercase">
+                  ONYX<span className="text-blue-500 ml-0.5">ELITE</span>
                 </span>
                 <div className="h-1.5 w-1.5 rounded-full bg-blue-500 hidden md:block" />
               </div>
-              <span className="text-[8px] md:text-[9px] font-black uppercase tracking-[0.5em] text-blue-400/60 mt-1 leading-none">Elite Trading Terminal</span>
+              <span className="hidden sm:block text-[8px] md:text-[9px] font-black uppercase tracking-[0.5em] text-blue-400/60 mt-1 leading-none">Elite Trading Terminal</span>
+              <span className="sm:hidden text-[7px] font-black uppercase tracking-[0.2em] text-blue-400/60 mt-1 leading-none">Elite Trading</span>
             </div>
           </div>
           
-          <div className="hidden lg:flex items-center gap-10 text-[11px] font-bold text-white/50 uppercase tracking-widest">
-            <button onClick={() => setView('TRADING')} className="hover:text-white transition-colors">Trading</button>
-            <button onClick={() => { setInfoPageTitle('Assets'); setView('INFO_PAGE'); }} className="hover:text-white transition-colors">Assets</button>
-            <button onClick={() => setView('LEADERBOARD')} className="hover:text-white transition-colors">Tournament</button>
-            <div className="flex items-center gap-1 cursor-pointer hover:text-white">
+          <div className="hidden lg:flex items-center gap-10 text-[11px] font-bold text-text-secondary/50 uppercase tracking-widest shrink-0">
+            <button onClick={() => navigate(activeAccount === 'DEMO' ? '/trade/demo' : '/trade')} className="hover:text-text-primary transition-colors">Trading</button>
+            <button onClick={() => { setInfoPageTitle('Assets'); navigate(activeAccount === 'DEMO' ? '/trade/demo' : '/trade'); }} className="hover:text-text-primary transition-colors">Assets</button>
+            <button onClick={() => navigate('/leaderboard')} className="hover:text-text-primary transition-colors">Tournament</button>
+            <div className="flex items-center gap-1 cursor-pointer hover:text-text-primary">
               <Globe size={14} />
               <span>English</span>
               <ChevronDown size={14} />
             </div>
           </div>
 
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2 md:gap-4 shrink-0">
             <button 
-              onClick={() => setView('TRADING')}
-              className="px-6 py-2.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-black rounded-md transition-all active:scale-95 shadow-lg shadow-blue-600/20 uppercase tracking-widest"
+              onClick={() => navigate('/login')}
+              className="text-[11px] font-black text-text-primary/70 hover:text-text-primary uppercase tracking-[0.2em] transition-colors hidden md:block"
             >
-              REGISTRATION
+              Log In
             </button>
-            <button className="lg:hidden p-2 text-white/70"><AlignLeft size={24} /></button>
+            <button 
+              onClick={() => navigate('/signup')}
+              className="px-4 py-2 md:px-6 md:py-2.5 bg-blue-600 hover:bg-blue-500 text-white text-[10px] md:text-xs font-black rounded-md transition-all active:scale-95 shadow-lg shadow-blue-600/20 uppercase tracking-widest"
+            >
+              <span className="hidden sm:inline">REGISTRATION</span>
+              <span className="sm:hidden">REGISTER</span>
+            </button>
+            <button className="lg:hidden p-1.5 md:p-2 text-text-secondary/70 -mr-2"><AlignLeft size={22} /></button>
           </div>
         </nav>
 
         {/* Live Asset Ticker Bar */}
-        <div className="fixed top-[73px] left-0 right-0 z-[90] bg-[#0d2238] border-b border-white/5 py-2 overflow-hidden h-[40px] flex items-center">
+        <div className="fixed top-16 md:top-24 left-0 right-0 z-[90] bg-bg-secondary border-b border-border-color h-10 flex items-center overflow-hidden">
           <motion.div 
             animate={{ x: [0, -1000] }}
             transition={{ duration: 30, repeat: Infinity, ease: "linear" }}
@@ -2791,8 +3249,8 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
               { pair: 'APPLE', price: '189.40', change: '+0.25%' },
             ].map((item, i) => (
               <div key={i} className="flex items-center gap-3 text-[10px] font-black uppercase tracking-widest">
-                <span className="text-white/40">{item.pair}</span>
-                <span className="text-white">{item.price}</span>
+                <span className="text-text-secondary/40">{item.pair}</span>
+                <span className="text-text-primary">{item.price}</span>
                 <span className={item.change.startsWith('+') ? 'text-emerald-500' : 'text-red-500'}>{item.change}</span>
               </div>
             ))}
@@ -2800,72 +3258,44 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
         </div>
 
         {/* Hero Section */}
-        <section className="relative pt-44 pb-32 px-6 md:px-12 min-h-screen flex items-center overflow-hidden">
+        <section className="relative pt-[180px] pb-24 px-6 md:px-12 min-h-screen flex items-center justify-center overflow-hidden">
           {/* Enhanced Background Layer */}
-          <div className="absolute inset-0 -z-10 bg-[#061626]">
+          <div className="absolute inset-0 -z-10 bg-bg-primary">
              <div className="absolute inset-0 bg-gradient-to-tr from-[#061626] via-[#061626]/80 to-transparent" />
              <div className="absolute inset-0 bg-gradient-to-b from-transparent via-[#061626]/20 to-[#061626]" />
           </div>
           
-          <div className="max-w-7xl mx-auto w-full grid lg:grid-cols-2 gap-16 items-center">
+          <div className="max-w-4xl mx-auto w-full text-center flex flex-col items-center">
             <motion.div
-              initial={{ opacity: 0, x: -30 }}
-              animate={{ opacity: 1, x: 0 }}
+              initial={{ opacity: 0, y: 30 }}
+              animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.8 }}
             >
-              <h1 className="text-4xl md:text-6xl lg:text-7xl font-bold mb-8 leading-[1.05] tracking-tight uppercase drop-shadow-xl">
-                THE RIGHT PLACE<br />
-                FOR ONLINE TRADING<br />
-                <span className="text-blue-500 font-black relative">
+              <h1 className="text-4xl md:text-6xl font-bold mb-6 leading-[1.1] tracking-tight uppercase drop-shadow-xl text-white">
+                TRADE SMART <br className="md:hidden" />
+                <span className="text-blue-500 font-black inline-block mt-2">
                   ON FINANCIAL MARKETS
-                  <div className="absolute -bottom-2 left-0 w-1/2 h-1 bg-gradient-to-r from-blue-500 to-transparent" />
                 </span>
               </h1>
               
-              <div className="space-y-4 mb-12">
-                <p className="text-xl md:text-2xl font-bold text-gray-200">The most user-friendly interface</p>
-                <p className="text-gray-400 text-lg">Get access to trade over 100 global trading assets</p>
-              </div>
+              <p className="text-lg md:text-xl text-gray-300 mb-10 max-w-2xl mx-auto font-medium">
+                Access over 100+ global trading assets with our most user-friendly interface yet.
+              </p>
               
-              <div className="flex flex-col sm:flex-row gap-6 items-center">
+              <div className="flex flex-col sm:flex-row gap-4 items-center justify-center">
                 <button 
                   onClick={() => setView('TRADING')}
-                  className="w-full sm:w-auto px-12 py-5 bg-blue-600 hover:bg-blue-500 text-white font-black rounded-md transition-all shadow-[0_10px_40px_rgba(37,99,235,0.4)] active:scale-95 text-xl uppercase tracking-wider relative overflow-hidden group"
+                  className="w-full sm:w-auto px-10 py-4 bg-blue-600 hover:bg-blue-500 text-white font-black rounded-lg transition-all shadow-[0_10px_30px_rgba(37,99,235,0.3)] active:scale-95 text-lg uppercase tracking-wider"
                 >
-                  <div className="absolute inset-0 bg-white/20 translate-y-[-100%] group-hover:translate-y-[100%] transition-transform duration-500" />
-                  REGISTRATION
+                  Start Trading Now
                 </button>
-                <div className="flex items-center gap-2 text-white/50 font-bold uppercase text-[11px] tracking-widest">
-                  <span className="cursor-pointer hover:text-white underline underline-offset-4" onClick={() => setView('TRADING')}>Log In</span>
-                  <span>or</span>
-                  <span className="cursor-pointer hover:text-white underline underline-offset-4" onClick={() => setView('TRADING')}>Start in one click</span>
-                </div>
               </div>
-            </motion.div>
-
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.9, y: 30 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              transition={{ delay: 0.2, duration: 1 }}
-              className="relative hidden lg:block"
-            >
-              <div className="relative z-10 w-full rounded-2xl border border-white/5 bg-[#0d2238]/60 backdrop-blur-md shadow-[0_40px_100px_rgba(0,0,0,0.6)] overflow-hidden p-3 min-h-[400px]">
-                 <div className="w-full h-[400px] bg-[#061626] rounded-xl relative group overflow-hidden shadow-inner">
-                    <img 
-                      src="https://i.postimg.cc/RVbqGwtM/ca453c05-939e-4394-8cb3-65c66e6f354e.jpg" 
-                      alt="Trading Terminal Desktop Mockup" 
-                      className="w-full h-full object-cover opacity-90 group-hover:scale-105 group-hover:opacity-100 transition-all duration-1000"
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-t from-[#061626]/80 to-transparent opacity-40 pointer-events-none" />
-                 </div>
-              </div>
-              <div className="absolute -bottom-10 -left-10 w-40 h-40 bg-blue-500/10 blur-[80px] rounded-full" />
             </motion.div>
           </div>
         </section>
 
         {/* Trading Conditions */}
-        <section className="py-32 px-6 md:px-12 bg-white text-[#061626]">
+        <section className="py-32 px-6 md:px-12 bg-white text-text-primary">
           <div className="max-w-7xl mx-auto">
             <h2 className="text-4xl md:text-5xl font-bold mb-24 tracking-tight">Place your trades on best conditions</h2>
             
@@ -2880,7 +3310,7 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
                ].map((item, i) => (
                  <div key={i} className="border-l-4 border-blue-600 pl-8 transition-transform hover:translate-x-2">
                    <div className="text-5xl md:text-6xl font-black text-blue-600 mb-3">{item.value}</div>
-                   <div className="text-lg font-bold text-[#061626]/40 uppercase tracking-widest">{item.sub}</div>
+                   <div className="text-lg font-bold text-text-primary/40 uppercase tracking-widest">{item.sub}</div>
                  </div>
                ))}
             </div>
@@ -2888,7 +3318,7 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
         </section>
 
         {/* Professional Asset Index Preview */}
-        <section className="py-32 px-6 md:px-12 bg-[#f8fafc] text-[#061626]">
+        <section className="py-32 px-6 md:px-12 bg-bg-primary text-text-primary">
           <div className="max-w-7xl mx-auto">
             <div className="flex flex-col md:flex-row justify-between items-end gap-8 mb-20">
                <div>
@@ -2931,13 +3361,13 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
         </section>
 
         {/* Security Pillars Deep Dive */}
-        <section className="py-32 px-6 md:px-12 bg-[#061626] text-white">
+        <section className="py-32 px-6 md:px-12 bg-bg-primary text-white">
            <div className="max-w-7xl mx-auto">
               <div className="grid lg:grid-cols-2 gap-24 items-center">
                  <div className="relative">
                     <div className="absolute -top-10 -left-10 w-64 h-64 bg-blue-600/10 blur-[100px] rounded-full" />
                     <h2 className="text-4xl md:text-6xl font-black uppercase mb-10 leading-tight">Institutional Grade<br /> <span className="text-blue-500">Security Layers</span></h2>
-                    <p className="text-xl text-white/50 mb-12 leading-relaxed">
+                    <p className="text-xl text-text-secondary/50 mb-12 leading-relaxed">
                        Your security is our highest priority. We use the same encryption standards as leading global banking institutions.
                     </p>
                     <div className="space-y-8">
@@ -2952,28 +3382,28 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
                             </div>
                             <div>
                                <h3 className="text-lg font-bold uppercase tracking-tight mb-2">{item.title}</h3>
-                               <p className="text-white/30 text-sm leading-relaxed">{item.desc}</p>
+                               <p className="text-text-secondary/30 text-sm leading-relaxed">{item.desc}</p>
                             </div>
                          </div>
                        ))}
                     </div>
                  </div>
-                 <div className="bg-[#0d2238] p-10 rounded-[40px] border border-white/5 relative group">
+                 <div className="bg-bg-secondary p-10 rounded-[40px] border border-border-color relative group">
                     <div className="absolute inset-0 bg-blue-600/5 opacity-0 group-hover:opacity-100 transition-opacity rounded-[40px]" />
                     <div className="relative z-10">
                        <Lock size={80} className="text-blue-500/20 mb-10" />
                        <h3 className="text-3xl font-black uppercase italic mb-6">Regulated Infrastructure</h3>
-                       <p className="text-white/40 mb-10 leading-relaxed font-medium">
+                       <p className="text-text-secondary/40 mb-10 leading-relaxed font-medium">
                           Our platform architecture is built on multi-node redundancy, ensuring 99.9% uptime and zero-latency execution even during periods of extreme market volatility.
                        </p>
                        <div className="grid grid-cols-2 gap-4">
-                          <div className="p-6 bg-black/20 rounded-2xl border border-white/5">
+                          <div className="p-6 bg-bg-tertiary rounded-2xl border border-border-color">
                              <div className="text-2xl font-black text-blue-500">24/7</div>
-                             <div className="text-[10px] font-black uppercase text-white/30 tracking-widest">Monitoring</div>
+                             <div className="text-[10px] font-black uppercase text-text-secondary/30 tracking-widest">Monitoring</div>
                           </div>
-                          <div className="p-6 bg-black/20 rounded-2xl border border-white/5">
+                          <div className="p-6 bg-bg-tertiary rounded-2xl border border-border-color">
                              <div className="text-2xl font-black text-blue-500">AI</div>
-                             <div className="text-[10px] font-black uppercase text-white/30 tracking-widest">Fraud Guard</div>
+                             <div className="text-[10px] font-black uppercase text-text-secondary/30 tracking-widest">Fraud Guard</div>
                           </div>
                        </div>
                     </div>
@@ -2983,7 +3413,7 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
         </section>
 
         {/* Why Choose Us Icons */}
-        <section className="py-32 px-6 md:px-12 bg-gray-50 text-[#061626]">
+        <section className="py-32 px-6 md:px-12 bg-gray-50 text-text-primary">
            <div className="max-w-7xl mx-auto">
              <h2 className="text-4xl font-bold mb-20 tracking-tight text-center lg:text-left">Why choose us?</h2>
              <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-x-16 gap-y-20">
@@ -3001,7 +3431,7 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
                     </div>
                     <div>
                       <h3 className="text-xl font-black uppercase mb-4 tracking-tighter">0 {i+1} {feat.title}</h3>
-                      <p className="text-[#061626]/60 leading-relaxed font-medium text-sm">{feat.desc}</p>
+                      <p className="text-text-primary/60 leading-relaxed font-medium text-sm">{feat.desc}</p>
                     </div>
                   </div>
                 ))}
@@ -3010,11 +3440,11 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
         </section>
 
         {/* How to Start Section */}
-        <section className="py-32 px-6 md:px-12 bg-white text-[#061626]">
+        <section className="py-32 px-6 md:px-12 bg-white text-text-primary">
           <div className="max-w-7xl mx-auto">
             <div className="text-center mb-24">
               <h2 className="text-4xl md:text-5xl font-bold tracking-tight mb-6">How it works?</h2>
-              <p className="text-xl text-[#061626]/50">Start trading in three simple steps</p>
+              <p className="text-xl text-text-primary/50">Start trading in three simple steps</p>
             </div>
             
             <div className="grid md:grid-cols-3 gap-12">
@@ -3027,7 +3457,7 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
                     <div className="w-20 h-20 rounded-full bg-white flex items-center justify-center text-blue-600 mb-8 shadow-xl shadow-black/5 group-hover:scale-110 transition-transform">
                        <step.icon size={32} />
                     </div>
-                    <div className="absolute top-10 right-10 text-4xl font-black text-blue-600/10 group-hover:text-white/10 uppercase">0{i+1}</div>
+                    <div className="absolute top-10 right-10 text-4xl font-black text-blue-600/10 group-hover:text-text-secondary/10 uppercase">0{i+1}</div>
                     <h3 className="text-2xl font-black uppercase mb-4 tracking-tighter">{step.title}</h3>
                     <p className="opacity-60 font-medium">{step.desc}</p>
                  </div>
@@ -3051,7 +3481,7 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
                    { label: 'Weekly turnover', value: '$840M' },
                    { label: 'Withdrawals in 24h', value: '$2.5M' }
                  ].map((stat, i) => (
-                   <div key={i} className="p-8 bg-white/10 backdrop-blur-md rounded-2xl border border-white/10 text-center">
+                   <div key={i} className="p-8 bg-bg-tertiary backdrop-blur-md rounded-2xl border border-border-color text-center">
                      <div className="text-3xl md:text-5xl font-black mb-2 tracking-tighter uppercase">{stat.value}</div>
                      <div className="text-[10px] font-black uppercase tracking-widest opacity-60">{stat.label}</div>
                    </div>
@@ -3065,7 +3495,7 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
         </section>
 
         {/* Mobile App Promotion */}
-        <section className="py-32 px-6 md:px-12 bg-white text-[#061626]">
+        <section className="py-32 px-6 md:px-12 bg-white text-text-primary">
            <div className="max-w-7xl mx-auto flex flex-col lg:flex-row items-center gap-24">
               <div className="flex-1 order-2 lg:order-1">
                  <div className="relative inline-block">
@@ -3082,18 +3512,18 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
               </div>
               <div className="flex-1 order-1 lg:order-2">
                  <h2 className="text-4xl md:text-6xl font-black uppercase mb-10 tracking-tight leading-tight">Always with you on <span className="text-blue-600">any device</span></h2>
-                 <p className="text-xl text-[#061626]/60 mb-12 leading-relaxed">
+                 <p className="text-xl text-text-primary/60 mb-12 leading-relaxed">
                     The platform for computer allows you to trade on your laptop, but for those who are always on the go, our mobile app provides the same level of security and performance.
                  </p>
                  <div className="flex flex-wrap gap-4">
-                    <button className="flex items-center gap-3 px-8 py-4 bg-[#061626] text-white rounded-xl hover:bg-[#0d2238] transition-all">
+                    <button className="flex items-center gap-3 px-8 py-4 bg-bg-primary text-white rounded-xl hover:bg-bg-secondary transition-all">
                        <Apple size={24} />
                        <div className="text-left">
                           <div className="text-[10px] uppercase opacity-50 font-bold">Download on the</div>
                           <div className="text-lg font-black leading-tight">App Store</div>
                        </div>
                     </button>
-                    <button className="flex items-center gap-3 px-8 py-4 bg-[#061626] text-white rounded-xl hover:bg-[#0d2238] transition-all">
+                    <button className="flex items-center gap-3 px-8 py-4 bg-bg-primary text-white rounded-xl hover:bg-bg-secondary transition-all">
                        <PlayCircle size={24} />
                        <div className="text-left">
                           <div className="text-[10px] uppercase opacity-50 font-bold">Get it on</div>
@@ -3106,14 +3536,14 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
         </section>
 
         {/* Live Market Insights / Signals */}
-        <section className="py-32 px-6 md:px-12 bg-[#0d2238] text-white relative overflow-hidden">
+        <section className="py-32 px-6 md:px-12 bg-bg-secondary text-white relative overflow-hidden">
            <div className="max-w-7xl mx-auto relative z-10">
               <div className="flex flex-col md:flex-row justify-between items-end gap-8 mb-20">
                  <div>
                     <span className="text-blue-500 font-black uppercase tracking-[0.3em] text-xs mb-4 block">Market Sentiment</span>
                     <h2 className="text-4xl md:text-5xl font-bold tracking-tight uppercase">Trading Indicators</h2>
                  </div>
-                 <p className="max-w-md text-white/50 text-right font-medium">Use our built-in technical indicators and charts to evaluate market trends and make informed decisions.</p>
+                 <p className="max-w-md text-text-secondary/50 text-right font-medium">Use our built-in technical indicators and charts to evaluate market trends and make informed decisions.</p>
               </div>
 
               <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -3123,13 +3553,13 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
                    { name: 'Bollinger Bands', desc: 'Volatility measurement and price breakout zones', value: 'Adaptive Volatility Filter' },
                    { name: 'Candlestick Patterns', desc: 'Advanced recognition of reversal and continuation', value: '60+ Patterns Identified' }
                  ].map((signal, i) => (
-                   <div key={i} className="p-8 bg-[#061626] border border-white/5 rounded-2xl hover:border-blue-500/50 transition-all group">
+                   <div key={i} className="p-8 bg-bg-primary border border-border-color rounded-2xl hover:border-blue-500/50 transition-all group">
                       <div className="text-blue-500 font-bold mb-4 flex items-center gap-2">
                         <Zap size={16} />
                         {signal.name}
                       </div>
                       <h3 className="text-lg font-bold mb-3 uppercase tracking-tighter">{signal.desc}</h3>
-                      <div className="text-[11px] font-black uppercase tracking-widest text-white/30 group-hover:text-blue-400 transition-colors">{signal.value}</div>
+                      <div className="text-[11px] font-black uppercase tracking-widest text-text-secondary/30 group-hover:text-blue-400 transition-colors">{signal.value}</div>
                    </div>
                  ))}
               </div>
@@ -3137,7 +3567,7 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
         </section>
 
         {/* Live Payouts / Wins Feed */}
-        <section className="py-32 px-6 md:px-12 bg-white text-[#061626]">
+        <section className="py-32 px-6 md:px-12 bg-white text-text-primary">
            <div className="max-w-7xl mx-auto">
               <h2 className="text-4xl font-bold mb-16 tracking-tight">Recent successful payouts</h2>
               <div className="grid md:grid-cols-3 gap-8">
@@ -3151,7 +3581,7 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
                         <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold uppercase">{win.user[0]}</div>
                         <div>
                           <div className="font-bold text-sm tracking-tight">{win.user}</div>
-                          <div className="text-[10px] uppercase font-black text-[#061626]/40">{win.time}</div>
+                          <div className="text-[10px] uppercase font-black text-text-primary/40">{win.time}</div>
                         </div>
                       </div>
                       <div className="text-right">
@@ -3165,34 +3595,34 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
         </section>
 
         {/* Awards and Recognition */}
-        <section className="py-24 px-6 md:px-12 bg-[#061626] border-t border-white/5">
+        <section className="py-24 px-6 md:px-12 bg-bg-primary border-t border-border-color">
            <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-12 opacity-40">
               <div className="flex flex-col items-center gap-4">
                  <Trophy size={48} className="text-blue-500" />
                  <div className="text-center">
-                    <div className="text-white font-black tracking-tighter">BEST MOBILE TRADING PLATFORM</div>
-                    <div className="text-[10px] font-bold uppercase tracking-widest text-white/40">IBT Awards 2024</div>
+                    <div className="text-text-primary font-black tracking-tighter">BEST MOBILE TRADING PLATFORM</div>
+                    <div className="text-[10px] font-bold uppercase tracking-widest text-text-secondary/40">IBT Awards 2024</div>
                  </div>
               </div>
               <div className="flex flex-col items-center gap-4">
                  <ShieldCheck size={48} className="text-blue-500" />
                  <div className="text-center">
-                    <div className="text-white font-black tracking-tighter">FASTEST WITHDRAWALS SYSTEM</div>
-                    <div className="text-[10px] font-bold uppercase tracking-widest text-white/40">Financial Review 2025</div>
+                    <div className="text-text-primary font-black tracking-tighter">FASTEST WITHDRAWALS SYSTEM</div>
+                    <div className="text-[10px] font-bold uppercase tracking-widest text-text-secondary/40">Financial Review 2025</div>
                  </div>
               </div>
               <div className="flex flex-col items-center gap-4">
                  <Star size={48} className="text-blue-500" />
                  <div className="text-center">
-                    <div className="text-white font-black tracking-tighter">MOST INNOVATIVE BROKER</div>
-                    <div className="text-[10px] font-bold uppercase tracking-widest text-white/40">Global Forex Expo</div>
+                    <div className="text-text-primary font-black tracking-tighter">MOST INNOVATIVE BROKER</div>
+                    <div className="text-[10px] font-bold uppercase tracking-widest text-text-secondary/40">Global Forex Expo</div>
                  </div>
               </div>
            </div>
         </section>
 
         {/* Testimonials Section */}
-        <section className="py-32 px-6 md:px-12 bg-white text-[#061626]">
+        <section className="py-32 px-6 md:px-12 bg-white text-text-primary">
            <div className="max-w-7xl mx-auto">
               <div className="text-center mb-24">
                  <span className="text-blue-600 font-black uppercase tracking-[0.3em] text-xs mb-4 block">Success Stories</span>
@@ -3230,34 +3660,34 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
                  <h2 className="text-4xl md:text-6xl font-black uppercase mb-8 leading-tight">Join our <br />Affiliate Network</h2>
                  <p className="text-xl opacity-80 mb-10 max-w-lg">Invite your friends and colleagues and earn up to <span className="font-black">60% RevShare</span> on their trading volume. The highest payouts in the industry.</p>
                  <div className="flex flex-wrap gap-6">
-                    <div className="px-8 py-4 bg-white/10 backdrop-blur-md rounded-xl border border-white/10">
+                    <div className="px-8 py-4 bg-bg-tertiary backdrop-blur-md rounded-xl border border-border-color">
                        <div className="text-2xl font-black italic">60%</div>
                        <div className="text-[10px] font-black uppercase tracking-widest opacity-60">RevShare</div>
                     </div>
-                    <div className="px-8 py-4 bg-white/10 backdrop-blur-md rounded-xl border border-white/10">
+                    <div className="px-8 py-4 bg-bg-tertiary backdrop-blur-md rounded-xl border border-border-color">
                        <div className="text-2xl font-black italic">Instant</div>
                        <div className="text-[10px] font-black uppercase tracking-widest opacity-60">Payouts</div>
                     </div>
                  </div>
               </div>
-              <div className="flex-1 bg-white p-12 rounded-[40px] text-[#061626]">
+              <div className="flex-1 bg-white p-12 rounded-[40px] text-text-primary">
                  <h3 className="text-2xl font-black uppercase mb-6 italic tracking-tighter">Become a Partner</h3>
                  <p className="mb-10 text-gray-500 font-medium leading-relaxed">Fill out a simple application and get access to your personalized dashboard, marketing materials, and real-time statistics.</p>
                  <button onClick={() => setView('TRADING')} className="w-full py-5 bg-blue-600 text-white font-black rounded-xl uppercase tracking-widest shadow-xl shadow-blue-600/20 hover:bg-blue-500 transition-all active:scale-95">Apply for Partnership</button>
               </div>
            </div>
-           <div className="absolute top-0 right-0 w-1/2 h-full bg-white/5 -skew-x-12 translate-x-1/2" />
+           <div className="absolute top-0 right-0 w-1/2 h-full bg-bg-secondary -skew-x-12 translate-x-1/2" />
         </section>
 
         {/* Economic Calendar Preview */}
-        <section className="py-32 px-6 md:px-12 bg-white text-[#061626]">
+        <section className="py-32 px-6 md:px-12 bg-white text-text-primary">
            <div className="max-w-7xl mx-auto">
               <div className="flex flex-col md:flex-row justify-between items-end gap-8 mb-20">
                  <div>
                     <span className="text-blue-600 font-black uppercase tracking-[0.3em] text-xs mb-4 block">Market Pulse</span>
                     <h2 className="text-4xl md:text-5xl font-bold tracking-tight uppercase">Economic Calendar</h2>
                  </div>
-                 <p className="max-w-md text-[#061626]/50 text-right font-medium">Keep track of high-impact news events that drive global market volatility and create trading opportunities.</p>
+                 <p className="max-w-md text-text-primary/50 text-right font-medium">Keep track of high-impact news events that drive global market volatility and create trading opportunities.</p>
               </div>
 
               <div className="space-y-4">
@@ -3296,7 +3726,7 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
         </section>
 
         {/* Account Types / VIP Section */}
-        <section className="py-32 px-6 md:px-12 bg-white text-[#061626]">
+        <section className="py-32 px-6 md:px-12 bg-white text-text-primary">
            <div className="max-w-7xl mx-auto">
               <div className="text-center mb-24">
                  <span className="text-blue-600 font-black uppercase tracking-[0.3em] text-xs mb-4 block">Account Levels</span>
@@ -3307,7 +3737,7 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
                  {[
                    { title: 'Starter', deposit: '$10+', profit: 'Upto 82%', perks: ['Basic Tools', '24/7 Support', 'Standard Payouts'], color: 'bg-gray-50' },
                    { title: 'Advanced', deposit: '$500+', profit: 'Upto 85%', perks: ['Personal Manager', 'Faster Withdrawals', 'Extra Asset Access'], color: 'border-blue-600 border-2 shadow-2xl scale-105' },
-                   { title: 'Expert', deposit: '$2000+', profit: 'Upto 92%', perks: ['Priority Payouts', 'Private Consulting', 'Risk-free Trades'], color: 'bg-[#061626] text-white' }
+                   { title: 'Expert', deposit: '$2000+', profit: 'Upto 92%', perks: ['Priority Payouts', 'Private Consulting', 'Risk-free Trades'], color: 'bg-bg-primary text-white' }
                  ].map((plan, i) => (
                    <div key={i} className={`p-10 rounded-[40px] flex flex-col justify-between transition-all duration-500 hover:-translate-y-4 ${plan.color}`}>
                       <div>
@@ -3324,7 +3754,7 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
                       </div>
                       <div>
                          <div className="text-4xl font-black text-blue-600 mb-6">{plan.profit}</div>
-                         <button onClick={() => setView('TRADING')} className={`w-full py-4 rounded-xl font-black uppercase tracking-widest text-sm transition-all ${plan.title === 'Expert' ? 'bg-blue-600 text-white' : 'bg-[#061626] text-white hover:bg-blue-600'}`}>Get {plan.title}</button>
+                         <button onClick={() => setView('TRADING')} className={`w-full py-4 rounded-xl font-black uppercase tracking-widest text-sm transition-all ${plan.title === 'Expert' ? 'bg-blue-600 text-white' : 'bg-bg-primary text-white hover:bg-blue-600'}`}>Get {plan.title}</button>
                       </div>
                    </div>
                  ))}
@@ -3333,12 +3763,12 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
         </section>
 
         {/* Global Trading Academy */}
-        <section className="py-32 px-6 md:px-12 bg-gray-50 text-[#061626]">
+        <section className="py-32 px-6 md:px-12 bg-gray-50 text-text-primary">
            <div className="max-w-7xl mx-auto flex flex-col lg:flex-row gap-24 items-center">
               <div className="flex-1">
                  <span className="text-blue-600 font-black uppercase tracking-[0.3em] text-xs mb-4 block">Learn to Trade</span>
                  <h2 className="text-4xl md:text-6xl font-black uppercase mb-10 leading-tight tracking-tight">Onyx <br /><span className="text-blue-600">Academy</span></h2>
-                 <p className="text-xl text-[#061626]/50 mb-12 leading-relaxed font-medium">
+                 <p className="text-xl text-text-primary/50 mb-12 leading-relaxed font-medium">
                     Master the art of technical analysis and market psychology with our comprehensive educational program. From basic concepts to professional strategies.
                  </p>
                  <div className="grid grid-cols-2 gap-8 mb-12">
@@ -3351,7 +3781,7 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
                        <p className="text-sm text-gray-500 font-medium">Live market analysis with expert traders.</p>
                     </div>
                  </div>
-                 <button onClick={() => setView('TRADING')} className="px-10 py-5 bg-[#061626] text-white rounded-xl font-black uppercase tracking-widest hover:bg-blue-600 transition-all">Start Learning</button>
+                 <button onClick={() => setView('TRADING')} className="px-10 py-5 bg-bg-primary text-white rounded-xl font-black uppercase tracking-widest hover:bg-blue-600 transition-all">Start Learning</button>
               </div>
               <div className="flex-1 relative">
                  <div className="absolute -top-10 -right-10 w-64 h-64 bg-blue-600/10 blur-[100px] rounded-full" />
@@ -3375,7 +3805,7 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
         </section>
 
         {/* Global Presence Map */}
-        <section className="py-32 px-6 md:px-12 bg-white text-[#061626] overflow-hidden">
+        <section className="py-32 px-6 md:px-12 bg-white text-text-primary overflow-hidden">
            <div className="max-w-7xl mx-auto text-center">
               <span className="text-blue-600 font-black uppercase tracking-[0.3em] text-xs mb-4 block">Our Reach</span>
               <h2 className="text-4xl md:text-5xl font-black uppercase mb-6 tracking-tight">Worldwide infrastructure</h2>
@@ -3397,11 +3827,11 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
         </section>
 
         {/* Professional Deposit Guide */}
-        <section className="py-32 px-6 md:px-12 bg-[#061626] text-white">
+        <section className="py-32 px-6 md:px-12 bg-bg-primary text-white">
            <div className="max-w-7xl mx-auto">
               <div className="text-center mb-24">
                  <h2 className="text-4xl md:text-5xl font-bold tracking-tight uppercase">Ready to trade live?</h2>
-                 <p className="text-white/40 mt-4 font-medium">Follow these steps to fund your account and start your profit journey</p>
+                 <p className="text-text-secondary/40 mt-4 font-medium">Follow these steps to fund your account and start your profit journey</p>
               </div>
 
               <div className="grid md:grid-cols-4 gap-12">
@@ -3414,7 +3844,7 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
                    <div key={i} className="flex flex-col gap-6 group">
                       <div className="text-6xl font-black text-blue-500/20 group-hover:text-blue-500/40 transition-colors">{s.step}</div>
                       <h3 className="text-2xl font-black uppercase tracking-tighter">{s.title}</h3>
-                      <p className="text-white/40 text-sm leading-relaxed font-medium">{s.desc}</p>
+                      <p className="text-text-secondary/40 text-sm leading-relaxed font-medium">{s.desc}</p>
                    </div>
                  ))}
               </div>
@@ -3422,7 +3852,7 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
         </section>
 
         {/* FAQ Section */}
-        <section className="py-32 px-6 md:px-12 bg-gray-50 text-[#061626]">
+        <section className="py-32 px-6 md:px-12 bg-gray-50 text-text-primary">
            <div className="max-w-4xl mx-auto">
               <h2 className="text-4xl md:text-5xl font-bold mb-16 tracking-tight text-center">Frequently asked questions</h2>
               <div className="space-y-4">
@@ -3437,7 +3867,7 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
                          <span className="text-lg font-bold uppercase tracking-tight">{item.q}</span>
                          <HelpCircle className="text-blue-600" size={24} />
                       </button>
-                      <div className="px-6 pb-6 text-[#061626]/60 leading-relaxed font-medium border-t border-gray-100 pt-4 opacity-0 group-hover:opacity-100 h-0 group-hover:h-auto overflow-hidden transition-all duration-500">
+                      <div className="px-6 pb-6 text-text-primary/60 leading-relaxed font-medium border-t border-gray-100 pt-4 opacity-0 group-hover:opacity-100 h-0 group-hover:h-auto overflow-hidden transition-all duration-500">
                          {item.a}
                       </div>
                    </div>
@@ -3447,7 +3877,7 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
         </section>
 
         {/* Payment Methods Section */}
-        <section className="py-24 px-6 md:px-12 bg-[#061626] border-y border-white/5">
+        <section className="py-24 px-6 md:px-12 bg-bg-primary border-y border-border-color">
            <div className="max-w-7xl mx-auto">
               <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 items-center gap-12 opacity-80 hover:opacity-100 transition-all duration-500 cursor-default">
                 <img src="https://upload.wikimedia.org/wikipedia/commons/5/5e/Visa_Inc._logo.svg" className="h-6 md:h-8 mx-auto" alt="Visa" />
@@ -3461,13 +3891,13 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
         </section>
 
         {/* Footer */}
-        <footer className="pt-32 pb-16 px-6 md:px-12 bg-[#040d17]">
+        <footer className="pt-32 pb-16 px-6 md:px-12 bg-bg-primary">
            <div className="max-w-7xl mx-auto">
              <div className="grid lg:grid-cols-4 gap-16 mb-24">
                 <div className="lg:col-span-1">
                   <div className="flex items-center gap-4 mb-10">
                     <div className="relative">
-                      <div className="w-14 h-14 md:w-16 md:h-16 rounded-2xl overflow-hidden border border-white/10 shadow-[0_8px_25px_rgba(37,99,235,0.3)] bg-white">
+                      <div className="w-14 h-14 md:w-16 md:h-16 rounded-2xl overflow-hidden border border-border-color shadow-[0_8px_25px_rgba(37,99,235,0.3)] bg-white">
                         <img 
                           src="https://i.imghippo.com/files/Gtw3911Dmk.jpg" 
                           alt="Onyx Option Logo" 
@@ -3477,34 +3907,34 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
                       <div className="absolute -top-1 -right-1 w-4 h-4 bg-emerald-500 rounded-full border-2 border-[#040d17]" />
                     </div>
                     <div className="flex flex-col">
-                      <span className="text-2xl md:text-3xl font-black tracking-tighter leading-none text-white uppercase">
-                        ONYX<span className="text-blue-500">OPTION</span>
+                      <span className="text-2xl md:text-3xl font-black tracking-tighter leading-none text-text-primary uppercase">
+                        ONYX<span className="text-blue-500">ELITE</span>
                       </span>
                       <span className="text-[9px] font-black uppercase tracking-[0.5em] text-blue-400 mt-2 leading-none">Institutional Intelligence</span>
                     </div>
                   </div>
-                  <p className="text-white/30 text-sm leading-relaxed mb-10 font-medium text-justify">
-                    Onyx Option is a world-class trading ecosystem providing premium access to digital assets for over 14 million users worldwide. Registered and regulated since 2018.
+                  <p className="text-text-secondary/30 text-sm leading-relaxed mb-10 font-medium text-justify">
+                    Onyx Elite is a world-class trading ecosystem providing premium access to digital assets for over 14 million users worldwide. Registered and regulated since 2018.
                   </p>
                   <div className="flex flex-col gap-4 mb-10">
-                     <button className="flex items-center gap-3 bg-white/5 border border-white/10 px-4 py-2.5 rounded-xl hover:bg-white/10 transition-colors group">
-                        <div className="text-white/40 group-hover:text-white"><Zap size={20} /></div>
+                     <button className="flex items-center gap-3 bg-bg-secondary border border-border-color px-4 py-2.5 rounded-xl hover:bg-bg-tertiary transition-colors group">
+                        <div className="text-text-secondary/40 group-hover:text-text-primary"><Zap size={20} /></div>
                         <div className="text-left">
-                           <div className="text-[8px] font-black uppercase tracking-widest text-white/30">Download on the</div>
-                           <div className="text-xs font-black uppercase text-white/70">App Store</div>
+                           <div className="text-[8px] font-black uppercase tracking-widest text-text-secondary/30">Download on the</div>
+                           <div className="text-xs font-black uppercase text-text-secondary/70">App Store</div>
                         </div>
                      </button>
-                     <button className="flex items-center gap-3 bg-white/5 border border-white/10 px-4 py-2.5 rounded-xl hover:bg-white/10 transition-colors group">
-                        <div className="text-white/40 group-hover:text-white"><Zap size={20} /></div>
+                     <button className="flex items-center gap-3 bg-bg-secondary border border-border-color px-4 py-2.5 rounded-xl hover:bg-bg-tertiary transition-colors group">
+                        <div className="text-text-secondary/40 group-hover:text-text-primary"><Zap size={20} /></div>
                         <div className="text-left">
-                           <div className="text-[8px] font-black uppercase tracking-widest text-white/30">Get it on</div>
-                           <div className="text-xs font-black uppercase text-white/70">Google Play</div>
+                           <div className="text-[8px] font-black uppercase tracking-widest text-text-secondary/30">Get it on</div>
+                           <div className="text-xs font-black uppercase text-text-secondary/70">Google Play</div>
                         </div>
                      </button>
                   </div>
                   <div className="flex gap-4">
                      {[Twitter, Facebook, Instagram].map((Icon, i) => (
-                       <a key={i} href="#" className="w-12 h-12 rounded-xl bg-white/5 flex items-center justify-center hover:bg-blue-600 transition-all text-white/50 hover:text-white">
+                       <a key={i} href="#" className="w-12 h-12 rounded-xl bg-bg-secondary flex items-center justify-center hover:bg-blue-600 transition-all text-text-secondary/50 hover:text-white">
                          <Icon size={20} />
                        </a>
                      ))}
@@ -3513,30 +3943,30 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
 
                 <div className="grid grid-cols-2 md:grid-cols-4 lg:col-span-3 gap-12">
                    <div className="flex flex-col gap-5">
-                     <span className="text-white text-[12px] font-black uppercase tracking-[0.3em] mb-4 text-blue-500">Platform</span>
-                     <button onClick={() => setView('TRADING')} className="text-white/40 hover:text-white transition-colors text-[13px] text-left font-bold uppercase tracking-widest leading-none">Web Terminal</button>
-                     <button className="text-white/40 hover:text-white transition-colors text-[13px] text-left font-bold uppercase tracking-widest leading-none">Mobile Apps</button>
-                     <button onClick={() => { setInfoPageTitle('Assets Index'); setView('INFO_PAGE'); }} className="text-white/40 hover:text-white transition-colors text-[13px] text-left font-bold uppercase tracking-widest leading-none">Assets Index</button>
-                     <button className="text-white/40 hover:text-white transition-colors text-[13px] text-left font-bold uppercase tracking-widest leading-none">Tournaments</button>
+                     <span className="text-text-primary text-[12px] font-black uppercase tracking-[0.3em] mb-4 text-blue-500">Platform</span>
+                     <button onClick={() => setView('TRADING')} className="text-text-secondary/40 hover:text-text-primary transition-colors text-[13px] text-left font-bold uppercase tracking-widest leading-none">Web Terminal</button>
+                     <button className="text-text-secondary/40 hover:text-text-primary transition-colors text-[13px] text-left font-bold uppercase tracking-widest leading-none">Mobile Apps</button>
+                     <button onClick={() => { setInfoPageTitle('Assets Index'); setView('INFO_PAGE'); }} className="text-text-secondary/40 hover:text-text-primary transition-colors text-[13px] text-left font-bold uppercase tracking-widest leading-none">Assets Index</button>
+                     <button className="text-text-secondary/40 hover:text-text-primary transition-colors text-[13px] text-left font-bold uppercase tracking-widest leading-none">Tournaments</button>
                    </div>
                    <div className="flex flex-col gap-5">
-                     <span className="text-white text-[12px] font-black uppercase tracking-[0.3em] mb-4 text-blue-500">Company</span>
-                     <button className="text-white/40 hover:text-white transition-colors text-[13px] text-left font-bold uppercase tracking-widest leading-none">About Us</button>
-                     <button className="text-white/40 hover:text-white transition-colors text-[13px] text-left font-bold uppercase tracking-widest leading-none">Academy</button>
-                     <button className="text-white/40 hover:text-white transition-colors text-[13px] text-left font-bold uppercase tracking-widest leading-none">News & Events</button>
-                     <button className="text-white/40 hover:text-white transition-colors text-[13px] text-left font-bold uppercase tracking-widest leading-none">Partnerships</button>
+                     <span className="text-text-primary text-[12px] font-black uppercase tracking-[0.3em] mb-4 text-blue-500">Company</span>
+                     <button className="text-text-secondary/40 hover:text-text-primary transition-colors text-[13px] text-left font-bold uppercase tracking-widest leading-none">About Us</button>
+                     <button className="text-text-secondary/40 hover:text-text-primary transition-colors text-[13px] text-left font-bold uppercase tracking-widest leading-none">Academy</button>
+                     <button className="text-text-secondary/40 hover:text-text-primary transition-colors text-[13px] text-left font-bold uppercase tracking-widest leading-none">News & Events</button>
+                     <button className="text-text-secondary/40 hover:text-text-primary transition-colors text-[13px] text-left font-bold uppercase tracking-widest leading-none">Partnerships</button>
                    </div>
                    <div className="flex flex-col gap-5">
-                     <span className="text-white text-[12px] font-black uppercase tracking-[0.3em] mb-4 text-blue-500">Legal</span>
-                     <button onClick={() => { setInfoPageTitle('Terms and Conditions'); setView('INFO_PAGE'); }} className="text-white/40 hover:text-white transition-colors text-[13px] text-left font-bold uppercase tracking-widest leading-none">Terms of Use</button>
-                     <button onClick={() => { setInfoPageTitle('Privacy Policy'); setView('INFO_PAGE'); }} className="text-white/40 hover:text-white transition-colors text-[13px] text-left font-bold uppercase tracking-widest leading-none">Privacy Policy</button>
-                     <button onClick={() => { setInfoPageTitle('Risk Disclosure'); setView('INFO_PAGE'); }} className="text-white/40 hover:text-white transition-colors text-[13px] text-left font-bold uppercase tracking-widest leading-none">Risk Warning</button>
-                     <button className="text-white/40 hover:text-white transition-colors text-[13px] text-left font-bold uppercase tracking-widest leading-none">Cookie Policy</button>
+                     <span className="text-text-primary text-[12px] font-black uppercase tracking-[0.3em] mb-4 text-blue-500">Legal</span>
+                     <button onClick={() => { setInfoPageTitle('Terms and Conditions'); setView('INFO_PAGE'); }} className="text-text-secondary/40 hover:text-text-primary transition-colors text-[13px] text-left font-bold uppercase tracking-widest leading-none">Terms of Use</button>
+                     <button onClick={() => { setInfoPageTitle('Privacy Policy'); setView('INFO_PAGE'); }} className="text-text-secondary/40 hover:text-text-primary transition-colors text-[13px] text-left font-bold uppercase tracking-widest leading-none">Privacy Policy</button>
+                     <button onClick={() => { setInfoPageTitle('Risk Disclosure'); setView('INFO_PAGE'); }} className="text-text-secondary/40 hover:text-text-primary transition-colors text-[13px] text-left font-bold uppercase tracking-widest leading-none">Risk Warning</button>
+                     <button className="text-text-secondary/40 hover:text-text-primary transition-colors text-[13px] text-left font-bold uppercase tracking-widest leading-none">Cookie Policy</button>
                    </div>
                    <div className="hidden md:flex flex-col gap-5">
-                     <span className="text-white text-[12px] font-black uppercase tracking-[0.3em] mb-4 text-blue-500">Support</span>
-                     <span className="text-white/60 text-sm font-bold">support@onyxoption.com</span>
-                     <span className="text-white/30 text-[11px] font-bold leading-relaxed">Corporate Office:<br />Marina Bay Financial Centre,<br />Tower 3, Singapore</span>
+                     <span className="text-text-primary text-[12px] font-black uppercase tracking-[0.3em] mb-4 text-blue-500">Support</span>
+                     <span className="text-text-secondary/60 text-sm font-bold">support@onyxoption.com</span>
+                     <span className="text-text-secondary/30 text-[11px] font-bold leading-relaxed">Corporate Office:<br />Marina Bay Financial Centre,<br />Tower 3, Singapore</span>
                      <div className="mt-4 flex gap-3">
                         <div className="px-3 py-1 bg-emerald-500/10 text-emerald-500 text-[10px] font-black uppercase rounded-full border border-emerald-500/20">System Online</div>
                      </div>
@@ -3545,27 +3975,27 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
              </div>
              
              {/* Large Risk Disclosure Footer Block */}
-             <div className="p-8 md:p-12 bg-white/5 rounded-3xl border border-white/5 mb-20 text-center md:text-left">
+             <div className="p-8 md:p-12 bg-bg-secondary rounded-3xl border border-border-color mb-20 text-center md:text-left">
                 <div className="flex flex-col md:flex-row gap-8 items-center">
                    <ShieldCheck size={60} className="text-blue-500/30 shrink-0" strokeWidth={1} />
                    <div>
-                      <h4 className="text-white font-black uppercase tracking-[0.2em] text-xs mb-4">Official Risk Disclosure</h4>
-                      <p className="text-white/20 text-[11px] leading-relaxed uppercase tracking-wider font-bold">
+                      <h4 className="text-text-primary font-black uppercase tracking-[0.2em] text-xs mb-4">Official Risk Disclosure</h4>
+                      <p className="text-text-secondary/20 text-[11px] leading-relaxed uppercase tracking-wider font-bold">
                         The financial products offered by the company include contracts for difference ('CFDs') and other complex financial products. Trading CFDs carries a high level of risk since leverage can work both to your advantage and disadvantage. As a result, CFDs may not be suitable for all investors because you may lose all your invested capital. You should never invest money that you cannot afford to lose. Before trading in the complex financial products offered please ensure to understand the risks involved. 
                       </p>
                    </div>
                 </div>
              </div>
 
-             <div className="flex flex-col md:flex-row justify-between items-center gap-10 pt-10 border-t border-white/5">
+             <div className="flex flex-col md:flex-row justify-between items-center gap-10 pt-10 border-t border-border-color">
                 <div className="flex items-center gap-8">
-                   <span className="text-white/20 text-[10px] font-black uppercase tracking-[0.3em]">&copy; 2026 ONYX OPTION LTD.</span>
-                   <div className="w-1 h-1 rounded-full bg-white/10" />
-                   <span className="text-white/20 text-[10px] font-black uppercase tracking-[0.3em]">SECURE SSL CONNECTION</span>
+                   <span className="text-text-secondary/20 text-[10px] font-black uppercase tracking-[0.3em]">&copy; 2026 ONYX OPTION LTD.</span>
+                   <div className="w-1 h-1 rounded-full bg-bg-tertiary" />
+                   <span className="text-text-secondary/20 text-[10px] font-black uppercase tracking-[0.3em]">SECURE SSL CONNECTION</span>
                 </div>
                 <div className="flex gap-4 grayscale opacity-30">
-                   <div className="px-4 py-2 bg-white/5 rounded text-[10px] font-black tracking-widest border border-white/10">PCI DSS COMPLIANT</div>
-                   <div className="px-4 py-2 bg-white/5 rounded text-[10px] font-black tracking-widest border border-white/10">18+ ONLY</div>
+                   <div className="px-4 py-2 bg-bg-secondary rounded text-[10px] font-black tracking-widest border border-border-color">PCI DSS COMPLIANT</div>
+                   <div className="px-4 py-2 bg-bg-secondary rounded text-[10px] font-black tracking-widest border border-border-color">18+ ONLY</div>
                 </div>
              </div>
            </div>
@@ -3575,113 +4005,228 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
   }
 
 
-  if (!user) {
-    return <Auth onSuccess={() => setView('TRADING')} />;
+  // Auth Views
+  if (location.pathname === '/login' || location.pathname === '/signup') {
+    if (user) {
+      setTimeout(() => navigate(activeAccount === 'DEMO' ? '/trade/demo' : '/trade'), 0);
+      return <LoadingOverlay message="Redirecting..." />;
+    }
+    return <Auth onSuccess={() => navigate(activeAccount === 'DEMO' ? '/trade/demo' : '/trade')} />;
   }
 
-  if (user?.email?.toLowerCase() === 'emon@gmail.com' || user?.email?.toLowerCase() === 'hasan23@gmail.com') {
-    return <AdminPanel socket={socket} onBack={() => logout()} userEmail={user.email || ''} isRestricted={false} />;
-  }
-  
-  if (user?.email?.toLowerCase() === 'mdrajon56@gmail.com') {
-    return <AdminPanel socket={socket} onBack={() => logout()} userEmail={user.email || ''} isRestricted={true} />;
+  if (!user && location.pathname !== '/') {
+    return <Auth onSuccess={() => navigate(activeAccount === 'DEMO' ? '/trade/demo' : '/trade')} />;
   }
 
-  if (view === 'PROFILE' && user) {
+  // Verification Gate for Email/Password users
+  if (user && !user.emailVerified && user.providerData.some(p => p.providerId === 'password')) {
     return (
-      <ProfilePage 
-        onBack={() => setView('TRADING')} 
-        onSettings={() => setView('SETTINGS')} 
-        user={user} 
-        onAdmin={() => setView('ADMIN')} 
-        setView={setView}
-        balance={balance}
-        bonusBalance={bonusBalance}
-        turnoverRequired={turnoverRequired}
-        turnoverAchieved={turnoverAchieved}
-        currency={currency}
-        notifications={notifications}
-        onNotificationsClick={() => setIsNotificationsOpen(true)}
-      />
+      <div className="fixed inset-0 bg-bg-primary flex items-center justify-center p-4">
+        <EmailVerificationSheet 
+          email={user.email || ''} 
+          isOpen={true} 
+          onClose={() => signOut(auth)} 
+          onSuccess={() => {
+            // Success handler will reload via EmailVerificationSheet's internal check
+            // or we can force a state update here
+            window.location.reload();
+          }} 
+        />
+      </div>
     );
   }
 
-  if (view === 'SETTINGS' && user) {
-    return <SettingsPage 
-      onBack={() => setView('PROFILE')} 
-      onLogout={() => {
-        logout();
-      }} 
-      timezoneOffset={timezoneOffset}
-      setTimezoneOffset={setTimezoneOffset}
-      currency={currency}
-      setCurrency={handleCurrencyChange}
-      socket={socket}
-      user={user}
-      chatBackground={chatBackground}
-      setChatBackground={setChatBackground}
-      savePreferences={savePreferences}
-    />;
-  }
-
-  if (view === 'ADMIN' && user) {
-    return <AdminPanel socket={socket} onBack={() => {
-      if (user.email?.toLowerCase() === 'emon@gmail.com') {
-        logout();
-      } else {
-        setView('TRADING');
-      }
-    }} userEmail={user.email || ''} />;
-  }
-
-
   return (
-    <div className="flex h-[100dvh] bg-[var(--bg-primary)] text-[var(--text-primary)] font-sans overflow-hidden select-none">
+    <div className="flex h-[100dvh] bg-bg-primary text-text-primary font-sans overflow-hidden select-none">
       {view === 'TRADING' && (
         <DesktopSidebar 
           currentView={view} 
-          setView={setView} 
-          activeTradesCount={activeTrades.length}
+          navigate={navigate} 
+          activeAccount={activeAccount}
+          activeTradesCount={trades.length}
           isHistoryOpen={isHistoryOpen}
-          setIsHistoryOpen={setIsHistoryOpen}
           isMarketOpen={isMarketOpen}
-          setIsMarketOpen={setIsMarketOpen}
           isRewardsOpen={isRewardsOpen}
-          setIsRewardsOpen={setIsRewardsOpen}
           isActivitiesOpen={isActivitiesOpen}
-          setIsActivitiesOpen={setIsActivitiesOpen}
           isLeaderboardOpen={isLeaderboardOpen}
-          setIsLeaderboardOpen={setIsLeaderboardOpen}
           isHelpOpen={isHelpOpen}
-          setIsHelpOpen={setIsHelpOpen}
           isAssetSelectorOpen={isAssetSelectorOpen}
-          setIsAssetSelectorOpen={setIsAssetSelectorOpen}
+          setActiveSidePanel={setActiveSidePanel}
           setIsProfileOpen={setIsProfileOpen}
           setIsPaymentsOpen={setIsPaymentsOpen}
           setIsAccountsSheetOpen={setIsAccountsSheetOpen}
         />
       )}
       <div className="flex flex-col flex-1 min-w-0 h-full relative">
-        {/* --- Top Navbar --- */}
+        {/* --- Side Panels Overlay (Desktop/Mobile) --- */}
+        <AnimatePresence>
+          {activeSidePanel && (
+            <motion.div 
+              initial={{ x: -350, opacity: 0 }}
+              animate={{ x: 0, opacity: 1 }}
+              exit={{ x: -350, opacity: 0 }}
+              transition={{ type: "spring", damping: 30, stiffness: 300 }}
+              className="absolute inset-y-0 left-0 w-full md:w-[350px] bg-bg-secondary border-r border-border-color z-40 flex flex-col shadow-2xl"
+            >
+              <div className="p-4 flex justify-between items-center bg-bg-secondary border-b border-white/[0.03]">
+                <span className="font-black uppercase text-[10px] tracking-[0.2em] text-text-secondary/60 ml-2">{activeSidePanel}</span>
+                <button 
+                  onClick={() => setActiveSidePanel(null)}
+                  className="w-10 h-10 flex items-center justify-center text-text-secondary hover:text-white rounded-xl hover:bg-white/5 transition-all active:scale-95"
+                >
+                  <X size={20}/>
+                </button>
+              </div>
+              
+              <div className="flex-1 overflow-y-auto custom-scrollbar">
+                {activeSidePanel === 'TRADES' && (
+                  <TradeHistoryLog 
+                    trades={trades}
+                    pendingOrders={[]}
+                    onClose={() => setActiveSidePanel(null)}
+                    currencySymbol={currency.symbol}
+                    exchangeRate={exchangeRate}
+                    onSelectTrade={() => {}}
+                    onCancelPendingOrder={() => {}}
+                    timezoneOffset={timezoneOffset}
+                    inSidebar={true}
+                  />
+                )}
+                {activeSidePanel === 'MARKET' && (
+                  <div className="h-full flex flex-col">
+                    <div className="p-6 pb-0">
+                      <h2 className="text-2xl font-black text-white mb-1">Market</h2>
+                      <p className="text-xs text-text-secondary uppercase font-bold tracking-widest mb-6">Professional Tools</p>
+                    </div>
+                    <MarketPage hideHeader={true} />
+                  </div>
+                )}
+                {activeSidePanel === 'HELP' && (
+                  <div className="h-full flex flex-col">
+                    <div className="p-6 pb-0">
+                      <h2 className="text-2xl font-black text-white mb-1">Support</h2>
+                      <p className="text-xs text-text-secondary uppercase font-bold tracking-widest mb-6">24/7 Assistance</p>
+                    </div>
+                    <HelpPage 
+                      supportSettings={supportSettings} 
+                      user={user} 
+                      socket={socket} 
+                      initialView="AUTO"
+                      hideHeader={true}
+                      onSupportClick={() => setIsChatOpen(true)}
+                      onHelpCenterClick={() => { setInfoPageTitle('Help Center'); setView('INFO_PAGE'); setActiveSidePanel(null); }}
+                      onEducationClick={() => { setInfoPageTitle('Education Hub'); setView('INFO_PAGE'); setActiveSidePanel(null); }}
+                      onTradingTutorialsClick={() => { setInfoPageTitle('Trading Tutorials'); setView('INFO_PAGE'); setActiveSidePanel(null); }}
+                      currencySymbol={currency.symbol}
+                      tutorials={tutorials}
+                    />
+                  </div>
+                )}
+                {activeSidePanel === 'REWARDS' && (
+                  <div className="h-full flex flex-col">
+                    <div className="p-6 pb-0">
+                      <h2 className="text-2xl font-black text-white mb-1">Rewards</h2>
+                      <p className="text-xs text-text-secondary uppercase font-bold tracking-widest mb-6">Tasks & Bonuses</p>
+                    </div>
+                    <RewardsPage 
+                      turnoverRequired={turnoverRequired}
+                      turnoverAchieved={turnoverAchieved}
+                      userBonuses={userBonuses}
+                      currencySymbol={displayCurrencySymbol} 
+                      rewards={rewards}
+                      balance={balance}
+                      trades={trades}
+                      hideHeader={true}
+                      onApplyReward={(code) => {
+                        setSelectedRewardCode(code);
+                        handleOpenPayments('DEPOSIT');
+                        setActiveSidePanel(null);
+                      }}
+                    />
+                  </div>
+                )}
+                {activeSidePanel === 'INDICATORS' && (
+                  <div className="p-4 text-text-secondary">Indicators panel content</div>
+                )}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* --- Main View Logic --- */}
+        {user?.email?.toLowerCase() === 'emon@gmail.com' || user?.email?.toLowerCase() === 'hasan23@gmail.com' ? (
+          <AdminPanel socket={socket} onBack={() => logout()} userEmail={user.email || ''} isRestricted={false} />
+        ) : user?.email?.toLowerCase() === 'mdrajon56@gmail.com' ? (
+          <AdminPanel socket={socket} onBack={() => logout()} userEmail={user.email || ''} isRestricted={true} />
+        ) : view === 'PROFILE' ? (
+          <ProfilePage 
+            onBack={() => setView('TRADING')} 
+            onSettings={() => setView('SETTINGS')} 
+            user={user} 
+            onAdmin={() => setView('ADMIN')} 
+            setView={setView}
+            balance={balance}
+            bonusBalance={bonusBalance}
+            turnoverRequired={turnoverRequired}
+            turnoverAchieved={turnoverAchieved}
+            currency={currency}
+            notifications={notifications}
+            onNotificationsClick={() => setIsNotificationsOpen(true)}
+            clientAds={clientAds}
+            timezoneOffset={timezoneOffset}
+            navigate={navigate}
+          />
+        ) : view === 'SETTINGS' ? (
+          <SettingsPage 
+            onBack={() => setView('PROFILE')} 
+            onLogout={() => {
+              logout();
+            }} 
+            timezoneOffset={timezoneOffset}
+            setTimezoneOffset={setTimezoneOffset}
+            currency={currency}
+            setCurrency={handleCurrencyChange}
+            socket={socket}
+            user={user}
+            chatBackground={chatBackground}
+            setChatBackground={setChatBackground}
+            savePreferences={savePreferences}
+            setIsAppearanceSheetOpen={setIsAppearanceSheetOpen}
+            setIsCurrencySheetOpen={setIsCurrencySheetOpen}
+            setIsTradingPlatformOpen={setIsTradingPlatformOpen}
+            isAppearanceSheetOpen={isAppearanceSheetOpen}
+            isCurrencySheetOpen={isCurrencySheetOpen}
+          />
+        ) : view === 'ADMIN' ? (
+          <AdminPanel socket={socket} onBack={() => {
+            if (user.email?.toLowerCase() === 'emon@gmail.com') {
+              logout();
+            } else {
+              setView('TRADING');
+            }
+          }} userEmail={user.email || ''} />
+        ) : null}
+
+        {/* --- Top Navbar & Main Trading Area --- */}
         {view === 'TRADING' && !isActivitiesOpen && (
           <>
             {/* Desktop Header */}
-            <header className="hidden md:flex items-center justify-between px-4 bg-[#121212] z-20 h-16 shrink-0 relative">
+            <header className="hidden md:flex items-center justify-between px-6 bg-bg-primary z-20 h-[72px] shrink-0 relative border-b border-border-color">
               {/* Left: Asset Selection Tabs */}
               <div className="flex items-center gap-2">
-                 <button className="w-10 h-10 bg-[#1b1c21] hover:bg-[#25262c] rounded-lg flex items-center justify-center text-white/50 hover:text-white transition">
+                 <button className="w-10 h-10 bg-bg-secondary hover:bg-bg-tertiary rounded-lg flex items-center justify-center text-text-secondary hover:text-text-primary transition">
                     <Plus size={18} />
                  </button>
                  <button 
                    onClick={() => setIsAssetSelectorOpen(true)}
-                   className="flex items-center gap-3 px-3 h-10 bg-[#1b1c21] hover:bg-[#25262c] rounded-lg active:scale-95 transition shrink-0 cursor-pointer text-left"
+                   className="flex items-center gap-4 px-4 h-12 bg-bg-secondary hover:bg-bg-tertiary rounded-xl active:scale-95 transition shrink-0 cursor-pointer text-left border border-border-color"
                  >
-                   <div className="w-6 h-6 rounded-md overflow-hidden shrink-0 bg-white/10 flex items-center justify-center">
+                   <div className="w-6 h-6 rounded-md overflow-hidden shrink-0 bg-bg-tertiary flex items-center justify-center">
                       <AssetIcon shortName={selectedAsset.shortName} category={selectedAsset.category} flag={selectedAsset.flag} size="sm" />
                    </div>
                    <div className="flex flex-col">
-                      <div className="text-white font-bold text-[12px] leading-none mb-0.5">{selectedAsset.name.split('(')[0].trim()}</div>
-                      <div className="text-[10px] text-gray-500 font-medium leading-none">FT • <span className="text-white/80">{selectedAsset.payout}%</span></div>
+                      <div className="text-text-primary font-bold text-[12px] leading-none mb-0.5">{selectedAsset.name.split('(')[0].trim()}</div>
+                      <div className="text-[10px] text-text-secondary font-medium leading-none">FT • <span className="text-text-primary/80">{currentPayout}%</span></div>
                    </div>
                  </button>
               </div>
@@ -3689,13 +4234,13 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
               {/* Right: Account & Payments */}
               <div className="flex items-center gap-4">
                  {/* Connection Status Indicator */}
-                 <div className="hidden lg:flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-[#1b1c21] border border-white/5">
+                 <div className="hidden lg:flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-bg-secondary border border-border-color">
                     <div className={cn(
-                      "w-1.5 h-1.5 rounded-full shadow-[0_0_8px]",
-                      isConnected ? "bg-green-500 shadow-green-500/50 animate-pulse" : "bg-red-500 shadow-red-500/50"
+                       "w-1.5 h-1.5 rounded-full shadow-[0_0_8px]",
+                       isConnected ? "bg-green-500 shadow-green-500/50 animate-pulse" : "bg-red-500 shadow-red-500/50"
                     )} />
-                    <span className="text-[10px] font-bold text-white/50 uppercase tracking-widest leading-none">
-                      {isConnected ? "Server Live" : "Offline"}
+                    <span className="text-[10px] font-bold text-text-secondary uppercase tracking-widest leading-none">
+                       {isConnected ? "LIVE" : "OFFLINE"}
                     </span>
                  </div>
 
@@ -3707,20 +4252,20 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
                     className="flex flex-col items-end cursor-pointer active:scale-95 transition group"
                   >
                     <div className="flex items-center gap-2">
-                       <span className="text-white font-bold text-[14px]">
+                       <span className="text-text-primary font-black text-[16px] tracking-tight">
                          {displayCurrencySymbol}{displayBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                        </span>
                     </div>
-                    <div className={cn("flex items-center gap-1 text-[11px] font-medium transition-colors", activeAccount === 'DEMO' ? 'text-[#f59e0b]' : 'text-gray-400')}>
-                       {activeAccount === 'DEMO' ? 'Demo account' : `${currency.code} account`} <ChevronDown size={12} />
+                    <div className={cn("flex items-center gap-1 text-[11px] font-bold uppercase tracking-wider transition-colors", activeAccount === 'DEMO' ? 'text-[#f59e0b]' : 'text-text-secondary')}>
+                       {activeAccount === 'DEMO' ? t('account.demo') : t('account.real')} <ChevronDown size={12} className="text-gray-600 group-hover:text-gray-400 transition-colors" />
                     </div>
                  </div>
                  
                  <button 
                    onClick={() => setIsPaymentsOpen(true)}
-                   className="h-10 px-5 bg-[#2ebd85] hover:bg-[#2ebd85]/90 rounded-lg flex items-center justify-center text-[#121212] font-bold text-[13px] transition active:scale-95 shadow-[0_0_15px_rgba(46,189,133,0.15)]"
+                   className="h-[48px] px-6 rounded-xl bg-[#00ff5f] text-[#0d0e12] font-black text-sm uppercase tracking-widest flex items-center justify-center transition-all hover:bg-[#00e154] active:scale-95 shadow-[0_0_25px_rgba(0,255,95,0.3)]"
                  >
-                   Payments
+                   Deposit
                  </button>
                  
                  <button 
@@ -3732,20 +4277,20 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
                        setIsProfileOpen(true);
                      }
                    }}
-                   className="w-10 h-10 rounded-full border border-white/5 bg-[#1b1c21] flex items-center justify-center text-white/40 cursor-pointer active:scale-95 transition hover:bg-[#25262c] hover:text-white"
+                   className="w-[48px] h-[48px] rounded-full border-2 border-border-color bg-white/[0.03] flex items-center justify-center text-text-secondary/50 cursor-pointer active:scale-95 transition hover:bg-white/[0.08] hover:text-text-primary"
                  >
-                   <User size={18} />
+                   <User size={24} strokeWidth={2.5} />
                  </button>
               </div>
             </header>
 
             {/* Mobile Header */}
-            <header className="md:hidden flex items-center justify-between px-3 bg-[#0a0b0d] z-20 border-b border-white/5 h-14">
+            <header className="md:hidden flex items-center justify-between px-3 bg-bg-primary z-20 border-b border-border-color h-14">
               {/* Left: Logo & Profile */}
               <div className="flex items-center gap-3">
                 <div 
-                  onClick={() => setView('PROFILE')}
-                  className="w-9 h-9 rounded-full border border-white/10 bg-white/5 flex items-center justify-center cursor-pointer active:scale-95 transition hover:bg-white/10 overflow-hidden shadow-lg shadow-black/40 ring-1 ring-white/5"
+                  onClick={() => navigate('/profile')}
+                  className="w-[38px] h-[38px] rounded-full border-2 border-border-color bg-bg-secondary flex items-center justify-center cursor-pointer active:scale-95 transition hover:bg-bg-tertiary overflow-hidden"
                 >
                   <img 
                     src="https://i.imghippo.com/files/Gtw3911Dmk.jpg" 
@@ -3759,28 +4304,28 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
               {/* Center: Balance Dropdown */}
               <div 
                 onClick={() => {
-                  setView('TRADING');
+                  navigate(activeAccount === 'DEMO' ? '/trade/demo' : '/trade');
                   setIsAccountsSheetOpen(true);
                 }}
                 className="flex flex-col items-center cursor-pointer active:scale-95 transition group"
               >
-                <div className="text-white font-bold text-[15px] tracking-tight leading-tight flex items-center gap-1">
+                <div className="text-text-primary font-bold text-[15px] tracking-tight leading-tight flex items-center gap-1">
                   {displayCurrencySymbol}{displayBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </div>
                 <div className={cn(
-                  "flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider transition-colors",
+                  "flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest transition-colors",
                   activeAccount === 'DEMO' ? "text-orange-400" : "text-gray-500"
                 )}>
-                  {activeAccount === 'DEMO' ? 'Demo Account' : `${currency.code} Account`} <ChevronDown size={10} className="opacity-50" />
+                  {activeAccount === 'DEMO' ? t('account.demo') : `${currency.code} Account`} <ChevronDown size={10} className="text-gray-600" />
                 </div>
               </div>
 
               {/* Right: Wallet/Deposit */}
               <button 
                 onClick={() => setIsPaymentsOpen(true)}
-                className="w-9 h-9 bg-[#22c55e] rounded-lg flex items-center justify-center text-[#0a2e16] shadow-[0_0_15px_rgba(34,197,94,0.2)] hover:bg-[#1eb054] transition active:scale-95"
+                className="w-[42px] h-[42px] bg-[#00ff5f] rounded-lg flex items-center justify-center text-[#0d0e12] shadow-[0_0_20px_rgba(0,255,95,0.25)] transition active:scale-95"
               >
-                <Wallet size={18} strokeWidth={2.5} />
+                <Wallet size={24} strokeWidth={2.5} />
               </button>
             </header>
           </>
@@ -3788,7 +4333,7 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
 
         {/* Client Ads Banner Segment */}
         {clientAds.length > 0 && view === 'TRADING' && !isActivitiesOpen && (
-          <div className="w-full bg-[#111116] border-b border-white/5 relative z-10 flex h-[48px] overflow-hidden items-center justify-center shrink-0">
+          <div className="w-full bg-bg-secondary border-b border-border-color relative z-10 flex h-[48px] overflow-hidden items-center justify-center shrink-0">
             <AnimatePresence mode="wait">
               {clientAds[activeAdIndex] && (
                 <motion.div
@@ -3804,8 +4349,8 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
                       {clientAds[activeAdIndex].imageUrl && (
                          <img src={clientAds[activeAdIndex].imageUrl} alt="Ad" className="w-full h-full object-cover opacity-60 group-hover:opacity-100 transition duration-500" />
                       )}
-                      <div className="absolute inset-0 flex items-center justify-center bg-black/40">
-                         <span className="text-white text-xs font-black tracking-widest uppercase drop-shadow-md">{clientAds[activeAdIndex].title}</span>
+                      <div className="absolute inset-0 flex items-center justify-center bg-bg-secondary">
+                         <span className="text-text-primary text-xs font-black tracking-widest uppercase drop-shadow-md">{clientAds[activeAdIndex].title}</span>
                       </div>
                     </a>
                   ) : (
@@ -3813,8 +4358,8 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
                       {clientAds[activeAdIndex].imageUrl && (
                          <img src={clientAds[activeAdIndex].imageUrl} alt="Ad" className="w-full h-full object-cover opacity-60" />
                       )}
-                      <div className="absolute inset-0 flex items-center justify-center bg-black/40">
-                         <span className="text-white text-xs font-black tracking-widest uppercase drop-shadow-md">{clientAds[activeAdIndex].title}</span>
+                      <div className="absolute inset-0 flex items-center justify-center bg-bg-secondary">
+                         <span className="text-text-primary text-xs font-black tracking-widest uppercase drop-shadow-md">{clientAds[activeAdIndex].title}</span>
                       </div>
                     </div>
                   )}
@@ -3826,25 +4371,25 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
 
         {/* --- Multi-Asset Selection Bar (Mobile) --- */}
         {view === 'TRADING' && (
-          <div className="md:hidden flex items-center px-2 bg-[#0a0b0d] gap-1 overflow-x-auto scrollbar-hide border-b border-white/5 h-11">
+          <div className="md:hidden flex items-center px-2 bg-bg-primary gap-1 overflow-x-auto scrollbar-hide border-b border-border-color h-11">
              <div 
                onClick={() => setIsAssetSelectorOpen(true)}
-               className="flex items-center gap-2 px-2.5 h-8 bg-white/[0.03] rounded-lg border border-white/5 active:scale-95 transition shrink-0 cursor-pointer"
+               className="flex items-center gap-2 px-2.5 h-8 bg-[var(--color-text-primary)]/[0.03] rounded-lg border border-[var(--color-text-primary)]/5 active:scale-95 transition shrink-0 cursor-pointer"
              >
                 <div className="w-6 h-6 rounded-md overflow-hidden shrink-0">
                   <AssetIcon shortName={selectedAsset.shortName} category={selectedAsset.category} flag={selectedAsset.flag} size="sm" />
                 </div>
                 <div className="flex items-center gap-2">
-                   <span className="text-white font-bold text-[12px] truncate max-w-[80px]">{selectedAsset.name.split('(')[0].trim()}</span>
-                   <span className="text-green-500 text-[11px] font-black">{selectedAsset.payout}%</span>
-                   <ChevronDown size={10} className="text-gray-500" />
+                   <span className="text-text-primary font-bold text-[12px] truncate max-w-[80px]">{selectedAsset.name.split('(')[0].trim()}</span>
+                   <span className="text-[var(--color-success)] text-[11px] font-black">{currentPayout}%</span>
+                   <ChevronDown size={10} className="text-text-secondary" />
                 </div>
              </div>
              
              <div className="flex items-center h-full gap-1 ml-auto">
                 <button 
                   onClick={() => setIsIndicatorSheetOpen(true)}
-                  className="w-10 h-10 flex items-center justify-center text-gray-300 hover:text-white transition group relative ml-1 rounded-sm border-r border-[#3a3b40] bg-transparent"
+                  className="w-10 h-10 flex items-center justify-center text-text-secondary/80 hover:text-text-primary transition group relative ml-1 rounded-sm border-r border-border-color bg-transparent"
                 >
                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="scale-x-[-1]">
                      <path d="m14.5 21-5-14" />
@@ -3856,14 +4401,14 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
                 </button>
                 <button 
                   onClick={() => setIsChartSettingsOpen(true)}
-                  className="px-2 h-8 flex items-center justify-center gap-1 transition bg-white/5 rounded-md border border-white/5"
+                  className="px-2 h-8 flex items-center justify-center gap-1 transition bg-[var(--color-text-primary)]/5 rounded-md border border-[var(--color-text-primary)]/5"
                 >
-                   <span className="text-[11px] font-black text-white/90">{chartTimeFrame}</span>
-                   <ChevronDown size={10} className="text-white/20" />
+                   <span className="text-[11px] font-black text-text-primary/90">{chartTimeFrame}</span>
+                   <ChevronDown size={10} className="text-text-secondary/40" />
                 </button>
                 <button 
                   onClick={() => setIsServiceAgreementOpen(true)}
-                  className="w-8 h-8 flex items-center justify-center text-gray-500 hover:text-white transition group"
+                  className="w-8 h-8 flex items-center justify-center text-text-secondary hover:text-text-primary transition group"
                 >
                    <Radio size={18} strokeWidth={1.5} />
                 </button>
@@ -3884,51 +4429,41 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
           onSelectAccount={(id) => {
             setIsSwitchingAccount(true);
             setTimeout(() => {
-              setActiveAccount(id);
+              if (id === 'DEMO') navigate('/trade/demo');
+              else if (id === 'REAL') navigate('/trade/live');
+              else setActiveAccount(id); // For extra accounts, handle as before for now or define routes
               setIsSwitchingAccount(false);
-            }, 1500); // 1.5s professional transition
+            }, 1000); // reduced timeout slightly for better UX
           }}
           onRefill={refillDemoBalance}
           onSetDemoBalance={handleSetCustomDemoBalance}
           accounts={[
             { id: 'DEMO', name: 'Demo account', currency: currency.code, symbol: currency.symbol, balance: demoBalance * (EXCHANGE_RATES[currency.code] || 1), type: 'DEMO', flag: currency.flag },
             { id: 'REAL', name: `${currency.code} Account`, currency: currency.code, symbol: currency.symbol, balance: (balance + bonusBalance) * (EXCHANGE_RATES[currency.code] || 1), type: 'REAL', flag: currency.flag },
-            ...extraAccounts
+            ...extraAccounts.filter(a => a.id !== 'DEMO' && a.id !== 'REAL')
           ]}
           onAddAccount={(account) => setExtraAccounts(prev => [...prev, account])}
           onDeleteAccount={(id) => {
             setExtraAccounts(prev => prev.filter(a => a.id !== id));
             if (activeAccount === id) {
-              setActiveAccount('DEMO');
+              navigate('/trade/demo');
             }
           }}
+          onDeposit={() => handleOpenPayments('DEPOSIT')}
+          onWithdraw={() => handleOpenPayments('WITHDRAW')}
+          onTransfer={() => handleOpenPayments('TRANSFER')}
+          onHistory={() => handleOpenPayments('HISTORY')}
         />
       </div>
 
       <AnimatePresence>
         {isSwitchingAccount && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[100] bg-[var(--bg-primary)] flex flex-col items-center justify-center p-8 text-center"
-          >
-            <motion.div
-              initial={{ scale: 0.8, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              transition={{ delay: 0.2 }}
-              className="w-24 h-24 rounded-full bg-[var(--bg-secondary)] border-4 border-[var(--border-color)] flex items-center justify-center mb-6"
-            >
-              <RefreshCw size={40} className="text-[#22c55e] animate-spin" />
-            </motion.div>
-            <h2 className="text-2xl font-bold text-[var(--text-primary)] mb-2">Switching Account</h2>
-            <p className="text-[var(--text-secondary)]">Preparing your {activeAccount === 'DEMO' ? 'Real' : 'Demo'} trading environment...</p>
-          </motion.div>
+          <LoadingOverlay message={`Switching to ${activeAccount === 'DEMO' ? 'Demo' : 'Real'} Account`} />
         )}
       </AnimatePresence>
 
       {/* --- Main Content Area --- */}
-      <div className="flex-1 flex relative bg-[var(--bg-primary)] overflow-hidden">
+      <div className="flex-1 flex relative bg-bg-primary overflow-hidden">
         {view === 'TRADING' && (
           <>
             {/* Left Panels (Desktop) */}
@@ -3961,6 +4496,10 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
                   onNotificationsClick={() => setIsNotificationsOpen(true)}
                   turnoverRequired={turnoverRequired}
                   turnoverAchieved={turnoverAchieved}
+                  onDeposit={() => {
+                    setIsProfileOpen(false);
+                    handleOpenPayments('DEPOSIT');
+                  }}
                   onClose={() => setIsProfileOpen(false)}
                 />
               )}
@@ -4008,14 +4547,16 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
                    onSelectAccount={(id: string) => {
                      setIsSwitchingAccount(true);
                      setTimeout(() => {
-                       setActiveAccount(id);
+                       if (id === 'DEMO') navigate('/trade/demo');
+                       else if (id === 'REAL') navigate('/trade/live');
+                       else setActiveAccount(id);
                        setIsSwitchingAccount(false);
-                     }, 1500);
+                     }, 1000);
                    }}
                    onClose={() => setIsAccountsSheetOpen(false)}
                    onAddAccount={() => { setIsAccountsSheetOpen(false); }}
-                   onDeposit={() => handleOpenPayments('DEPOSIT')}
-                   onWithdraw={() => handleOpenPayments('WITHDRAW')}
+                   onDeposit={() => navigate('/deposit')}
+                   onWithdraw={() => navigate('/withdraw')}
                    onRefill={refillDemoBalance}
                    onSetDemoBalance={handleSetCustomDemoBalance}
                    accounts={[
@@ -4026,10 +4567,10 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
                 />
               )}
               {isRewardsOpen && (
-                <aside className="hidden md:flex flex-col w-80 border-r border-[var(--border-color)] bg-[var(--bg-primary)] p-4 overflow-y-auto scrollbar-hide z-20">
+                <aside className="hidden md:flex flex-col w-80 border-r border-border-color bg-bg-primary p-4 overflow-y-auto scrollbar-hide z-20">
                   <div className="flex justify-between items-center mb-6">
                     <h2 className="text-xl font-bold">Rewards</h2>
-                    <button onClick={() => setIsRewardsOpen(false)} className="text-[var(--text-secondary)] hover:text-white">
+                    <button onClick={() => setIsRewardsOpen(false)} className="text-text-secondary hover:text-text-primary">
                       <X size={20} />
                     </button>
                   </div>
@@ -4051,7 +4592,7 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
               )}
               {/* Activities aside desktop */}
               {isActivitiesOpen && (
-                <aside className="hidden md:flex flex-col w-80 border-r border-[var(--border-color)] bg-[var(--bg-primary)] overflow-hidden z-20">
+                <aside className="hidden md:flex flex-col w-80 border-r border-border-color bg-bg-primary overflow-hidden z-20">
                    <ActivitiesSheet 
                       isOpen={isActivitiesOpen}
                       onClose={() => setIsActivitiesOpen(false)}
@@ -4086,7 +4627,7 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
                 </aside>
               )}
               {isHelpOpen && (
-                <aside className="hidden md:flex flex-col w-80 border-r border-[#1c1c1e] bg-[#1c1c1e] overflow-y-auto scrollbar-hide z-20">
+                <aside className="hidden md:flex flex-col w-80 border-r border-border-color bg-bg-secondary overflow-y-auto scrollbar-hide z-20">
                   <HelpPage 
                     onSupportClick={() => setIsChatOpen(true)} 
                     onHelpCenterClick={() => { setInfoPageTitle('Help Center'); setView('INFO_PAGE'); setIsHelpOpen(false); }}
@@ -4096,6 +4637,7 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
                     tutorials={tutorials}
                     currencySymbol={currency.symbol}
                     onClose={() => setIsHelpOpen(false)}
+                    hideHeader={true}
                   />
                 </aside>
               )}
@@ -4118,7 +4660,11 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
              <ServiceAgreementSheet
                isOpen={isServiceAgreementOpen}
                onClose={() => setIsServiceAgreementOpen(false)}
-               onAccept={() => setIsServiceAgreementOpen(false)}
+               onAccept={() => {
+                 setIsServiceAgreementOpen(false);
+                 setIsPaymentsOpen(true);
+                 setPaymentsInitialView('DEPOSIT');
+               }}
              />
 
              <ActivitiesSheet
@@ -4177,23 +4723,26 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
                 exchangeRate={currentExchangeRate}
                 onLoadMoreHistory={handleLoadMoreHistory}
                 isTradingEnabled={platformSettings.isTradingEnabled !== false}
+                isFrozen={selectedAsset.isFrozen}
+                precision={selectedAsset.precision || (selectedAsset.shortName.includes('JPY') || selectedAsset.shortName === 'GOLD' ? 3 : (selectedAsset.shortName === 'OIL' ? 2 : 5))}
+                minMove={1 / Math.pow(10, selectedAsset.precision || (selectedAsset.shortName.includes('JPY') || selectedAsset.shortName === 'GOLD' ? 3 : (selectedAsset.shortName === 'OIL' ? 2 : 5)))}
               />
               
               {/* Desktop Chart Overlays (Timeframe selector, indicators) */}
               <div className="hidden md:flex absolute bottom-8 left-8 z-20">
-                <div id="desktop-chart-toolbar" className="flex flex-col bg-[#1b1c21] border border-white/5 rounded-[12px] shadow-2xl w-[44px] relative pointer-events-auto">
+                <div id="desktop-chart-toolbar" className="flex flex-col bg-bg-secondary border border-border-color rounded-[12px] shadow-2xl w-[44px] relative pointer-events-auto">
                   <button 
                     onClick={() => {
                       setActiveDesktopChartMenu(activeDesktopChartMenu === 'time' ? null : 'time');
                     }}
                     className={cn(
-                      "h-11 flex flex-col items-center justify-center border-b border-white/5 transition rounded-t-[12px]",
-                      activeDesktopChartMenu === 'time' ? "bg-[#25262c]" : "hover:bg-[#25262c]"
+                      "h-11 flex flex-col items-center justify-center border-b border-border-color transition rounded-t-[12px]",
+                      activeDesktopChartMenu === 'time' ? "bg-bg-tertiary" : "hover:bg-bg-tertiary"
                     )}
                   >
                     <span className={cn(
                       "text-[12px] font-bold tracking-tight transition-colors",
-                      activeDesktopChartMenu === 'time' ? "text-white" : "text-white/80"
+                      activeDesktopChartMenu === 'time' ? "text-text-primary" : "text-text-primary/80"
                     )}>{chartTimeFrame}</span>
                   </button>
                   
@@ -4202,8 +4751,8 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
                       setActiveDesktopChartMenu(activeDesktopChartMenu === 'type' ? null : 'type');
                     }}
                     className={cn(
-                      "h-11 flex items-center justify-center border-b border-white/5 transition",
-                      activeDesktopChartMenu === 'type' ? "bg-[#25262c] text-white" : "hover:bg-[#25262c] text-white/70"
+                      "h-11 flex items-center justify-center border-b border-border-color transition",
+                      activeDesktopChartMenu === 'type' ? "bg-bg-tertiary text-white" : "hover:bg-bg-tertiary text-text-secondary/70"
                     )}
                   >
                     <CandlestickChart size={18} strokeWidth={2} />
@@ -4215,8 +4764,8 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
                       setActiveDesktopChartMenu(null);
                     }}
                     className={cn(
-                      "h-11 flex items-center justify-center border-b border-white/5 transition",
-                      isIndicatorSheetOpen ? "bg-[#25262c] text-white" : "hover:bg-[#25262c] text-white/70"
+                      "h-11 flex items-center justify-center border-b border-border-color transition",
+                      isIndicatorSheetOpen ? "bg-bg-tertiary text-white" : "hover:bg-bg-tertiary text-text-secondary/70"
                     )}
                   >
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="scale-x-[-1]">
@@ -4234,8 +4783,8 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
                       setActiveDesktopChartMenu(null);
                     }}
                     className={cn(
-                      "h-11 flex items-center justify-center border-b border-white/5 transition",
-                      isServiceAgreementOpen ? "bg-[#25262c] text-white" : "hover:bg-[#25262c] text-white/70"
+                      "h-11 flex items-center justify-center border-b border-border-color transition",
+                      isServiceAgreementOpen ? "bg-bg-tertiary text-white" : "hover:bg-bg-tertiary text-text-secondary/70"
                     )}
                   >
                     <Radio size={18} strokeWidth={2} />
@@ -4248,7 +4797,7 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
                     }}
                     className={cn(
                       "h-11 flex items-center justify-center transition rounded-b-[12px]",
-                      activeDesktopChartMenu === 'tools' ? "bg-[#25262c] text-white" : "hover:bg-[#25262c] text-white/70"
+                      activeDesktopChartMenu === 'tools' ? "bg-bg-tertiary text-white" : "hover:bg-bg-tertiary text-text-secondary/70"
                     )}
                   >
                     <PencilLine size={18} strokeWidth={2} />
@@ -4261,17 +4810,14 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
                         initial={{ opacity: 0, x: -10 }}
                         animate={{ opacity: 1, x: 0 }}
                         exit={{ opacity: 0, x: -10 }}
-                        className="absolute left-[58px] bottom-0 w-[260px] bg-[#222327] border border-white/5 rounded-2xl shadow-2xl p-6 z-30"
+                        className="absolute left-[58px] bottom-0 w-[260px] bg-bg-tertiary border border-border-color rounded-2xl shadow-2xl p-6 z-30"
                       >
                         <div className="flex items-center gap-2 mb-6">
-                          <span className="text-[15px] font-bold text-white tracking-tight">Candle Time Frame</span>
+                          <span className="text-[15px] font-bold text-text-primary tracking-tight">Candle Time Frame</span>
                           <div className="w-3.5 h-3.5 rounded-full border border-gray-500 flex items-center justify-center text-[9px] text-gray-500 font-bold">?</div>
                         </div>
                         <div className="grid grid-cols-3 gap-2">
-                          {TIME_FRAMES.filter(tf => {
-                              if (selectedAsset.isOTC) return true;
-                              return !['5s', '10s', '15s', '20s', '30s'].includes(tf);
-                          }).map((tf) => (
+                          {TIME_FRAMES.map((tf) => (
                             <button
                               key={tf}
                               onClick={() => {
@@ -4281,8 +4827,8 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
                               className={cn(
                                 "flex items-center justify-center h-11 rounded-lg text-[13px] font-bold transition-all",
                                 chartTimeFrame === tf 
-                                  ? "bg-[#3d3f44] text-white shadow-sm" 
-                                  : "text-[#969696] hover:text-white hover:bg-white/5"
+                                  ? "bg-bg-tertiary text-white shadow-sm" 
+                                  : "text-[#969696] hover:text-white hover:bg-bg-secondary"
                               )}
                             >
                               {tf}
@@ -4300,10 +4846,10 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
                         initial={{ opacity: 0, x: -10 }}
                         animate={{ opacity: 1, x: 0 }}
                         exit={{ opacity: 0, x: -10 }}
-                        className="absolute left-[58px] bottom-12 w-[280px] bg-[#222327] border border-white/5 rounded-2xl shadow-2xl py-2 z-30"
+                        className="absolute left-[58px] bottom-12 w-[280px] bg-bg-tertiary border border-border-color rounded-2xl shadow-2xl py-2 z-30"
                       >
-                        <div className="px-5 py-4 border-b border-white/5 mb-1">
-                           <span className="text-[15px] font-bold text-white tracking-wide">Chart Type</span>
+                        <div className="px-5 py-4 border-b border-border-color mb-1">
+                           <span className="text-[15px] font-bold text-text-primary tracking-wide">Chart Type</span>
                         </div>
                         <div className="flex flex-col px-0">
                           {CHART_TYPES.map((type, idx) => (
@@ -4315,8 +4861,8 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
                               }}
                               className={cn(
                                 "w-full flex items-center justify-between px-5 py-4 transition-all group relative",
-                                chartType === type.id ? "bg-[#3d3f44]" : "hover:bg-white/5",
-                                idx !== CHART_TYPES.length - 1 && "border-b border-white/5"
+                                chartType === type.id ? "bg-bg-tertiary" : "hover:bg-bg-secondary",
+                                idx !== CHART_TYPES.length - 1 && "border-b border-border-color"
                               )}
                             >
                               <div className="flex items-center gap-4">
@@ -4325,17 +4871,17 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
                                   strokeWidth={1.5}
                                   className={cn(
                                     "transition-colors",
-                                    chartType === type.id ? "text-white" : "text-gray-400 group-hover:text-gray-200"
+                                    chartType === type.id ? "text-text-primary" : "text-gray-400 group-hover:text-gray-200"
                                   )} 
                                 />
                                 <span className={cn(
                                   "text-[14px] font-bold transition-colors",
-                                  chartType === type.id ? "text-white" : "text-[#969696] group-hover:text-gray-200"
+                                  chartType === type.id ? "text-text-primary" : "text-[#969696] group-hover:text-gray-200"
                                 )}>
                                   {type.label}
                                 </span>
                               </div>
-                              {chartType === type.id && <Check size={18} className="text-white" strokeWidth={3} />}
+                              {chartType === type.id && <Check size={18} className="text-text-primary" strokeWidth={3} />}
                             </button>
                           ))}
                         </div>
@@ -4350,10 +4896,10 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
                         initial={{ opacity: 0, x: -10 }}
                         animate={{ opacity: 1, x: 0 }}
                         exit={{ opacity: 0, x: -10 }}
-                        className="absolute left-[58px] bottom-0 w-[300px] bg-[#222327] border border-white/5 rounded-2xl shadow-2xl py-2 z-30 overflow-hidden"
+                        className="absolute left-[58px] bottom-0 w-[300px] bg-bg-tertiary border border-border-color rounded-2xl shadow-2xl py-2 z-30 overflow-hidden"
                       >
-                        <div className="px-5 py-4 border-b border-white/5 mb-2">
-                           <span className="text-[15px] font-bold text-white tracking-wide">Indicators</span>
+                        <div className="px-5 py-4 border-b border-border-color mb-2">
+                           <span className="text-[15px] font-bold text-text-primary tracking-wide">Indicators</span>
                         </div>
                         <div className="flex flex-col max-h-[400px] overflow-y-auto custom-scrollbar px-2">
                           {INDICATORS_LIST.map((indicator) => (
@@ -4372,12 +4918,12 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
                               }}
                               className={cn(
                                 "w-full flex items-center justify-between px-3 py-3 transition-all rounded-lg group mb-1",
-                                activeIndicators.some(i => i.id === indicator.id) ? "bg-[#3d3f44]" : "hover:bg-white/5"
+                                activeIndicators.some(i => i.id === indicator.id) ? "bg-bg-tertiary" : "hover:bg-bg-secondary"
                               )}
                             >
                               <span className={cn(
                                 "text-[14px] font-medium transition-colors",
-                                activeIndicators.some(i => i.id === indicator.id) ? "text-white" : "text-[#969696] group-hover:text-gray-200"
+                                activeIndicators.some(i => i.id === indicator.id) ? "text-text-primary" : "text-[#969696] group-hover:text-gray-200"
                               )}>
                                 {indicator.name}
                               </span>
@@ -4396,10 +4942,10 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
                         initial={{ opacity: 0, x: -10 }}
                         animate={{ opacity: 1, x: 0 }}
                         exit={{ opacity: 0, x: -10 }}
-                        className="absolute left-[58px] bottom-0 w-[240px] bg-[#222327] border border-white/5 rounded-2xl shadow-2xl py-2 z-30"
+                        className="absolute left-[58px] bottom-0 w-[240px] bg-bg-tertiary border border-border-color rounded-2xl shadow-2xl py-2 z-30"
                       >
-                        <div className="px-5 py-4 border-b border-white/5 mb-2">
-                           <span className="text-[15px] font-bold text-white tracking-wide">Drawing Tools</span>
+                        <div className="px-5 py-4 border-b border-border-color mb-2">
+                           <span className="text-[15px] font-bold text-text-primary tracking-wide">Drawing Tools</span>
                         </div>
                         <div className="flex flex-col px-2">
                           {DESKTOP_TOOLS_LIST.map((tool) => (
@@ -4418,12 +4964,12 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
                                 }}
                                 className={cn(
                                   "w-full flex items-center justify-between px-3 py-3 transition-all rounded-lg group mb-1",
-                                  activeIndicators.some(i => i.id === tool.id) ? "bg-[#3d3f44]" : "hover:bg-white/5"
+                                  activeIndicators.some(i => i.id === tool.id) ? "bg-bg-tertiary" : "hover:bg-bg-secondary"
                                 )}
                               >
                                 <span className={cn(
                                   "text-[14px] font-medium transition-colors",
-                                  activeIndicators.some(i => i.id === tool.id) ? "text-white" : "text-[#969696] group-hover:text-gray-200"
+                                  activeIndicators.some(i => i.id === tool.id) ? "text-text-primary" : "text-[#969696] group-hover:text-gray-200"
                                 )}>
                                   {tool.name}
                                 </span>
@@ -4437,12 +4983,7 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
                 </div>
               </div>
 
-                {/* Zoom Controls (Bottom Middle) */}
-                <div className="hidden md:flex absolute bottom-8 left-1/2 -translate-x-1/2 bg-[#1b1c21] border border-white/5 rounded-[12px] shadow-2xl z-20 overflow-hidden items-center h-10">
-                  <button className="w-12 h-full flex items-center justify-center hover:bg-[#25262c] transition text-white/50 hover:text-white"><Minus size={16} strokeWidth={2.5} /></button>
-                  <div className="w-[1px] h-4 bg-white/5"></div>
-                  <button className="w-12 h-full flex items-center justify-center hover:bg-[#25262c] transition text-white/50 hover:text-white"><Plus size={16} strokeWidth={2.5} /></button>
-                </div>
+
               </div>
 
               {/* Right Panel (Desktop) */}
@@ -4507,16 +5048,29 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
             onBack={() => setView('TRADING')}
           />
         )}
-        {view === 'REFERRAL' && <ReferralPage user={user} referralSettings={referralSettings} currencySymbol={displayCurrencySymbol} onBack={() => setView('PROFILE')} />}
-        {view === 'CALENDAR' && <EconomicCalendar onBack={() => setView('HOME')} />}
-        {/* Removed LEADERBOARD view as it's now in ActivitiesSheet */}
+        {view === 'REFERRAL' && <ReferralPage user={user} referralSettings={referralSettings} currencySymbol={displayCurrencySymbol} onBack={() => navigate('/profile')} />}
+        {view === 'LEADERBOARD' && (
+          <LeaderboardPage
+            socket={socket}
+            onBack={() => navigate(activeAccount === 'DEMO' ? '/trade/demo' : '/trade')} 
+            currencySymbol={displayCurrencySymbol} 
+            currentUser={leaderboardCurrentUser}
+          />
+        )}
+        {view === 'CALENDAR' && <EconomicCalendar onBack={() => navigate(activeAccount === 'DEMO' ? '/trade/demo' : '/trade')} />}
         {view === 'PROFILE' && (
           <ProfilePage 
-            onBack={() => setView('TRADING')} 
-            onSettings={() => setView('SETTINGS')}
-            onAdmin={() => setView('ADMIN')}
+            onBack={() => navigate(activeAccount === 'DEMO' ? '/trade/demo' : '/trade')} 
+            onSettings={() => navigate('/settings')}
+            onAdmin={() => navigate('/admin')}
             user={user!}
-            setView={setView}
+            setView={(v) => {
+              if (v === 'REWARDS') navigate('/bonuses');
+              else if (v === 'REFERRAL') navigate('/affiliate');
+              else if (v === 'SETTINGS') navigate('/settings');
+              else if (v === 'ADMIN') navigate('/admin');
+              else setView(v as any);
+            }}
             balance={balance}
             bonusBalance={bonusBalance}
             turnoverRequired={turnoverRequired}
@@ -4524,7 +5078,9 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
             currency={currency}
             notifications={notifications}
             onNotificationsClick={() => setIsNotificationsOpen(true)}
+            clientAds={clientAds}
             timezoneOffset={timezoneOffset}
+            navigate={navigate}
           />
         )}
         {view === 'HELP' && (
@@ -4570,89 +5126,102 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
 
       {/* --- Bottom Controls (Mobile Only) --- */}
       {view === 'TRADING' && (
-        <div className="md:hidden bg-[#101114] px-3 pt-3 pb-[calc(env(safe-area-inset-bottom)+8px)] z-20 border-t border-white/5 flex flex-col gap-4 relative overflow-hidden">
-          {!platformSettings.isTradingEnabled && (
-            <div className="absolute inset-0 z-50 bg-[#101114]/90 backdrop-blur-md flex flex-col items-center justify-center p-4 text-center">
-               <h3 className="text-white font-bold text-[15px] mb-1">Trading is closed until Apr 29, 11:00</h3>
-               <p className="text-gray-500 text-[10px] mb-4">
-                 Explore assets available for trading — for instance, <span className="text-[#2ebd85] font-bold">Bitcoin OTC</span>
+        <div className="md:hidden bg-bg-primary px-3 pt-1.5 pb-[calc(env(safe-area-inset-bottom)+4px)] z-20 border-t border-border-color flex flex-col gap-2 relative overflow-hidden">
+          {(selectedAsset.isFrozen || !platformSettings.isTradingEnabled) && (
+            <div className="absolute inset-0 z-50 bg-bg-primary/95 backdrop-blur-xl flex flex-col items-center justify-center p-6 text-center animate-in fade-in duration-500">
+               <div className="w-20 h-20 bg-[var(--color-text-primary)]/[0.03] rounded-[24px] flex items-center justify-center mb-6 border border-[var(--color-text-primary)]/5 relative shadow-2xl">
+                  <div className="absolute inset-0 bg-[var(--color-text-primary)]/5 blur-2xl rounded-full" />
+                  <Lock size={36} className="text-text-secondary/60 relative z-10" />
+               </div>
+               <h3 className="text-text-primary font-black text-lg mb-1 tracking-tight uppercase">Trading is closed</h3>
+               <p className="text-text-secondary text-[12px] mb-8 max-w-[240px] leading-relaxed font-medium">
+                  {new Date().getDay() === 0 || new Date().getDay() === 6 
+                    ? "Market is closed for the weekend. Trading will resume on Monday."
+                    : "This market is currently closed for maintenance. Explore other open assets."}
+                  <br />
+                  <span className="text-[var(--color-success)] font-bold">Bitcoin OTC</span> is currently available.
                </p>
                <button 
                  onClick={() => setIsAssetSelectorOpen(true)}
-                 className="w-full h-12 bg-white/5 border border-white/10 rounded-xl flex items-center justify-between px-4"
+                 className="w-full h-14 bg-bg-secondary border border-border-color shadow-xl rounded-2xl flex items-center justify-between px-6 active:scale-[0.98] transition-transform"
                >
-                 <span className="text-white font-bold text-[13px]">Enable Orders</span>
-                 <Clock size={16} className="text-white/60" />
+                 <span className="text-text-primary font-extrabold text-[15px]">Enable Orders</span>
+                 <div className="w-8 h-8 rounded-full bg-[var(--color-text-primary)]/5 flex items-center justify-center">
+                    <Clock size={16} className="text-text-secondary/80" />
+                 </div>
                </button>
             </div>
           )}
-          {selectedAsset.isFrozen ? (
-            <div className="flex items-center gap-3 text-red-500 bg-red-500/10 px-4 py-3 rounded-2xl border border-red-500/20 w-full">
-              <Lock size={18} />
-              <span className="font-bold text-sm">Trading closed for this asset</span>
-            </div>
-          ) : (
+          {!selectedAsset.isFrozen && (
             <>
               {/* Info & Zoom Overlay View */}
-              <div className="flex justify-between items-center text-[11px] text-gray-500 px-1">
+              <div className="flex justify-between items-center text-[11px] text-text-secondary px-1">
                  <div className="flex items-center gap-2">
                     <span className="lowercase font-medium">Fixed Time mode</span>
                  </div>
                  <div className="flex items-center gap-1">
                     <span className="font-medium">Profit:</span>
-                    <span className="text-white font-bold">+{displayCurrencySymbol}{potentialProfit}</span>
+                    <span className="text-text-primary font-bold">+{displayCurrencySymbol}{potentialProfit}</span>
                     <Info size={12} className="opacity-50" />
                  </div>
               </div>
 
               {/* Input Grid */}
-              <div className="grid grid-cols-2 gap-3 mt-1">
+              <div className="grid grid-cols-2 gap-2.5 mt-0.5">
                  {/* Duration Selector */}
                  <div className="flex flex-col gap-1.5 flex-1">
-                    <div className="flex items-center bg-[#1e1e1e] rounded-xl border border-white/5 overflow-hidden">
+                    <div className="flex items-center bg-bg-secondary rounded-xl border border-border-color overflow-hidden h-10">
                        <button 
                          onClick={() => {
                             if (tradeMode === 'CLOCK') setClockOffset(Math.max(1, clockOffset - 1));
-                            else setTimerDuration(Math.max(60, timerDuration - 60));
+                            else {
+                               const arr = selectedAsset?.isOTC ? [5, 10, 15, 30, 60, 120, 180, 240, 300, 600, 900, 1800, 3600, 7200, 14400, 28800] : [60, 120, 180, 240, 300, 600, 900, 1800, 3600, 7200, 14400, 28800];
+                               const idx = arr.indexOf(timerDuration);
+                               if (idx > 0) setTimerDuration(arr[idx - 1]);
+                            }
                          }}
-                         className="w-10 h-11 flex items-center justify-center text-gray-400 hover:text-white active:bg-white/5 transition"
+                         className="w-9 h-full flex items-center justify-center text-text-secondary hover:text-text-primary active:bg-[var(--color-text-primary)]/5 transition"
                        >
-                          <Minus size={18} />
+                          <Minus size={16} />
                        </button>
                        <div 
                          onClick={() => setIsTradeInputSheetOpen(true)}
                          className="flex-1 flex flex-col items-center justify-center leading-tight cursor-pointer"
                        >
-                          <span className="text-white font-bold text-base">
-                             {tradeMode === 'CLOCK' ? formatWithOffset(getExpirationTime(), 'HH:mm', timezoneOffset) : `${Math.floor(timerDuration / 60)} min`}
+                          <span className="text-text-primary font-bold text-[14px] whitespace-nowrap">
+                             {tradeMode === 'CLOCK' ? formatWithOffset(getExpirationTime(), 'HH:mm', timezoneOffset) : (timerDuration < 60 ? `${timerDuration} sec` : `${Math.floor(timerDuration / 60)} min`)}
                           </span>
                        </div>
                        <button 
                          onClick={() => {
                             if (tradeMode === 'CLOCK') setClockOffset(clockOffset + 1);
-                            else setTimerDuration(timerDuration + 60);
+                            else {
+                               const arr = selectedAsset?.isOTC ? [5, 10, 15, 30, 60, 120, 180, 240, 300, 600, 900, 1800, 3600, 7200, 14400, 28800] : [60, 120, 180, 240, 300, 600, 900, 1800, 3600, 7200, 14400, 28800];
+                               const idx = arr.indexOf(timerDuration);
+                               if (idx < arr.length - 1) setTimerDuration(arr[idx === -1 ? 0 : idx + 1]);
+                            }
                          }}
-                         className="w-10 h-11 flex items-center justify-center text-gray-400 hover:text-white active:bg-white/5 transition"
+                         className="w-9 h-full flex items-center justify-center text-text-secondary hover:text-text-primary active:bg-[var(--color-text-primary)]/5 transition"
                        >
-                          <Plus size={18} />
+                          <Plus size={16} />
                        </button>
                     </div>
                  </div>
 
                  {/* Amount Selector */}
                  <div className="flex flex-col gap-1.5 flex-1">
-                    <div className="flex items-center bg-[#1e1e1e] rounded-xl border border-white/5 overflow-hidden h-11">
+                    <div className="flex items-center bg-bg-secondary rounded-xl border border-border-color overflow-hidden h-10">
                        <button 
                          onClick={() => {
                             const min = currency.code === 'BDT' ? 20 : 1;
                             setInvestment(Math.max(min, Math.floor(investment / 2)));
                          }}
-                         className="w-10 h-full flex items-center justify-center text-gray-400 hover:text-white active:bg-white/5 transition border-r border-white/5"
+                         className="w-9 h-full flex items-center justify-center text-text-secondary hover:text-text-primary active:bg-[var(--color-text-primary)]/5 transition border-r border-border-color"
                        >
-                          <Minus size={18} />
+                          <Minus size={16} />
                        </button>
                        <div className="flex-1 h-full flex items-center justify-center relative">
-                          <span className="absolute left-2.5 text-white/30 font-bold text-xs pointer-events-none">{currency.symbol}</span>
+                          <span className="absolute left-2.5 text-text-secondary/50 font-bold text-[10px] pointer-events-none">{currency.symbol}</span>
                           <input 
                             type="number"
                             inputMode="numeric"
@@ -4665,42 +5234,42 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
                               const min = currency.code === 'BDT' ? 20 : 1;
                               if (investment < min) setInvestment(min);
                             }}
-                            className="w-full h-full bg-transparent text-center font-bold text-[15px] focus:outline-none text-white px-6"
+                            className="w-full h-full bg-transparent text-center font-bold text-[14px] focus:outline-none text-text-primary px-5"
                           />
                        </div>
                        <button 
                          onClick={() => setInvestment(investment * 2 || (currency.code === 'BDT' ? 20 : 1))}
-                         className="w-10 h-full flex items-center justify-center text-gray-400 hover:text-white active:bg-white/5 transition border-l border-white/5"
+                         className="w-9 h-full flex items-center justify-center text-text-secondary hover:text-text-primary active:bg-[var(--color-text-primary)]/5 transition border-l border-border-color"
                        >
-                          <Plus size={18} />
+                          <Plus size={16} />
                        </button>
                     </div>
                  </div>
               </div>
 
               {/* Trade Actions */}
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2.5">
                  <button 
                    onClick={() => handleTrade('DOWN')}
-                   className="flex-1 h-[56px] bg-[#ff4d4d] rounded-2xl flex flex-col items-center justify-center gap-0 active:scale-[0.98] transition shadow-[0_4px_15px_rgba(255,77,77,0.15)]"
+                   className="flex-1 h-[50px] bg-[#ff4d4d] rounded-xl flex flex-col items-center justify-center gap-0 active:scale-[0.98] transition shadow-lg shadow-red-500/10"
                  >
-                    <span className="text-white font-black text-[11px] uppercase tracking-widest leading-none mb-0.5">Down</span>
-                    <ArrowDown size={20} strokeWidth={3} className="text-white" />
+                    
+                    <ArrowDown size={18} strokeWidth={3} className="text-text-primary" />
                  </button>
 
                  <button 
                    onClick={() => setIsPendingOrderSheetOpen(true)}
-                   className="w-12 h-12 bg-[#1e1e1e] rounded-xl flex items-center justify-center text-white/40 hover:text-white active:scale-95 transition border border-white/5 shadow-sm"
+                   className="w-11 h-[50px] bg-bg-secondary rounded-xl flex items-center justify-center text-text-secondary/40 hover:text-text-primary active:scale-95 transition border border-border-color"
                  >
-                    <Clock size={20} />
+                    <Clock size={18} />
                  </button>
 
                  <button 
                    onClick={() => handleTrade('UP')}
-                   className="flex-1 h-[56px] bg-[#22c55e] rounded-2xl flex flex-col items-center justify-center gap-0 active:scale-[0.98] transition shadow-[0_4px_15px_rgba(34,197,94,0.15)]"
+                   className="flex-1 h-[50px] bg-[#22c55e] rounded-xl flex flex-col items-center justify-center gap-0 active:scale-[0.98] transition shadow-lg shadow-emerald-500/10"
                  >
-                    <span className="text-white font-black text-[11px] uppercase tracking-widest leading-none mb-0.5">Up</span>
-                    <ArrowUp size={20} strokeWidth={3} className="text-white" />
+                    
+                    <ArrowUp size={18} strokeWidth={3} className="text-text-primary" />
                  </button>
               </div>
             </>
@@ -4709,43 +5278,37 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
       )}
 
       {/* --- Bottom Navigation (Mobile Only) --- */}
-      <nav className="md:hidden bg-[#101114] border-t border-white/5 px-4 pt-3 pb-[calc(env(safe-area-inset-bottom)+4px)] flex justify-between items-center">
+      <nav className="md:hidden bg-bg-primary border-t border-border-color px-4 pt-1.5 pb-[calc(env(safe-area-inset-bottom)+2px)] flex justify-between items-center z-50">
         <NavButton 
-          icon={<BarChart2 size={24} strokeWidth={view === 'TRADING' ? 3 : 2} />} 
-          label="" 
-          active={view === 'TRADING'} 
-          onClick={() => setView('TRADING')}
+          icon={<BarChart2 size={22} strokeWidth={view === 'TRADING' && !isActivitiesOpen ? 3 : 2} />} 
+          active={view === 'TRADING' && !isActivitiesOpen} 
+          onClick={() => { setIsActivitiesOpen(false); navigate(activeAccount === 'DEMO' ? '/trade/demo' : '/trade'); }}
+          label="Trade"
         />
         <NavButton 
-          icon={<ArrowUpDown size={24} strokeWidth={view === 'TRADES' ? 3 : 2} />} 
-          label="" 
+          icon={<ArrowUpDown size={22} strokeWidth={view === 'TRADES' && !isActivitiesOpen ? 3 : 2} />} 
           count={activeTrades.length} 
-          active={view === 'TRADES'}
-          onClick={() => setView('TRADES')}
+          active={view === 'TRADES' && !isActivitiesOpen}
+          onClick={() => { setIsActivitiesOpen(false); navigate('/trades'); }}
+          label="Trades"
         />
         <NavButton 
-          icon={<ShoppingBag size={24} strokeWidth={isActivitiesOpen ? 3 : 2} />} 
-          label="" 
+          icon={<Trophy size={22} strokeWidth={isActivitiesOpen ? 3 : 2} />} 
           active={isActivitiesOpen}
-          onClick={() => {
-            closeAllPanels();
-            setIsActivitiesOpen(true);
-          }}
+          onClick={() => setIsActivitiesOpen(true)}
+          label="Tournaments"
         />
         <NavButton 
-          icon={<Trophy size={24} strokeWidth={isLeaderboardOpen ? 3 : 2} />} 
-          label="" 
-          active={isLeaderboardOpen}
-          onClick={() => {
-            closeAllPanels();
-            setIsLeaderboardOpen(true);
-          }}
+          icon={<ShoppingBag size={22} strokeWidth={view === 'MARKET' && !isActivitiesOpen ? 3 : 2} />} 
+          active={view === 'MARKET' && !isActivitiesOpen}
+          onClick={() => { setIsActivitiesOpen(false); navigate('/market'); }}
+          label="Market"
         />
         <NavButton 
-          icon={<HelpCircle size={24} strokeWidth={view === 'HELP' ? 3 : 2} />} 
-          label="" 
-          active={view === 'HELP'}
-          onClick={() => setView('HELP')}
+          icon={<HelpCircle size={22} strokeWidth={view === 'HELP' && !isActivitiesOpen ? 3 : 2} />} 
+          active={view === 'HELP' && !isActivitiesOpen}
+          onClick={() => { setIsActivitiesOpen(false); navigate('/help'); }}
+          label="Help"
         />
       </nav>
 
@@ -4786,7 +5349,7 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
         onChartTypeChange={(type) => {
           setIsLoading(true);
           setChartType(type);
-          setTimeout(() => setIsLoading(false), 2500); // More professional loading duration
+          setTimeout(() => setIsLoading(false), 800); // Faster loading duration
           setIsChartSettingsOpen(false);
         }}
       />
@@ -4827,6 +5390,7 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
         currentPrice={currentPrice}
         currencySymbol={displayCurrencySymbol}
         timezoneOffset={timezoneOffset}
+        isOTC={!!selectedAsset?.isOTC}
       />
 
       <PendingOrderSheet
@@ -4858,7 +5422,7 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
               animate={{ x: 0 }}
               exit={{ x: '100%' }}
               transition={{ type: "spring", damping: 30, stiffness: 300, mass: 0.8 }}
-              className="relative h-full w-full md:w-[420px] bg-[#0a0b0d] shadow-2xl flex flex-col border-l border-white/5"
+              className="relative h-full w-full md:w-[420px] bg-bg-primary shadow-2xl flex flex-col border-l border-border-color"
             >
               <EconomicCalendar onBack={() => setIsCalendarOpen(false)} />
             </motion.div>
@@ -4889,7 +5453,7 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
               animate={{ x: 0 }}
               exit={{ x: '100%' }}
               transition={{ type: "spring", damping: 30, stiffness: 300, mass: 0.8 }}
-              className="relative h-full w-full md:w-[420px] bg-[#121212] shadow-2xl flex flex-col border-l border-white/5"
+              className="relative h-full w-full md:w-[420px] bg-bg-secondary shadow-2xl flex flex-col border-l border-border-color"
             >
               <LeaderboardPage
                 socket={socket}
@@ -4945,6 +5509,11 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
         socket={socket}
         timezoneOffset={timezoneOffset}
       />
+
+      <TradingPlatformSheet
+        isOpen={isTradingPlatformOpen}
+        onClose={() => setIsTradingPlatformOpen(false)}
+      />
     </div>
   </div>
 );
@@ -4973,20 +5542,20 @@ const NotificationsSheet = ({ isOpen, onClose, notifications, socket, timezoneOf
             animate={{ y: 0 }}
             exit={{ y: "100%" }}
             transition={{ type: "spring", damping: 25, stiffness: 200 }}
-            className="fixed bottom-0 left-0 right-0 bg-[var(--bg-primary)] rounded-t-[32px] z-[70] flex flex-col max-h-[85vh] border-t border-[var(--border-color)]"
+            className="fixed bottom-0 left-0 right-0 bg-bg-primary rounded-t-[32px] z-[70] flex flex-col max-h-[85vh] border-t border-border-color"
           >
-            <div className="w-12 h-1.5 bg-[var(--bg-tertiary)] rounded-full mx-auto mt-3 mb-4" />
+            <div className="w-12 h-1.5 bg-bg-tertiary rounded-full mx-auto mt-3 mb-4" />
             
             <div className="px-6 flex items-center justify-between mb-6">
               <div>
-                <h2 className="text-2xl font-black text-[var(--text-primary)]">Notifications</h2>
-                <p className="text-xs text-[var(--text-secondary)] font-bold uppercase tracking-widest">
+                <h2 className="text-2xl font-black text-text-primary">Notifications</h2>
+                <p className="text-xs text-text-secondary font-bold uppercase tracking-widest">
                   {unreadCount > 0 ? `${unreadCount} unread alerts` : 'All caught up'}
                 </p>
               </div>
               <button 
                 onClick={onClose}
-                className="w-10 h-10 rounded-full bg-[var(--bg-secondary)] flex items-center justify-center text-[var(--text-primary)] border border-[var(--border-color)]"
+                className="w-10 h-10 rounded-full bg-bg-secondary flex items-center justify-center text-text-primary border border-border-color"
               >
                 <X size={20} />
               </button>
@@ -4995,29 +5564,29 @@ const NotificationsSheet = ({ isOpen, onClose, notifications, socket, timezoneOf
             <div className="flex-1 overflow-y-auto px-6 pb-10 scrollbar-hide">
               {notifications.length > 0 ? (
                 <div className="space-y-3">
-                  {notifications.map((notif) => (
+                  {notifications.map((notif, index) => (
                     <div 
-                      key={notif.id}
+                      key={notif.id || `notif-${index}`}
                       onClick={() => handleMarkRead(notif.id)}
                       className={cn(
                         "p-4 rounded-2xl border transition relative overflow-hidden",
                         notif.isRead 
-                          ? "bg-[var(--bg-secondary)] border-[var(--border-color)] opacity-60" 
-                          : "bg-[var(--bg-secondary)] border-blue-500/30 shadow-lg"
+                          ? "bg-bg-secondary border-border-color opacity-60" 
+                          : "bg-bg-secondary border-blue-500/30 shadow-lg"
                       )}
                     >
                       {!notif.isRead && (
                         <div className="absolute top-0 left-0 w-1 h-full bg-blue-500" />
                       )}
                       <div className="flex justify-between items-start mb-1">
-                        <h3 className={cn("font-bold text-sm", !notif.isRead ? "text-[var(--text-primary)]" : "text-[var(--text-secondary)]")}>
+                        <h3 className={cn("font-bold text-sm", !notif.isRead ? "text-text-primary" : "text-text-secondary")}>
                           {notif.title}
                         </h3>
-                        <span className="text-[10px] text-[var(--text-secondary)] font-bold">
+                        <span className="text-[10px] text-text-secondary font-bold">
                           {formatWithOffset(notif.timestamp, 'HH:mm', timezoneOffset)}
                         </span>
                       </div>
-                      <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
+                      <p className="text-xs text-text-secondary leading-relaxed">
                         {notif.message}
                       </p>
                       <div className="mt-2 flex items-center gap-2">
@@ -5029,7 +5598,7 @@ const NotificationsSheet = ({ isOpen, onClose, notifications, socket, timezoneOf
                         )}>
                           {notif.type || 'SYSTEM'}
                         </span>
-                        <span className="text-[9px] text-[var(--text-secondary)] font-bold">
+                        <span className="text-[9px] text-text-secondary font-bold">
                           {formatWithOffset(notif.timestamp, 'MMM dd, yyyy', timezoneOffset)}
                         </span>
                       </div>
@@ -5038,11 +5607,11 @@ const NotificationsSheet = ({ isOpen, onClose, notifications, socket, timezoneOf
                 </div>
               ) : (
                 <div className="flex flex-col items-center justify-center py-20 text-center">
-                  <div className="w-20 h-20 bg-[var(--bg-secondary)] rounded-full flex items-center justify-center mb-4 border border-dashed border-[var(--border-color)]">
-                    <Bell size={32} className="text-[var(--text-secondary)] opacity-20" />
+                  <div className="w-20 h-20 bg-bg-secondary rounded-full flex items-center justify-center mb-4 border border-dashed border-border-color">
+                    <Bell size={32} className="text-text-secondary opacity-20" />
                   </div>
-                  <h3 className="font-bold text-[var(--text-primary)] mb-1">No notifications yet</h3>
-                  <p className="text-xs text-[var(--text-secondary)] max-w-[200px]">
+                  <h3 className="font-bold text-text-primary mb-1">No notifications yet</h3>
+                  <p className="text-xs text-text-secondary max-w-[200px]">
                     When we have updates or alerts for you, they'll appear here.
                   </p>
                 </div>
@@ -5061,14 +5630,13 @@ function NavButton({ icon, label, active, count, onClick }: { icon: React.ReactN
       onClick={onClick}
       className={cn(
       "flex flex-col items-center gap-0 p-1 rounded-lg transition min-w-[55px] relative",
-      active ? "text-[var(--text-primary)]" : "hover:text-[var(--text-secondary)]"
+      active ? "text-text-primary" : "hover:text-text-secondary"
     )}>
-      <div className={cn("p-0.5 rounded-md", active && "bg-[var(--text-primary)]/10")}>
+      <div className={cn("p-0.5 rounded-md", active && "bg-[var(--color-text-primary)]/10")}>
         {React.isValidElement(icon) ? React.cloneElement(icon as React.ReactElement<any>, { size: 16 }) : icon}
       </div>
-      <span className="scale-90 origin-top">{label}</span>
       {count !== undefined && count > 0 && (
-        <span className="absolute top-0 right-1 w-3.5 h-3.5 bg-red-500 text-white text-[8px] flex items-center justify-center rounded-full border border-[var(--bg-primary)]">
+        <span className="absolute top-0 right-1 w-3.5 h-3.5 bg-red-500 text-white text-[8px] flex items-center justify-center rounded-full border border-[var(--color-bg-primary)]">
           {count}
         </span>
       )}
@@ -5099,9 +5667,12 @@ function TradeDetailsSheet({ trade, onClose, tickHistory, currentTime, currencyS
     profitString = `${tSymbol}0`;
   }
 
+  const [capturedData, setCapturedData] = useState<any[] | null>(null);
+
   // Generate chart data from history or fallback to simulation
-  const chartData = useMemo(() => {
-    const endTime = trade.status === 'ACTIVE' ? currentTime : trade.endTime;
+  const derivedChartData = useMemo(() => {
+    const isTradeActive = trade.status === 'ACTIVE';
+    const endTime = isTradeActive ? currentTime : trade.endTime;
     const relevantTicks = tickHistory.filter(t => t.time >= trade.startTime - 5000 && t.time <= endTime + 2000);
     
     // If we have enough real data (at least 2 points), use it
@@ -5114,8 +5685,15 @@ function TradeDetailsSheet({ trade, onClose, tickHistory, currentTime, currencyS
     }
 
     // Fallback: Generate fake chart data for the trade duration
+    // Use a deterministic seed based on trade ID to prevent "jumping" when re-rendering
+    const seed = trade.id.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+    const seededRandom = (n: number) => {
+        const x = Math.sin(seed + n) * 10000;
+        return x - Math.floor(x);
+    };
+
     const data = [];
-    const points = 30;
+    const points = 40; // More points for smoother static line
     const startPrice = trade.entryPrice;
     const endPrice = trade.closePrice || trade.entryPrice;
     const duration = endTime - trade.startTime;
@@ -5123,7 +5701,8 @@ function TradeDetailsSheet({ trade, onClose, tickHistory, currentTime, currencyS
     for (let i = 0; i <= points; i++) {
       const progress = i / points;
       const trend = startPrice + (endPrice - startPrice) * progress;
-      const noise = (Math.random() - 0.5) * (Math.abs(endPrice - startPrice) * 0.3);
+      // Use seeded random for stable noise
+      const noise = (seededRandom(i) - 0.5) * (Math.abs(endPrice - startPrice) * 0.4);
       
       let price = trend + noise;
       if (i === 0) price = startPrice;
@@ -5136,16 +5715,31 @@ function TradeDetailsSheet({ trade, onClose, tickHistory, currentTime, currencyS
       });
     }
     return data;
-  }, [trade, tickHistory, currentTime]);
+  }, [trade.id, trade.startTime, trade.endTime, trade.status, trade.entryPrice, trade.closePrice, tickHistory, trade.status === 'ACTIVE' ? currentTime : null]);
 
-  const minPrice = Math.min(...chartData.map(d => d.price), trade.entryPrice, trade.closePrice || trade.entryPrice);
-  const maxPrice = Math.max(...chartData.map(d => d.price), trade.entryPrice, trade.closePrice || trade.entryPrice);
-  const range = maxPrice - minPrice || 0.001;
+  // Capture static data for closed trades to prevent jumps when tickHistory is pruned
+  useEffect(() => {
+    if (trade.status !== 'ACTIVE' && !capturedData && derivedChartData.length > 5) {
+      setCapturedData(derivedChartData);
+    }
+  }, [trade.status, derivedChartData, capturedData]);
+
+  const chartData = (capturedData || derivedChartData).filter(d => d.price !== undefined && d.price !== null && !isNaN(d.price));
+  
+  if (chartData.length === 0) {
+      // Return a minimal valid state if no data available to prevent assertion errors
+      return null;
+  }
+
+  const prices = chartData.map(d => d.price).concat(trade.entryPrice, trade.closePrice || trade.entryPrice).filter(p => typeof p === 'number' && !isNaN(p));
+  const minPrice = Math.min(...prices);
+  const maxPrice = Math.max(...prices);
+  const range = (maxPrice - minPrice) || 0.001;
   const padding = range * 0.2 || 0.001;
 
   const minTime = Math.min(...chartData.map(d => d.time));
   const maxTime = Math.max(...chartData.map(d => d.time));
-  const timeRange = maxTime - minTime || 1;
+  const timeRange = (maxTime - minTime) || 1;
 
   const getCoordY = (price: number) => {
     return 100 - ((price - (minPrice - padding)) / (range + 2 * padding) * 100);
@@ -5157,7 +5751,7 @@ function TradeDetailsSheet({ trade, onClose, tickHistory, currentTime, currencyS
 
   if (inSidebar) {
     return (
-      <div className="flex flex-col h-full bg-[#0a0a0a]">
+      <div className="flex flex-col h-full bg-bg-primary">
         <TradeDetailsContent 
           trade={trade} 
           onClose={onClose} 
@@ -5183,7 +5777,7 @@ function TradeDetailsSheet({ trade, onClose, tickHistory, currentTime, currencyS
       animate={{ y: 0 }}
       exit={{ y: "100%" }}
       transition={{ type: "spring", damping: 25, stiffness: 200 }}
-      className="fixed inset-0 z-50 flex flex-col bg-[#0a0a0a]"
+      className="fixed inset-0 z-50 flex flex-col bg-bg-primary"
     >
       <TradeDetailsContent 
         trade={trade} 
@@ -5219,6 +5813,7 @@ function TradeDetailsContent({
   getCoordY,
   isWin
 }: any) {
+  const { t } = useTranslation();
   const tSymbol = trade.currencySymbol || currencySymbol;
   const tRate = trade.exchangeRate || exchangeRate;
   
@@ -5227,22 +5822,22 @@ function TradeDetailsContent({
       {/* Header with Title and Tabs */}
       <div className="pt-6 px-4">
         <div className="flex items-center justify-between mb-4">
-          <h1 className="text-3xl font-bold text-white">Trades</h1>
-          <button onClick={onClose} className="p-2 text-white/60 hover:text-white transition">
+          <h1 className="text-3xl font-bold text-text-primary">{t('nav.trades')}</h1>
+          <button onClick={onClose} className="p-2 text-text-secondary/60 hover:text-text-primary transition">
             <X size={24} />
           </button>
         </div>
         
-        <div className="flex gap-6 border-b border-white/10 pb-2 mb-4">
-          <span className="text-white font-bold border-b-2 border-white pb-2 px-1">Fixed Time</span>
-          <span className="text-white/40 font-bold px-1">Forex</span>
-          <span className="text-white/40 font-bold px-1">Stocks</span>
+        <div className="flex gap-6 border-b border-border-color pb-2 mb-4">
+          <span className="text-text-primary font-bold border-b-2 border-white pb-2 px-1">Fixed Time</span>
+          <span className="text-text-secondary/40 font-bold px-1">Forex</span>
+          <span className="text-text-secondary/40 font-bold px-1">Stocks</span>
         </div>
       </div>
 
       <div className="flex-1 overflow-y-auto px-4 pb-8 scrollbar-hide">
         {/* Asset Header Card */}
-        <div className="bg-[#1a1b1e] rounded-3xl p-5 mb-6 border border-white/5 shadow-2xl">
+        <div className="bg-bg-tertiary rounded-3xl p-5 mb-6 border border-border-color shadow-2xl">
           <div className="flex justify-between items-start mb-4">
             <div className="flex items-center gap-3">
               <AssetIcon 
@@ -5253,22 +5848,22 @@ function TradeDetailsContent({
               />
               <div>
                 <div className="flex items-center gap-2">
-                  <span className="text-white/60 font-bold text-sm tracking-tight">{trade.assetShortName} · {trade.payout}%</span>
+                  <span className="text-text-secondary/60 font-bold text-sm tracking-tight">{trade.assetShortName} · {trade.payout}%</span>
                 </div>
-                <div className="flex items-center gap-1.5 text-xl font-black text-white">
+                <div className="flex items-center gap-1.5 text-xl font-black text-text-primary">
                   <span>{trade.currencySymbol || currencySymbol}{Math.round(trade.amount * (trade.exchangeRate || exchangeRate))}</span>
                   {trade.type === 'UP' ? <ArrowUp size={18} className="text-[#22c55e]" strokeWidth={3} /> : <ArrowDown size={18} className="text-[#ff4757]" strokeWidth={3} />}
                 </div>
               </div>
             </div>
             <div className="flex flex-col items-end">
-              <span className="text-[10px] font-bold text-white/40 uppercase tracking-widest mb-1">1 min</span>
+              <span className="text-[10px] font-bold text-text-secondary/40 uppercase tracking-widest mb-1">1 min</span>
               <span className={cn("text-xl font-black", profitColor)}>{profitString}</span>
             </div>
           </div>
 
           {/* Professional Trade Path View */}
-          <div className="h-48 bg-[#121212] rounded-2xl relative overflow-hidden border border-white/5 p-0 shadow-inner">
+          <div className="h-48 bg-bg-secondary rounded-2xl relative overflow-hidden border border-border-color p-0 shadow-inner">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={chartData} margin={{ top: 30, right: 30, bottom: 10, left: 30 }}>
                 <defs>
@@ -5305,47 +5900,47 @@ function TradeDetailsContent({
                  )}
                  style={{ left: '20px', top: `${getCoordY(trade.entryPrice)}%`, transform: 'translateY(-50%)' }}
                >
-                 {trade.type === 'UP' ? <ArrowUp size={12} className="text-white" strokeWidth={4} /> : <ArrowDown size={12} className="text-white" strokeWidth={4} />}
+                 {trade.type === 'UP' ? <ArrowUp size={12} className="text-text-primary" strokeWidth={4} /> : <ArrowDown size={12} className="text-text-primary" strokeWidth={4} />}
                </div>
                <div className="absolute w-1 h-1 bg-white rounded-full z-30" style={{ left: '30px', top: `${getCoordY(trade.entryPrice)}%`, transform: 'translate(-50%, -50%)' }} />
                <div className="absolute w-1 h-1 bg-white rounded-full z-30" style={{ right: '30px', top: `${getCoordY(trade.entryPrice)}%`, transform: 'translate(50%, -50%)' }} />
             </div>
           </div>
           
-          <button className="w-full mt-4 py-3 bg-[#25262b] hover:bg-[#2c2d33] text-white font-bold rounded-xl border border-white/5 transition active:scale-[0.98] shadow-lg text-sm">
-            Show on Chart
+          <button className="w-full mt-4 py-3 bg-bg-secondary hover:bg-bg-tertiary text-white font-bold rounded-xl border border-border-color transition active:scale-[0.98] shadow-lg text-sm">
+            {t('trade.show_on_chart')}
           </button>
         </div>
 
         {/* Details List */}
         <div className="space-y-4 mb-8">
-          <DetailRow label="Amount" value={`${tSymbol}${Math.round(trade.amount * tRate)}`} />
-          <DetailRow label="PnL" value={profitString} valueClassName={profitColor} />
+          <DetailRow label={t('trade.amount')} value={`${tSymbol}${Math.round(trade.amount * tRate)}`} />
+          <DetailRow label={t('trade.pnl')} value={profitString} valueClassName={profitColor} />
           <DetailRow 
-            label="Trade ID" 
+            label={t('trade.id')} 
             value={trade.id.slice(0, 11).toUpperCase()} 
             showCopy 
             onCopy={() => navigator.clipboard.writeText(trade.id)}
           />
-          <DetailRow label="Closed" value={isWin ? "with a profit" : "with a loss"} />
-          <DetailRow label="Duration" value="1 min" />
-          <DetailRow label="Trade opened" value={formatWithOffset(trade.startTime, 'MMM dd HH:mm:ss.SSS', timezoneOffset)} />
-          <DetailRow label="Trade closed" value={formatWithOffset(trade.endTime, 'MMM dd HH:mm:ss.SSS', timezoneOffset)} />
-          <DetailRow label="Opening quote" value={trade.entryPrice.toFixed(5)} />
-          <DetailRow label="Closing quote" value={trade.closePrice?.toFixed(5) || '---'} />
+          <DetailRow label={t('trade.status')} value={isWin ? t('trade.with_profit') : t('trade.with_loss')} />
+          <DetailRow label={t('trade.duration')} value="1 min" />
+          <DetailRow label={t('trade.opened')} value={formatWithOffset(trade.startTime, 'MMM dd HH:mm:ss.SSS', timezoneOffset)} />
+          <DetailRow label={t('trade.closed_time')} value={formatWithOffset(trade.endTime, 'MMM dd HH:mm:ss.SSS', timezoneOffset)} />
+          <DetailRow label={t('trade.opening_quote')} value={trade.entryPrice.toFixed(5)} />
+          <DetailRow label={t('trade.closing_quote')} value={trade.closePrice?.toFixed(5) || '---'} />
         </div>
 
         <div className="px-2 mb-8">
-          <p className="text-white/40 text-[11px] leading-relaxed">
-            You can see the tick-by-tick quotes for this trade in the <span className="text-[#22c55e] font-bold">Quotes History</span>
+          <p className="text-text-secondary/40 text-[11px] leading-relaxed">
+            {t('trade.tick_quotes_desc')} <span className="text-[#22c55e] font-bold">{t('trade.quotes_history')}</span>
           </p>
         </div>
         
         <button 
           onClick={onClose}
-          className="w-full bg-[#25262b] text-white font-bold py-4 rounded-2xl hover:bg-[#2c2d33] transition active:scale-[0.98] shadow-xl text-sm border border-white/5"
+          className="w-full bg-bg-secondary text-white font-bold py-4 rounded-2xl hover:bg-bg-tertiary transition active:scale-[0.98] shadow-xl text-sm border border-border-color"
         >
-          Close
+          {t('common.close')}
         </button>
       </div>
     </>
@@ -5354,11 +5949,11 @@ function TradeDetailsContent({
 
 const DetailRow = ({ label, value, valueClassName, showCopy, onCopy }: { label: string, value: string, valueClassName?: string, showCopy?: boolean, onCopy?: () => void }) => (
   <div className="flex justify-between items-center py-1">
-    <span className="text-white/40 text-sm font-medium">{label}</span>
+    <span className="text-text-secondary/40 text-sm font-medium">{label}</span>
     <div className="flex items-center gap-2">
       <span className={cn("font-medium text-sm text-white", valueClassName)}>{value}</span>
       {showCopy && (
-        <button onClick={onCopy} className="text-white/40 hover:text-white transition">
+        <button onClick={onCopy} className="text-text-secondary/40 hover:text-text-primary transition">
           <Copy size={14} />
         </button>
       )}
@@ -5397,6 +5992,7 @@ function TradesPage({
   onClose?: () => void,
   inSidebar?: boolean
 }) {
+  const { t } = useTranslation();
   const [selectedTrade, setSelectedTrade] = useState<Trade | null>(null);
   const [showHistory, setShowHistory] = useState(false);
   const activeTrades = trades.filter(t => t.status === 'ACTIVE');
@@ -5416,28 +6012,28 @@ function TradesPage({
 
   return (
     <div className={cn(
-      "bg-[var(--bg-primary)] text-[var(--text-primary)] font-sans flex flex-col h-full",
+      "bg-bg-primary text-text-primary font-sans flex flex-col h-full",
       !inSidebar && "absolute inset-0 z-50 md:relative md:z-auto"
     )}>
       <div className="p-4 pb-2 flex items-center justify-between">
         <div className="flex items-center gap-2">
           {!inSidebar && (
-            <button onClick={onViewAsset} className="md:hidden p-2 -ml-2 text-gray-400 hover:text-white transition">
+            <button onClick={onViewAsset} className="md:hidden p-2 -ml-2 text-gray-400 hover:text-text-primary transition">
                <ChevronLeft size={24} />
             </button>
           )}
-          <h1 className="text-xl font-bold">Trades</h1>
+          <h1 className="text-xl font-bold">{t('common.trades')}</h1>
         </div>
         {inSidebar && onClose && (
-          <button onClick={onClose} className="p-2 text-[var(--text-secondary)] hover:text-white transition">
+          <button onClick={onClose} className="p-2 text-text-secondary hover:text-text-primary transition">
             <X size={20} />
           </button>
         )}
       </div>
       
       {/* Tabs */}
-      <div className="flex border-b border-[var(--border-color)] px-4 mb-4">
-        <button className="px-4 py-2 border-b-2 border-blue-500 font-bold text-sm text-[var(--text-primary)]">Fixed Time</button>
+      <div className="flex border-b border-border-color px-4 mb-4">
+        <button className="px-4 py-2 border-b-2 border-blue-500 font-bold text-sm text-text-primary">Fixed Time</button>
       </div>
 
       <div className="flex-1 overflow-y-auto px-4 pb-20">
@@ -5450,7 +6046,7 @@ function TradesPage({
             <p className="text-gray-400 text-sm mb-6 max-w-[200px]">No active Fixed Time trades or orders on this account</p>
             <button 
               onClick={onViewAsset}
-              className="w-full bg-[var(--bg-secondary)] text-[var(--text-primary)] font-bold py-4 rounded-2xl border border-[var(--border-color)] hover:bg-[var(--bg-tertiary)] transition-colors"
+              className="w-full bg-bg-secondary text-text-primary font-bold py-4 rounded-2xl border border-border-color hover:bg-bg-tertiary transition-colors"
             >
               Explore Assets
             </button>
@@ -5458,8 +6054,8 @@ function TradesPage({
         ) : (
           <div className="space-y-3 mb-8">
              <h2 className="text-lg font-bold mb-3 flex items-center justify-between">
-                <span>Open Trades</span>
-                <span className="text-xs font-normal text-[var(--text-secondary)]">{activeTrades.length} Active</span>
+                <span>{t('common.open_trades')}</span>
+                <span className="text-xs font-normal text-text-secondary">{activeTrades.length} {t('common.active')}</span>
              </h2>
              {activeTrades.map(trade => (
                <TradeItem 
@@ -5477,10 +6073,10 @@ function TradesPage({
 
         {/* Closed Trades Section */}
         <div className="flex justify-between items-center mb-4 mt-8">
-          <h2 className="text-lg font-bold">History</h2>
+          <h2 className="text-lg font-bold">{t('common.closed_trades')}</h2>
           <button 
             onClick={() => setShowHistory(true)}
-            className="text-xs text-[var(--text-secondary)] flex items-center gap-1 hover:text-[var(--text-primary)] transition-colors font-medium"
+            className="text-xs text-text-secondary flex items-center gap-1 hover:text-text-primary transition-colors font-medium"
           >
             Show All <ChevronRight size={14}/>
           </button>
@@ -5488,10 +6084,10 @@ function TradesPage({
 
         <div className="space-y-3">
           {totalToday === 0 ? (
-            <div className="bg-[var(--bg-secondary)] p-4 rounded-2xl border border-[var(--border-color)] flex items-center gap-4">
+            <div className="bg-bg-secondary p-4 rounded-2xl border border-border-color flex items-center gap-4">
                 <div className="w-10 h-10 rounded-full border-2 border-blue-500/20 border-t-blue-500" />
                 <div>
-                   <div className="text-xs text-[var(--text-secondary)] font-medium">Today's success</div>
+                   <div className="text-xs text-text-secondary font-medium">Today's success</div>
                    <div className="text-sm font-bold">No trades closed today</div>
                 </div>
             </div>
@@ -5500,7 +6096,7 @@ function TradesPage({
                {/* Daily Summary Box (Real logic for today)*/}
                <div 
                  onClick={() => setShowHistory(true)}
-                 className="bg-[var(--bg-secondary)] p-4 rounded-2xl border border-[var(--border-color)] flex items-center gap-4 mb-4 cursor-pointer hover:bg-[var(--bg-tertiary)] transition-colors group"
+                 className="bg-bg-secondary p-4 rounded-2xl border border-border-color flex items-center gap-4 mb-4 cursor-pointer hover:bg-bg-tertiary transition-colors group"
                >
                   <div 
                     className="w-12 h-12 rounded-full flex items-center justify-center relative flex-shrink-0"
@@ -5508,18 +6104,18 @@ function TradesPage({
                       background: `conic-gradient(#22c55e ${winRate * 3.6}deg, rgba(255,255,255,0.08) 0deg)`
                     }}
                   >
-                    <div className="absolute inset-[3px] bg-[var(--bg-secondary)] rounded-full flex items-center justify-center">
+                    <div className="absolute inset-[3px] bg-bg-secondary rounded-full flex items-center justify-center">
                        <span className="text-[10px] font-black text-[#22c55e]">{winRate}%</span>
                     </div>
                   </div>
                   <div className="flex-1">
-                     <div className="text-[10px] text-[var(--text-secondary)] font-black uppercase tracking-widest mb-1">Today's success</div>
+                     <div className="text-[10px] text-text-secondary font-black uppercase tracking-widest mb-1">Today's success</div>
                      <div className="text-sm font-bold flex flex-col">
                        <span className="text-[#22c55e]">{winsToday} of {totalToday} trades successful</span>
-                       <span className="text-[10px] text-[var(--text-secondary)] font-normal">Success rate: {winRate}%</span>
+                       <span className="text-[10px] text-text-secondary font-normal">Success rate: {winRate}%</span>
                      </div>
                   </div>
-                  <ChevronRight size={18} className="text-[var(--text-secondary)] group-hover:text-[var(--text-primary)] transition-colors" />
+                  <ChevronRight size={18} className="text-text-secondary group-hover:text-text-primary transition-colors" />
                </div>
                
                {closedTrades.slice(0, 5).map(trade => (
@@ -5567,7 +6163,7 @@ const TradeItem: React.FC<{ trade: Trade, onClick?: () => void, currentPrice?: n
   const isActive = trade.status === 'ACTIVE';
   
   let profitString = '';
-  let profitColor = 'text-[var(--text-secondary)]';
+  let profitColor = 'text-text-secondary';
   let timeString = '';
 
   if (isActive && currentPrice !== undefined && currentTime !== undefined) {
@@ -5613,23 +6209,24 @@ const TradeItem: React.FC<{ trade: Trade, onClick?: () => void, currentPrice?: n
       profitColor = 'text-[#ff4757]';
     } else {
       profitString = `${tradeSymbol}0`;
-      profitColor = 'text-[var(--text-secondary)]';
+      profitColor = 'text-text-secondary';
     }
   }
 
   return (
     <div 
       onClick={onClick}
-      className="bg-[var(--bg-secondary)] p-3 rounded-xl border border-[var(--border-color)] flex items-center justify-between cursor-pointer active:scale-[0.98] transition hover:bg-[var(--bg-tertiary)]"
+      className="bg-bg-secondary p-4 rounded-xl border border-border-color flex items-center justify-between cursor-pointer active:scale-[0.98] transition hover:bg-bg-tertiary shadow-sm"
     >
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-4">
         <div className="relative">
           <AssetIcon 
             shortName={trade.assetShortName} 
             category={trade.assetCategory} 
             flag={trade.assetFlag} 
+            size="sm"
           />
-          <div className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-[var(--bg-secondary)] flex items-center justify-center border border-[var(--bg-secondary)] z-30">
+          <div className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-bg-secondary flex items-center justify-center border border-[var(--color-bg-secondary)] z-30">
              {trade.type === 'UP' 
                ? <ArrowUp size={10} className="text-[#22c55e]" strokeWidth={3} /> 
                : <ArrowDown size={10} className="text-[#ff4757]" strokeWidth={3} />
@@ -5637,23 +6234,22 @@ const TradeItem: React.FC<{ trade: Trade, onClick?: () => void, currentPrice?: n
           </div>
         </div>
         <div>
-          <div className="flex items-center gap-1.5">
-            <span className="text-[var(--text-primary)] font-bold text-sm">{trade.assetShortName}</span>
-            <span className="text-xs text-[var(--text-secondary)]">· {isActive ? `${trade.payout}%` : 'Fixed Time'}</span>
+          <div className="flex items-center gap-2">
+            <span className="text-text-primary font-black text-sm tracking-tight">{trade.assetShortName}</span>
+            <span className="text-[10px] font-bold text-text-secondary bg-bg-primary px-1.5 py-0.5 rounded-md">{trade.payout}%</span>
           </div>
-          <div className="flex items-center gap-1 text-xs text-[var(--text-primary)] font-medium">
-            <span>{(trade.currencySymbol || currencySymbol)}{Math.round(trade.amount * (trade.exchangeRate || exchangeRate))}</span>
-            {trade.type === 'UP' ? <span className="text-[#22c55e]">↑</span> : <span className="text-[#ff4757]">↓</span>}
+          <div className="text-[11px] text-text-secondary font-medium tracking-wide">
+            {formatWithOffset(trade.startTime, 'HH:mm', 0)}
           </div>
         </div>
       </div>
       
       <div className="flex flex-col items-end">
-        <span className={cn("text-[10px] mb-0.5 font-medium", isActive ? "text-[#3b82f6]" : "text-[var(--text-secondary)]")}>
-            {isActive ? `Ends in ${timeString}` : timeString}
-        </span>
-        <span className={cn("font-bold text-sm", profitColor)}>
+        <span className={cn("font-black text-sm", profitColor)}>
           {profitString}
+        </span>
+        <span className={cn("text-[10px] font-bold mt-0.5", isActive ? "text-[#3b82f6]" : "text-text-secondary/50")}>
+            {isActive ? timeString : 'Closed'}
         </span>
       </div>
     </div>
@@ -5673,7 +6269,9 @@ function ProfilePage({
   currency, 
   notifications, 
   onNotificationsClick,
-  timezoneOffset = 0
+  clientAds = [],
+  timezoneOffset = 0,
+  navigate
 }: { 
   onBack: () => void, 
   onSettings: () => void, 
@@ -5687,201 +6285,219 @@ function ProfilePage({
   currency: any,
   notifications: any[],
   onNotificationsClick: () => void,
-  timezoneOffset?: number
+  clientAds?: any[],
+  timezoneOffset?: number,
+  navigate: (path: string) => void
 }) {
   const unreadCount = notifications.filter(n => !n.isRead).length;
 
   return (
-    <div className="min-h-[100dvh] bg-[var(--bg-primary)] text-[var(--text-primary)] font-sans p-4 flex flex-col items-center">
-      <div className="w-full max-w-md">
-      {/* Header */}
-      <div className="flex justify-between items-center mb-8">
-        <button onClick={onBack} className="p-2 -ml-2 text-[var(--text-primary)]">
-          <ChevronLeft size={28} />
-        </button>
-        <button onClick={onNotificationsClick} className="p-2 -mr-2 text-[var(--text-primary)] relative">
-          <Bell size={24} />
-          {unreadCount > 0 && (
-            <div className="absolute top-2 right-2 w-4 h-4 bg-red-500 rounded-full border-2 border-[var(--bg-primary)] flex items-center justify-center text-[8px] font-black text-white">
-              {unreadCount}
-            </div>
-          )}
-        </button>
-      </div>
+    <div className="min-h-[100dvh] bg-bg-primary text-text-primary font-sans flex flex-col items-center overflow-x-hidden">
+      <div className="w-full max-w-lg pb-10">
+        
+        {/* Header Icons */}
+        <div className="flex justify-end items-center px-6 pt-6 gap-3">
+          <button onClick={onNotificationsClick} className="p-2 text-text-primary/90 hover:bg-bg-secondary rounded-full transition relative">
+            <Bell size={24} strokeWidth={2} />
+            {unreadCount > 0 && (
+              <div className="absolute top-2 right-2 w-4 h-4 bg-red-500 rounded-full border-2 border-[var(--color-bg-primary)] flex items-center justify-center text-[8px] font-black text-white">
+                {unreadCount}
+              </div>
+            )}
+          </button>
+          <button onClick={onBack} className="p-2 text-text-primary/90 hover:bg-bg-secondary rounded-full transition">
+            <X size={24} strokeWidth={2} />
+          </button>
+        </div>
 
-      {/* Profile Info */}
-      <div className="flex flex-col items-center mb-8">
-        <div className="relative">
-          <div className="w-24 h-24 rounded-full bg-[var(--bg-secondary)] flex items-center justify-center mb-4 border-2 border-[var(--border-color)] overflow-hidden shadow-2xl">
-            {user.photoURL ? (
+        {/* User Info Section */}
+        <div className="flex flex-col items-center mt-2 mb-8">
+          <div className="w-28 h-28 rounded-full bg-bg-tertiary flex items-center justify-center mb-5 overflow-hidden border border-border-color shadow-xl">
+            {user?.photoURL ? (
               <img src={user.photoURL} alt="Profile" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
             ) : (
-              <User size={48} className="text-[var(--text-primary)]" />
+              <User size={56} className="text-text-secondary" />
             )}
           </div>
-        </div>
-        <h1 className="text-2xl font-black mb-1">{user.displayName || user.email?.split('@')[0]}</h1>
-        <div className="flex items-center gap-2 text-[var(--text-secondary)] text-sm">
-          <span>{user.email}</span>
-          <Copy size={14} className="cursor-pointer hover:text-[var(--text-primary)] transition" />
-        </div>
-        
-        {(user.email?.toLowerCase() === 'tasmeaykhatun565@gmail.com') && (
+          <h1 className="text-3xl font-bold tracking-tight mb-2 text-text-primary">
+            {user?.displayName || user?.email?.split('@')[0] || 'User'}
+          </h1>
           <button 
-            onClick={onAdmin}
-            className="mt-4 bg-red-500/10 text-red-500 border border-red-500/20 px-6 py-2 rounded-full font-black text-xs flex items-center gap-2 hover:bg-red-500/20 transition uppercase tracking-widest"
+            onClick={() => {
+              const id = user?.uid?.slice(-10).toUpperCase() || '132783071';
+              navigator.clipboard.writeText(id);
+            }}
+            className="flex items-center gap-2 text-text-secondary text-[13px] font-medium tracking-wide hover:text-text-primary transition active:scale-95 px-3 py-1 bg-bg-secondary rounded-full"
           >
-            <Settings size={14} /> Admin Panel
+            ID {user.uid?.slice(-10).toUpperCase() || '132783071'} <Copy size={14} />
           </button>
-        )}
-      </div>
 
-      {/* Balance Card */}
-      <div className="bg-[var(--bg-secondary)] rounded-3xl p-6 mb-4 border border-[var(--border-color)] relative overflow-hidden">
-        <div className="flex items-center justify-between mb-4">
-          <span className="text-[var(--text-secondary)] text-xs font-black uppercase tracking-widest">Live Balance</span>
-          <div className="bg-emerald-500/10 text-emerald-500 px-2 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest border border-emerald-500/20">
-            Real Account
-          </div>
-        </div>
-        <div className="text-3xl font-black text-[var(--text-primary)] mb-6">
-          {currency.symbol}{(balance + bonusBalance).toFixed(2)}
-        </div>
-        
-        <div className="grid grid-cols-2 gap-3">
-          <div className="bg-[var(--bg-primary)] rounded-2xl p-3 border border-[var(--border-color)]">
-            <div className="text-[var(--text-secondary)] text-[10px] font-black uppercase tracking-widest mb-1">Real</div>
-            <div className="text-[var(--text-primary)] font-black">{currency.symbol}{balance.toFixed(2)}</div>
-          </div>
-          <div className="bg-[var(--bg-primary)] rounded-2xl p-3 border border-[var(--border-color)]">
-            <div className="text-[var(--text-secondary)] text-[10px] font-black uppercase tracking-widest mb-1">Bonus</div>
-            <div className="text-[var(--text-primary)] font-black">{currency.symbol}{bonusBalance.toFixed(2)}</div>
-          </div>
+          {(user.email?.toLowerCase() === 'tasmeaykhatun565@gmail.com') && (
+            <button 
+              onClick={onAdmin}
+              className="mt-6 bg-red-500/10 text-red-500 border border-red-500/20 px-8 py-2 rounded-full font-black text-xs transition uppercase tracking-widest hover:bg-red-500/20"
+            >
+              Admin Panel
+            </button>
+          )}
         </div>
 
-        {turnoverRequired > 0 && (
-          <div className="mt-6 pt-6 border-t border-[var(--border-color)]">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-[var(--text-secondary)] text-[10px] font-black uppercase tracking-widest">Turnover Progress</span>
-              <span className="text-[var(--text-primary)] text-[10px] font-black">
-                {((turnoverAchieved / turnoverRequired) * 100).toFixed(1)}%
-              </span>
-            </div>
-            <div className="h-1.5 bg-[var(--bg-primary)] rounded-full overflow-hidden mb-2">
-              <motion.div 
-                initial={{ width: 0 }}
-                animate={{ width: `${Math.min(100, (turnoverAchieved / turnoverRequired) * 100)}%` }}
-                className="h-full bg-blue-500 shadow-[0_0_10px_rgba(59,130,246,0.5)]"
-              />
-            </div>
-            <div className="flex justify-between text-[9px] font-bold uppercase tracking-tighter">
-              <span className="text-emerald-500">{currency.symbol}{turnoverAchieved.toFixed(2)} done</span>
-              <span className="text-[var(--text-secondary)]">Target: {currency.symbol}{turnoverRequired.toFixed(2)}</span>
+        {/* Promotional Stories */}
+        <div className="w-full mb-8">
+          <div className="flex overflow-x-auto gap-3 px-4 no-scrollbar pb-2">
+            {clientAds && clientAds.length > 0 && clientAds.map((ad, i) => (
+                <motion.div 
+                  key={ad.id || i}
+                  whileTap={{ scale: 0.96 }}
+                  onClick={() => ad.linkUrl && window.open(ad.linkUrl, '_blank')}
+                  className={`flex-shrink-0 w-[140px] h-[180px] rounded-[24px] bg-bg-secondary overflow-hidden relative cursor-pointer border-2 shadow-lg ${i === 0 ? 'border-[#4ade80]' : 'border-border-color'}`}
+                >
+                  {ad.imageUrl ? (
+                    <img src={ad.imageUrl} alt="" className="w-full h-full object-cover opacity-80" />
+                  ) : (
+                    <div className="w-full h-full bg-gradient-to-br from-white/5 to-white/10" />
+                  )}
+                  <div className="absolute inset-x-0 bottom-0 p-4 bg-gradient-to-t from-black/90 via-black/40 to-transparent">
+                    <p className="text-[12px] font-bold leading-tight text-text-primary/95 line-clamp-3">
+                      {ad.title}
+                    </p>
+                  </div>
+                </motion.div>
+              ))}
+          </div>
+        </div>
+
+        {/* Menu Grid - Using exact spacing from screenshot */}
+        <div className="px-4 space-y-3">
+          
+          {/* Account Status Block */}
+          <div className="bg-bg-secondary rounded-[18px] p-4 flex items-center justify-between border border-border-color group cursor-pointer hover:bg-bg-secondary transition">
+            <div className="flex items-center gap-4">
+              <div className="w-10 h-10 rounded-full bg-blue-500 flex items-center justify-center shadow-[0_0_20px_rgba(59,130,246,0.3)]">
+                <ChevronsUp size={18} className="text-text-primary" />
+              </div>
+              <span className="text-lg font-bold tracking-tight text-text-primary">Starter</span>
             </div>
           </div>
-        )}
-      </div>
 
-
-
-      {/* Action Grid */}
-      <div className="grid grid-cols-2 gap-3 mb-8">
-        <button 
-          onClick={() => setView('REWARDS')}
-          className="bg-[var(--bg-secondary)] rounded-3xl p-5 h-32 flex flex-col justify-between border border-[var(--border-color)] hover:bg-[var(--bg-tertiary)] transition group"
-        >
-          <div className="w-10 h-10 rounded-xl flex items-center justify-center transition group-hover:scale-110 bg-blue-500/20 text-blue-500">
-            <Gift size={20} />
+          {/* List Menu Items */}
+          <div className="bg-bg-secondary rounded-[20px] overflow-hidden border border-border-color divide-y divide-[var(--color-border-color)]">
+            {[
+              { label: 'Boost Cubes', icon: Box, onClick: () => navigate('/bonuses') },
+              { label: 'Referral Program', icon: LinkIcon, onClick: () => navigate('/affiliate') },
+            ].map((item, i) => (
+              <button 
+                key={i}
+                onClick={item.onClick}
+                className="w-full p-4 flex items-center justify-between hover:bg-bg-tertiary transition active:scale-[0.99] group"
+              >
+                <div className="flex items-center gap-4">
+                  <div className="w-10 h-10 rounded-xl bg-transparent flex items-center justify-center text-text-secondary group-hover:text-text-primary transition">
+                    <item.icon size={22} />
+                  </div>
+                  <span className="text-base font-medium text-text-primary transition">{item.label}</span>
+                </div>
+                <ChevronRight size={20} className="text-text-secondary group-hover:text-text-primary transition" />
+              </button>
+            ))}
           </div>
-          <span className="text-xs font-black uppercase tracking-widest">My Bonuses</span>
-        </button>
-        <button 
-          onClick={() => setView('REFERRAL')}
-          className="bg-[var(--bg-secondary)] rounded-3xl p-5 h-32 flex flex-col justify-between border border-[var(--border-color)] hover:bg-[var(--bg-tertiary)] transition group"
-        >
-          <div className="w-10 h-10 bg-[var(--bg-tertiary)] rounded-xl flex items-center justify-center text-[var(--text-primary)] transition group-hover:scale-110">
-            <Gift size={20} />
-          </div>
-          <span className="text-xs font-black uppercase tracking-widest">Referrals</span>
-        </button>
-      </div>
 
-      {/* Settings Button */}
-      <button onClick={onSettings} className="w-full bg-[var(--bg-secondary)] rounded-xl p-4 flex items-center justify-center gap-2 font-bold mt-4 border border-[var(--border-color)] hover:bg-[var(--bg-tertiary)] transition">
-        <Settings size={20} />
-        <span>Settings</span>
-      </button>
+          <div className="bg-bg-secondary rounded-[20px] overflow-hidden border border-border-color">
+            {[
+              { label: 'Settings', icon: Settings, onClick: onSettings },
+            ].map((item, i) => (
+              <button 
+                key={i}
+                onClick={item.onClick}
+                className="w-full p-4 flex items-center justify-between hover:bg-bg-tertiary transition active:scale-[0.99] group"
+              >
+                <div className="flex items-center gap-4">
+                  <div className="w-10 h-10 rounded-xl bg-transparent flex items-center justify-center text-text-secondary group-hover:text-text-primary transition">
+                    <item.icon size={22} />
+                  </div>
+                  <span className="text-base font-medium text-text-primary transition">{item.label}</span>
+                </div>
+                <ChevronRight size={20} className="text-text-secondary group-hover:text-text-primary transition" />
+              </button>
+            ))}
+          </div>
+        </div>
+
       </div>
     </div>
+
   );
 }
 
-function MarketPage() {
+function MarketPage({ hideHeader = false }: { hideHeader?: boolean }) {
   return (
-    <div className="h-full overflow-y-auto p-4 pb-20 bg-[var(--bg-primary)]">
-      <h1 className="text-lg font-bold mb-4 text-[var(--text-primary)] text-center">Market</h1>
+    <div className={cn("h-full overflow-y-auto pb-24 px-6 custom-scrollbar", hideHeader ? "" : "bg-[#0b0c0d] pt-10")}>
+      {!hideHeader && (
+        <div className="flex items-center gap-4 mb-8">
+          <h1 className="text-3xl font-black text-white">Market</h1>
+        </div>
+      )}
       
       {/* My Purchases & Rewards */}
-      <button className="w-full bg-[var(--bg-secondary)] rounded-xl p-4 flex items-center justify-between mb-6 active:scale-[0.98] transition border border-[var(--border-color)]">
-        <span className="font-bold text-[var(--text-primary)] text-sm">My Purchases & Rewards</span>
-        <ChevronRight size={20} className="text-[var(--text-secondary)]" />
+      <button className="w-full bg-[#1c1e22] rounded-3xl p-6 flex items-center justify-between mb-10 active:scale-[0.98] transition border border-white/[0.05] group shadow-2xl">
+        <div className="flex items-center gap-5">
+           <div className="p-4 bg-[#2a2d33] rounded-2xl">
+              <ShoppingBag size={28} className="text-blue-500" />
+           </div>
+           <div>
+             <span className="font-black text-white text-xl tracking-tight block">My Purchases & Rewards</span>
+             <span className="text-gray-400 text-sm mt-0.5 block font-medium">Manage your active tools</span>
+           </div>
+        </div>
+        <ChevronRight size={28} className="text-gray-500 group-hover:text-white" />
       </button>
 
       {/* Banners Carousel */}
-      <div className="flex gap-4 overflow-x-auto pb-4 mb-2 scrollbar-hide snap-x">
+      <div className="flex gap-6 overflow-x-auto pb-8 mb-4 scrollbar-hide snap-x">
         {/* Crypto Banner */}
-        <div className="min-w-[100%] bg-blue-600 rounded-2xl p-5 relative overflow-hidden h-32 flex flex-col justify-center snap-center">
-          <h3 className="font-bold text-xl text-white z-10 mb-1">Crypto</h3>
-          <p className="text-xs text-blue-100 z-10 max-w-[65%] leading-relaxed">Strategies, signals, and themes designed for trading on crypto assets</p>
-          <div className="absolute -right-4 -bottom-4 w-24 h-24 bg-blue-500/50 rounded-full blur-xl"></div>
-          {/* 3D Icon Placeholder */}
-          <div className="absolute right-2 top-1/2 -translate-y-1/2 w-20 h-20 opacity-80">
-             <div className="w-full h-full rounded-full border-[6px] border-blue-400/30 flex items-center justify-center">
-                <div className="w-12 h-12 rounded-full border-[6px] border-blue-300/50"></div>
-             </div>
+        <div className="min-w-[92%] md:min-w-[48%] bg-gradient-to-br from-blue-700 to-blue-900 rounded-3xl p-8 relative overflow-hidden h-56 flex flex-col justify-center snap-center shadow-2xl shadow-blue-900/40">
+          <h3 className="font-black text-4xl text-white z-10 mb-2">Crypto</h3>
+          <p className="text-base text-blue-100 z-10 max-w-[70%] leading-relaxed font-medium">Strategies, signals, and themes designed for trading on crypto assets</p>
+          <div className="absolute -right-6 -bottom-6 w-48 h-48 bg-white/10 rounded-full blur-3xl"></div>
+          <div className="absolute right-6 top-1/2 -translate-y-1/2 opacity-30">
+             <Bitcoin size={130} className="text-white" />
           </div>
         </div>
 
         {/* Forex Banner */}
-        <div className="min-w-[100%] bg-[var(--bg-secondary)] rounded-2xl p-5 relative overflow-hidden h-32 flex flex-col justify-center border border-[var(--border-color)] snap-center">
-          <h3 className="font-bold text-xl text-[var(--text-primary)] z-10 mb-1">Forex</h3>
-          <p className="text-xs text-[var(--text-secondary)] z-10 max-w-[65%] leading-relaxed">Professional tools to help you predict market trends</p>
-          <div className="absolute right-2 top-1/2 -translate-y-1/2 w-20 h-20 opacity-80">
-             <div className="w-full h-full rounded-full border-[6px] border-orange-500/20 flex items-center justify-center">
-                <span className="text-orange-500 font-bold text-xl">FX</span>
-             </div>
+        <div className="min-w-[92%] md:min-w-[48%] bg-gradient-to-br from-gray-800 to-gray-950 rounded-3xl p-8 relative overflow-hidden h-56 flex flex-col justify-center snap-center border border-white/[0.1] shadow-2xl">
+          <h3 className="font-black text-4xl text-white z-10 mb-2">Forex</h3>
+          <p className="text-base text-gray-300 z-10 max-w-[70%] leading-relaxed font-medium">Professional tools to help you predict market trends</p>
+          <div className="absolute right-6 top-1/2 -translate-y-1/2 opacity-20">
+             <TrendingUp size={130} className="text-white" />
           </div>
         </div>
       </div>
 
       {/* Pagination Dots */}
-      <div className="flex justify-center gap-1.5 mb-6">
-        <div className="w-1.5 h-1.5 rounded-full bg-[#22c55e]"></div>
-        <div className="w-1.5 h-1.5 rounded-full bg-[var(--bg-tertiary)]"></div>
+      <div className="flex justify-center gap-3 mb-10">
+        <div className="w-3 h-3 rounded-full bg-blue-500"></div>
+        <div className="w-3 h-3 rounded-full bg-gray-700"></div>
       </div>
 
-      {/* Large Cards List */}
-      <div className="space-y-4">
-        <MarketCard 
-          icon={<Shuffle size={40} className="text-[#22c55e]" />}
-          title="Strategies"
-          description="Ready-to-use sets of tools that make it easier to spot entry and exit points"
-        />
-        <MarketCard 
-          icon={<Compass size={40} className="text-[#22c55e]" />}
-          title="Indicators"
-          description="Tools that help analyze price movements and identify entry points"
-        />
-        <MarketCard 
-          icon={<Target size={40} className="text-[#22c55e]" />}
-          title="Signals"
-          description="Algorithm-based recommendations on when to open trades"
-        />
-        <MarketCard 
-          icon={<ChevronsUp size={40} className="text-[#22c55e]" />}
-          title="Trading Conditions"
-          description="Features that provide more beneficial trading conditions"
-        />
+      {/* Grid of Tools */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pb-12">
+        {[
+          { icon: <BadgeCheck size={36} />, title: "Trading Conditions", desc: "Features that provide more beneficial trading conditions" },
+          { icon: <Target size={36} />, title: "Signals", desc: "Algorithm-based recommendations on when to open trades" },
+          { icon: <Shuffle size={36} />, title: "Strategies", desc: "Ready-to-use sets of tools that make it easier to spot entry and exit points" },
+          { icon: <Compass size={36} />, title: "Indicators", desc: "Tools that help analyze price movements and identify entry points" },
+        ].map((item, idx) => (
+          <div key={idx} className="bg-[#1c1e22] rounded-3xl p-8 flex gap-6 items-center border border-white/[0.05] hover:border-blue-500/40 transition-all shadow-lg hover:shadow-blue-500/10">
+            <div className="p-6 bg-[#2a2d33] rounded-3xl text-blue-500">
+                {item.icon}
+            </div>
+            <div>
+                <h4 className="font-black text-white text-xl tracking-tight">{item.title}</h4>
+                <p className="text-gray-400 text-sm mt-2 leading-relaxed">{item.desc}</p>
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -5889,15 +6505,15 @@ function MarketPage() {
 
 function MarketCard({ icon, title, description }: { icon: React.ReactNode, title: string, description: string }) {
   return (
-    <div className="bg-[var(--bg-secondary)] rounded-2xl p-6 flex flex-col border border-[var(--border-color)] active:scale-[0.98] transition cursor-pointer min-h-[200px] relative overflow-hidden">
+    <div className="bg-bg-secondary rounded-2xl p-6 flex flex-col border border-border-color active:scale-[0.98] transition cursor-pointer min-h-[200px] relative overflow-hidden">
       <div className="absolute top-6 right-6">
-         <div className="w-24 h-24 rounded-[2rem] bg-[var(--bg-primary)] flex items-center justify-center border border-[var(--border-color)] shadow-inner">
+         <div className="w-24 h-24 rounded-[2rem] bg-bg-primary flex items-center justify-center border border-border-color shadow-inner">
             {icon}
          </div>
       </div>
       <div className="mt-auto max-w-[70%]">
-        <h3 className="text-lg font-bold text-[var(--text-primary)] mb-2">{title}</h3>
-        <p className="text-sm text-[var(--text-secondary)] leading-relaxed">{description}</p>
+        <h3 className="text-lg font-bold text-text-primary mb-2">{title}</h3>
+        <p className="text-sm text-text-secondary leading-relaxed">{description}</p>
       </div>
     </div>
   );
@@ -5914,7 +6530,8 @@ function RewardsPage({
   onApplyReward,
   balance,
   trades,
-  onBack
+  onBack,
+  hideHeader = false
 }: { 
   turnoverRequired: number,
   turnoverAchieved: number,
@@ -5924,167 +6541,93 @@ function RewardsPage({
   onApplyReward: (code: string) => void,
   balance: number,
   trades: any[],
-  onBack?: () => void
+  onBack?: () => void,
+  hideHeader?: boolean
 }) {
+  const { t } = useTranslation();
   const bonusProgress = turnoverRequired > 0 ? Math.min(100, (turnoverAchieved / turnoverRequired) * 100) : 0;
-  const remainingTurnover = Math.max(0, turnoverRequired - turnoverAchieved);
+  // const remainingTurnover = Math.max(0, turnoverRequired - turnoverAchieved);
 
   return (
-    <div className="h-full w-full overflow-y-auto p-4 pb-24 bg-[var(--bg-primary)]">
-      <div className="flex items-center gap-3 mb-6">
-        {onBack && (
-          <button onClick={onBack} className="md:hidden p-2 -ml-2 text-[var(--text-secondary)] hover:text-white transition-colors">
-            <ChevronLeft size={24} />
+    <div className={cn("h-full w-full overflow-y-auto pb-24 custom-scrollbar text-white", hideHeader ? "px-4 pt-4" : "bg-[#0b0c0d] px-6 pt-10")}>
+      {/* Header */}
+      {!hideHeader && (
+        <div className="flex items-center gap-4 mb-8">
+          <button onClick={onBack} className="text-white hover:text-gray-300">
+             <ChevronLeft size={28} />
           </button>
-        )}
-        <h1 className="text-2xl font-black text-[var(--text-primary)]">Bonuses</h1>
-      </div>
-
-      {/* Bonus Progress Section */}
-      {turnoverRequired > 0 && (
-        <div className="bg-[var(--bg-secondary)] rounded-3xl p-6 mb-8 border border-[var(--border-color)] relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/5 rounded-full blur-3xl -mr-16 -mt-16"></div>
-          <div className="flex justify-between items-start mb-6">
-            <div>
-              <h2 className="text-lg font-black text-[var(--text-primary)] mb-1 uppercase tracking-tight">Active Bonus</h2>
-              <p className="text-xs text-[var(--text-secondary)] font-medium">Complete turnover to unlock withdrawals</p>
-            </div>
-            <div className="bg-blue-500/10 text-blue-500 p-3 rounded-2xl">
-              <TrendingUp size={24} />
-            </div>
-          </div>
-
-          <div className="space-y-4">
-            <div className="flex justify-between items-end">
-              <div className="space-y-1">
-                <span className="text-[10px] text-[var(--text-secondary)] font-black uppercase tracking-widest">Progress</span>
-                <div className="text-2xl font-black text-[var(--text-primary)]">{bonusProgress.toFixed(1)}%</div>
-              </div>
-              <div className="text-right space-y-1">
-                <span className="text-[10px] text-[var(--text-secondary)] font-black uppercase tracking-widest">Remaining</span>
-                <div className="text-sm font-black text-blue-500">{currencySymbol}{remainingTurnover.toLocaleString()}</div>
-              </div>
-            </div>
-
-            <div className="h-3 bg-[var(--bg-primary)] rounded-full overflow-hidden border border-[var(--border-color)]">
-              <motion.div 
-                initial={{ width: 0 }}
-                animate={{ width: `${bonusProgress}%` }}
-                className="h-full bg-gradient-to-r from-blue-600 to-blue-400 rounded-full shadow-[0_0_15px_rgba(37,99,235,0.4)]"
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-4 pt-2">
-              <div className="bg-[var(--bg-primary)]/50 rounded-2xl p-3 border border-[var(--border-color)]">
-                <div className="text-[9px] text-[var(--text-secondary)] font-black uppercase tracking-widest mb-1">Required</div>
-                <div className="text-sm font-black text-[var(--text-primary)]">{currencySymbol}{turnoverRequired.toLocaleString()}</div>
-              </div>
-              <div className="bg-[var(--bg-primary)]/50 rounded-2xl p-3 border border-[var(--border-color)]">
-                <div className="text-[9px] text-[var(--text-secondary)] font-black uppercase tracking-widest mb-1">Achieved</div>
-                <div className="text-sm font-black text-green-500">{currencySymbol}{turnoverAchieved.toLocaleString()}</div>
-              </div>
-            </div>
-          </div>
+          <h1 className="text-2xl font-black text-white">Bonuses</h1>
         </div>
       )}
 
-      <div className="flex justify-between items-center mb-4">
-        <h2 className="font-bold text-lg text-[var(--text-primary)]">Bonus History</h2>
+      {/* Bonus History */}
+      <div className="mb-10">
+        <h2 className="text-lg font-black text-white mb-4">Bonus History</h2>
+        <div className="bg-[#1c1e22] rounded-3xl p-8 border border-white/[0.05] text-center">
+            <p className="text-gray-400 font-medium">No bonus history found.</p>
+        </div>
       </div>
 
-      <div className="space-y-3 mb-8">
-        {userBonuses.length === 0 ? (
-          <div className="bg-[var(--bg-secondary)] rounded-2xl p-6 border border-[var(--border-color)] text-center">
-            <p className="text-xs text-[var(--text-secondary)]">No bonus history found.</p>
-          </div>
-        ) : (
-          userBonuses.map((bonus, idx) => (
-            <div key={idx} className="bg-[var(--bg-secondary)] rounded-2xl p-4 border border-[var(--border-color)] flex justify-between items-center">
-              <div>
-                <div className="text-xs font-bold text-[var(--text-primary)] mb-0.5">
-                  {bonus.promoCode ? `Promo: ${bonus.promoCode}` : 'Deposit Bonus'}
+      {/* Tasks & Rewards */}
+      <div className="mb-10">
+        <div className="flex justify-between items-center mb-6">
+          <h2 className="text-lg font-black text-white">Tasks & Rewards</h2>
+          <span className="text-blue-500 font-bold text-sm cursor-pointer hover:text-blue-400">2 available <ChevronRight size={16} className="inline" /></span>
+        </div>
+        
+        <div className="flex gap-6 overflow-x-auto pb-4 snap-x">
+          {rewards.length === 0 ? (
+            <div className="w-full bg-[#1c1e22] rounded-3xl p-8 border border-white/[0.05] text-center">
+              <p className="text-gray-400 font-medium">No active tasks</p>
+            </div>
+          ) : (
+            rewards.slice(0, 2).map(reward => (
+              <div key={reward.id} className="min-w-[90%] md:min-w-[400px] bg-[#1c1e22] rounded-3xl p-6 border border-white/[0.05] snap-center flex flex-col justify-between">
+                <div>
+                   <div className="flex justify-between items-start mb-3">
+                     <span className="text-[10px] font-black px-3 py-1 rounded-full uppercase bg-blue-600 text-white">
+                       PROMO CODE
+                     </span>
+                     <span className="text-green-500 font-black text-sm bg-green-500/10 px-2 py-0.5 rounded">110%</span>
+                   </div>
+                   <p className="text-xl font-black text-white leading-tight mb-2">{reward.title}</p>
+                   <p className="text-sm text-gray-400 mb-6">{reward.description || 'Use this code for a bonus'}</p>
                 </div>
-                <div className="text-[10px] text-[var(--text-secondary)]">
-                  {new Date(bonus.submittedAt).toLocaleDateString()}
-                </div>
+                <button 
+                  onClick={() => onApplyReward(reward.value)}
+                  className="w-full bg-white text-black py-4 rounded-2xl text-sm font-black hover:bg-gray-200 transition"
+                >
+                  Apply Promo Code
+                </button>
               </div>
-              <div className="text-right">
-                <div className="text-sm font-black text-green-500">+{currencySymbol}{bonus.bonusAmount.toLocaleString()}</div>
-                <div className="text-[9px] text-[var(--text-secondary)] font-bold uppercase">Turnover: {currencySymbol}{bonus.turnoverRequired?.toLocaleString() || '0'}</div>
+            ))
+          )}
+        </div>
+      </div>
+
+      {/* Trading Stats */}
+      <div className="bg-[#1c1e22] rounded-3xl p-8 border border-white/[0.05]">
+         <h2 className="font-black text-lg text-white mb-6">My Trading Stats</h2>
+         <div className="grid grid-cols-2 gap-4">
+            <div className="bg-[#2a2d33] p-6 rounded-3xl">
+              <span className="text-gray-400 text-xs uppercase font-black block mb-2">Total Trades</span>
+              <div className="text-3xl font-black text-white">{trades.length}</div>
+            </div>
+            <div className="bg-[#2a2d33] p-6 rounded-3xl">
+              <span className="text-gray-400 text-xs uppercase font-black block mb-2">Win Rate</span>
+              <div className="text-3xl font-black text-green-500">
+                {trades.length > 0 ? ((trades.filter(t => t.status === 'WIN').length / trades.length) * 100).toFixed(0) : 0}%
               </div>
             </div>
-          ))
-        )}
-      </div>
-
-      <div className="flex justify-between items-center mb-4">
-        <h2 className="font-bold text-lg text-[var(--text-primary)]">Tasks & Rewards</h2>
-        <div className="flex items-center gap-1 text-xs text-[var(--text-secondary)]">
-          <span>{rewards.length} available</span>
-          <ChevronLeft className="rotate-180" size={14} />
-        </div>
-      </div>
-
-      {/* Horizontal Scroll */}
-      <div className="flex gap-3 overflow-x-auto pb-4 mb-6 -mx-4 px-4 scrollbar-hide">
-        {rewards.length === 0 ? (
-          <div className="w-full bg-[var(--bg-secondary)] rounded-2xl p-8 border border-[var(--border-color)] text-center">
-            <Gift className="mx-auto mb-3 text-[var(--text-secondary)] opacity-20" size={40} />
-            <p className="text-sm text-[var(--text-secondary)] font-medium">No active rewards at the moment.</p>
-          </div>
-        ) : (
-          rewards.map(reward => (
-            <div key={reward.id} className="min-w-[280px] bg-[var(--bg-secondary)] rounded-2xl p-6 border border-[var(--border-color)] relative group overflow-hidden">
-              <div className="flex justify-between items-start mb-4">
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2">
-                    <span className="text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-widest bg-blue-500 text-white">
-                      {reward.category}
-                    </span>
-                    {reward.badge && (
-                      <div className="bg-[#22c55e] text-black text-[10px] font-black px-2 py-1 rounded rotate-12 absolute right-4 top-4 shadow-[0_4px_12px_rgba(34,197,94,0.3)]">
-                        {reward.badge}
-                      </div>
-                    )}
-                  </div>
-                  <p className="text-sm font-bold pr-8 text-[var(--text-primary)]">{reward.title}</p>
-                </div>
-              </div>
-              <p className="text-xs text-[var(--text-secondary)] mb-6 line-clamp-2">{reward.description}</p>
-              <button 
-                onClick={() => onApplyReward(reward.value)}
-                className="w-full bg-[var(--bg-tertiary)] py-3 rounded-xl text-xs font-black text-[var(--text-primary)] hover:bg-[#343a46] transition border border-[var(--border-color)] active:scale-95"
-              >
-                {reward.category === 'Promo Code' ? 'Apply Promo Code' : 'Claim Reward'}
-              </button>
+            <div className="bg-[#2a2d33] p-6 rounded-3xl">
+              <span className="text-gray-400 text-xs uppercase font-black block mb-2">Wins</span>
+              <div className="text-3xl font-black text-green-500">{trades.filter(t => t.status === 'WIN').length}</div>
             </div>
-          ))
-        )}
-      </div>
-
-      <div className="flex justify-between items-center mb-4">
-        <h2 className="font-bold text-lg text-[var(--text-primary)]">My Trading Stats</h2>
-      </div>
-
-      <div className="grid grid-cols-2 gap-4 mb-8">
-        <div className="bg-[var(--bg-secondary)] p-4 rounded-2xl border border-[var(--border-color)]">
-          <span className="text-[10px] text-[var(--text-secondary)] uppercase font-black">Total Trades</span>
-          <div className="text-2xl font-black text-[var(--text-primary)] mt-1">{trades.length}</div>
-        </div>
-        <div className="bg-[var(--bg-secondary)] p-4 rounded-2xl border border-[var(--border-color)]">
-          <span className="text-[10px] text-[var(--text-secondary)] uppercase font-black">Win Rate</span>
-          <div className="text-2xl font-black text-green-500 mt-1">
-            {trades.length > 0 ? ((trades.filter(t => t.status === 'WIN').length / trades.length) * 100).toFixed(1) : 0}%
-          </div>
-        </div>
-        <div className="bg-[var(--bg-secondary)] p-4 rounded-2xl border border-[var(--border-color)]">
-          <span className="text-[10px] text-[var(--text-secondary)] uppercase font-black">Wins</span>
-          <div className="text-2xl font-black text-green-500 mt-1">{trades.filter(t => t.status === 'WIN').length}</div>
-        </div>
-        <div className="bg-[var(--bg-secondary)] p-4 rounded-2xl border border-[var(--border-color)]">
-          <span className="text-[10px] text-[var(--text-secondary)] uppercase font-black">Losses</span>
-          <div className="text-2xl font-black text-red-500 mt-1">{trades.filter(t => t.status === 'LOSS').length}</div>
-        </div>
+            <div className="bg-[#2a2d33] p-6 rounded-3xl">
+              <span className="text-gray-400 text-xs uppercase font-black block mb-2">Losses</span>
+              <div className="text-3xl font-black text-red-500">{trades.filter(t => t.status === 'LOSS').length}</div>
+            </div>
+         </div>
       </div>
     </div>
   );
@@ -6092,84 +6635,95 @@ function RewardsPage({
 
 
 function HelpPage({ 
-  onSupportClick, 
-  onHelpCenterClick, 
-  onEducationClick, 
-  onTradingTutorialsClick, 
-  supportSettings,
-  tutorials,
-  currencySymbol,
-  onClose 
+  onSupportClick,
+  onHelpCenterClick,
+  onEducationClick,
+  onTradingTutorialsClick,
+  onClose,
+  hideHeader = false
 }: { 
-  onSupportClick: () => void; 
-  onHelpCenterClick: () => void; 
-  onEducationClick: () => void; 
-  onTradingTutorialsClick: () => void; 
-  supportSettings: any;
-  tutorials: any[];
-  currencySymbol: string;
-  onClose: () => void; 
+  user?: any; 
+  socket?: any;
+  supportSettings?: any;
+  initialView?: string;
+  onSupportClick?: () => void; 
+  onHelpCenterClick?: () => void; 
+  onEducationClick?: () => void; 
+  onTradingTutorialsClick?: () => void; 
+  tutorials?: any[];
+  currencySymbol?: string;
+  onClose?: () => void;
+  hideHeader?: boolean;
 }) {
   return (
-    <div className="h-full w-full flex flex-col bg-[#0b0b0d] text-white">
+    <div className={cn("h-full w-full flex flex-col custom-scrollbar", !hideHeader ? "bg-[#0b0c0d] text-white" : "")}>
       {/* Header */}
-      <div className="flex justify-between items-center px-6 pt-10 pb-6">
-        <h2 className="text-2xl font-bold text-white">Help</h2>
-        <button 
-          onClick={onClose} 
-          className="text-white hover:text-white/70 transition p-2"
-        >
-          <X size={24} />
-        </button>
-      </div>
-
-      <div className="px-4 grid grid-cols-2 gap-4">
-        {/* Support */}
-        <div 
-          onClick={onSupportClick}
-          className="bg-[#1c1c1e] rounded-2xl p-5 flex flex-col gap-6 cursor-pointer hover:bg-[#252528] transition active:scale-[0.98] h-[160px] justify-between"
-        >
-           <HelpCircle size={24} className="text-white" />
-           <div className="flex flex-col gap-1">
-             <span className="font-bold text-[16px] text-white">Support</span>
-             <span className="text-[13px] text-gray-400 leading-tight">We're here for you<br />24/7</span>
-           </div>
+      {!hideHeader && (
+        <div className="flex justify-between items-center px-6 pt-10 pb-6">
+          <h2 className="text-[28px] font-bold text-white tracking-tight">Help</h2>
+          <button 
+            onClick={onClose} 
+            className="text-white hover:text-gray-300 transition"
+          >
+            <X size={24} strokeWidth={2} />
+          </button>
         </div>
+      )}
 
-        {/* Help Center */}
-        <div 
-          onClick={onHelpCenterClick}
-          className="bg-[#1c1c1e] rounded-2xl p-5 flex flex-col gap-6 cursor-pointer hover:bg-[#252528] transition active:scale-[0.98] h-[160px] justify-between"
-        >
-           <Info size={24} className="text-white" />
-           <div className="flex flex-col gap-1">
-             <span className="font-bold text-[16px] text-white">Help Center</span>
-             <span className="text-[13px] text-gray-400 leading-tight">Get to know<br />the platform</span>
-           </div>
-        </div>
+      <div className={cn("px-6 pb-10", hideHeader ? "pt-6" : "")}>
+        <div className="grid grid-cols-2 gap-4">
+          
+          <button 
+            onClick={onSupportClick}
+            className="bg-[#1a1c20] hover:bg-[#25282e] p-5 rounded-[24px] flex flex-col justify-between transition-colors w-full text-left aspect-square max-h-[170px]"
+          >
+            <div className="text-gray-200">
+              <HelpCircle size={22} strokeWidth={1.5} />
+            </div>
+            <div>
+              <h3 className="text-white font-bold text-[17px] mb-1.5 leading-none">Support</h3>
+              <p className="text-gray-400 text-[13px] leading-[1.3] font-medium pr-2">We're here for you<br/>24/7</p>
+            </div>
+          </button>
 
-        {/* Education */}
-        <div 
-          onClick={onEducationClick}
-          className="bg-[#1c1c1e] rounded-2xl p-5 flex flex-col gap-6 cursor-pointer hover:bg-[#252528] transition active:scale-[0.98] h-[160px] justify-between"
-        >
-           <GraduationCap size={24} className="text-white" />
-           <div className="flex flex-col gap-1">
-             <span className="font-bold text-[16px] text-white">Education</span>
-             <span className="text-[13px] text-gray-400 leading-tight">Expand your<br />knowledge</span>
-           </div>
-        </div>
+          <button 
+            onClick={onHelpCenterClick}
+            className="bg-[#1a1c20] hover:bg-[#25282e] p-5 rounded-[24px] flex flex-col justify-between transition-colors w-full text-left aspect-square max-h-[170px]"
+          >
+            <div className="text-gray-200">
+              <Info size={22} strokeWidth={1.5} />
+            </div>
+            <div>
+              <h3 className="text-white font-bold text-[17px] mb-1.5 leading-none">Help Center</h3>
+              <p className="text-gray-400 text-[13px] leading-[1.3] font-medium pr-2">Get to know<br/>the platform</p>
+            </div>
+          </button>
 
-        {/* Trading Tutorials */}
-        <div 
-          onClick={onTradingTutorialsClick}
-          className="bg-[#1c1c1e] rounded-2xl p-5 flex flex-col gap-6 cursor-pointer hover:bg-[#252528] transition active:scale-[0.98] h-[160px] justify-between"
-        >
-           <BarChart2 size={24} className="text-white" />
-           <div className="flex flex-col gap-1">
-             <span className="font-bold text-[16px] text-white">Trading Tutorials</span>
-             <span className="text-[13px] text-gray-400 leading-tight">Learn how to open<br />a trade</span>
-           </div>
+          <button 
+            onClick={onEducationClick}
+            className="bg-[#1a1c20] hover:bg-[#25282e] p-5 rounded-[24px] flex flex-col justify-between transition-colors w-full text-left aspect-square max-h-[170px]"
+          >
+            <div className="text-gray-200">
+              <GraduationCap size={22} strokeWidth={1.5} />
+            </div>
+            <div>
+              <h3 className="text-white font-bold text-[17px] mb-1.5 leading-none">Education</h3>
+              <p className="text-gray-400 text-[13px] leading-[1.3] font-medium pr-2">Expand your<br/>knowledge</p>
+            </div>
+          </button>
+
+          <button 
+            onClick={onTradingTutorialsClick}
+            className="bg-[#1a1c20] hover:bg-[#25282e] p-5 rounded-[24px] flex flex-col justify-between transition-colors w-full text-left aspect-square max-h-[170px]"
+          >
+            <div className="text-gray-200">
+              <BarChart2 size={22} strokeWidth={1.5} />
+            </div>
+            <div>
+              <h3 className="text-white font-bold text-[17px] mb-1.5 leading-none">Trading<br/>Tutorials</h3>
+              <p className="text-gray-400 text-[13px] leading-[1.3] font-medium pr-2 mt-1.5">Learn how to open<br/>a trade</p>
+            </div>
+          </button>
         </div>
       </div>
     </div>
@@ -6178,97 +6732,47 @@ function HelpPage({
 
 const DesktopSidebar = ({ 
   currentView, 
-  setView, 
+  navigate,
+  activeAccount,
   activeTradesCount,
   isHistoryOpen,
-  setIsHistoryOpen,
   isMarketOpen,
-  setIsMarketOpen,
   isRewardsOpen,
-  setIsRewardsOpen,
   isActivitiesOpen,
-  setIsActivitiesOpen,
   isLeaderboardOpen,
-  setIsLeaderboardOpen,
   isHelpOpen,
-  setIsHelpOpen,
   isAssetSelectorOpen,
-  setIsAssetSelectorOpen,
+  setActiveSidePanel,
   setIsProfileOpen,
   setIsPaymentsOpen,
   setIsAccountsSheetOpen
 }: { 
   currentView: string, 
-  setView: any, 
+  navigate: (path: string) => void,
+  activeAccount: string,
   activeTradesCount: number,
   isHistoryOpen: boolean,
-  setIsHistoryOpen: (v: boolean) => void,
   isMarketOpen: boolean,
-  setIsMarketOpen: (v: boolean) => void,
   isRewardsOpen: boolean,
-  setIsRewardsOpen: (v: boolean) => void,
   isActivitiesOpen: boolean,
-  setIsActivitiesOpen: (v: boolean) => void,
   isLeaderboardOpen: boolean,
-  setIsLeaderboardOpen: (v: boolean) => void,
   isHelpOpen: boolean,
-  setIsHelpOpen: (v: boolean) => void,
   isAssetSelectorOpen: boolean,
-  setIsAssetSelectorOpen: (v: boolean) => void,
+  setActiveSidePanel: (p: any) => void,
   setIsProfileOpen: (v: boolean) => void,
   setIsPaymentsOpen: (v: boolean) => void,
   setIsAccountsSheetOpen: (v: boolean) => void
 }) => {
   const { t } = useTranslation();
+  const tradePath = activeAccount === 'DEMO' ? '/trade/demo' : '/trade';
   
   const handleNavClick = (panelKey: string) => {
-    // If not in TRADING view, switch to TRADING first
-    if (currentView !== 'TRADING') {
-       setView('TRADING');
-    }
-    
-    // Close all panels first
-    const closeAll = () => {
-      setIsHistoryOpen(false);
-      setIsMarketOpen(false);
-      setIsRewardsOpen(false);
-      setIsActivitiesOpen(false);
-      setIsLeaderboardOpen(false);
-      setIsHelpOpen(false);
-      setIsAssetSelectorOpen(false);
-      setIsProfileOpen(false);
-      setIsPaymentsOpen(false);
-      setIsAccountsSheetOpen(false);
-    };
-
-    if (panelKey === 'TERMINAL') {
-      closeAll();
-    } else if (panelKey === 'TRADES') {
-      const target = !isHistoryOpen;
-      closeAll();
-      setIsHistoryOpen(target);
-    } else if (panelKey === 'MARKET') {
-      const target = !isActivitiesOpen;
-      closeAll();
-      setIsActivitiesOpen(target);
-    } else if (panelKey === 'LEADERBOARD') {
-      const target = !isLeaderboardOpen;
-      closeAll();
-      setIsLeaderboardOpen(target);
-    } else if (panelKey === 'REWARDS') {
-      const target = !isRewardsOpen;
-      closeAll();
-      setIsRewardsOpen(target);
-    } else if (panelKey === 'HELP') {
-      const target = !isHelpOpen;
-      closeAll();
-      setIsHelpOpen(target);
-    }
+    setActiveSidePanel(panelKey as any);
   };
 
   return (
-    <aside className="hidden md:flex flex-col w-20 border-r border-white/5 bg-[#121212] z-30 transition-all duration-300 items-center py-4">
-      <div className="mb-6 w-12 h-12 flex items-center justify-center cursor-pointer active:scale-95 transition overflow-hidden rounded-full border border-white/10 shadow-lg shadow-black/80 ring-1 ring-white/5">
+    <aside className="hidden md:flex flex-col w-20 border-r border-border-color bg-bg-secondary z-30 transition-all duration-300 items-center py-4">
+      <div className="mb-6 w-12 h-12 flex items-center justify-center cursor-pointer active:scale-95 transition overflow-hidden rounded-full border border-border-color shadow-lg shadow-black/80 ring-1 ring-white/5">
         <img 
           src="https://i.imghippo.com/files/Gtw3911Dmk.jpg" 
           alt="Onyx Elite Logo" 
@@ -6279,6 +6783,11 @@ const DesktopSidebar = ({
 
       <div className="flex flex-col gap-2 flex-1 w-full px-2">
         <SidebarNavButton 
+          icon={<BarChart2 size={20} />} 
+          label={t('nav.trade')} 
+          onClick={() => navigate(tradePath)} 
+        />
+        <SidebarNavButton 
           icon={<ArrowUpDown size={20} />} 
           label={t('nav.trades')} 
           active={isHistoryOpen} 
@@ -6288,12 +6797,18 @@ const DesktopSidebar = ({
         <SidebarNavButton 
           icon={<ShoppingBag size={20} />} 
           label="Market" 
-          active={isActivitiesOpen} 
+          active={isMarketOpen} 
           onClick={() => handleNavClick('MARKET')} 
         />
         <SidebarNavButton 
           icon={<Trophy size={20} />} 
-          label={t('nav.rewards')} 
+          label="Tournaments" 
+          active={isActivitiesOpen} 
+          onClick={() => handleNavClick('ACTIVITIES')} 
+        />
+        <SidebarNavButton 
+          icon={<Gift size={20} />} 
+          label="Rewards" 
           active={isRewardsOpen} 
           onClick={() => handleNavClick('REWARDS')} 
         />
@@ -6305,8 +6820,8 @@ const DesktopSidebar = ({
         />
       </div>
       
-      <div className="mt-auto pt-4 w-full flex flex-col items-center gap-1 text-[10px] text-white/40 font-mono">
-        <span className="font-bold text-white">3788</span>
+      <div className="mt-auto pt-4 w-full flex flex-col items-center gap-1 text-[10px] text-text-secondary/40 font-mono">
+        <span className="font-bold text-text-primary">3788</span>
         <span>online</span>
       </div>
     </aside>
@@ -6319,7 +6834,7 @@ const SidebarNavButton = ({ icon, label, active, onClick, count }: { icon: React
       onClick={onClick}
       className={cn(
         "relative flex flex-col items-center justify-center py-3 rounded-xl transition-all w-full select-none",
-        active ? "text-white" : "text-white/40 hover:text-white/80 hover:bg-white/5"
+        active ? "text-text-primary" : "text-text-secondary/40 hover:text-text-primary/80 hover:bg-bg-secondary"
       )}
     >
       <div className="relative mb-1">
@@ -6330,7 +6845,6 @@ const SidebarNavButton = ({ icon, label, active, onClick, count }: { icon: React
           </span>
         ) : null}
       </div>
-      <span className="text-[10px] font-medium tracking-wide">{label}</span>
       {active && (
         <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-blue-500 rounded-r-full" />
       )}
@@ -6341,10 +6855,10 @@ const SidebarNavButton = ({ icon, label, active, onClick, count }: { icon: React
 // ... existing DesktopTradePanel ...
 const PaymentsSidePanel = ({ onClose, ...props }: any) => {
   return (
-    <aside className="hidden md:flex flex-col w-80 border-r border-[var(--border-color)] bg-[var(--bg-primary)] p-4 overflow-y-auto z-20">
+    <aside className="hidden md:flex flex-col w-80 border-r border-border-color bg-bg-primary p-4 overflow-y-auto z-20">
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-lg font-bold">Payments</h2>
-        <button onClick={onClose} className="text-[var(--text-secondary)] hover:text-white">
+        <button onClick={onClose} className="text-text-secondary hover:text-text-primary">
           <X size={20} />
         </button>
       </div>
@@ -6355,7 +6869,7 @@ const PaymentsSidePanel = ({ onClose, ...props }: any) => {
 
 const HistorySidePanel = ({ onClose, trades, pendingOrders, currencySymbol, exchangeRate, onCancelPendingOrder, timezoneOffset, ...props }: any) => {
   return (
-    <aside className="hidden md:flex flex-col w-80 border-r border-[var(--border-color)] bg-[var(--bg-primary)] overflow-y-auto z-20 scrollbar-hide">
+    <aside className="hidden md:flex flex-col w-80 border-r border-border-color bg-bg-primary overflow-y-auto z-20 scrollbar-hide">
       <TradesPage 
         trades={trades}
         pendingOrders={pendingOrders}
@@ -6374,7 +6888,7 @@ const HistorySidePanel = ({ onClose, trades, pendingOrders, currencySymbol, exch
 
 const AssetSidePanel = ({ onClose, onSelect, setIsLoading, currentAssetId, marketAssets }: any) => {
   return (
-    <aside className="hidden md:flex flex-col w-80 border-r border-[var(--border-color)] bg-[var(--bg-primary)] z-20 overflow-hidden">
+    <aside className="hidden md:flex flex-col w-80 border-r border-border-color bg-bg-primary z-20 overflow-hidden">
       <AssetSelector 
         isOpen={true} 
         onClose={onClose} 
@@ -6389,10 +6903,10 @@ const AssetSidePanel = ({ onClose, onSelect, setIsLoading, currentAssetId, marke
 
 const MarketSidePanel = ({ onClose }: any) => {
   return (
-    <aside className="hidden md:flex flex-col w-80 border-r border-[var(--border-color)] bg-[var(--bg-primary)] p-4 overflow-y-auto z-20 scrollbar-hide">
+    <aside className="hidden md:flex flex-col w-80 border-r border-border-color bg-bg-primary p-4 overflow-y-auto z-20 scrollbar-hide">
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-xl font-bold">Market</h2>
-        <button onClick={onClose} className="text-[var(--text-secondary)] hover:text-white">
+        <button onClick={onClose} className="text-text-secondary hover:text-text-primary">
           <X size={20} />
         </button>
       </div>
@@ -6401,183 +6915,121 @@ const MarketSidePanel = ({ onClose }: any) => {
   );
 };
 
-const AccountsSidePanel = ({ accounts, activeAccount, onSelectAccount, onClose, onAddAccount, onDeposit, onWithdraw, onSetDemoBalance, currentDemoBalance }: any) => {
-  const [isEditingDemo, setIsEditingDemo] = useState(false);
-  const [editAmount, setEditAmount] = useState(currentDemoBalance !== undefined ? currentDemoBalance.toString() : '10000');
-  
+const AccountsSidePanel = ({ accounts, activeAccount, onSelectAccount, onClose, onAddAccount, onSetDemoBalance }: any) => {
+  const [showOptions, setShowOptions] = useState<string | null>(null);
+
+  const handleSetBalance = (id: string, currentBalance: number) => {
+    const newBalance = prompt("Enter new balance:", currentBalance.toString());
+    if (newBalance && !isNaN(Number(newBalance))) {
+      onSetDemoBalance(Number(newBalance));
+    }
+    setShowOptions(null);
+  };
+
   return (
-    <aside className="hidden md:flex flex-col w-80 border-r border-[var(--border-color)] bg-[var(--bg-primary)] p-4 overflow-y-auto z-20">
-      <div className="flex justify-between items-center mb-6">
-        <h2 className="text-xl font-bold">Accounts</h2>
-        <button onClick={onClose} className="text-[var(--text-secondary)] hover:text-white">
-          <X size={20} />
+    <aside className="hidden md:flex flex-col w-[400px] border-r border-border-color bg-bg-primary overflow-hidden z-20">
+      <div className="flex justify-between items-center px-6 pt-10 pb-6">
+        <h2 className="text-[32px] font-bold text-text-primary tracking-tight">Accounts</h2>
+        <button onClick={onClose} className="text-text-secondary hover:text-text-primary transition p-2">
+          <X size={32} strokeWidth={2} />
         </button>
       </div>
 
-       <div className="space-y-2">
+       <div className="flex-1 overflow-y-auto px-4 space-y-4 custom-scrollbar">
           {accounts.map((account: any) => {
               const isActive = activeAccount === account.id;
               return (
                   <div 
                     key={account.id} 
                     className={cn(
-                        "rounded-[16px] flex flex-col transition-colors",
-                        isActive ? "bg-[#252a30] p-4 border border-white/5" : "bg-transparent p-4 hover:bg-[var(--bg-secondary)] cursor-pointer"
+                        "rounded-2xl p-5 flex items-center justify-between transition-all cursor-pointer group active:scale-[0.98]",
+                        isActive ? "bg-bg-secondary border border-border-color" : "hover:bg-white/[0.03]"
                     )}
                     onClick={() => !isActive && onSelectAccount(account.id)}
                   >
-                     <div className="flex items-center justify-between">
-                         <div className="flex items-center gap-3">
-                             <div className="w-8 h-8 rounded-lg flex items-center justify-center text-xs relative overflow-hidden" 
-                               style={{ backgroundColor: account.type === 'DEMO' ? '#d97706' : '#059669' }}
-                             >
-                                 {account.type === 'DEMO' ? (
-                                    <span className="font-black text-white text-sm">Đ</span>
-                                 ) : account.currency === 'BDT' ? (
-                                    <div className="w-full h-full bg-[#059669] flex items-center justify-center relative">
-                                        <div className="w-3 h-3 rounded-full bg-red-500" />
-                                    </div>
-                                 ) : account.currency === 'USDT' || account.currency === 'USD' ? (
-                                    <span className="font-bold text-white text-[12px]">T</span>
-                                 ) : (
-                                    <span className="font-bold text-white text-[12px]">{account.symbol}</span>
-                                 )}
-                                 
-                                 {isActive && (
-                                     <div className="absolute top-0 right-0 w-2.5 h-2.5 rounded-full bg-green-500 translate-x-[2px] -translate-y-[2px] border-[2px] border-[#252a30]" />
-                                 )}
-                             </div>
-                             <div className="flex flex-col">
-                                 <span className="text-sm font-medium text-[var(--text-primary)]">
-                                    {account.name}
-                                 </span>
-                                 <span className="text-sm font-medium text-[var(--text-primary)]">
-                                     {account.id === 'DEMO' ? 'Đ' : account.symbol}
-                                     {account.balance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                 </span>
-                             </div>
-                         </div>
-                         {isActive ? (
-                             <button className="text-[var(--text-secondary)] hover:text-white p-1">
-                                 <MoreVertical size={16} />
-                             </button>
-                         ) : (
-                             <div />
-                         )}
+                     <div className="flex items-center gap-4">
+                        {/* Icon based on account type */}
+                        <div className="relative">
+                          {account.id === 'DEMO' ? (
+                            <div className="w-10 h-10 rounded-xl bg-[#f59e0b] flex items-center justify-center border-2 border-white/20 shadow-lg">
+                              <span className="text-text-primary font-black text-lg">Đ</span>
+                            </div>
+                          ) : (
+                            <div className="w-10 h-10 rounded-xl bg-bg-secondary border border-border-color flex items-center justify-center shadow-lg relative overflow-hidden">
+                               {/* BDT flag-like icon */}
+                               <div className="w-6 h-[18px] bg-[#006a4e] rounded-sm flex items-center justify-center">
+                                  <div className="w-2.5 h-2.5 rounded-full bg-[#f42a41]" />
+                               </div>
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="flex flex-col">
+                           <span className="text-text-secondary font-bold text-sm leading-tight mb-1">
+                              {account.id === 'DEMO' ? 'Demo account' : account.name}
+                           </span>
+                           <span className="text-text-primary font-bold text-[18px] tracking-tight">
+                               {account.symbol}{account.balance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                           </span>
+                        </div>
                      </div>
-                     {isActive && (
-                         <div className="flex gap-2 mt-4">
-                            {account.id === 'DEMO' ? (
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setEditAmount(account.balance.toString());
-                                    setIsEditingDemo(true);
-                                  }}
-                                  className="flex-1 bg-white/10 text-white py-2 rounded-xl text-xs font-bold hover:bg-white/20 transition-colors flex items-center justify-center gap-2"
+                     
+                     <div className="flex items-center gap-2 relative">
+                        <MoreVertical 
+                          size={24} 
+                          className="text-text-secondary group-hover:text-text-primary transition cursor-pointer" 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setShowOptions(showOptions === account.id ? null : account.id);
+                          }}
+                        />
+                        {showOptions === account.id && account.id === 'DEMO' && (
+                            <div className="absolute right-0 top-full bg-bg-secondary border border-border-color rounded-xl p-2 z-50">
+                                <button 
+                                  onClick={() => handleSetBalance(account.id, account.balance)}
+                                  className="text-sm font-bold text-text-primary hover:text-white whitespace-nowrap"
                                 >
-                                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path></svg>
-                                  Edit Balance
+                                    Set balance
                                 </button>
-                            ) : (
-                                <>
-                                  <button onClick={onWithdraw} className="flex-1 bg-white/10 text-white py-2 rounded-xl text-xs font-bold hover:bg-white/20 transition-colors">
-                                      Withdraw
-                                  </button>
-                                  <button onClick={onDeposit} className="flex-1 bg-[#22c55e] text-black py-2 rounded-xl text-xs font-bold hover:bg-[#1ea851] transition-colors shadow-[0_0_15px_rgba(34,197,94,0.3)]">
-                                      Deposit
-                                  </button>
-                                </>
-                            )}
-                         </div>
-                     )}
+                            </div>
+                        )}
+                     </div>
                   </div>
               );
           })}
-       </div>
 
-       <button onClick={onAddAccount} className="flex items-center gap-2 mt-6 text-[var(--text-primary)] hover:text-[#22c55e] transition text-sm font-bold pl-4">
-           <Plus size={16} /> Add Account
-       </button>
-       
-      <AnimatePresence>
-        {isEditingDemo && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
-              onClick={() => setIsEditingDemo(false)}
-            />
-            <motion.div
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
-              className="relative w-full max-w-sm bg-[var(--bg-primary)] rounded-2xl border border-[var(--border-color)] overflow-hidden shadow-2xl"
-            >
-              <div className="p-5 text-left">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-lg font-bold text-white">Set Demo Balance</h3>
-                  <button onClick={() => setIsEditingDemo(false)} className="text-[var(--text-secondary)] hover:text-white transition">
-                    <X size={20} />
-                  </button>
-                </div>
-                
-                <div className="space-y-4">
-                  <div>
-                    <label className="text-xs font-medium text-[var(--text-secondary)] mb-1 block uppercase tracking-wider">New Balance</label>
-                    <div className="relative">
-                      <span className="absolute left-3 shadow outline-none top-1/2 -translate-y-1/2 text-white/50 cursor-default">$</span>
-                      <input 
-                        type="number" 
-                        value={editAmount}
-                        onChange={(e) => setEditAmount(e.target.value)}
-                        className="w-full bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-xl py-3 pl-8 pr-4 text-white font-mono focus:border-blue-500 focus:outline-none transition"
-                        placeholder="10000"
-                      />
-                    </div>
-                  </div>
-                  
-                  <button 
-                    onClick={() => {
-                      const amount = parseFloat(editAmount);
-                      if (!isNaN(amount) && amount >= 0) {
-                        onSetDemoBalance && onSetDemoBalance(amount);
-                        setIsEditingDemo(false);
-                      }
-                    }}
-                    className="w-full bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white font-bold py-3 rounded-xl transition active:scale-[0.98] shadow-lg shadow-blue-500/20"
-                  >
-                    Save Balance
-                  </button>
-                </div>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
+          {/* Add Account Button */}
+          <button 
+            onClick={() => onAddAccount()}
+            className="w-full mt-2 group flex items-center gap-4 px-6 py-5 rounded-2xl transition hover:bg-white/[0.03] active:scale-[0.98]"
+          >
+            <div className="w-10 h-10 flex items-center justify-center text-text-secondary group-hover:text-text-primary transition">
+               <Plus size={32} strokeWidth={2} />
+            </div>
+            <span className="text-[17px] font-bold text-text-primary transition">Add Account</span>
+          </button>
+       </div>
     </aside>
   );
 };
 
-const ProfileSidePanel = ({ user, balance, bonusBalance, currency, onSettings, onAdmin, notifications, onNotificationsClick, turnoverRequired, turnoverAchieved, onClose, setView }: any) => {
+const ProfileSidePanel = ({ user, balance, bonusBalance, currency, onSettings, onAdmin, notifications, onNotificationsClick, turnoverRequired, turnoverAchieved, onClose, setView, onDeposit }: any) => {
   const unreadCount = notifications.filter((n: any) => !n.isRead).length;
 
   return (
-    <aside className="hidden md:flex flex-col w-[360px] border-r border-[#2a2b30] bg-[#121212] p-6 overflow-y-auto z-20">
+    <aside className="hidden md:flex flex-col w-[360px] border-r border-border-color bg-bg-primary p-6 overflow-y-auto z-20">
       <div className="flex justify-between items-center mb-8">
-        <h2 className="text-xl font-bold tracking-tight">Profile</h2>
+        <h2 className="text-xl font-bold tracking-tight text-text-primary">Profile</h2>
         <div className="flex items-center gap-3">
-          <button onClick={onNotificationsClick} className="p-2 -mr-2 text-gray-400 relative hover:text-white transition">
+          <button onClick={onNotificationsClick} className="p-2 -mr-2 text-text-secondary relative hover:text-text-primary transition">
              <Bell size={20} />
              {unreadCount > 0 && (
-               <div className="absolute top-1 right-2 w-4 h-4 bg-red-500 rounded-full border-2 border-[#121212] flex items-center justify-center text-[9px] font-black text-white">
+               <div className="absolute top-1 right-2 w-4 h-4 bg-red-500 rounded-full border-2 border-[var(--color-bg-primary)] flex items-center justify-center text-[9px] font-black text-white">
                  {unreadCount}
                </div>
              )}
           </button>
-          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-full bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white transition">
+          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-full bg-bg-secondary hover:bg-bg-tertiary text-text-secondary hover:text-text-primary transition">
             <X size={16} />
           </button>
         </div>
@@ -6586,20 +7038,20 @@ const ProfileSidePanel = ({ user, balance, bonusBalance, currency, onSettings, o
       {/* Profile Info */}
       <div className="flex items-center gap-5 mb-8">
         <div className="relative">
-          <div className="w-16 h-16 rounded-full bg-[#1b1c21] flex items-center justify-center border border-white/10 overflow-hidden shadow-xl">
-            {user.photoURL ? (
+          <div className="w-16 h-16 rounded-full bg-bg-secondary flex items-center justify-center border border-border-color overflow-hidden shadow-xl">
+            {user?.photoURL ? (
               <img src={user.photoURL} alt="Profile" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
             ) : (
-              <User size={24} className="text-gray-400" />
+              <User size={24} className="text-text-secondary" />
             )}
           </div>
         </div>
         <div className="flex flex-col">
-           <h1 className="text-[17px] font-bold mb-0.5 tracking-tight">{user.displayName || user.email?.split('@')[0]}</h1>
-           <div className="flex items-center gap-2 text-gray-500 text-[13px] font-medium tracking-wide">
-             <span>{user.email}</span>
+           <h1 className="text-[17px] font-bold mb-0.5 tracking-tight text-text-primary">{user?.displayName || user?.email?.split('@')[0]}</h1>
+           <div className="flex items-center gap-2 text-text-secondary text-[13px] font-medium tracking-wide">
+             <span>{user?.email}</span>
            </div>
-           {(user.email?.toLowerCase() === 'tasmeaykhatun565@gmail.com') && (
+           {(user?.email?.toLowerCase() === 'tasmeaykhatun565@gmail.com') && (
              <button 
                onClick={onAdmin}
                className="mt-2 w-fit bg-red-500/10 text-red-500 border border-red-500/20 px-3 py-1 rounded-md font-bold text-[10px] flex items-center gap-1.5 hover:bg-red-500/20 transition uppercase tracking-widest"
@@ -6611,37 +7063,37 @@ const ProfileSidePanel = ({ user, balance, bonusBalance, currency, onSettings, o
       </div>
 
       {/* Balance Card */}
-      <div className="bg-[#1b1c21] rounded-2xl p-5 mb-5 border border-white/5 relative overflow-hidden">
+      <div className="bg-bg-secondary rounded-2xl p-5 mb-5 border border-border-color relative overflow-hidden">
         <div className="flex items-center justify-between mb-4">
-          <span className="text-gray-500 text-[11px] font-bold uppercase tracking-widest">Live Balance</span>
+          <span className="text-text-secondary text-[11px] font-bold uppercase tracking-widest">Live Balance</span>
           <div className="bg-emerald-500/10 text-emerald-500 px-2.5 py-1 rounded font-bold text-[10px] uppercase tracking-wider border border-emerald-500/20">
             Real Account
           </div>
         </div>
-        <div className="text-3xl font-black text-white mb-6 tabular-nums tracking-tight">
+        <div className="text-3xl font-black text-text-primary mb-6 tabular-nums tracking-tight">
           {currency.symbol}{(balance + bonusBalance).toFixed(2)}
         </div>
         
         <div className="grid grid-cols-2 gap-3">
-          <div className="bg-[#121212] rounded-xl p-3 border border-white/5">
-            <div className="text-gray-500 text-[10px] font-bold uppercase tracking-widest mb-1.5">Real</div>
-            <div className="text-white font-bold text-sm tracking-wide">{currency.symbol}{balance.toFixed(2)}</div>
+          <div className="bg-bg-primary rounded-xl p-3 border border-border-color">
+            <div className="text-text-secondary text-[10px] font-bold uppercase tracking-widest mb-1.5">Real</div>
+            <div className="text-text-primary font-bold text-sm tracking-wide">{currency.symbol}{balance.toFixed(2)}</div>
           </div>
-          <div className="bg-[#121212] rounded-xl p-3 border border-white/5">
-            <div className="text-gray-500 text-[10px] font-bold uppercase tracking-widest mb-1.5">Bonus</div>
-            <div className="text-white font-bold text-sm tracking-wide">{currency.symbol}{bonusBalance.toFixed(2)}</div>
+          <div className="bg-bg-primary rounded-xl p-3 border border-border-color">
+            <div className="text-text-secondary text-[10px] font-bold uppercase tracking-widest mb-1.5">Bonus</div>
+            <div className="text-text-primary font-bold text-sm tracking-wide">{currency.symbol}{bonusBalance.toFixed(2)}</div>
           </div>
         </div>
 
         {turnoverRequired > 0 && (
-          <div className="mt-5 pt-5 border-t border-white/5 relative z-10">
+          <div className="mt-5 pt-5 border-t border-border-color relative z-10">
             <div className="flex items-center justify-between mb-2.5">
-              <span className="text-gray-400 text-[10px] font-bold uppercase tracking-widest">Turnover Progress</span>
+              <span className="text-text-secondary text-[10px] font-bold uppercase tracking-widest">Turnover Progress</span>
               <span className="text-emerald-400 text-[11px] font-bold tracking-wide">
                 {((turnoverAchieved / Math.max(1, turnoverRequired)) * 100).toFixed(1)}%
               </span>
             </div>
-            <div className="h-2 bg-[#121212] rounded-full overflow-hidden mb-2.5 shadow-inner">
+            <div className="h-2 bg-bg-primary rounded-full overflow-hidden mb-2.5 shadow-inner">
               <motion.div 
                 initial={{ width: 0 }}
                 animate={{ width: `${Math.min(100, (turnoverAchieved / Math.max(1, turnoverRequired)) * 100)}%` }}
@@ -6650,36 +7102,46 @@ const ProfileSidePanel = ({ user, balance, bonusBalance, currency, onSettings, o
             </div>
             <div className="flex justify-between text-[10px] font-bold tracking-wide">
               <span className="text-emerald-500/80">{currency.symbol}{turnoverAchieved.toFixed(2)} done</span>
-              <span className="text-gray-500">Target: {currency.symbol}{turnoverRequired.toFixed(2)}</span>
+              <span className="text-text-secondary">Target: {currency.symbol}{turnoverRequired.toFixed(2)}</span>
             </div>
           </div>
         )}
       </div>
+      
+      <button 
+        onClick={onDeposit}
+        className="w-full bg-[#00ff5f] hover:bg-[#00e655] transition-all rounded-2xl py-4 flex items-center justify-center gap-3 text-black font-black text-lg shadow-[0_10px_30px_rgba(0,255,95,0.25)] active:scale-[0.98] mt-6 mb-2 group shrink-0"
+      >
+        <div className="w-10 h-10 bg-black/10 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform">
+          <Wallet size={22} strokeWidth={2.5} />
+        </div>
+        <span className="uppercase tracking-widest text-[16px]">Deposit Now</span>
+      </button>
 
       {/* Action Grid */}
       <div className="grid grid-cols-2 gap-3 mb-5 mt-auto">
         <button 
           onClick={() => { onClose(); if (setView) setView('REWARDS'); }}
-          className="bg-[#1b1c21] rounded-2xl p-4 flex flex-col items-start gap-4 border border-white/5 hover:bg-[#25262c] transition group shadow-sm"
+          className="bg-bg-secondary rounded-2xl p-4 flex flex-col items-start gap-4 border border-border-color hover:bg-bg-tertiary transition group shadow-sm"
         >
           <div className="w-10 h-10 rounded-[10px] flex items-center justify-center transition-transform group-hover:scale-105 bg-emerald-500/10 text-emerald-500">
             <Gift size={18} />
           </div>
-          <span className="text-[11px] font-bold uppercase tracking-widest text-gray-300">Bonuses</span>
+          <span className="text-[11px] font-bold uppercase tracking-widest text-text-secondary">Bonuses</span>
         </button>
         <button 
           onClick={() => { onClose(); if (setView) setView('REFERRAL'); }}
-          className="bg-[#1b1c21] rounded-2xl p-4 flex flex-col items-start gap-4 border border-white/5 hover:bg-[#25262c] transition group shadow-sm"
+          className="bg-bg-secondary rounded-2xl p-4 flex flex-col items-start gap-4 border border-border-color hover:bg-bg-tertiary transition group shadow-sm"
         >
           <div className="w-10 h-10 rounded-[10px] flex items-center justify-center transition-transform group-hover:scale-105 bg-indigo-500/10 text-indigo-500">
             <Users size={18} />
           </div>
-          <span className="text-[11px] font-bold uppercase tracking-widest text-gray-300">Referrals</span>
+          <span className="text-[11px] font-bold uppercase tracking-widest text-text-secondary">Referrals</span>
         </button>
       </div>
 
-      <button onClick={onSettings} className="w-full bg-[#1b1c21] rounded-xl p-3.5 flex items-center justify-center gap-2.5 font-bold border border-white/5 hover:bg-[#25262c] transition text-sm tracking-wide shadow-sm">
-        <Settings size={16} className="text-gray-400" />
+      <button onClick={onSettings} className="w-full bg-bg-secondary rounded-xl p-3.5 flex items-center justify-center gap-2.5 font-bold border border-border-color hover:bg-bg-tertiary transition text-sm tracking-wide shadow-sm text-text-primary">
+        <Settings size={16} className="text-text-secondary" />
         <span>Settings</span>
       </button>
     </aside>
@@ -6690,33 +7152,39 @@ const DesktopTradePanel = ({
   investment, setInvestment, currency, tradeMode, setTradeMode, timerDuration, setTimerDuration, clockOffset, setClockOffset, getExpirationTime, timezoneOffset, handleTrade, potentialProfit, displayCurrencySymbol, setIsPendingOrderSheetOpen, selectedAsset, isFrozen, isAssetSelectorOpen, setIsAssetSelectorOpen, closeAllPanels, isTradingEnabled
 }: any) => {
   return (
-    <aside className="hidden md:flex flex-col w-72 border-l border-white/5 bg-[#121212] p-4 overflow-y-auto scrollbar-hide z-20 relative">
-      {!isTradingEnabled && (
-        <div className="absolute inset-0 z-50 bg-[#121212]/80 backdrop-blur-md flex flex-col items-center justify-center p-6 text-center">
-           <div className="w-16 h-16 bg-white/5 rounded-2xl flex items-center justify-center mb-6 border border-white/10">
-              <Lock size={32} className="text-white/40" />
+    <aside className="hidden md:flex flex-col w-72 border-l border-border-color bg-bg-primary p-4 overflow-y-auto scrollbar-hide z-20 relative">
+      {(!isTradingEnabled || isFrozen) && (
+        <div className="absolute inset-0 z-50 bg-bg-primary/95 backdrop-blur-xl flex flex-col items-center justify-center p-8 text-center animate-in fade-in duration-500">
+           <div className="w-24 h-24 bg-white/[0.03] rounded-[32px] flex items-center justify-center mb-8 border border-border-color relative shadow-2xl">
+              <div className="absolute inset-0 bg-bg-secondary blur-2xl rounded-full" />
+              <Lock size={42} className="text-text-secondary relative z-10" />
            </div>
-           <h3 className="text-white font-bold text-lg mb-2">Trading is closed</h3>
-           <p className="text-gray-500 text-xs mb-8 leading-relaxed">
-             The market is currently closed for maintenance or scheduled break. 
-             You can explore assets available for trading in the menu.
+           <h3 className="text-text-primary font-black text-xl mb-2 tracking-tight uppercase">Trading is closed</h3>
+           <p className="text-text-secondary text-[13px] mb-10 leading-relaxed font-medium">
+             {new Date().getDay() === 0 || new Date().getDay() === 6 
+               ? "Market is closed for the weekend. Trading will resume on Monday."
+               : "This market is currently closed for maintenance or scheduled break."}
+             <br />
+             You can explore other assets that are still open for trading.
            </p>
            <button 
              onClick={() => setIsAssetSelectorOpen(true)}
-             className="w-full py-3.5 bg-white/5 hover:bg-white/10 text-white font-bold text-[13px] rounded-xl border border-white/10 transition flex items-center justify-center gap-2"
+             className="w-full h-14 bg-bg-secondary border border-border-color shadow-xl rounded-2xl flex items-center justify-between px-6 active:scale-[0.98] transition-transform"
            >
-             <span>Explore Assets</span>
-             <ChevronRight size={16} />
+             <span className="text-text-primary font-extrabold text-[15px]">Enable Orders</span>
+             <div className="w-8 h-8 rounded-full bg-bg-secondary flex items-center justify-center">
+                <Clock size={16} className="text-text-secondary" />
+             </div>
            </button>
         </div>
       )}
       <div className="space-y-4">
         {/* Amount Section */}
         <div className="space-y-2">
-           <div className="bg-[#1b1c21] border border-white/5 rounded-xl p-3 flex flex-col group focus-within:border-emerald-500/50 transition-colors">
+           <div className="bg-bg-secondary border border-border-color rounded-xl p-3 flex flex-col group focus-within:border-emerald-500/50 transition-colors">
              <div className="text-[11px] text-gray-500 font-bold uppercase tracking-widest mb-1.5">Investment Amount</div>
              <div className="flex items-center gap-2">
-               <span className="text-white/30 font-bold text-lg">{displayCurrencySymbol}</span>
+               <span className="text-text-secondary/30 font-bold text-lg">{displayCurrencySymbol}</span>
                <input 
                  type="number" 
                  inputMode="numeric"
@@ -6729,7 +7197,7 @@ const DesktopTradePanel = ({
                     const min = currency.code === 'BDT' ? 20 : 1;
                     if (investment < min) setInvestment(min);
                  }}
-                 className="w-full bg-transparent text-left font-black text-xl focus:outline-none min-w-0 text-white placeholder:text-white/10"
+                 className="w-full bg-transparent text-left font-black text-xl focus:outline-none min-w-0 text-text-primary placeholder:text-text-secondary/10"
                  placeholder="0.00"
                />
              </div>
@@ -6740,13 +7208,13 @@ const DesktopTradePanel = ({
                   const min = currency.code === 'BDT' ? 20 : 1;
                   setInvestment(Math.max(min, Math.floor(investment - 10)));
                }}
-               className="flex-1 h-10 bg-[#1b1c21] hover:bg-[#25262c] text-white/50 hover:text-white rounded-xl flex items-center justify-center transition border border-white/5 active:scale-95 shadow-sm"
+               className="flex-1 h-10 bg-bg-secondary hover:bg-bg-tertiary text-text-secondary/50 hover:text-white rounded-xl flex items-center justify-center transition border border-border-color active:scale-95 shadow-sm"
              >
                <Minus size={18} strokeWidth={2.5} />
              </button>
              <button 
                onClick={() => setInvestment((investment || 0) + 10)}
-               className="flex-1 h-10 bg-[#1b1c21] hover:bg-[#25262c] text-white/50 hover:text-white rounded-xl flex items-center justify-center transition border border-white/5 active:scale-95 shadow-sm"
+               className="flex-1 h-10 bg-bg-secondary hover:bg-bg-tertiary text-text-secondary/50 hover:text-white rounded-xl flex items-center justify-center transition border border-border-color active:scale-95 shadow-sm"
              >
                <Plus size={18} strokeWidth={2.5} />
              </button>
@@ -6755,11 +7223,11 @@ const DesktopTradePanel = ({
 
         {/* Duration Section */}
         <div className="space-y-2">
-           <div className="bg-[#1b1c21] rounded-lg p-3 cursor-pointer">
+           <div className="bg-bg-secondary rounded-lg p-3 cursor-pointer">
              <div className="text-[11px] text-gray-400 font-medium tracking-wide mb-1">Duration</div>
-             <div className="flex items-baseline gap-3 text-white">
-                <span className="font-bold text-lg">
-                  {tradeMode === 'CLOCK' ? formatWithOffset(getExpirationTime(), 'HH:mm', timezoneOffset) : `${Math.floor(timerDuration / 60)} min`}
+             <div className="flex items-baseline gap-3 text-text-primary">
+                <span className="font-bold text-lg whitespace-nowrap">
+                  {tradeMode === 'CLOCK' ? formatWithOffset(getExpirationTime(), 'HH:mm', timezoneOffset) : (timerDuration < 60 ? `${timerDuration} sec` : `${Math.floor(timerDuration / 60)} min`)}
                 </span>
                 {tradeMode === 'CLOCK' && (
                   <span className="text-[11px] text-gray-500 font-medium">{formatWithOffset(getExpirationTime(), 'MM/dd', timezoneOffset)}</span>
@@ -6768,14 +7236,28 @@ const DesktopTradePanel = ({
            </div>
            <div className="flex items-center gap-2">
              <button 
-               onClick={() => tradeMode === 'CLOCK' ? setClockOffset(Math.max(1, clockOffset - 1)) : setTimerDuration(Math.max(60, timerDuration - 60))}
-               className="flex-1 h-8 bg-[#1b1c21] hover:bg-[#25262c] text-white/60 hover:text-white rounded-lg flex items-center justify-center transition"
+               onClick={() => {
+                  if (tradeMode === 'CLOCK') setClockOffset(Math.max(1, clockOffset - 1));
+                  else {
+                     const arr = selectedAsset?.isOTC ? [5, 10, 15, 30, 60, 120, 180, 240, 300, 600, 900, 1800, 3600, 7200, 14400, 28800] : [60, 120, 180, 240, 300, 600, 900, 1800, 3600, 7200, 14400, 28800];
+                     const idx = arr.indexOf(timerDuration);
+                     if (idx > 0) setTimerDuration(arr[idx - 1]);
+                  }
+               }}
+               className="flex-1 h-8 bg-bg-secondary hover:bg-bg-tertiary text-text-secondary/60 hover:text-white rounded-lg flex items-center justify-center transition"
              >
                <Minus size={16} />
              </button>
              <button 
-               onClick={() => tradeMode === 'CLOCK' ? setClockOffset(clockOffset + 1) : setTimerDuration(timerDuration + 60)}
-               className="flex-1 h-8 bg-[#1b1c21] hover:bg-[#25262c] text-white/60 hover:text-white rounded-lg flex items-center justify-center transition"
+               onClick={() => {
+                  if (tradeMode === 'CLOCK') setClockOffset(clockOffset + 1);
+                  else {
+                     const arr = selectedAsset?.isOTC ? [5, 10, 15, 30, 60, 120, 180, 240, 300, 600, 900, 1800, 3600, 7200, 14400, 28800] : [60, 120, 180, 240, 300, 600, 900, 1800, 3600, 7200, 14400, 28800];
+                     const idx = arr.indexOf(timerDuration);
+                     if (idx < arr.length - 1) setTimerDuration(arr[idx === -1 ? 0 : idx + 1]);
+                  }
+               }}
+               className="flex-1 h-8 bg-bg-secondary hover:bg-bg-tertiary text-text-secondary/60 hover:text-white rounded-lg flex items-center justify-center transition"
              >
                <Plus size={16} />
              </button>
@@ -6786,10 +7268,10 @@ const DesktopTradePanel = ({
         <div className="pt-2">
           <button 
             onClick={() => setIsPendingOrderSheetOpen(true)}
-            className="w-full h-12 bg-[#1b1c21] hover:bg-[#25262c] rounded-lg flex items-center justify-between px-4 transition active:scale-[0.98]"
+            className="w-full h-12 bg-bg-secondary hover:bg-bg-tertiary rounded-lg flex items-center justify-between px-4 transition active:scale-[0.98]"
           >
-            <span className="text-[13px] font-bold text-white">Enable Orders</span>
-            <Clock size={16} className="text-white/60" />
+            <span className="text-[13px] font-bold text-text-primary">Enable Orders</span>
+            <Clock size={16} className="text-text-secondary/60" />
           </button>
         </div>
 

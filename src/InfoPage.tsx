@@ -1,5 +1,6 @@
 import React from 'react';
 import { ChevronLeft, Shield, Lock, FileText, AlertTriangle, CheckCircle2, Globe, CreditCard, Star, Users, Activity, Target, BookOpen, HeadphonesIcon, HelpCircle, Info, GraduationCap, Image } from 'lucide-react';
+import { useTranslation } from './i18n';
 
 interface InfoPageProps {
   title: string;
@@ -7,35 +8,37 @@ interface InfoPageProps {
 }
 
 export default function InfoPage({ title, onBack }: InfoPageProps) {
+  const { t } = useTranslation();
+
   const renderContent = () => {
     switch (title) {
       case 'Help':
       case 'Support':
         return (
           <div className="grid grid-cols-2 gap-4">
-            <div className="p-8 bg-neutral-900 rounded-3xl border border-white/5 shadow-2xl flex flex-col items-start gap-4">
-              <HelpCircle className="text-white" size={32} strokeWidth={1.5} />
+            <div className="p-8 bg-neutral-900 rounded-3xl border border-border-color shadow-2xl flex flex-col items-start gap-4">
+              <HelpCircle className="text-text-primary" size={32} strokeWidth={1.5} />
               <div>
                 <h3 className="text-xl font-bold text-white mb-1">Support</h3>
                 <p className="text-neutral-500 text-sm leading-snug">We're here for you 24/7</p>
               </div>
             </div>
-            <div className="p-8 bg-neutral-900 rounded-3xl border border-white/5 shadow-2xl flex flex-col items-start gap-4">
-              <Info className="text-white" size={32} strokeWidth={1.5} />
+            <div className="p-8 bg-neutral-900 rounded-3xl border border-border-color shadow-2xl flex flex-col items-start gap-4">
+              <Info className="text-text-primary" size={32} strokeWidth={1.5} />
               <div>
                 <h3 className="text-xl font-bold text-white mb-1">Help Center</h3>
                 <p className="text-neutral-500 text-sm leading-snug">Get to know the platform</p>
               </div>
             </div>
-            <div className="p-8 bg-neutral-900 rounded-3xl border border-white/5 shadow-2xl flex flex-col items-start gap-4">
-              <GraduationCap className="text-white" size={32} strokeWidth={1.5} />
+            <div className="p-8 bg-neutral-900 rounded-3xl border border-border-color shadow-2xl flex flex-col items-start gap-4">
+              <GraduationCap className="text-text-primary" size={32} strokeWidth={1.5} />
               <div>
                 <h3 className="text-xl font-bold text-white mb-1">Education</h3>
                 <p className="text-neutral-500 text-sm leading-snug">Expand your knowledge</p>
               </div>
             </div>
-            <div className="p-8 bg-neutral-900 rounded-3xl border border-white/5 shadow-2xl flex flex-col items-start gap-4">
-              <Image className="text-white" size={32} strokeWidth={1.5} />
+            <div className="p-8 bg-neutral-900 rounded-3xl border border-border-color shadow-2xl flex flex-col items-start gap-4">
+              <Image className="text-text-primary" size={32} strokeWidth={1.5} />
               <div>
                 <h3 className="text-xl font-bold text-white mb-1">Trading Tutorials</h3>
                 <p className="text-neutral-500 text-sm leading-snug">Learn how to open a trade</p>
@@ -48,32 +51,32 @@ export default function InfoPage({ title, onBack }: InfoPageProps) {
           <div className="space-y-8">
             <p className="text-gray-400 text-lg">Welcome to the ONYX OPTION Help Center. How can we assist you today?</p>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="p-6 bg-white/5 rounded-2xl border border-white/10">
+              <div className="p-6 bg-bg-secondary rounded-2xl border border-border-color">
                 <BookOpen className="text-blue-500 mb-4" size={32} />
                 <h3 className="text-xl font-bold mb-2 text-white">Getting Started</h3>
                 <p className="text-gray-400">Learn the basics of setting up your account and making your first trade.</p>
               </div>
-              <div className="p-6 bg-white/5 rounded-2xl border border-white/10">
+              <div className="p-6 bg-bg-secondary rounded-2xl border border-border-color">
                 <CreditCard className="text-emerald-500 mb-4" size={32} />
                 <h3 className="text-xl font-bold mb-2 text-white">Deposits & Withdrawals</h3>
                 <p className="text-gray-400">Everything you need to know about funding your account and withdrawing profits.</p>
               </div>
-              <div className="p-6 bg-white/5 rounded-2xl border border-white/10">
+              <div className="p-6 bg-bg-secondary rounded-2xl border border-border-color">
                 <Target className="text-rose-500 mb-4" size={32} />
                 <h3 className="text-xl font-bold mb-2 text-white">Trading Strategies</h3>
                 <p className="text-gray-400">Advanced techniques and strategies to improve your trading performance.</p>
               </div>
-              <div className="p-6 bg-white/5 rounded-2xl border border-white/10">
+              <div className="p-6 bg-bg-secondary rounded-2xl border border-border-color">
                 <Lock className="text-indigo-500 mb-4" size={32} />
                 <h3 className="text-xl font-bold mb-2 text-white">Account Security</h3>
                 <p className="text-gray-400">Best practices for keeping your account and funds secure.</p>
               </div>
-              <div className="p-6 bg-white/5 rounded-2xl border border-white/10">
+              <div className="p-6 bg-bg-secondary rounded-2xl border border-border-color">
                 <Activity className="text-amber-500 mb-4" size={32} />
                 <h3 className="text-xl font-bold mb-2 text-white">Technical Analysis</h3>
                 <p className="text-gray-400">Master chart patterns, indicators, and trend analysis.</p>
               </div>
-              <div className="p-6 bg-white/5 rounded-2xl border border-white/10">
+              <div className="p-6 bg-bg-secondary rounded-2xl border border-border-color">
                 <Users className="text-purple-500 mb-4" size={32} />
                 <h3 className="text-xl font-bold mb-2 text-white">Community & Social Trading</h3>
                 <p className="text-gray-400">Learn how to follow expert traders and copy their strategies.</p>
@@ -87,8 +90,8 @@ export default function InfoPage({ title, onBack }: InfoPageProps) {
             <p className="text-gray-400 text-lg">Daily market analysis and insights from our expert team.</p>
             <div className="space-y-6">
               {[1, 2, 3].map((i) => (
-                <div key={i} className="p-6 bg-white/5 rounded-2xl border border-white/10 flex flex-col md:flex-row gap-6">
-                  <div className="w-full md:w-48 h-32 bg-white/10 rounded-xl flex-shrink-0 animate-pulse" />
+                <div key={i} className="p-6 bg-bg-secondary rounded-2xl border border-border-color flex flex-col md:flex-row gap-6">
+                  <div className="w-full md:w-48 h-32 bg-bg-tertiary rounded-xl flex-shrink-0 animate-pulse" />
                   <div>
                     <div className="text-blue-500 text-xs font-bold uppercase tracking-widest mb-2">Forex Market</div>
                     <h3 className="text-xl font-bold mb-2 text-white">EUR/USD Technical Analysis: Key Levels to Watch</h3>
@@ -112,7 +115,7 @@ export default function InfoPage({ title, onBack }: InfoPageProps) {
                 { title: 'Risk Management Basics', desc: 'Learn how to set stop-loss and take-profit levels for safer trading.' },
                 { title: 'Deposit & Withdrawal Process', desc: 'Detailed walkthrough on funding your account and withdrawing your profits securely.' }
               ].map((item, idx) => (
-                <div key={idx} className="p-6 bg-white/5 rounded-2xl border border-white/10">
+                <div key={idx} className="p-6 bg-bg-secondary rounded-2xl border border-border-color">
                   <h4 className="text-lg font-bold mb-2 text-white">{item.title}</h4>
                   <p className="text-gray-400 text-sm">{item.desc}</p>
                 </div>
@@ -125,7 +128,7 @@ export default function InfoPage({ title, onBack }: InfoPageProps) {
           <div className="space-y-8">
             <p className="text-gray-400 text-lg">Master the markets with our comprehensive learning materials.</p>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div className="p-6 bg-white/5 rounded-2xl border border-white/10">
+              <div className="p-6 bg-bg-secondary rounded-2xl border border-border-color">
                 <div className="w-12 h-12 bg-blue-500/20 rounded-xl flex items-center justify-center mb-4">
                   <span className="text-blue-500 font-bold text-xl">1</span>
                 </div>
@@ -133,7 +136,7 @@ export default function InfoPage({ title, onBack }: InfoPageProps) {
                 <p className="text-gray-400 mb-4">Learn the fundamentals of trading and platform navigation.</p>
                 <button className="text-blue-400 font-bold hover:text-blue-300">Start Learning →</button>
               </div>
-              <div className="p-6 bg-white/5 rounded-2xl border border-white/10">
+              <div className="p-6 bg-bg-secondary rounded-2xl border border-border-color">
                 <div className="w-12 h-12 bg-emerald-500/20 rounded-xl flex items-center justify-center mb-4">
                   <span className="text-emerald-500 font-bold text-xl">2</span>
                 </div>
@@ -141,7 +144,7 @@ export default function InfoPage({ title, onBack }: InfoPageProps) {
                 <p className="text-gray-400 mb-4">Deep dive into technical analysis and complex trading strategies.</p>
                 <button className="text-emerald-400 font-bold hover:text-emerald-300">Start Learning →</button>
               </div>
-              <div className="p-6 bg-white/5 rounded-2xl border border-white/10">
+              <div className="p-6 bg-bg-secondary rounded-2xl border border-border-color">
                 <div className="w-12 h-12 bg-purple-500/20 rounded-xl flex items-center justify-center mb-4">
                   <span className="text-purple-500 font-bold text-xl">3</span>
                 </div>
@@ -186,34 +189,34 @@ export default function InfoPage({ title, onBack }: InfoPageProps) {
       case 'Affiliate Program':
         return (
           <div className="space-y-12">
-            <div className="relative p-10 bg-gradient-to-br from-blue-600/10 to-purple-600/10 rounded-[40px] border border-white/10 overflow-hidden">
+            <div className="relative p-10 bg-gradient-to-br from-blue-600/10 to-purple-600/10 rounded-[40px] border border-border-color overflow-hidden">
               <div className="absolute -top-24 -right-24 w-64 h-64 bg-blue-500/20 blur-[100px] rounded-full" />
               <div className="relative z-10 max-w-2xl">
                 <h3 className="text-4xl font-black mb-4 text-white">Become an Onyx Partner</h3>
                 <p className="text-gray-400 text-lg mb-8">Join the world's most lucrative affiliate program in the trading industry. Earn high commissions by introducing traders to our premium platform.</p>
                 <div className="flex flex-wrap gap-4">
                   <button className="px-8 py-4 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-2xl transition-all shadow-lg shadow-blue-600/20 active:scale-95">Apply Now</button>
-                  <button className="px-8 py-4 bg-white/5 hover:bg-white/10 text-white font-bold rounded-2xl border border-white/10 transition-all active:scale-95">Partner Portal</button>
+                  <button className="px-8 py-4 bg-bg-secondary hover:bg-bg-tertiary text-white font-bold rounded-2xl border border-border-color transition-all active:scale-95">Partner Portal</button>
                 </div>
               </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div className="p-8 bg-white/5 rounded-3xl border border-white/10 hover:border-blue-500/30 transition-colors group">
+              <div className="p-8 bg-bg-secondary rounded-3xl border border-border-color hover:border-blue-500/30 transition-colors group">
                 <div className="w-14 h-14 bg-blue-500/10 rounded-2xl flex items-center justify-center text-blue-500 mb-6 group-hover:scale-110 transition-transform">
                   <Activity size={28} />
                 </div>
                 <h4 className="text-xl font-bold mb-2 text-white">High Conversion</h4>
                 <p className="text-gray-400 text-sm leading-relaxed">Our optimized landing pages and premium brand reputation ensure the highest conversion rates in the market.</p>
               </div>
-              <div className="p-8 bg-white/5 rounded-3xl border border-white/10 hover:border-emerald-500/30 transition-colors group">
+              <div className="p-8 bg-bg-secondary rounded-3xl border border-border-color hover:border-emerald-500/30 transition-colors group">
                 <div className="w-14 h-14 bg-emerald-500/10 rounded-2xl flex items-center justify-center text-emerald-500 mb-6 group-hover:scale-110 transition-transform">
                   <CreditCard size={28} />
                 </div>
                 <h4 className="text-xl font-bold mb-2 text-white">Instant Payouts</h4>
                 <p className="text-gray-400 text-sm leading-relaxed">Withdraw your earnings daily. We support multiple payment methods including Crypto, Bank, and E-wallets.</p>
               </div>
-              <div className="p-8 bg-white/5 rounded-3xl border border-white/10 hover:border-purple-500/30 transition-colors group">
+              <div className="p-8 bg-bg-secondary rounded-3xl border border-border-color hover:border-purple-500/30 transition-colors group">
                 <div className="w-14 h-14 bg-purple-500/10 rounded-2xl flex items-center justify-center text-purple-500 mb-6 group-hover:scale-110 transition-transform">
                   <Target size={28} />
                 </div>
@@ -227,7 +230,7 @@ export default function InfoPage({ title, onBack }: InfoPageProps) {
                 <div className="w-1 h-8 bg-blue-500 rounded-full" />
                 Commission Structure
               </h3>
-              <div className="bg-white/5 rounded-[32px] border border-white/10 overflow-hidden">
+              <div className="bg-bg-secondary rounded-[32px] border border-border-color overflow-hidden">
                 <div className="grid grid-cols-1 md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-white/10">
                   <div className="p-8 text-center space-y-2">
                     <div className="text-xs font-bold text-gray-500 uppercase tracking-widest">Standard</div>
@@ -263,8 +266,8 @@ export default function InfoPage({ title, onBack }: InfoPageProps) {
                   { step: '03', title: 'Track', desc: 'Monitor performance in your dashboard.' },
                   { step: '04', title: 'Earn', desc: 'Receive daily payouts of your profit.' }
                 ].map((item, idx) => (
-                  <div key={idx} className="p-6 bg-white/5 rounded-2xl border border-white/10 relative">
-                    <div className="text-3xl font-black text-white/10 absolute top-4 right-4">{item.step}</div>
+                  <div key={idx} className="p-6 bg-bg-secondary rounded-2xl border border-border-color relative">
+                    <div className="text-3xl font-black text-text-secondary/10 absolute top-4 right-4">{item.step}</div>
                     <h4 className="font-bold text-white mb-2">{item.title}</h4>
                     <p className="text-gray-500 text-xs leading-relaxed">{item.desc}</p>
                   </div>
@@ -272,7 +275,7 @@ export default function InfoPage({ title, onBack }: InfoPageProps) {
               </div>
             </div>
 
-            <div className="p-10 bg-white/5 rounded-[40px] border border-white/10 text-center space-y-6">
+            <div className="p-10 bg-bg-secondary rounded-[40px] border border-border-color text-center space-y-6">
               <h3 className="text-3xl font-bold text-white">Ready to scale your income?</h3>
               <p className="text-gray-400 max-w-xl mx-auto">Our dedicated affiliate managers are ready to help you optimize your campaigns and maximize your revenue.</p>
               <button className="px-12 py-5 bg-white text-black font-black rounded-2xl hover:bg-gray-200 transition-all active:scale-95 uppercase tracking-widest text-sm">Get Started Today</button>
@@ -284,21 +287,21 @@ export default function InfoPage({ title, onBack }: InfoPageProps) {
           <div className="space-y-8">
             <p className="text-gray-400 text-lg">Your security is our top priority. Learn about our industry-leading protection measures.</p>
             <div className="space-y-6">
-              <div className="flex gap-4 p-6 bg-white/5 rounded-2xl border border-white/10">
+              <div className="flex gap-4 p-6 bg-bg-secondary rounded-2xl border border-border-color">
                 <Shield className="text-blue-500 shrink-0" size={32} />
                 <div>
                   <h3 className="text-xl font-bold mb-2 text-white">Military-Grade Encryption</h3>
                   <p className="text-gray-400">All data transmissions are protected by 256-bit SSL encryption, ensuring your personal and financial information remains completely secure.</p>
                 </div>
               </div>
-              <div className="flex gap-4 p-6 bg-white/5 rounded-2xl border border-white/10">
+              <div className="flex gap-4 p-6 bg-bg-secondary rounded-2xl border border-border-color">
                 <Lock className="text-emerald-500 shrink-0" size={32} />
                 <div>
                   <h3 className="text-xl font-bold mb-2 text-white">Two-Factor Authentication (2FA)</h3>
                   <p className="text-gray-400">Add an extra layer of security to your account with mandatory 2FA for all withdrawals and sensitive account changes.</p>
                 </div>
               </div>
-              <div className="flex gap-4 p-6 bg-white/5 rounded-2xl border border-white/10">
+              <div className="flex gap-4 p-6 bg-bg-secondary rounded-2xl border border-border-color">
                 <CheckCircle2 className="text-indigo-500 shrink-0" size={32} />
                 <div>
                   <h3 className="text-xl font-bold mb-2 text-white">Segregated Accounts</h3>
@@ -313,19 +316,19 @@ export default function InfoPage({ title, onBack }: InfoPageProps) {
           <div className="space-y-8">
             <p className="text-gray-400 text-lg">Everything you need to master the financial markets in one powerful platform.</p>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="p-6 bg-white/5 rounded-2xl border border-white/10">
+              <div className="p-6 bg-bg-secondary rounded-2xl border border-border-color">
                 <h3 className="text-xl font-bold mb-2 text-white">Instant Execution</h3>
                 <p className="text-gray-400">Trades are executed in less than 5ms, ensuring you get the best possible price every time.</p>
               </div>
-              <div className="p-6 bg-white/5 rounded-2xl border border-white/10">
+              <div className="p-6 bg-bg-secondary rounded-2xl border border-border-color">
                 <h3 className="text-xl font-bold mb-2 text-white">Secure Platform</h3>
                 <p className="text-gray-400">Military-grade encryption and segregated accounts to keep your funds and data safe.</p>
               </div>
-              <div className="p-6 bg-white/5 rounded-2xl border border-white/10">
+              <div className="p-6 bg-bg-secondary rounded-2xl border border-border-color">
                 <h3 className="text-xl font-bold mb-2 text-white">Advanced Charts</h3>
                 <p className="text-gray-400">Professional technical indicators and drawing tools built directly into the terminal.</p>
               </div>
-              <div className="p-6 bg-white/5 rounded-2xl border border-white/10">
+              <div className="p-6 bg-bg-secondary rounded-2xl border border-border-color">
                 <h3 className="text-xl font-bold mb-2 text-white">Global Markets</h3>
                 <p className="text-gray-400">Trade Forex, Crypto, Stocks, and Commodities from a single unified interface.</p>
               </div>
@@ -337,21 +340,21 @@ export default function InfoPage({ title, onBack }: InfoPageProps) {
           <div className="space-y-8">
             <p className="text-gray-400 text-lg">Start Trading in 3 Simple Steps.</p>
             <div className="space-y-6">
-              <div className="flex gap-4 p-6 bg-white/5 rounded-2xl border border-white/10">
+              <div className="flex gap-4 p-6 bg-bg-secondary rounded-2xl border border-border-color">
                 <div className="w-12 h-12 bg-blue-600 rounded-xl flex items-center justify-center text-white font-black text-xl shrink-0">1</div>
                 <div>
                   <h3 className="text-xl font-bold mb-2 text-white">Create Account</h3>
                   <p className="text-gray-400">Sign up for a free account in less than 30 seconds. No credit card required to start.</p>
                 </div>
               </div>
-              <div className="flex gap-4 p-6 bg-white/5 rounded-2xl border border-white/10">
+              <div className="flex gap-4 p-6 bg-bg-secondary rounded-2xl border border-border-color">
                 <div className="w-12 h-12 bg-blue-600 rounded-xl flex items-center justify-center text-white font-black text-xl shrink-0">2</div>
                 <div>
                   <h3 className="text-xl font-bold mb-2 text-white">Make Deposit</h3>
                   <p className="text-gray-400">Fund your account with over 20+ payment methods including Crypto, Cards, and E-wallets.</p>
                 </div>
               </div>
-              <div className="flex gap-4 p-6 bg-white/5 rounded-2xl border border-white/10">
+              <div className="flex gap-4 p-6 bg-bg-secondary rounded-2xl border border-border-color">
                 <div className="w-12 h-12 bg-blue-600 rounded-xl flex items-center justify-center text-white font-black text-xl shrink-0">3</div>
                 <div>
                   <h3 className="text-xl font-bold mb-2 text-white">Start Trading</h3>
@@ -365,17 +368,17 @@ export default function InfoPage({ title, onBack }: InfoPageProps) {
         return (
           <div className="space-y-8">
             <p className="text-gray-400 text-lg">Real-time Trading Results from our community.</p>
-            <div className="bg-white/5 rounded-2xl border border-white/10 overflow-hidden">
+            <div className="bg-bg-secondary rounded-2xl border border-border-color overflow-hidden">
               <table className="w-full text-left text-sm">
-                <thead className="bg-white/5 text-gray-400">
+                <thead className="bg-bg-secondary text-gray-400">
                   <tr>
-                    <th className="px-6 py-4 font-medium">Asset</th>
-                    <th className="px-6 py-4 font-medium">Time</th>
-                    <th className="px-6 py-4 font-medium">Investment</th>
-                    <th className="px-6 py-4 font-medium text-right">Profit</th>
+                    <th className="px-6 py-4 font-medium">{t('home.asset')}</th>
+                    <th className="px-6 py-4 font-medium">{t('trade.duration')}</th>
+                    <th className="px-6 py-4 font-medium">{t('trade.investment')}</th>
+                    <th className="px-6 py-4 font-medium text-right">{t('common.profit')}</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-white/5">
+                <tbody className="divide-y divide-[var(--color-border-color)]">
                   <tr className="hover:bg-white/[0.02]">
                     <td className="px-6 py-4 font-bold text-white">EUR/USD</td>
                     <td className="px-6 py-4 text-gray-500 font-mono">18:45:12</td>
@@ -404,19 +407,19 @@ export default function InfoPage({ title, onBack }: InfoPageProps) {
           <div className="space-y-8">
             <p className="text-gray-400 text-lg">Find answers to the most common questions about ONYX OPTION.</p>
             <div className="space-y-4">
-              <div className="p-6 bg-white/5 rounded-2xl border border-white/10">
+              <div className="p-6 bg-bg-secondary rounded-2xl border border-border-color">
                 <h3 className="text-xl font-bold mb-2 text-white">What is the minimum deposit?</h3>
                 <p className="text-gray-400">The minimum deposit to start trading on a live account is only $10. However, you can start practicing on our demo account with $10,000 in virtual funds for free.</p>
               </div>
-              <div className="p-6 bg-white/5 rounded-2xl border border-white/10">
+              <div className="p-6 bg-bg-secondary rounded-2xl border border-border-color">
                 <h3 className="text-xl font-bold mb-2 text-white">How long do withdrawals take?</h3>
                 <p className="text-gray-400">Withdrawals are typically processed within 24 hours. Depending on your payment method, funds usually arrive in your account within 1-3 business days.</p>
               </div>
-              <div className="p-6 bg-white/5 rounded-2xl border border-white/10">
+              <div className="p-6 bg-bg-secondary rounded-2xl border border-border-color">
                 <h3 className="text-xl font-bold mb-2 text-white">Is ONYX OPTION regulated?</h3>
                 <p className="text-gray-400">Yes, ONYX OPTION follows strict international financial regulations and keeps all client funds in segregated accounts with top-tier global banks.</p>
               </div>
-              <div className="p-6 bg-white/5 rounded-2xl border border-white/10">
+              <div className="p-6 bg-bg-secondary rounded-2xl border border-border-color">
                 <h3 className="text-xl font-bold mb-2 text-white">Can I trade on my mobile device?</h3>
                 <p className="text-gray-400">Absolutely! We offer powerful mobile applications for both iOS and Android, providing the full trading experience on the go.</p>
               </div>
@@ -443,7 +446,7 @@ export default function InfoPage({ title, onBack }: InfoPageProps) {
             <h3 className="text-xl font-bold text-white mt-8 mb-4">4. Compliance</h3>
             <p>We strictly adhere to international regulatory standards, including Anti-Money Laundering (AML) and Know Your Customer (KYC) protocols. Users must provide accurate information and cooperate with verification requests.</p>
             
-            <div className="mt-12 p-6 bg-white/5 rounded-xl border border-white/10">
+            <div className="mt-12 p-6 bg-bg-secondary rounded-xl border border-border-color">
               <p className="text-sm">For the complete, legally binding version of this document, please download the PDF version from our Legal archive.</p>
             </div>
           </div>
@@ -459,12 +462,12 @@ export default function InfoPage({ title, onBack }: InfoPageProps) {
 
   return (
     <div className="min-h-[100dvh] bg-[#050505] text-white font-sans selection:bg-blue-500/30">
-      <nav className="fixed top-0 left-0 right-0 z-50 bg-[#050505]/80 backdrop-blur-xl border-b border-white/5">
+      <nav className="fixed top-0 left-0 right-0 z-50 bg-[#050505]/80 backdrop-blur-xl border-b border-border-color">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center h-20 gap-4">
             <button 
               onClick={onBack}
-              className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center hover:bg-white/10 transition-colors"
+              className="w-10 h-10 rounded-full bg-bg-secondary flex items-center justify-center hover:bg-bg-tertiary transition-colors"
             >
               <ChevronLeft size={24} />
             </button>

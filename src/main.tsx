@@ -4,19 +4,21 @@ import App from './App.tsx';
 import './index.css';
 import './firebase'; // Initialize Firebase
 
+import { BrowserRouter } from 'react-router-dom';
 import { LanguageProvider } from './i18n';
 import { ToastProvider } from './Toast';
-
-// Apply saved theme immediately
-const savedTheme = localStorage.getItem('app-theme') || 'dark';
-document.documentElement.setAttribute('data-theme', savedTheme);
+import { ThemeProvider } from './ThemeContext';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <LanguageProvider>
-      <ToastProvider>
-        <App />
-      </ToastProvider>
-    </LanguageProvider>
+    <BrowserRouter>
+      <LanguageProvider>
+        <ThemeProvider>
+          <ToastProvider>
+            <App />
+          </ToastProvider>
+        </ThemeProvider>
+      </LanguageProvider>
+    </BrowserRouter>
   </StrictMode>,
 );

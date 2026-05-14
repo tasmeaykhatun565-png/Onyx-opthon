@@ -52,11 +52,11 @@ const WhatsNewSheet: React.FC<WhatsNewSheetProps> = ({ isOpen, onClose, announce
   const unreadCount = announcements.filter(a => !readIds.includes(a.id)).length;
 
   const content = (
-    <div className="h-full w-full bg-[#1e1e1e] flex flex-col pt-safe text-white relative">
+    <div className="h-full w-full bg-bg-tertiary flex flex-col pt-safe text-white relative">
       {/* Header */}
-      <div className="flex items-center justify-between p-4 bg-[#121418] border-b border-white/5 sticky top-0 z-10">
+      <div className="flex items-center justify-between p-4 bg-[#121418] border-b border-border-color sticky top-0 z-10">
         <div className="flex items-center gap-3">
-          <button onClick={() => selectedAnnouncement ? setSelectedAnnouncement(null) : onClose()} className="p-2 hover:bg-white/5 rounded-full transition-colors active:scale-95">
+          <button onClick={() => selectedAnnouncement ? setSelectedAnnouncement(null) : onClose()} className="p-2 hover:bg-bg-secondary rounded-full transition-colors active:scale-95">
             <ArrowLeft size={24} />
           </button>
           {!selectedAnnouncement ? (
@@ -104,7 +104,7 @@ const WhatsNewSheet: React.FC<WhatsNewSheetProps> = ({ isOpen, onClose, announce
                    </div>
                    <h3 className="text-lg font-bold mb-2 pr-6 flex items-center gap-2">
                      <Target className="text-red-500 shrink-0" size={18} />
-                     <span className={cn(!isRead && "text-white", isRead && "text-gray-300")}>{announcement.title}</span>
+                     <span className={cn(!isRead && "text-text-primary", isRead && "text-gray-300")}>{announcement.title}</span>
                    </h3>
                    <p className="text-gray-400 text-sm line-clamp-2 mb-4">
                      {announcement.message}
@@ -138,26 +138,26 @@ const WhatsNewSheet: React.FC<WhatsNewSheetProps> = ({ isOpen, onClose, announce
                <div dangerouslySetInnerHTML={{ __html: selectedAnnouncement.message || '' }} className="prose prose-invert max-w-none prose-a:text-blue-400" />
 
                {selectedAnnouncement.linkUrl && (
-                 <a href={selectedAnnouncement.linkUrl} target="_blank" rel="noreferrer" className="mt-6 inline-block bg-white/10 hover:bg-white/20 text-white font-bold py-3 px-6 rounded-xl transition-colors">
+                 <a href={selectedAnnouncement.linkUrl} target="_blank" rel="noreferrer" className="mt-6 inline-block bg-bg-tertiary hover:bg-white/20 text-white font-bold py-3 px-6 rounded-xl transition-colors">
                    Read more
                  </a>
                )}
              </div>
 
-             <div className="p-4 border-t border-white/5 mt-auto flex items-center justify-between">
+             <div className="p-4 border-t border-border-color mt-auto flex items-center justify-between">
                <span className="font-bold">Like it?</span>
                <div className="flex items-center gap-3">
                  <button 
                    onClick={() => handleVote(selectedAnnouncement.id, 'like')}
                    disabled={!!votes[selectedAnnouncement.id]}
-                   className={cn("flex items-center gap-2 bg-[#2a2d35] px-4 py-2 rounded-xl transition-all", votes[selectedAnnouncement.id] === 'like' ? "text-emerald-400 bg-emerald-500/10" : "hover:bg-white/10 disabled:opacity-50")}
+                   className={cn("flex items-center gap-2 bg-[#2a2d35] px-4 py-2 rounded-xl transition-all", votes[selectedAnnouncement.id] === 'like' ? "text-emerald-400 bg-emerald-500/10" : "hover:bg-bg-tertiary disabled:opacity-50")}
                  >
                    <Smile size={18} /> {selectedAnnouncement.likes + (votes[selectedAnnouncement.id] === 'like' ? 1 : 0) || 0}
                  </button>
                  <button 
                    onClick={() => handleVote(selectedAnnouncement.id, 'dislike')}
                    disabled={!!votes[selectedAnnouncement.id]}
-                   className={cn("flex items-center gap-2 bg-[#2a2d35] px-4 py-2 rounded-xl transition-all", votes[selectedAnnouncement.id] === 'dislike' ? "text-red-400 bg-red-500/10" : "hover:bg-white/10 disabled:opacity-50")}
+                   className={cn("flex items-center gap-2 bg-[#2a2d35] px-4 py-2 rounded-xl transition-all", votes[selectedAnnouncement.id] === 'dislike' ? "text-red-400 bg-red-500/10" : "hover:bg-bg-tertiary disabled:opacity-50")}
                  >
                    <Frown size={18} /> {selectedAnnouncement.dislikes + (votes[selectedAnnouncement.id] === 'dislike' ? 1 : 0) || 0}
                  </button>
@@ -177,7 +177,7 @@ const WhatsNewSheet: React.FC<WhatsNewSheetProps> = ({ isOpen, onClose, announce
            animate={{ x: 0, opacity: 1 }}
            exit={{ x: '100%', opacity: 0 }}
            transition={{ type: "spring", damping: 25, stiffness: 200 }}
-           className="fixed inset-0 z-[1001] bg-[#121418] md:w-96 md:left-auto md:right-0 md:border-l md:border-white/5"
+           className="fixed inset-0 z-[1001] bg-[#121418] md:w-96 md:left-auto md:right-0 md:border-l md:border-border-color"
         >
           {content}
         </motion.div>

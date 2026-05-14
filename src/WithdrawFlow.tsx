@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from './i18n';
 import BottomSheet from './BottomSheet';
 import { cn } from './utils';
 import { 
@@ -120,6 +121,7 @@ export default function WithdrawFlow({
   turnoverAchieved = 0,
   platformSettings = {}
 }: WithdrawFlowProps) {
+  const { t } = useTranslation();
   const [step, setStep] = useState<'LOADING' | 'OVERVIEW' | 'AMOUNT' | 'METHOD' | 'DETAILS' | 'SUCCESS' | 'ERROR'>('LOADING');
   const [amount, setAmount] = useState<number | ''>('');
   const [selectedMethod, setSelectedMethod] = useState<typeof WITHDRAW_METHODS[0] | null>(null);
@@ -144,7 +146,7 @@ export default function WithdrawFlow({
       // Force real account context for withdrawal UI if user is on demo
       const timer = setTimeout(() => {
         setStep('OVERVIEW');
-      }, 1500);
+      }, 600);
       return () => clearTimeout(timer);
     }
   }, [isOpen]);
@@ -190,18 +192,18 @@ export default function WithdrawFlow({
 
   const handleSubmit = () => {
     if (activeAccount === 'DEMO') {
-      setErrorMsg('Withdrawals are not available for Demo accounts. Please switch to your Real Account.');
+      setErrorMsg(t('withdraw.demo_error'));
       setStep('ERROR');
       return;
     }
     if (!isTurnoverMet) {
-      setErrorMsg(`Turnover requirement not met. Remaining: ${currencySymbol}${turnoverRemaining.toLocaleString()}`);
+      setErrorMsg(`${t('withdraw.turnover_error')} Remaining: ${currencySymbol}${turnoverRemaining.toLocaleString()}`);
       setStep('ERROR');
       return;
     }
     if (!amount || amount < minWithdraw || !selectedMethod || !accountDetails || !socket || !userEmail) return;
     if (amount > balance) {
-      setErrorMsg('Insufficient balance.');
+      setErrorMsg(t('withdraw.insufficient_balance'));
       setStep('ERROR');
       return;
     }
@@ -229,9 +231,13 @@ export default function WithdrawFlow({
     switch (step) {
       case 'LOADING':
         return (
-          <div className="flex flex-col items-center justify-center py-20 space-y-4">
-            <Loader2 size={40} className="text-[#00ff5f] animate-spin" />
-            <p className="text-white/40 font-bold text-xs uppercase tracking-widest">Securing Connection...</p>
+          <div className="flex flex-col items-center justify-center py-24 relative overflow-hidden">
+            <div className="flex flex-col items-center space-y-6">
+              <div className="w-10 h-10 border-4 border-border-color border-t-accent-color rounded-full animate-spin" />
+              <p className="text-text-primary/70 font-medium text-sm animate-pulse uppercase tracking-[0.2em]">
+                {t('withdraw.securing_connection')}
+              </p>
+            </div>
           </div>
         );
 
@@ -240,16 +246,16 @@ export default function WithdrawFlow({
           <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-300 pb-10 px-6">
              <div className="flex items-center justify-between mb-8">
                 <div className="flex items-center gap-4">
-                   <button onClick={resetAndClose} className="p-2 -ml-2 text-white/40 hover:text-white transition">
+                   <button onClick={resetAndClose} className="p-2 -ml-2 text-text-secondary/40 hover:text-text-primary transition">
                       <ChevronLeft size={28} />
                    </button>
-                   <h2 className="text-3xl font-black text-white tracking-tight">Withdraw</h2>
+                   <h2 className="text-3xl font-black text-text-primary tracking-tight">{t('common.withdraw')}</h2>
                 </div>
                 <div className="flex items-center gap-2">
-                   <button className="p-2 text-white/20 hover:text-white">
+                   <button className="p-2 text-text-secondary/20 hover:text-text-primary">
                       <Info size={24} />
                    </button>
-                   <button onClick={resetAndClose} className="p-2 text-white/20 hover:text-white">
+                   <button onClick={resetAndClose} className="p-2 text-text-secondary/20 hover:text-text-primary">
                       <X size={24} />
                    </button>
                 </div>
@@ -257,48 +263,50 @@ export default function WithdrawFlow({
 
              {/* Account Card */}
              <div 
-               className="bg-[#1c1c1e] rounded-[1.5rem] p-6 flex items-center justify-between border border-white/5 active:bg-[#252527] transition group cursor-pointer shadow-lg"
+               className="bg-bg-secondary rounded-[1.5rem] p-6 flex items-center justify-between border border-border-color active:bg-[#252527] transition group cursor-pointer shadow-lg"
                onClick={() => activeAccount === 'REAL' && balance > 0 && setStep('AMOUNT')}
              >
                 <div className="flex items-center gap-5">
                    <div className="flex flex-col">
-                      <span className="text-[11px] text-white/40 font-black uppercase tracking-[0.2em] mb-1">From {activeAccount === 'REAL' ? 'Real' : 'Demo'} Account</span>
-                      <span className="text-xl font-black text-white">
+                      <span className="text-[11px] text-text-secondary/40 font-black uppercase tracking-[0.2em] mb-1">
+  {activeAccount === 'REAL' ? t('withdraw.from_real_account') : t('withdraw.from_demo_account')}
+</span>
+                      <span className="text-xl font-black text-text-primary">
                         {activeAccount === 'REAL' ? `${currencyCode} ${balance.toLocaleString(undefined, { minimumFractionDigits: 2 })}` : `${currencyCode} 0.00`}
                       </span>
                    </div>
                 </div>
-                <ChevronRight size={24} className="text-white/10 group-hover:text-[#00ff5f] transition-all" />
+                <ChevronRight size={24} className="text-text-secondary/10 group-hover:text-[#00ff5f] transition-all" />
              </div>
 
              {/* Guidance Card */}
-             <div className="bg-[#1c1c1e] rounded-[1.5rem] p-8 border border-white/5 flex flex-col gap-6 shadow-xl">
+             <div className="bg-bg-secondary rounded-[1.5rem] p-8 border border-border-color flex flex-col gap-6 shadow-xl">
                 <div className="flex gap-6">
-                  <div className="w-12 h-12 rounded-full bg-white/5 flex items-center justify-center shrink-0">
-                    <Info size={24} className="text-white/40" />
+                  <div className="w-12 h-12 rounded-full bg-bg-secondary flex items-center justify-center shrink-0">
+                    <Info size={24} className="text-text-secondary/40" />
                   </div>
                   <div className="space-y-3">
-                    <p className="text-sm text-white/60 leading-relaxed font-bold">
+                    <p className="text-sm text-text-secondary/60 leading-relaxed font-bold">
                         {activeAccount === 'DEMO' 
-                          ? "Withdrawals are only available for Real Account balances. Switch to your Real Account to proceed."
+                          ? t('withdraw.demo_error')
                           : balance < minWithdraw 
-                          ? "You have insufficient funds to make a withdrawal from this account." 
-                          : "To ensure security, withdrawals are processed back to the original funding source."}
+                          ? t('withdraw.insufficient_funds_notice') 
+                          : t('withdraw.security_notice')}
                     </p>
                   </div>
                 </div>
 
                 {allowedMethods.length > 0 && activeAccount === 'REAL' && balance >= minWithdraw && (
-                  <div className="pt-4 border-t border-white/5">
-                    <p className="text-[10px] text-white/20 font-black uppercase tracking-[0.2em] mb-4">Supported Gateways</p>
+                  <div className="pt-4 border-t border-border-color">
+                    <p className="text-[10px] text-text-secondary/20 font-black uppercase tracking-[0.2em] mb-4">{t('withdraw.supported_gateways')}</p>
                     <div className="flex flex-wrap gap-3">
                       {allowedMethods.map(methodId => {
                         const method = WITHDRAW_METHODS.find(m => m.id === methodId);
                         if (!method) return null;
                         return (
-                          <div key={methodId} className="flex items-center gap-2 bg-white/5 px-3 py-2 rounded-xl border border-white/5">
+                          <div key={methodId} className="flex items-center gap-2 bg-bg-secondary px-3 py-2 rounded-xl border border-border-color">
                             <img src={method.logo} alt={method.name} className="w-5 h-5 object-contain" />
-                            <span className="text-[11px] font-bold text-white/60">{method.name}</span>
+                            <span className="text-[11px] font-bold text-text-secondary/60">{method.name}</span>
                           </div>
                         );
                       })}
@@ -314,7 +322,7 @@ export default function WithdrawFlow({
                     }}
                     className="text-[#00ff5f] font-black text-sm flex items-center gap-2 hover:opacity-80 transition"
                   >
-                      Make Deposit <ChevronRight size={18} strokeWidth={3} />
+                      {t('withdraw.make_deposit')} <ChevronRight size={18} strokeWidth={3} />
                   </button>
                 )}
              </div>
@@ -323,9 +331,9 @@ export default function WithdrawFlow({
                 <button 
                   disabled={activeAccount !== 'REAL' || balance < minWithdraw}
                   onClick={() => setStep('AMOUNT')}
-                  className="w-full bg-[#3d3d3f] text-white/30 font-black py-6 rounded-[2rem] disabled:opacity-40 transition-all text-xl shadow-2xl active:scale-[0.98]"
+                  className="w-full bg-[#3d3d3f] text-text-secondary/30 font-black py-6 rounded-[2rem] disabled:opacity-40 transition-all text-xl shadow-2xl active:scale-[0.98]"
                 >
-                  Next Step
+                  {t('withdraw.next_step')}
                 </button>
              </div>
           </div>
@@ -335,14 +343,14 @@ export default function WithdrawFlow({
         return (
           <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-300 pb-10 px-6">
             <div className="flex items-center gap-4">
-               <button onClick={() => setStep('OVERVIEW')} className="p-2 -ml-2 text-white/40 hover:text-white transition">
+               <button onClick={() => setStep('OVERVIEW')} className="p-2 -ml-2 text-text-secondary/40 hover:text-text-primary transition">
                   <ChevronLeft size={28} />
                </button>
-               <h3 className="text-2xl font-black text-white tracking-tight">Withdraw Amount</h3>
+               <h3 className="text-2xl font-black text-text-primary tracking-tight">{t('withdraw.amount_title')}</h3>
             </div>
 
             <div className="relative group">
-              <div className="absolute left-8 top-1/2 -translate-y-1/2 text-2xl font-black text-white/20 group-focus-within:text-[#00ff5f] transition-colors">
+              <div className="absolute left-8 top-1/2 -translate-y-1/2 text-2xl font-black text-text-secondary/20 group-focus-within:text-[#00ff5f] transition-colors">
                 {currencyCode === 'BDT' ? 'BDT' : currencySymbol}
               </div>
               <input 
@@ -350,7 +358,7 @@ export default function WithdrawFlow({
                 inputMode="numeric"
                 value={amount} 
                 onChange={(e) => setAmount(e.target.value === '' ? '' : Number(e.target.value))}
-                className="w-full bg-[#1c1c1e] py-12 pl-24 pr-8 rounded-[3rem] text-white font-black text-6xl focus:outline-none border-2 border-transparent focus:border-[#00ff5f]/30 transition-all shadow-[0_20px_50px_rgba(0,0,0,0.5)] placeholder:text-white/5"
+                className="w-full bg-bg-secondary py-12 pl-24 pr-8 rounded-[3rem] text-text-primary font-black text-6xl focus:outline-none border-2 border-transparent focus:border-[#00ff5f]/30 transition-all shadow-[0_20px_50px_rgba(0,0,0,0.5)] placeholder:text-white/5"
                 placeholder="0.00"
                 autoFocus
               />
@@ -362,8 +370,8 @@ export default function WithdrawFlow({
                   key={val}
                   onClick={() => setAmount(val)}
                   className={cn(
-                    "py-6 rounded-2xl bg-[#1c1c1e] border border-white/5 transition-all font-black text-base active:scale-95 shadow-lg",
-                    amount === val ? "bg-[#00ff5f]/10 border-[#00ff5f] text-[#00ff5f] shadow-[#00ff5f]/10" : "text-white/40 hover:text-white hover:bg-white/5"
+                    "py-6 rounded-2xl bg-bg-secondary border border-border-color transition-all font-black text-base active:scale-95 shadow-lg",
+                    amount === val ? "bg-[#00ff5f]/10 border-[#00ff5f] text-[#00ff5f] shadow-[#00ff5f]/10" : "text-text-secondary/40 hover:text-white hover:bg-bg-secondary"
                   )}
                 >
                   {currencyCode === 'BDT' ? 'BDT ' : currencySymbol}{val.toLocaleString()}
@@ -372,24 +380,24 @@ export default function WithdrawFlow({
             </div>
 
             {turnoverRequired > 0 && (
-              <div className="bg-[#1c1c1e] rounded-[2.5rem] p-8 border border-white/5 space-y-6 shadow-2xl">
+              <div className="bg-bg-secondary rounded-[2.5rem] p-8 border border-border-color space-y-6 shadow-2xl">
                 <div className="flex justify-between items-center">
                   <div className="flex items-center gap-3">
                     <ShieldCheck size={20} className="text-[#00ff5f]" />
-                    <span className="text-[11px] font-black text-[#00ff5f] uppercase tracking-[0.2em]">Compliance Check</span>
+                    <span className="text-[11px] font-black text-[#00ff5f] uppercase tracking-[0.2em]">{t('withdraw.compliance_check')}</span>
                   </div>
-                  <span className="text-xs font-black text-white/40">{Math.min(100, (turnoverAchieved / turnoverRequired) * 100).toFixed(0)}%</span>
+                  <span className="text-xs font-black text-text-secondary/40">{Math.min(100, (turnoverAchieved / turnoverRequired) * 100).toFixed(0)}%</span>
                 </div>
-                <div className="w-full h-2.5 bg-white/5 rounded-full overflow-hidden p-[1px]">
+                <div className="w-full h-2.5 bg-bg-secondary rounded-full overflow-hidden p-[1px]">
                   <div 
                     className="h-full bg-[#00ff5f] rounded-full shadow-[0_0_15px_rgba(0,255,95,0.4)] transition-all duration-1000 ease-out" 
                     style={{ width: `${Math.min(100, (turnoverAchieved / turnoverRequired) * 100)}%` }} 
                   />
                 </div>
-                <p className="text-[11px] text-white/40 leading-relaxed font-bold uppercase tracking-widest text-center">
+                <p className="text-[11px] text-text-secondary/40 leading-relaxed font-bold uppercase tracking-widest text-center">
                   {isTurnoverMet 
-                    ? "✓ Trading volume satisfied. Verified." 
-                    : `Complete ${currencyCode} ${turnoverRemaining.toLocaleString()} volume to unlock.`}
+                    ? t('withdraw.turnover_satisfied')
+                    : t('withdraw.complete_turnover', { amount: `${currencyCode} ${turnoverRemaining.toLocaleString()}` })}
                 </p>
               </div>
             )}
@@ -399,7 +407,7 @@ export default function WithdrawFlow({
               onClick={() => setStep('METHOD')}
               className="w-full bg-[#00ff5f] text-black font-extrabold py-7 rounded-[2.5rem] disabled:opacity-30 shadow-[0_15px_40px_rgba(0,255,95,0.2)] active:scale-[0.98] transition-all text-2xl mt-4"
             >
-              Select Method
+              {t('withdraw.select_method')}
             </button>
 
             {amount && amount < minWithdraw && (
@@ -414,17 +422,27 @@ export default function WithdrawFlow({
         return (
           <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-300 pb-10 px-6">
             <div className="flex items-center gap-4">
-               <button onClick={() => setStep('AMOUNT')} className="p-2 -ml-2 text-white/40 hover:text-white transition">
+               <button onClick={() => setStep('AMOUNT')} className="p-2 -ml-2 text-text-secondary/40 hover:text-text-primary transition">
                   <ChevronLeft size={28} />
                </button>
-               <h3 className="text-2xl font-black text-white tracking-tight">Withdraw Method</h3>
+               <h3 className="text-2xl font-black text-text-primary tracking-tight">{t('withdraw.method_title')}</h3>
             </div>
 
             <div className="grid grid-cols-1 gap-4">
               {isLoadingMethods ? (
-                <div className="flex flex-col items-center py-20 space-y-6">
-                  <Loader2 className="animate-spin text-[#00ff5f]" size={48} />
-                  <p className="text-xs text-white/40 font-black uppercase tracking-[0.2em]">Negotiating Protocols...</p>
+                <div className="flex flex-col items-center py-24 relative overflow-hidden">
+                  <div className="relative">
+                    {/* Static track */}
+                    <div className="absolute inset-0 rounded-full border-2 border-border-color" />
+                    
+                    {/* Animated Gradient Spinner */}
+                    <motion.div
+                      animate={{ rotate: 360 }}
+                      transition={{ duration: 0.8, repeat: Infinity, ease: "linear" }}
+                      className="w-12 h-12 rounded-full border-2 border-transparent border-t-[#00ff5f] border-r-[#00ff5f]/30 shadow-[0_0_15px_rgba(0,255,95,0.2)]"
+                    />
+                  </div>
+                  <p className="mt-8 text-[10px] font-black text-[#00ff5f] uppercase tracking-[0.4em] animate-pulse">Negotiating Protocols</p>
                 </div>
               ) : filteredMethods.length > 0 ? (
                 filteredMethods.map(m => (
@@ -434,10 +452,10 @@ export default function WithdrawFlow({
                       setSelectedMethod(m);
                       setStep('DETAILS');
                     }}
-                    className="flex items-center justify-between p-6 rounded-[2.5rem] bg-[#1c1c1e] border border-white/5 hover:border-[#00ff5f]/40 transition-all group active:scale-[0.98] shadow-lg"
+                    className="flex items-center justify-between p-6 rounded-[2.5rem] bg-bg-secondary border border-border-color hover:border-[#00ff5f]/40 transition-all group active:scale-[0.98] shadow-lg"
                   >
                     <div className="flex items-center gap-6">
-                      <div className="w-16 h-16 rounded-2xl flex items-center justify-center bg-white/5 overflow-hidden p-2 border border-white/10 group-hover:border-[#00ff5f]/20 transition-all">
+                      <div className="w-16 h-16 rounded-2xl flex items-center justify-center bg-bg-secondary overflow-hidden p-2 border border-border-color group-hover:border-[#00ff5f]/20 transition-all">
                         <img 
                           src={m.logo} 
                           alt={m.name} 
@@ -446,21 +464,21 @@ export default function WithdrawFlow({
                         />
                       </div>
                       <div className="text-left">
-                        <div className="font-black text-white text-xl">{m.name}</div>
-                        <div className="text-[11px] text-white/40 uppercase font-black tracking-widest">Verified Payment Gateway</div>
+                        <div className="font-black text-text-primary text-xl">{m.name}</div>
+                        <div className="text-[11px] text-text-secondary/40 uppercase font-black tracking-widest">Verified Payment Gateway</div>
                       </div>
                     </div>
-                    <ChevronRight size={28} className="text-white/10 group-hover:text-[#00ff5f] transition-all" />
+                    <ChevronRight size={28} className="text-text-secondary/10 group-hover:text-[#00ff5f] transition-all" />
                   </button>
                 ))
               ) : (
-                <div className="bg-[#1c1c1e] rounded-[3rem] p-12 text-center flex flex-col items-center space-y-10 border border-white/5 shadow-2xl">
+                <div className="bg-bg-secondary rounded-[3rem] p-12 text-center flex flex-col items-center space-y-10 border border-border-color shadow-2xl">
                   <div className="w-24 h-24 bg-red-500/10 rounded-full flex items-center justify-center border border-red-500/10">
                     <CircleOff size={56} className="text-red-500 border-red-500/20" />
                   </div>
                   <div className="space-y-4">
-                    <p className="text-3xl font-black text-white leading-tight">No Active Gateways</p>
-                    <p className="text-sm text-white/40 leading-relaxed max-w-[300px] mx-auto font-bold uppercase tracking-wide">
+                    <p className="text-3xl font-black text-text-primary leading-tight">No Active Gateways</p>
+                    <p className="text-sm text-text-secondary/40 leading-relaxed max-w-[300px] mx-auto font-bold uppercase tracking-wide">
                       A prior deposit must be established to whitelist a disbursement node.
                     </p>
                   </div>
@@ -480,28 +498,28 @@ export default function WithdrawFlow({
         return (
           <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-300 pb-10 px-6">
             <div className="flex items-center gap-4">
-               <button onClick={() => setStep('METHOD')} className="p-2 -ml-2 text-white/40 hover:text-white transition">
+               <button onClick={() => setStep('METHOD')} className="p-2 -ml-2 text-text-secondary/40 hover:text-text-primary transition">
                   <ChevronLeft size={28} />
                </button>
-               <h3 className="text-2xl font-black text-white tracking-tight">Payout Details</h3>
+               <h3 className="text-2xl font-black text-text-primary tracking-tight">{t('withdraw.payout_details')}</h3>
             </div>
 
-            <div className="bg-[#1c1c1e] rounded-[3rem] p-10 border border-white/5 space-y-10 shadow-2xl">
-              <div className="flex justify-between items-center pb-10 border-b border-white/5">
-                <span className="text-[11px] text-white/40 font-black uppercase tracking-[0.2em]">Target Disbursement</span>
+            <div className="bg-bg-secondary rounded-[3rem] p-10 border border-border-color space-y-10 shadow-2xl">
+              <div className="flex justify-between items-center pb-10 border-b border-border-color">
+                <span className="text-[11px] text-text-secondary/40 font-black uppercase tracking-[0.2em]">Target Disbursement</span>
                 <span className="text-4xl font-black text-[#00ff5f]">{currencyCode} {amount?.toLocaleString()}</span>
               </div>
               
               <div className="space-y-5">
-                <label className="text-[11px] text-white/40 font-black uppercase tracking-[0.2em] ml-1">
-                  Recipient {selectedMethod?.name} Address
+                <label className="text-[11px] text-text-secondary/40 font-black uppercase tracking-[0.2em] ml-1">
+                  {t('withdraw.recipient_account_address', { method: selectedMethod?.name })}
                 </label>
                 <div className="relative group">
                    <input 
                      type="text" 
                      value={accountDetails} 
                      onChange={(e) => setAccountDetails(e.target.value)}
-                     className="w-full bg-white/5 p-8 rounded-[2rem] text-white font-bold text-2xl focus:outline-none focus:ring-2 focus:ring-[#00ff5f]/30 transition-all border border-white/5 shadow-inner"
+                     className="w-full bg-bg-secondary p-8 rounded-[2rem] text-text-primary font-bold text-2xl focus:outline-none focus:ring-2 focus:ring-[#00ff5f]/30 transition-all border border-border-color shadow-inner"
                      placeholder={selectedMethod?.id === 'usdt' ? "Txxx..." : "01XXXXXXXXX"}
                      autoFocus
                    />
@@ -521,16 +539,16 @@ export default function WithdrawFlow({
 
             <div className="pt-4">
               <button 
-                disabled={!accountDetails || isProcessing}
-                onClick={handleSubmit}
-                className="w-full bg-[#00ff5f] text-black font-black py-7 rounded-[2.5rem] disabled:opacity-50 shadow-[0_15px_40px_rgba(0,255,95,0.2)] active:scale-[0.98] transition-all flex justify-center items-center gap-4 text-2xl"
-              >
-                {isProcessing ? <Loader2 className="animate-spin" size={32} /> : (
-                   <>
-                      Complete Payout <ArrowRight size={28} strokeWidth={3} />
-                   </>
-                )}
-              </button>
+  disabled={!accountDetails || isProcessing}
+  onClick={handleSubmit}
+  className="w-full bg-[#00ff5f] text-black font-black py-7 rounded-[2.5rem] disabled:opacity-50 shadow-[0_15px_40px_rgba(0,255,95,0.2)] active:scale-[0.98] transition-all flex justify-center items-center gap-4 text-2xl"
+>
+  {isProcessing ? <Loader2 className="animate-spin" size={32} /> : (
+     <>
+        {t('withdraw.complete_payout')} <ArrowRight size={28} strokeWidth={3} />
+     </>
+  )}
+</button>
             </div>
           </div>
         );
@@ -545,9 +563,9 @@ export default function WithdrawFlow({
                <div className="absolute inset-0 bg-[#00ff5f]/15 blur-3xl -z-10 animate-pulse"></div>
             </div>
             <div className="space-y-6 px-4">
-              <h3 className="text-5xl font-black text-white leading-tight tracking-tight">Request Transmitted</h3>
-              <p className="text-xl text-white/30 font-bold max-w-[320px] mx-auto leading-relaxed">
-                The disbursement of <span className="text-white font-black">{currencyCode} {amount}</span> has been broadcast to the nodes and is now in processing queue.
+              <h3 className="text-5xl font-black text-text-primary leading-tight tracking-tight">{t('withdraw.request_transmitted')}</h3>
+              <p className="text-xl text-text-secondary/30 font-bold max-w-[320px] mx-auto leading-relaxed">
+                The disbursement of <span className="text-text-primary font-black">{currencyCode} {amount}</span> has been broadcast to the nodes and is now in processing queue.
               </p>
             </div>
             <div className="pt-8">
@@ -555,7 +573,7 @@ export default function WithdrawFlow({
                  onClick={resetAndClose}
                  className="w-full bg-[#00ff5f] text-black font-black py-7 rounded-[2.5rem] shadow-[0_15px_40px_rgba(0,255,95,0.3)] text-2xl active:scale-95 transition-transform"
                >
-                 Close Terminal
+                 {t('withdraw.close_terminal')}
                </button>
             </div>
           </div>
@@ -568,15 +586,15 @@ export default function WithdrawFlow({
               <XCircle size={96} className="text-red-500" />
             </div>
             <div className="space-y-6 px-6">
-              <h3 className="text-4xl font-black text-white tracking-tight">Protocol Violation</h3>
+              <h3 className="text-4xl font-black text-text-primary tracking-tight">{t('withdraw.protocol_violation')}</h3>
               <p className="text-sm text-red-500/80 font-black uppercase tracking-[0.3em] leading-relaxed">{errorMsg}</p>
             </div>
             <div className="pt-8">
                <button 
                  onClick={() => setStep('OVERVIEW')}
-                 className="w-full bg-white/5 text-white font-black py-7 rounded-[2.5rem] border border-white/10 active:scale-95 transition-transform text-2xl"
+                 className="w-full bg-bg-secondary text-text-primary font-black py-7 rounded-[2.5rem] border border-border-color active:scale-95 transition-transform text-2xl"
                >
-                 Re-Initiate Protocol
+                 {t('withdraw.reinitiate_protocol')}
                </button>
             </div>
           </div>
@@ -592,7 +610,7 @@ export default function WithdrawFlow({
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: '100%' }}
           transition={{ type: 'spring', damping: 35, stiffness: 300, mass: 0.7 }}
-          className="fixed inset-0 z-[150] bg-[#121214] flex flex-col no-scrollbar overflow-y-auto"
+          className="fixed inset-0 z-[150] bg-bg-primary flex flex-col no-scrollbar overflow-y-auto"
         >
           <div className="flex-1 w-full max-w-xl mx-auto py-12 flex flex-col">
             <AnimatePresence mode="wait">
@@ -601,13 +619,13 @@ export default function WithdrawFlow({
           </div>
 
           {(step !== 'LOADING' && step !== 'SUCCESS' && step !== 'ERROR') && (
-             <div className="w-full max-w-xl mx-auto pb-12 px-8 border-t border-white/5 pt-10 flex flex-col items-center space-y-4 opacity-30 mt-auto">
-               <div className="flex items-center gap-3 text-white font-black text-[11px] uppercase tracking-[0.4em]">
+             <div className="w-full max-w-xl mx-auto pb-12 px-8 border-t border-border-color pt-10 flex flex-col items-center space-y-4 opacity-30 mt-auto">
+               <div className="flex items-center gap-3 text-text-primary font-black text-[11px] uppercase tracking-[0.4em]">
                  <ShieldCheck size={16} className="text-[#00ff5f]" />
-                 Quantum-Safe disbursement protocol v2.9
+                 {t('withdraw.disbursement_protocol')}
                </div>
-               <p className="text-[10px] text-white font-bold opacity-50 uppercase tracking-[0.3em]">
-                 End-to-End verified encryption active
+               <p className="text-[10px] text-text-primary font-bold opacity-50 uppercase tracking-[0.3em]">
+                 {t('withdraw.encryption_active')}
                </p>
              </div>
           )}

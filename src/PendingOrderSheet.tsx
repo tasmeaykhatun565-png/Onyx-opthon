@@ -76,17 +76,17 @@ export default function PendingOrderSheet({
             animate={{ y: 0 }}
             exit={{ y: "100%" }}
             transition={{ type: "spring", damping: 30, stiffness: 300 }}
-            className="relative bg-[#111214] rounded-t-[32px] overflow-hidden border-t border-white/5 pb-safe max-h-[90vh]"
+            className="relative bg-[#111214] rounded-t-[32px] overflow-hidden border-t border-border-color pb-safe max-h-[90vh]"
           >
             <div className="flex justify-center pt-3">
-              <div className="w-10 h-1 bg-white/10 rounded-full" />
+              <div className="w-10 h-1 bg-bg-tertiary rounded-full" />
             </div>
 
             <div className="p-5 flex items-center justify-between">
               <h2 className="text-white font-bold text-base">Place an Order on {assetName}</h2>
               <button 
                 onClick={onClose}
-                className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-white/40"
+                className="w-8 h-8 rounded-full bg-bg-secondary flex items-center justify-center text-text-secondary/40"
               >
                 <HelpCircle size={18} />
               </button>
@@ -94,12 +94,12 @@ export default function PendingOrderSheet({
 
             <div className="px-5 pb-6">
               {/* Tabs */}
-              <div className="flex border-b border-white/5 mb-5">
+              <div className="flex border-b border-border-color mb-5">
                 <button 
                   onClick={() => handleTabChange('PRICE')}
                   className={cn(
                     "flex-1 py-3 text-[15px] font-bold transition relative",
-                    tab === 'PRICE' ? "text-[#a3ff12]" : "text-white/40"
+                    tab === 'PRICE' ? "text-[#a3ff12]" : "text-text-secondary/40"
                   )}
                 >
                   By Price
@@ -109,7 +109,7 @@ export default function PendingOrderSheet({
                   onClick={() => handleTabChange('TIME')}
                   className={cn(
                     "flex-1 py-3 text-[15px] font-bold transition relative",
-                    tab === 'TIME' ? "text-[#a3ff12]" : "text-white/40"
+                    tab === 'TIME' ? "text-[#a3ff12]" : "text-text-secondary/40"
                   )}
                 >
                   By Time
@@ -127,7 +127,7 @@ export default function PendingOrderSheet({
                       "px-4 py-2 rounded-full text-[13px] font-bold whitespace-nowrap transition-all",
                       profitability === opt.value 
                         ? "bg-[#a3ff12] text-black" 
-                        : "bg-white/5 text-white/60 hover:bg-white/10 border border-white/5"
+                        : "bg-bg-secondary text-text-secondary/60 hover:bg-bg-tertiary border border-border-color"
                     )}
                   >
                     {opt.label}
@@ -137,7 +137,7 @@ export default function PendingOrderSheet({
 
               {/* Input Field Display */}
               <div className="mt-2 bg-white/[0.02] border border-[#a3ff12] rounded-2xl p-4 mb-4 shadow-[0_0_20px_rgba(163,255,18,0.05)]">
-                <div className="text-[10px] text-white/40 font-black uppercase tracking-widest mb-1">
+                <div className="text-[10px] text-text-secondary/40 font-black uppercase tracking-widest mb-1">
                   {tab === 'PRICE' ? 'Opening Price' : 'Opening Time'}
                 </div>
                 <div className="text-2xl font-bold text-white font-mono">
@@ -145,7 +145,7 @@ export default function PendingOrderSheet({
                 </div>
               </div>
 
-              <p className="text-[11px] text-white/40 mb-5 leading-tight px-1">
+              <p className="text-[11px] text-text-secondary/40 mb-5 leading-tight px-1">
                 Your trade will be opened if the asset {tab === 'PRICE' ? 'price reaches' : 'time matches'} <span className="text-white font-bold">{inputValue}</span>
               </p>
 
@@ -155,14 +155,14 @@ export default function PendingOrderSheet({
                   <button
                     key={num}
                     onClick={() => handleNumberClick(num.toString())}
-                    className="h-12 flex items-center justify-center text-2xl font-medium text-white/90 active:scale-75 transition-all"
+                    className="h-12 flex items-center justify-center text-2xl font-medium text-text-primary/90 active:scale-75 transition-all"
                   >
                     {num}
                   </button>
                 ))}
                 <button
                   onClick={handleDelete}
-                  className="h-12 flex items-center justify-center text-white/60 active:scale-75 transition-all"
+                  className="h-12 flex items-center justify-center text-text-secondary/60 active:scale-75 transition-all"
                 >
                   <Delete size={24} strokeWidth={1.5} />
                 </button>
@@ -174,7 +174,7 @@ export default function PendingOrderSheet({
                   onClick={() => setDirection('UP')}
                   className={cn(
                     "flex-1 h-14 rounded-2xl font-black text-sm uppercase tracking-widest transition-all flex items-center justify-center gap-2",
-                    direction === 'UP' ? "bg-[#22c55e] text-white shadow-[0_4px_15px_rgba(34,197,94,0.3)]" : "bg-white/5 text-white/40 border border-white/5"
+                    direction === 'UP' ? "bg-[#22c55e] text-white shadow-[0_4px_15px_rgba(34,197,94,0.3)]" : "bg-bg-secondary text-text-secondary/40 border border-border-color"
                   )}
                 >
                   <ArrowUp size={18} strokeWidth={3} />
@@ -184,7 +184,7 @@ export default function PendingOrderSheet({
                   onClick={() => setDirection('DOWN')}
                   className={cn(
                     "flex-1 h-14 rounded-2xl font-black text-sm uppercase tracking-widest transition-all flex items-center justify-center gap-2",
-                    direction === 'DOWN' ? "bg-[#ff4d4d] text-white shadow-[0_4px_15px_rgba(255,77,77,0.3)]" : "bg-white/5 text-white/40 border border-white/5"
+                    direction === 'DOWN' ? "bg-[#ff4d4d] text-white shadow-[0_4px_15px_rgba(255,77,77,0.3)]" : "bg-bg-secondary text-text-secondary/40 border border-border-color"
                   )}
                 >
                   <ArrowDown size={18} strokeWidth={3} />

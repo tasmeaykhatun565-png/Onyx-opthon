@@ -38,82 +38,82 @@
   }
   --animate-shake: shake 0.2s ease-in-out 0s 2;
 
-  /* Theme Variables */
-  --bg-primary: var(--color-bg-primary);
-  --bg-secondary: var(--color-bg-secondary);
-  --bg-tertiary: var(--color-bg-tertiary);
-  --text-primary: var(--color-text-primary);
-  --text-secondary: var(--color-text-secondary);
-  --border-color: var(--color-border-color);
-  --accent-color: var(--color-accent-color);
-  --accent-hover: var(--color-accent-hover);
+  /* Theme Variables properly exposed as colors */
+  --color-bg-primary: var(--theme-bg-primary);
+  --color-bg-secondary: var(--theme-bg-secondary);
+  --color-bg-tertiary: var(--theme-bg-tertiary);
+  --color-text-primary: var(--theme-text-primary);
+  --color-text-secondary: var(--theme-text-secondary);
+  --color-border-color: var(--theme-border-color);
+  --color-accent-color: var(--theme-accent-color);
+  --color-accent-hover: var(--theme-accent-hover);
 }
 
 :root {
-  /* Professional Deep Dark Theme */
-  --color-bg-primary: #0f1117;
-  --color-bg-secondary: #1a1d26;
-  --color-bg-tertiary: #252935;
-  --color-text-primary: #f8fafc;
-  --color-text-secondary: #94a3b8;
-  --color-border-color: rgba(255, 255, 255, 0.08);
-  --color-accent-color: #3b82f6;
-  --color-accent-hover: #2563eb;
+  /* Professional Dark Theme (Default) */
+  --theme-bg-primary: #0a0b0f;
+  --theme-bg-secondary: #13141b;
+  --theme-bg-tertiary: #1b1d28;
+  --theme-text-primary: #f8fafc;
+  --theme-text-secondary: #94a3b8;
+  --theme-border-color: rgba(255, 255, 255, 0.08);
+  --theme-accent-color: #3b82f6;
+  --theme-accent-hover: #2563eb;
+  --color-success: #10b981;
+  --color-danger: #ef4444;
 }
 
 [data-theme='light'] {
-  --color-bg-primary: #f3f4f6;
-  --color-bg-secondary: #ffffff;
-  --color-bg-tertiary: #e5e7eb;
-  --color-text-primary: #111827;
-  --color-text-secondary: #4b5563;
-  --color-border-color: rgba(0, 0, 0, 0.05);
-  --color-accent-color: #2563eb;
-  --color-accent-hover: #1d4ed8;
+  --theme-bg-primary: #ffffff;
+  --theme-bg-secondary: #ffffff;
+  --theme-bg-tertiary: #fafafa;
+  --theme-text-primary: #0f172a;
+  --theme-text-secondary: #64748b;
+  --theme-border-color: rgba(15, 23, 42, 0.05);
+  --theme-accent-color: #2563eb;
+  --theme-accent-hover: #1d4ed8;
+  --color-success: #059669;
+  --color-danger: #dc2626;
 }
 
-[data-theme='onyx'] {
-  --color-bg-primary: #000000;
-  --color-bg-secondary: #0a0a0a;
-  --color-bg-tertiary: #141414;
-  --color-text-primary: #ffffff;
-  --color-text-secondary: #71717a;
-  --color-border-color: rgba(255, 255, 255, 0.03);
-  --color-accent-color: #ffffff;
-  --color-accent-hover: #e4e4e7;
+[data-theme='classic'] {
+  --theme-bg-primary: #0f172a;
+  --theme-bg-secondary: #1e293b;
+  --theme-bg-tertiary: #334155;
+  --theme-text-primary: #f1f5f9;
+  --theme-text-secondary: #94a3b8;
+  --theme-border-color: rgba(255, 255, 255, 0.06);
+  --theme-accent-color: #38bdf8;
+  --theme-accent-hover: #0ea5e9;
+  --color-success: #22c55e;
+  --color-danger: #f43f5e;
 }
 
-[data-theme='midnight'] {
-  --color-bg-primary: #020617;
-  --color-bg-secondary: #0f172a;
-  --color-bg-tertiary: #1e293b;
-  --color-text-primary: #f8fafc;
-  --color-text-secondary: #94a3b8;
-  --color-border-color: rgba(255, 255, 255, 0.05);
-  --color-accent-color: #38bdf8;
-  --color-accent-hover: #0ea5e9;
+[data-theme='purple'] {
+  --theme-bg-primary: #0f0a1e;
+  --theme-bg-secondary: #1a1433;
+  --theme-bg-tertiary: #2a204d;
+  --theme-text-primary: #f5f3ff;
+  --theme-text-secondary: #a78bfa;
+  --theme-border-color: rgba(167, 139, 250, 0.15);
+  --theme-accent-color: #8b5cf6;
+  --theme-accent-hover: #7c3aed;
+  --color-success: #34d399;
+  --color-danger: #fb7185;
 }
 
-[data-theme='emerald'] {
-  --color-bg-primary: #022c22;
-  --color-bg-secondary: #064e3b;
-  --color-bg-tertiary: #065f46;
-  --color-text-primary: #ecfdf5;
-  --color-text-secondary: #a7f3d0;
-  --color-border-color: rgba(255, 255, 255, 0.05);
-  --color-accent-color: #10b981;
-  --color-accent-hover: #059669;
-  /* Hide number input spinners */
-  input[type="number"]::-webkit-inner-spin-button,
-  input[type="number"]::-webkit-outer-spin-button {
-    -webkit-appearance: none;
-    margin: 0;
-  }
-  input[type="number"] {
-    -moz-appearance: textfield;
-  }
+[data-theme='inspire'] {
+  --theme-bg-primary: #020617;
+  --theme-bg-secondary: #0a0a0a;
+  --theme-bg-tertiary: #1a1a1a;
+  --theme-text-primary: #fef3c7;
+  --theme-text-secondary: #d97706;
+  --theme-border-color: rgba(251, 191, 36, 0.15);
+  --theme-accent-color: #fbbf24;
+  --theme-accent-hover: #f59e0b;
+  --color-success: #10b981;
+  --color-danger: #ef4444;
 }
-
 @layer utilities {
   .no-scrollbar::-webkit-scrollbar {
     display: none;
@@ -126,14 +126,65 @@
 
 @layer base {
   html, body {
-    background-color: var(--bg-primary);
-    color: var(--text-primary);
+    background-color: var(--theme-bg-primary);
+    color: var(--theme-text-primary);
     -webkit-tap-highlight-color: transparent;
     overscroll-behavior: none;
     user-select: none;
     -webkit-user-select: none;
     transition: background-color 0.3s ease, color 0.3s ease;
+    top: 0 !important; /* Override Google Translate */
   }
+  
+  /* Hide Google Translate UI */
+  .goog-te-banner-frame {
+    display: none !important;
+  }
+  .goog-te-banner-frame.skiptranslate {
+    display: none !important;
+  }
+  iframe.skiptranslate {
+    display: none !important;
+    visibility: hidden !important;
+  }
+  #goog-gt-tt, .goog-te-balloon-frame {
+    display: none !important;
+  }
+  .goog-text-highlight {
+    background: none !important;
+    box-shadow: none !important;
+  }
+  .VIpgJd-Zvi9od-aZ2wEe-wOHMyf {
+    display: none !important;
+  }
+  div[id^="goog-gt-"] {
+    display: none !important;
+  }
+  .skiptranslate > iframe {
+    display: none !important;
+  }
+  .goog-te-gadget-icon {
+    display: none !important;
+  }
+  .goog-tooltip {
+    display: none !important;
+  }
+  .goog-tooltip:hover {
+    display: none !important;
+  }
+  .goog-text-highlight {
+    background-color: transparent !important;
+    border: none !important; 
+    box-shadow: none !important;
+  }
+  body {
+    top: 0px !important; 
+  }
+  html {
+    top: 0px !important;
+  }
+  /* Google Translate changes the html lang attribute, so we don't need iframe showing */
+
   
   * {
     -webkit-tap-highlight-color: transparent;
@@ -143,6 +194,16 @@
   input, textarea {
     user-select: text;
     -webkit-user-select: text;
+  }
+
+  /* Hide number input spinners */
+  input[type="number"]::-webkit-inner-spin-button,
+  input[type="number"]::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+  input[type="number"] {
+    -moz-appearance: textfield;
   }
 
   /* Hide TradingView logo from lightweight-charts */
@@ -157,3 +218,4 @@
     z-index: -1 !important;
   }
 }
+

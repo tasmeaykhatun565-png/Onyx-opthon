@@ -172,11 +172,11 @@ export default function TransferFlow({
   };
 
   return (
-    <BottomSheet isOpen={isOpen} onClose={onClose} className="bg-[var(--bg-primary)]">
+    <BottomSheet isOpen={isOpen} onClose={onClose} className="bg-bg-primary">
       <div className="p-4 space-y-6 pb-10">
         <div className="text-center space-y-2">
-          <h2 className="text-xl font-bold text-[var(--text-primary)]">Internal Transfer</h2>
-          <p className="text-xs text-[var(--text-secondary)]">Transfer funds to another Onyx account</p>
+          <h2 className="text-xl font-bold text-text-primary">Internal Transfer</h2>
+          <p className="text-xs text-text-secondary">Transfer funds to another Onyx account</p>
         </div>
 
         {success ? (
@@ -186,7 +186,7 @@ export default function TransferFlow({
             </div>
             <div className="text-center">
               <h3 className="text-lg font-bold text-green-500">Transfer Successful</h3>
-              <p className="text-sm text-[var(--text-secondary)]">Funds have been sent to {recipientEmail}</p>
+              <p className="text-sm text-text-secondary">Funds have been sent to {recipientEmail}</p>
             </div>
           </div>
         ) : (
@@ -199,40 +199,40 @@ export default function TransferFlow({
             )}
 
             <div className="space-y-2">
-              <label className="text-xs font-medium text-[var(--text-secondary)] uppercase tracking-wider ml-1">Recipient Email</label>
+              <label className="text-xs font-medium text-text-secondary uppercase tracking-wider ml-1">Recipient Email</label>
               <input 
                 type="email" 
                 value={recipientEmail} 
                 onChange={(e) => setRecipientEmail(e.target.value)}
-                className="w-full bg-[var(--bg-secondary)] p-4 rounded-2xl text-[var(--text-primary)] border border-[var(--border-color)] focus:border-blue-500 transition-all outline-none"
+                className="w-full bg-bg-secondary p-4 rounded-2xl text-text-primary border border-border-color focus:border-blue-500 transition-all outline-none"
                 placeholder="Enter recipient's email"
               />
             </div>
 
             <div className="space-y-2">
               <div className="flex justify-between items-center ml-1">
-                <label className="text-xs font-medium text-[var(--text-secondary)] uppercase tracking-wider">Amount</label>
-                <span className="text-[10px] text-[var(--text-secondary)]">Balance: {currencySymbol}{balance.toFixed(2)}</span>
+                <label className="text-xs font-medium text-text-secondary uppercase tracking-wider">Amount</label>
+                <span className="text-[10px] text-text-secondary">Balance: {currencySymbol}{balance.toFixed(2)}</span>
               </div>
               <div className="relative">
                 <input 
                   type="number" 
                   value={amount} 
                   onChange={(e) => setAmount(e.target.value)}
-                  className="w-full bg-[var(--bg-secondary)] p-4 rounded-2xl text-[var(--text-primary)] font-bold text-xl border border-[var(--border-color)] focus:border-blue-500 transition-all outline-none pl-10"
+                  className="w-full bg-bg-secondary p-4 rounded-2xl text-text-primary font-bold text-xl border border-border-color focus:border-blue-500 transition-all outline-none pl-10"
                   placeholder="0.00"
                 />
-                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-[var(--text-secondary)] font-bold text-lg">{currencySymbol}</span>
+                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-text-secondary font-bold text-lg">{currencySymbol}</span>
               </div>
               <div className="flex justify-between px-1">
-                <p className="text-[10px] text-[var(--text-secondary)] italic">Max: $1.00 equivalent</p>
-                <p className="text-[10px] text-[var(--text-secondary)] italic">Min: {currencyCode === 'BDT' ? '20.00 BDT' : '0.10 USD'}</p>
+                <p className="text-[10px] text-text-secondary italic">Max: $1.00 equivalent</p>
+                <p className="text-[10px] text-text-secondary italic">Min: {currencyCode === 'BDT' ? '20.00 BDT' : '0.10 USD'}</p>
               </div>
             </div>
 
             <div className="bg-blue-500/5 border border-blue-500/10 p-4 rounded-xl space-y-2">
               <h4 className="text-xs font-bold text-blue-500 uppercase tracking-widest">Transfer Rules</h4>
-              <ul className="text-[10px] text-[var(--text-secondary)] space-y-1 list-disc pl-4">
+              <ul className="text-[10px] text-text-secondary space-y-1 list-disc pl-4">
                 <li>Once every 3 days only.</li>
                 <li>Maximum $1.00 per transfer.</li>
                 <li>One-time transfer per recipient.</li>

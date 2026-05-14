@@ -25,12 +25,12 @@ const ActivitiesSheet: React.FC<ActivitiesSheetProps> = ({
   const content = (
     <div className={cn(
       "h-full w-full bg-[#121418] flex flex-col pt-safe scrollbar-hide",
-      !inSidebar && "fixed md:relative right-0 top-0 md:w-80 border-l border-white/5 z-50 shadow-2xl"
+      !inSidebar && "fixed md:relative right-0 top-0 md:w-80 border-l border-border-color z-50 shadow-2xl"
     )}>
       {/* Header */}
       <div className="flex justify-between items-center px-6 py-4">
-        <h2 className="text-xl font-bold text-white tracking-tight">Activities</h2>
-        <button onClick={onClose} className="text-gray-400 hover:text-white transition-colors p-1">
+        <h2 className="text-xl font-bold text-text-primary tracking-tight">Activities</h2>
+        <button onClick={onClose} className="text-gray-400 hover:text-text-primary transition-colors p-1">
           <X size={24} strokeWidth={2.5} />
         </button>
       </div>
@@ -46,7 +46,7 @@ const ActivitiesSheet: React.FC<ActivitiesSheetProps> = ({
                 href={ad.linkUrl || '#'} 
                 target={ad.linkUrl ? "_blank" : undefined}
                 rel="noreferrer"
-                className="min-w-[130px] h-36 rounded-2xl p-4 flex flex-col justify-end relative overflow-hidden group cursor-pointer transition-transform active:scale-95 bg-[#1e1e1e]"
+                className="min-w-[130px] h-36 rounded-2xl p-4 flex flex-col justify-end relative overflow-hidden group cursor-pointer transition-transform active:scale-95 bg-bg-tertiary"
                 style={{
                   backgroundImage: ad.imageUrl && (!ad.imageUrl.startsWith('bg-') && !ad.imageUrl.startsWith('#')) ? `url(${ad.imageUrl})` : 'none',
                   backgroundColor: (!ad.imageUrl || ad.imageUrl.startsWith('#')) ? (ad.imageUrl || '#1e1e1e') : '',
@@ -57,75 +57,68 @@ const ActivitiesSheet: React.FC<ActivitiesSheetProps> = ({
                  {ad.imageUrl && !ad.imageUrl.startsWith('#') && (
                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
                  )}
-                 <span className="text-[13px] font-bold text-white leading-tight relative shadow-sm drop-shadow-md z-10">{ad.title}</span>
+                 <span className="text-[13px] font-bold text-text-primary leading-tight relative shadow-sm drop-shadow-md z-10">{ad.title}</span>
               </a>
             ))}
           </div>
         )}
 
-        {/* Tournaments Row */}
-        <div 
-          onClick={onOpenTournaments}
-          className="bg-[#1e1e1e] rounded-2xl p-4 flex items-center justify-between cursor-pointer hover:bg-white/[0.03] transition-all group shadow-sm active:scale-[0.98]"
-        >
-          <div className="flex items-center gap-4">
-             <div className="w-12 h-12 bg-white/5 rounded-2xl flex items-center justify-center text-gray-400">
-               <Trophy size={24} strokeWidth={1.5} />
-             </div>
-             <span className="text-[15px] font-bold text-white">Tournaments</span>
-          </div>
-          <ChevronRight size={20} className="text-gray-600" />
-        </div>
-
-        {/* Grid (Bonuses, Calendar, Top-20) */}
-        <div className="grid grid-cols-3 gap-3">
-          {/* Bonuses */}
+        <div className="space-y-3">
+          {/* Tournaments */}
           <div 
-            onClick={onOpenRewards}
-            className="aspect-square rounded-2xl bg-[#1e1e1e] p-3 flex flex-col items-center justify-center gap-3 cursor-pointer hover:bg-white/[0.03] transition-all active:scale-[0.95] group"
+            onClick={onOpenTournaments}
+            className="bg-bg-tertiary rounded-2xl p-4 flex items-center justify-between cursor-pointer hover:bg-bg-secondary transition-all group shadow-sm active:scale-[0.98]"
           >
-            <div className="w-10 h-10 bg-blue-500/10 rounded-xl flex items-center justify-center text-blue-500">
-              <Gift size={20} />
-            </div>
-            <span className="text-[12px] font-bold text-[#fefefe]">Bonuses</span>
-          </div>
-
-          {/* Calendar */}
-          <div 
-            onClick={onOpenCalendar}
-            className="aspect-square rounded-2xl bg-[#1e1e1e] p-3 flex flex-col items-center justify-center gap-3 cursor-pointer hover:bg-white/[0.03] transition-all active:scale-[0.95] group"
-          >
-            <div className="w-10 h-10 bg-[#a855f7]/10 rounded-xl flex items-center justify-center text-[#a855f7]">
-              <Calendar size={20} />
-            </div>
-            <span className="text-[12px] font-bold text-[#fefefe]">Calendar</span>
-          </div>
-
-          {/* Top-20 (Leaderboard) */}
-          <div 
-            onClick={onOpenLeaderboard}
-            className="aspect-square rounded-2xl bg-[#1e1e1e] p-3 flex flex-col items-center justify-center gap-3 cursor-pointer hover:bg-white/[0.03] transition-all active:scale-[0.95] group relative"
-          >
-            <div className="absolute top-3 right-3 w-2 h-2 bg-red-500 rounded-full shadow-[0_0_8px_rgba(239,68,68,0.5)]" />
-            <div className="w-10 h-10 bg-white/5 rounded-xl flex items-center justify-center text-gray-400">
-              <div className="relative">
-                <User size={20} />
-                <div className="absolute -bottom-0.5 -right-0.5 w-1.5 h-1.5 bg-gray-400 rounded-full border border-[#1e1e1e]" />
-              </div>
-            </div>
-            <span className="text-[12px] font-bold text-[#fefefe]">Top-20</span>
-          </div>
-        </div>
-
-        {/* List Section */}
-        <div className="space-y-3 pt-2">
-          {/* What's new? */}
-          <div onClick={onOpenWhatsNew} className="bg-[#1e1e1e] rounded-2xl p-4 flex items-center justify-between cursor-pointer hover:bg-white/[0.03] transition-all active:scale-[0.98] group">
             <div className="flex items-center gap-4">
-               <div className="w-12 h-12 bg-white/5 rounded-2xl flex items-center justify-center text-gray-400">
-                 <Megaphone size={22} strokeWidth={1.5} />
+               <div className="w-12 h-12 bg-bg-secondary rounded-2xl flex items-center justify-center text-text-secondary">
+                 <Trophy size={24} strokeWidth={1.5} />
                </div>
-               <span className="text-[15px] font-bold text-white">What's new?</span>
+               <span className="text-[15px] font-bold text-text-primary">Tournaments</span>
+            </div>
+            <ChevronRight size={20} className="text-text-secondary" />
+          </div>
+
+          {/* Bonuses, Calendar, Top-20 Grid */}
+          <div className="grid grid-cols-3 gap-3">
+            <div 
+              onClick={onOpenRewards}
+              className="bg-bg-tertiary rounded-2xl p-4 flex flex-col items-center justify-center gap-3 cursor-pointer hover:bg-bg-secondary transition-all group shadow-sm"
+            >
+              <div className="w-12 h-12 bg-blue-500/10 rounded-2xl flex items-center justify-center text-blue-500">
+                <Gift size={24} strokeWidth={1.5} />
+              </div>
+              <span className="text-[13px] font-bold text-text-primary text-center leading-tight">Bonuses</span>
+            </div>
+
+            <div 
+              onClick={onOpenCalendar}
+              className="bg-bg-tertiary rounded-2xl p-4 flex flex-col items-center justify-center gap-3 cursor-pointer hover:bg-bg-secondary transition-all group shadow-sm"
+            >
+              <div className="w-12 h-12 bg-[#a855f7]/10 rounded-2xl flex items-center justify-center text-[#a855f7]">
+                <Calendar size={24} strokeWidth={1.5} />
+              </div>
+              <span className="text-[13px] font-bold text-text-primary text-center leading-tight">Calendar</span>
+            </div>
+
+            <div 
+              onClick={onOpenLeaderboard}
+              className="bg-bg-tertiary rounded-2xl p-4 flex flex-col items-center justify-center gap-3 cursor-pointer hover:bg-bg-secondary transition-all group shadow-sm relative"
+            >
+              <div className="absolute top-3 right-3 w-2 h-2 bg-[#ff4757] rounded-full drop-shadow-[0_0_4px_rgba(255,71,87,0.8)]" />
+              <div className="w-12 h-12 bg-bg-secondary rounded-2xl flex items-center justify-center text-text-secondary">
+                <User size={24} strokeWidth={1.5} />
+              </div>
+              <span className="text-[13px] font-bold text-text-primary text-center leading-tight">Top-20</span>
+            </div>
+          </div>
+
+          {/* What's new? */}
+          <div onClick={onOpenWhatsNew} className="bg-bg-tertiary rounded-2xl p-4 flex items-center justify-between cursor-pointer hover:bg-bg-secondary transition-all active:scale-[0.98] group">
+            <div className="flex items-center gap-4">
+               <div className="w-12 h-12 bg-bg-secondary rounded-2xl flex items-center justify-center text-text-secondary">
+                 <Megaphone size={24} strokeWidth={1.5} />
+               </div>
+               <span className="text-[15px] font-bold text-text-primary">What's new?</span>
             </div>
             <div className="flex items-center gap-3">
               {unreadAnnouncementsCount > 0 && (
@@ -133,19 +126,19 @@ const ActivitiesSheet: React.FC<ActivitiesSheetProps> = ({
                   {unreadAnnouncementsCount}
                 </div>
               )}
-              <ChevronRight size={20} className="text-gray-600" />
+              <ChevronRight size={20} className="text-text-secondary" />
             </div>
           </div>
 
           {/* Invite Friends */}
-          <div onClick={onOpenReferral} className="bg-[#1e1e1e] rounded-2xl p-4 flex items-center justify-between cursor-pointer hover:bg-white/[0.03] transition-all active:scale-[0.98] group">
+          <div onClick={onOpenReferral} className="bg-bg-tertiary rounded-2xl p-4 flex items-center justify-between cursor-pointer hover:bg-bg-secondary transition-all active:scale-[0.98] group">
             <div className="flex items-center gap-4">
-               <div className="w-12 h-12 bg-white/5 rounded-2xl flex items-center justify-center text-gray-400">
-                 <UserPlus size={22} strokeWidth={1.5} />
+               <div className="w-12 h-12 bg-bg-secondary rounded-2xl flex items-center justify-center text-text-secondary">
+                 <UserPlus size={24} strokeWidth={1.5} />
                </div>
-               <span className="text-[15px] font-bold text-white">Invite Friends</span>
+               <span className="text-[15px] font-bold text-text-primary">Invite Friends</span>
             </div>
-            <ChevronRight size={20} className="text-gray-600" />
+            <ChevronRight size={20} className="text-text-secondary" />
           </div>
         </div>
       </div>

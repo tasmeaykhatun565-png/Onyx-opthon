@@ -136,7 +136,7 @@ export default function NewsFeed() {
     return (
       <div className="flex flex-col items-center justify-center p-12 gap-4">
         <Loader2 className="animate-spin text-blue-500" size={40} />
-        <p className="text-[var(--text-secondary)] font-medium">Fetching latest market insights...</p>
+        <p className="text-text-secondary font-medium">Fetching latest market insights...</p>
       </div>
     );
   }
@@ -144,13 +144,13 @@ export default function NewsFeed() {
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
-        <h3 className="text-2xl font-black text-[var(--text-primary)] flex items-center gap-3">
+        <h3 className="text-2xl font-black text-text-primary flex items-center gap-3">
           <Newspaper className="text-blue-500" size={28} /> Market News
         </h3>
         <button 
           onClick={handleRefresh}
           disabled={refreshing}
-          className="p-2 rounded-full bg-[var(--bg-secondary)] border border-[var(--border-color)] text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)] transition disabled:opacity-50"
+          className="p-2 rounded-full bg-bg-secondary border border-border-color text-text-primary hover:bg-bg-tertiary transition disabled:opacity-50"
         >
           <RefreshCw size={20} className={refreshing ? "animate-spin" : ""} />
         </button>
@@ -160,20 +160,20 @@ export default function NewsFeed() {
         {news.map((item, index) => (
           <div 
             key={index} 
-            className="p-5 bg-[var(--bg-secondary)] rounded-2xl border border-[var(--border-color)] hover:border-blue-500/30 transition shadow-sm"
+            className="p-5 bg-bg-secondary rounded-2xl border border-border-color hover:border-blue-500/30 transition shadow-sm"
           >
             <div className="flex justify-between items-start mb-2">
               <span className="text-[10px] font-bold text-blue-500 uppercase tracking-widest bg-blue-500/10 px-2 py-0.5 rounded-full">
                 {item.source}
               </span>
             </div>
-            <h4 className="text-lg font-bold text-[var(--text-primary)] mb-2 leading-tight">{item.title}</h4>
-            <p className="text-sm text-[var(--text-secondary)] leading-relaxed">{item.summary}</p>
+            <h4 className="text-lg font-bold text-text-primary mb-2 leading-tight">{item.title}</h4>
+            <p className="text-sm text-text-secondary leading-relaxed">{item.summary}</p>
           </div>
         ))}
       </div>
       
-      <p className="text-center text-[10px] text-[var(--text-secondary)] mt-4 uppercase tracking-widest font-bold opacity-50">
+      <p className="text-center text-[10px] text-text-secondary mt-4 uppercase tracking-widest font-bold opacity-50">
         Powered by Gemini AI • Real-time Market Data
       </p>
     </div>

@@ -132,5 +132,11 @@ service cloud.firestore {
       allow read: if true;
       allow write: if isAdmin();
     }
+
+    // Promotions (Stories)
+    match /promotions/{promoId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
   }
 }

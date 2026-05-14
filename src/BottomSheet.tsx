@@ -51,7 +51,7 @@ export default function BottomSheet({ isOpen, onClose, children, className, igno
             animate={{ y: 0 }}
             exit={{ y: "100%" }}
             transition={{ type: "spring", damping: 25, stiffness: 300 }}
-            className={`fixed bottom-0 left-0 right-0 z-50 bg-[var(--bg-primary)] rounded-t-[32px] border-t border-[var(--border-color)] pb-safe shadow-2xl flex flex-col max-h-[92vh] ${className || ''}`}
+            className={`fixed bottom-0 left-0 right-0 z-50 bg-bg-primary rounded-t-[32px] border-t border-border-color pb-safe shadow-2xl flex flex-col max-h-[92vh] ${className || ''}`}
             drag="y"
             dragControls={dragControls}
             dragListener={false}
@@ -68,7 +68,7 @@ export default function BottomSheet({ isOpen, onClose, children, className, igno
               className="flex justify-center pt-3 pb-4 cursor-grab active:cursor-grabbing shrink-0" 
               onPointerDown={(e) => dragControls.start(e)}
             >
-              <div className="w-12 h-1.5 bg-[var(--text-secondary)]/20 rounded-full" />
+              <div className="w-12 h-1.5 bg-[var(--color-text-secondary)]/20 rounded-full" />
             </div>
             
             <div className="flex-1 overflow-y-auto custom-scrollbar flex flex-col">

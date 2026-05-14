@@ -109,16 +109,16 @@ export function LeaderboardPage({ onBack, currencySymbol = '$', currentUser, soc
   const todayStr = format(new Date(), 'dd MMMM yyyy');
 
   return (
-    <div className="min-h-full bg-[#121212] text-white font-sans flex flex-col relative overflow-y-auto scrollbar-hide">
+    <div className="min-h-full bg-bg-secondary text-text-primary font-sans flex flex-col relative overflow-y-auto scrollbar-hide">
       {/* Header */}
-      <div className="flex items-center gap-6 px-4 py-5 sticky top-0 bg-[#121212] z-20">
+      <div className="flex items-center gap-6 px-4 py-5 sticky top-0 bg-bg-secondary z-20">
         <button 
           onClick={onBack} 
-          className="text-gray-400 hover:text-white transition"
+          className="text-text-secondary hover:text-text-primary transition"
         >
           <ChevronLeft size={28} />
         </button>
-        <h1 className="text-xl font-bold text-white">Top-20</h1>
+        <h1 className="text-xl font-bold text-text-primary">Top-20</h1>
       </div>
 
       <div className="flex-1 w-full flex flex-col gap-6 px-4 pb-10">
@@ -126,7 +126,7 @@ export function LeaderboardPage({ onBack, currencySymbol = '$', currentUser, soc
         <motion.div 
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
-          className="relative w-full rounded-2xl overflow-hidden aspect-[4/1.2] shadow-2xl border border-white/5 bg-[#1a1a1a]"
+          className="relative w-full rounded-2xl overflow-hidden aspect-[4/1.2] shadow-2xl border border-border-color bg-bg-tertiary"
         >
            {/* Gold Dots Pattern */}
            <div className="absolute inset-0 opacity-20" style={{ backgroundImage: 'radial-gradient(#ffd700 0.5px, transparent 0.5px)', backgroundSize: '10px 10px' }} />
@@ -136,22 +136,22 @@ export function LeaderboardPage({ onBack, currencySymbol = '$', currentUser, soc
                 Best traders of the week announced
               </span>
               <div className="flex items-center gap-6">
-                 <span className="text-3xl font-light tracking-[0.3em] text-white">HALL</span>
+                 <span className="text-3xl font-light tracking-[0.3em] text-text-primary">HALL</span>
                  <div className="w-1.5 h-1.5 rounded-full bg-[#ffd700] shadow-[0_0_8px_#ffd700]" />
-                 <span className="text-3xl font-light tracking-[0.3em] text-white">OF</span>
+                 <span className="text-3xl font-light tracking-[0.3em] text-text-primary">OF</span>
                  <div className="w-1.5 h-1.5 rounded-full bg-[#ffd700] shadow-[0_0_8px_#ffd700]" />
-                 <span className="text-3xl font-light tracking-[0.3em] text-white">FAME</span>
+                 <span className="text-3xl font-light tracking-[0.3em] text-text-primary">FAME</span>
               </div>
            </div>
         </motion.div>
 
         <div>
-           <p className="text-sm font-bold text-gray-500 mb-6">Traders with the biggest profit</p>
+           <p className="text-sm font-bold text-text-secondary mb-6">Traders with the biggest profit</p>
            
            <div className="grid grid-cols-3 gap-4 mb-8">
               <div className="flex flex-col">
-                 <span className="text-[18px] md:text-[22px] font-bold text-white tracking-tight">20,000+</span>
-                 <span className="text-[10px] text-gray-500 font-black uppercase tracking-widest leading-none mt-1">Traders</span>
+                 <span className="text-[18px] md:text-[22px] font-bold text-text-primary tracking-tight">20,000+</span>
+                 <span className="text-[10px] text-text-secondary font-black uppercase tracking-widest leading-none mt-1">Traders</span>
               </div>
               <div className="flex flex-col items-center">
                  <span className={`text-[18px] md:text-[22px] font-bold tracking-tight ${currentUser?.profit !== undefined && currentUser.profit < 0 ? 'text-red-500' : 'text-emerald-500'}`}>
@@ -163,21 +163,21 @@ export function LeaderboardPage({ onBack, currencySymbol = '$', currentUser, soc
               </div>
               <div className="flex flex-col items-end">
                  <div className="flex items-center gap-2">
-                    <span className="text-[18px] md:text-[22px] font-bold text-white tabular-nums tracking-tight leading-none">{lastUpdate}</span>
+                    <span className="text-[18px] md:text-[22px] font-bold text-text-primary tabular-nums tracking-tight leading-none">{lastUpdate}</span>
                  </div>
-                 <span className="text-[10px] text-gray-500 font-black uppercase tracking-widest leading-none mt-1">Live Sync</span>
+                 <span className="text-[10px] text-text-secondary font-black uppercase tracking-widest leading-none mt-1">Live Sync</span>
               </div>
            </div>
         </div>
 
         {/* Promo Card */}
-        <div className="bg-[#1e1e1e] rounded-3xl p-6 border border-white/5 flex flex-col gap-4">
-           <div className="w-12 h-12 bg-white/5 rounded-2xl flex items-center justify-center text-gray-300">
+        <div className="bg-bg-tertiary rounded-3xl p-6 border border-border-color flex flex-col gap-4">
+           <div className="w-12 h-12 bg-bg-secondary rounded-2xl flex items-center justify-center text-text-primary">
               <Globe size={24} />
            </div>
            <div className="flex flex-col gap-2">
-              <h3 className="text-lg font-bold text-white leading-tight">Make trades to reach Bivax's top</h3>
-              <p className="text-[13px] leading-relaxed text-gray-500">
+              <h3 className="text-lg font-bold text-text-primary leading-tight">Make trades to reach Bivax's top</h3>
+              <p className="text-[13px] leading-relaxed text-text-secondary">
                  Start earning funds on your real account, and your name will appear in the list of Bivax traders. Trade wisely, and you'll move today's Top traders!
               </p>
            </div>
@@ -185,10 +185,10 @@ export function LeaderboardPage({ onBack, currencySymbol = '$', currentUser, soc
 
         {/* Period Selector */}
         <div className="space-y-2 mt-2">
-           <label className="text-[11px] text-gray-600 font-black uppercase tracking-widest ml-1">Period</label>
-           <button className="w-full bg-[#1e1e1e] border border-white/5 rounded-2xl p-4 flex items-center justify-between group">
-              <span className="text-base font-bold text-gray-200">Today, {todayStr}</span>
-              <ChevronDown size={20} className="text-gray-500" />
+           <label className="text-[11px] text-text-secondary font-black uppercase tracking-widest ml-1">Period</label>
+           <button className="w-full bg-bg-tertiary border border-border-color rounded-2xl p-4 flex items-center justify-between group">
+              <span className="text-base font-bold text-text-primary">Today, {todayStr}</span>
+              <ChevronDown size={20} className="text-text-secondary" />
            </button>
         </div>
 
@@ -208,7 +208,7 @@ export function LeaderboardPage({ onBack, currencySymbol = '$', currentUser, soc
                     "flex items-center justify-between px-3 rounded-2xl py-3.5 transition-all", 
                     entry.isCurrentUser 
                       ? "bg-gradient-to-r from-emerald-500/20 to-emerald-500/5 border border-emerald-500/30 shadow-[0_0_15px_rgba(16,185,129,0.1)]" 
-                      : "hover:bg-white/5"
+                      : "hover:bg-bg-secondary"
                   )}
                 >
                    <div className="flex items-center gap-4">
@@ -216,8 +216,8 @@ export function LeaderboardPage({ onBack, currencySymbol = '$', currentUser, soc
                         "w-7 h-7 flex items-center justify-center text-[13px] font-black rounded-lg shadow-sm font-mono",
                         rank === 1 ? "bg-gradient-to-br from-[#ffd700] to-[#b8860b] text-black" : 
                         rank === 2 ? "bg-gradient-to-br from-gray-300 to-gray-500 text-black" : 
-                        rank === 3 ? "bg-gradient-to-br from-amber-600 to-amber-800 text-white" : 
-                        "bg-white/5 text-gray-500"
+                        rank === 3 ? "bg-gradient-to-br from-amber-600 to-amber-800 text-text-primary" : 
+                        "bg-bg-secondary text-text-secondary"
                       )}>
                         {rank}
                       </div>
@@ -227,14 +227,14 @@ export function LeaderboardPage({ onBack, currencySymbol = '$', currentUser, soc
                             {isTop3 && (
                                <Medal size={10} className={cn(
                                  "absolute -top-2 -right-2",
-                                 rank === 1 ? "text-[#ffd700]" : rank === 2 ? "text-gray-300" : "text-amber-600"
+                                 rank === 1 ? "text-[#ffd700]" : rank === 2 ? "text-text-primary" : "text-amber-600"
                                )} />
                             )}
                          </div>
                          <div className="flex flex-col">
                             <span className={cn(
                               "text-[14px] font-bold tracking-tight leading-tight",
-                              isTop3 ? "text-white" : "text-gray-300",
+                              isTop3 ? "text-text-primary" : "text-text-primary",
                               entry.isCurrentUser ? "text-emerald-400" : ""
                             )}>
                               {entry.name.toUpperCase()}
@@ -251,12 +251,12 @@ export function LeaderboardPage({ onBack, currencySymbol = '$', currentUser, soc
                    <div className="flex flex-col items-end">
                       <span className={cn(
                         "text-[16px] font-black tabular-nums tracking-tighter", 
-                        entry.isCurrentUser ? "text-emerald-400" : (isTop3 ? "text-white" : "text-gray-200")
+                        entry.isCurrentUser ? "text-emerald-400" : (isTop3 ? "text-text-primary" : "text-text-primary")
                       )}>
                         {entry.profit < 0 ? `-$${Math.abs(entry.profit).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : `$${entry.profit.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
                         {entry.profit >= 2500 && <span className="ml-0.5 text-[10px] opacity-60">+</span>}
                       </span>
-                      <span className="text-[9px] text-gray-500 font-bold uppercase tracking-tighter">Profit</span>
+                      <span className="text-[9px] text-text-secondary font-bold uppercase tracking-tighter">Profit</span>
                    </div>
                 </motion.div>
               );

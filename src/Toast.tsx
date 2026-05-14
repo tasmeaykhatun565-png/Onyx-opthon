@@ -53,7 +53,7 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
               initial={{ opacity: 0, y: -20, scale: 0.9 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, scale: 0.9, transition: { duration: 0.2 } }}
-              className="pointer-events-auto min-w-[300px] max-w-md bg-[#1e222d] border border-white/10 shadow-xl rounded-xl p-4 flex items-start gap-3 backdrop-blur-xl"
+              className="pointer-events-auto min-w-[300px] max-w-md bg-[#1e222d] border border-border-color shadow-xl rounded-xl p-4 flex items-start gap-3 backdrop-blur-xl"
             >
               <div className="mt-0.5">
                 {toast.type === 'success' && <CheckCircle className="text-green-500" size={20} />}

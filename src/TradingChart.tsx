@@ -1,9 +1,10 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { ArrowUp, ArrowDown, Clock, TrendingUp, TrendingDown, Trash2, ArrowUpRight, ArrowDownRight, Lock } from 'lucide-react';
+import { ArrowUp, ArrowDown, Clock, TrendingUp, TrendingDown, Trash2, ArrowUpRight, ArrowDownRight, Lock, Flag, Plus, Minus, ChevronRight, ArrowUpDown, X } from 'lucide-react';
 import { createChart, ColorType, IChartApi, ISeriesApi, Time, CrosshairMode, CandlestickSeries, AreaSeries, BarSeries, LineSeries, HistogramSeries, LineStyle, LogicalRange } from 'lightweight-charts';
-import { deepEqual, safeStringify, getTimeFrameInMs } from './utils';
+import { deepEqual, safeStringify, getTimeFrameInMs, cn } from './utils';
 import { SMA, EMA, WMA, BollingerBands, MACD, RSI, CCI, ATR, PSAR, WilliamsR, ADX, AwesomeOscillator, ROC, Stochastic } from 'technicalindicators';
+import { useTheme } from './ThemeContext';
 
 interface Trade {
   id: string;
@@ -43,6 +44,9 @@ interface TradingChartProps {
   currencySymbol?: string;
   exchangeRate?: number;
   isTradingEnabled?: boolean;
+  isFrozen?: boolean;
+  precision?: number;
+  minMove?: number;
   onVisibleTimeRangeChange?: (range: { from: number; to: number }) => void;
   onLoadMoreHistory?: () => void;
 }
@@ -58,32 +62,20 @@ import { DRAWING_TOOLS } from './constants';
 
 const ChartSkeleton = () => {
   return (
-    <div className="absolute inset-0 bg-[#0a0a0a] flex flex-col items-center justify-center z-50 overflow-hidden">
-      {/* Background Ambience */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none opacity-40">
-        <div className="absolute top-[-20%] left-[-20%] w-[60%] h-[60%] bg-blue-600/20 blur-[150px] animate-pulse" />
-        <div className="absolute bottom-[-20%] right-[-20%] w-[60%] h-[60%] bg-indigo-600/20 blur-[150px] animate-pulse rounded-full" />
-      </div>
-
+    <div className="absolute inset-0 bg-bg-primary flex items-center justify-center z-[1000]">
       <motion.div
-        initial={{ opacity: 0, scale: 0.9 }}
+        initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
-        exit={{ opacity: 0, scale: 0.9 }}
-        className="flex flex-col items-center gap-6 relative z-10"
+        exit={{ opacity: 0, scale: 0.95 }}
+        transition={{ duration: 0.3 }}
+        className="flex items-center justify-center"
       >
-        <div className="relative w-24 h-24">
+        <div className="relative w-12 h-12 flex items-center justify-center">
           <motion.div
             animate={{ rotate: 360 }}
-            transition={{ duration: 3, repeat: Infinity, ease: "linear" }}
-            className="absolute inset-0 border-t-4 border-blue-500 rounded-full"
+            transition={{ duration: 1.5, repeat: Infinity, ease: "linear" }}
+            className="w-12 h-12 rounded-full border-2 border-border-color border-t-[var(--color-accent-color)]"
           />
-          <div className="absolute inset-0 flex items-center justify-center">
-            <div className="w-16 h-16 rounded-full bg-blue-500/10 animate-pulse" />
-          </div>
-        </div>
-        
-        <div className="text-white font-bold text-lg tracking-[0.2em] uppercase animate-pulse">
-          ONYX LOADING
         </div>
       </motion.div>
     </div>
@@ -107,10 +99,14 @@ export const TradingChart: React.FC<TradingChartProps> = ({
   currencySymbol = '$',
   exchangeRate = 1,
   isTradingEnabled = true,
+  isFrozen = false,
+  precision = 5,
+  minMove = 0.00001,
   onLoadMoreHistory,
 }) => {
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
+  const dismissedResultsRef = useRef<Set<string>>(new Set());
   const seriesRef = useRef<ISeriesApi<any> | null>(null);
   const indicatorsRef = useRef<Record<string, ISeriesApi<any>>>({});
   const horizontalLineRef = useRef<HTMLDivElement>(null);
@@ -132,7 +128,9 @@ export const TradingChart: React.FC<TradingChartProps> = ({
   const lastChartTypeRef = useRef(chartType);
   const haDataRef = useRef<any[]>([]);
   const lastIndicatorConfigsRef = useRef<string>(JSON.stringify(activeIndicators));
+  const { theme: currentThemeName } = useTheme();
   const [isChartReady, setIsChartReady] = useState(false);
+  const [isScrolledBack, setIsScrolledBack] = useState(false);
 
   // Safeguard: Fetch more history if data takes too long to load
   useEffect(() => {
@@ -146,6 +144,33 @@ export const TradingChart: React.FC<TradingChartProps> = ({
     }
   }, [data, onLoadMoreHistory]);
 
+  const zoomIn = useCallback(() => {
+    if (chartRef.current) {
+      const timeScale = chartRef.current.timeScale();
+      timeScale.applyOptions({ barSpacing: timeScale.options().barSpacing + 5 });
+    }
+  }, []);
+
+  const zoomOut = useCallback(() => {
+    if (chartRef.current) {
+      const timeScale = chartRef.current.timeScale();
+      timeScale.applyOptions({ barSpacing: Math.max(15, timeScale.options().barSpacing - 5) });
+    }
+  }, []);
+
+  const fitContent = useCallback(() => {
+    if (chartRef.current) {
+      chartRef.current.timeScale().fitContent();
+    }
+  }, []);
+
+  const scrollToLatest = useCallback(() => {
+    if (chartRef.current) {
+      chartRef.current.timeScale().scrollToRealTime();
+      setIsScrolledBack(false);
+    }
+  }, []);
+  
   const updateChartData = useCallback((series: ISeriesApi<any>, chartData: OHLCData[], type: string) => {
     // Detect if we should use update() instead of setData()
     // 1. Same asset as before
@@ -166,7 +191,7 @@ export const TradingChart: React.FC<TradingChartProps> = ({
     }
 
     // Use incremental update if only last few bars change
-    if (isIncremental && chartData.length > lastDataLengthRef.current && chartData.length < lastDataLengthRef.current + 50) {
+    if (isIncremental && chartData.length >= lastDataLengthRef.current && chartData.length < lastDataLengthRef.current + 50) {
       const startIndex = Math.max(0, lastDataLengthRef.current - 1);
       
       for (let i = startIndex; i < chartData.length; i++) {
@@ -195,12 +220,22 @@ export const TradingChart: React.FC<TradingChartProps> = ({
           haDataRef.current[i] = formatted;
         }
         
-        // Final guard for series update: try to avoid weird jumps if timeframe changed (though handled by useEffect dep)
+        // Final guard for series update: only update if data actually changed
+        const latestInfo = latestChartCandleRef.current;
+        if (
+             latestInfo && 
+             formatted.time === latestInfo.time &&
+             formatted.open === latestInfo.open &&
+             formatted.high === latestInfo.high &&
+             formatted.low === latestInfo.low &&
+             formatted.close === latestInfo.close
+        ) {
+            continue; // Skip redundant updates
+        }
+
         try {
           series.update(formatted);
-          if (i === chartData.length - 1) {
-            latestChartCandleRef.current = formatted;
-          }
+          latestChartCandleRef.current = formatted;
         } catch (e) {
           console.error('Failed to update series:', e);
         }
@@ -256,7 +291,11 @@ export const TradingChart: React.FC<TradingChartProps> = ({
           // Initial load OR asset switch: focus on the end of the chart
           if (!isSameAsset || lastDataLengthRef.current === 0) {
             // Force scroll to end to ensure multiple candles are visible
-            timeScale?.scrollToRealTime();
+            const dl = formattedData.length;
+            timeScale?.setVisibleLogicalRange({
+              from: Math.max(0, dl - 60),
+              to: dl + 10
+            });
           }
           // Restore logical range shifted by the number of prepended items, 
           // but ONLY if the user was not already at the end of the chart.
@@ -338,43 +377,140 @@ export const TradingChart: React.FC<TradingChartProps> = ({
     
     const series = seriesRef.current;
     const currentAssetTrades = tradesRef.current.filter(t => t.asset === assetName);
+    const chartWidth = chartRef.current.timeScale().width();
     
+    // Group trades by visual position to handle stacking
+    const groups: Record<string, string[]> = {};
+    const clusterInfo: Record<string, { index: number; count: number }> = {};
+
+    currentAssetTrades.forEach(trade => {
+        const y = series.priceToCoordinate(trade.entryPrice);
+        let rawEntryX = chartRef.current?.timeScale().timeToCoordinate((trade.startTime / 1000) as Time) ?? null;
+        
+        if (rawEntryX === null && trade.status === 'ACTIVE' && dataRef.current.length > 0) {
+             rawEntryX = chartRef.current?.timeScale().timeToCoordinate((dataRef.current[dataRef.current.length - 1].time / 1000) as Time) ?? null;
+        }
+
+        if (y !== null && rawEntryX !== null) {
+            // Group by approximate visual proximity
+            const groupKey = `${Math.round(rawEntryX / 20)}-${Math.round(y / 20)}`;
+            if (!groups[groupKey]) groups[groupKey] = [];
+            groups[groupKey].push(trade.id);
+        }
+    });
+
+    // Populate cluster info
+    Object.values(groups).forEach(ids => {
+        ids.forEach((id, idx) => {
+            clusterInfo[id] = { index: idx, count: ids.length };
+        });
+    });
+
+    const xGroupCounts: Record<number, number> = {};
+    const resultXGroupCounts: Record<number, number> = {};
+
     const coords = currentAssetTrades.map(trade => {
         const y = series.priceToCoordinate(trade.entryPrice);
         
-        // Find DOM element for this trade using ID, and update it directly
-        // This avoids React state updates for every high-frequency scroll/zoom tick
-        const entryEl = document.getElementById(`trade-entry-${trade.id}`);
-        const resultEl = document.getElementById(`trade-result-${trade.id}`);
+        // Find basic X coordinate
+        let rawEntryX = chartRef.current?.timeScale().timeToCoordinate((trade.startTime / 1000) as Time) ?? null;
         
-        let entryX: number | null = null;
-        let exitX: number | null = null;
-
-        if (entryEl || resultEl) {
-            entryX = chartRef.current?.timeScale().timeToCoordinate((trade.startTime / 1000) as Time) ?? null;
-            if (entryX === null && trade.status === 'ACTIVE' && dataRef.current.length > 0) {
-                entryX = chartRef.current?.timeScale().timeToCoordinate((dataRef.current[dataRef.current.length - 1].time / 1000) as Time) ?? null;
-            }
-            if (trade.status !== 'ACTIVE') {
-                 exitX = chartRef.current?.timeScale().timeToCoordinate((trade.endTime / 1000) as Time) ?? null;
-            }
+        // Fallback for active trades not yet in timescale (align with latest candle)
+        if (rawEntryX === null && trade.status === 'ACTIVE' && dataRef.current.length > 0) {
+             // dataRef timestamps are in milliseconds, so we must divide by 1000 for the chart's timescale
+             rawEntryX = chartRef.current?.timeScale().timeToCoordinate((dataRef.current[dataRef.current.length - 1].time / 1000) as Time) ?? null;
         }
 
+        // Round X to group close entries (e.g. within 10px) to prevent vertical stacking when close
+        const xKey = rawEntryX !== null ? Math.round(rawEntryX / 10) * 10 : -1;
+        const entryOffsetIdx = rawEntryX !== null ? (xGroupCounts[xKey] || 0) : 0;
+        if (rawEntryX !== null) xGroupCounts[xKey] = entryOffsetIdx + 1;
+
+        // Same for results
+        const rawExitX = chartRef.current?.timeScale().timeToCoordinate((trade.endTime / 1000) as Time) ?? null;
+        const exitXKey = rawExitX !== null ? Math.round(rawExitX / 15) * 15 : -1;
+        const resultOffsetIdx = rawExitX !== null ? (resultXGroupCounts[exitXKey] || 0) : 0;
+        if (rawExitX !== null) resultXGroupCounts[exitXKey] = resultOffsetIdx + 1;
+
+        // Find DOM element for this trade using ID, and update it directly
+        const entryEl = document.getElementById(`trade-entry-${trade.id}`);
+        const resultEl = document.getElementById(`trade-result-${trade.id}`);
+        const vLineEl = document.getElementById(`trade-line-v-${trade.id}`);
+        const vStartLineEl = document.getElementById(`trade-line-v-start-${trade.id}`);
+        const hLineEl = document.getElementById(`trade-line-h-${trade.id}`);
+        const hLineBubbleEl = document.getElementById(`trade-line-h-bubble-${trade.id}`);
+
         if (entryEl) {
-            if (y !== null) {
+            if (y !== null && rawEntryX !== null) {
                 entryEl.style.top = `${y}px`;
-                entryEl.style.left = entryX !== null ? `${entryX}px` : '100%';
-                entryEl.style.visibility = (entryX === null && trade.status !== 'ACTIVE') ? 'hidden' : 'visible';
+                // Position badge to the left of the entry point
+                const badgeWidth = 50; // Base badge width
+                const baseOffset = -badgeWidth - 15;
+                const shift = -entryOffsetIdx * (badgeWidth + 4); 
+                entryEl.style.left = `${rawEntryX + baseOffset + shift}px`;
+                entryEl.style.visibility = 'visible';
             } else {
                 entryEl.style.visibility = 'hidden';
             }
         }
 
+        if (vStartLineEl) {
+            if (rawEntryX !== null && rawEntryX > 0) {
+                vStartLineEl.style.left = `${rawEntryX}px`;
+                vStartLineEl.style.visibility = 'visible';
+            } else {
+                vStartLineEl.style.visibility = 'hidden';
+            }
+        }
+
+        if (vLineEl) {
+            if (rawExitX !== null && rawExitX > 0) {
+                vLineEl.style.left = `${rawExitX}px`;
+                vLineEl.style.visibility = 'visible';
+            } else {
+                vLineEl.style.visibility = 'hidden';
+            }
+        }
+
+        if (hLineEl) {
+            if (y !== null && rawEntryX !== null) {
+                const containerWidth = chartContainerRef.current?.clientWidth ?? chartWidth;
+                hLineEl.style.top = `${y}px`;
+                // Start the line from the tip of the badge
+                const badgeWidth = 60;
+                const badgeOffset = -badgeWidth - 10;
+                const badgeShift = -entryOffsetIdx * (badgeWidth + 8);
+                const startX = rawEntryX + badgeOffset + badgeShift + badgeWidth;
+
+                hLineEl.style.left = `${startX}px`;
+                hLineEl.style.right = '0px';
+                hLineEl.style.visibility = 'visible';
+
+                if (hLineBubbleEl) {
+                    hLineBubbleEl.style.top = `${y}px`;
+                    hLineBubbleEl.style.right = '0px';
+                    hLineBubbleEl.innerText = trade.entryPrice.toFixed(precision);
+                    hLineBubbleEl.style.visibility = 'visible';
+                }
+            } else {
+                hLineEl.style.visibility = 'hidden';
+                if (hLineBubbleEl) hLineBubbleEl.style.visibility = 'hidden';
+            }
+        }
+
         if (resultEl) {
-            if (y !== null && exitX !== null && exitX > 0) {
+            const isDismissed = dismissedResultsRef.current.has(trade.id);
+            if (y !== null && rawExitX !== null && rawExitX > 0 && !isDismissed) {
+                 // Position result bubble at center-vertically with the price
                  resultEl.style.top = `${y}px`;
-                 resultEl.style.left = `${exitX}px`;
+                 resultEl.style.transform = 'translateY(-50%)';
+                 
+                 // Pin to the right of the exit point
+                 // The triangle is 10px wide, so we just place it at rawExitX
+                 const resultShift = resultOffsetIdx * 20; // smaller shift for professional look
+                 resultEl.style.left = `${rawExitX + resultShift}px`;
                  resultEl.style.visibility = 'visible';
+                 resultEl.style.display = 'flex'; // Ensure it's showing if previously hidden by button
             } else {
                  resultEl.style.visibility = 'hidden';
             }
@@ -387,7 +523,7 @@ export const TradingChart: React.FC<TradingChartProps> = ({
             amount: trade.amount,
             endTime: trade.endTime,
             startTime: trade.startTime,
-            y: y ?? -100 // Fallback y position if not visible
+            y: y ?? -100
         };
     });
     
@@ -407,6 +543,7 @@ export const TradingChart: React.FC<TradingChartProps> = ({
     if (!chartRef.current || !seriesRef.current || !latestChartCandleRef.current) return;
     // Snap updateLatestCoords to use the exact candle lightweight-charts just painted
     const series = seriesRef.current;
+    
     const lastCandle = latestChartCandleRef.current;
     
     // Safety check fallback to zero-value check for edge cases
@@ -437,7 +574,7 @@ export const TradingChart: React.FC<TradingChartProps> = ({
     }
 
     if (lockIconRef.current) {
-        if (!isTradingEnabled && xBase !== null && y !== null) {
+        if ((!isTradingEnabled || isFrozen) && xBase !== null && y !== null) {
             lockIconRef.current.style.left = `${xBase}px`;
             lockIconRef.current.style.top = `${y - 12}px`; // Nudge it upwards
             lockIconRef.current.style.display = 'block';
@@ -445,13 +582,24 @@ export const TradingChart: React.FC<TradingChartProps> = ({
             lockIconRef.current.style.display = 'none';
         }
     }
+
+    const vLineEl = document.getElementById('current-candle-v-line');
+    if (vLineEl && xBase !== null) {
+        vLineEl.style.left = `${xBase}px`;
+        vLineEl.style.display = 'block';
+    } else if (vLineEl) {
+        vLineEl.style.display = 'none';
+    }
     
     if (bubbleGroupRef.current && y !== null) {
-        bubbleGroupRef.current.style.top = `${y - 12}px`;
-        // Keep bubble visible and aligned with the price line
+        // Vertical offset for centering: 
+        // Price bubble container is h-[30px], so its center is 15px.
+        // Triangle is 20px (10+10), centered in h-[30px] means its tip is at 15px.
+        // So bubble-group top = y - 15.
+        bubbleGroupRef.current.style.top = `${y - 15}px`;
         bubbleGroupRef.current.style.display = 'flex';
         
-        if (priceBubbleRef.current) priceBubbleRef.current.innerText = price < 10 ? price.toFixed(5) : price.toFixed(3);
+        if (priceBubbleRef.current) priceBubbleRef.current.innerText = price.toFixed(precision);
     }
 
     // No state update here to avoid infinite re-render loops. 
@@ -667,22 +815,24 @@ export const TradingChart: React.FC<TradingChartProps> = ({
     };
   }, []);
 
+  const getThemeColors = () => {
+    const style = getComputedStyle(document.documentElement);
+    const getVar = (name: string) => style.getPropertyValue(name).trim();
+    
+    return {
+      background: getVar('--color-bg-primary') || '#0a0b0f',
+      text: getVar('--color-text-primary') || '#f8fafc',
+      secondaryText: getVar('--color-text-secondary') || '#94a3b8',
+      border: getVar('--color-border-color') || 'rgba(255, 255, 255, 0.08)',
+      tertiary: getVar('--color-bg-tertiary') || '#1b1d28',
+      success: getVar('--color-success') || '#10b981',
+      danger: getVar('--color-danger') || '#ef4444',
+    };
+  };
+
   // 1. Initialize Chart Instance (Once on mount)
   useEffect(() => {
     if (!chartContainerRef.current) return;
-
-    const getThemeColors = () => {
-      const style = getComputedStyle(document.documentElement);
-      const getVar = (name: string) => style.getPropertyValue(name).trim();
-      
-      return {
-        background: getVar('--bg-primary') || getVar('--color-bg-primary') || '#101114',
-        text: getVar('--text-primary') || getVar('--color-text-primary') || '#ffffff',
-        secondaryText: getVar('--text-secondary') || getVar('--color-text-secondary') || '#9ca3af',
-        border: getVar('--border-color') || getVar('--color-border-color') || 'rgba(255, 255, 255, 0.05)',
-        tertiary: getVar('--bg-tertiary') || getVar('--color-bg-tertiary') || '#2a2e39',
-      };
-    };
 
     const colors = getThemeColors();
 
@@ -709,11 +859,11 @@ export const TradingChart: React.FC<TradingChartProps> = ({
         borderColor: colors.border,
         fixLeftEdge: false,
         fixRightEdge: false,
-        minBarSpacing: 1,
-        maxBarSpacing: 50,
-        barSpacing: 8,
+        minBarSpacing: 15,
+        maxBarSpacing: 120,
+        barSpacing: 25,
         shiftVisibleRangeOnNewBar: true,
-        rightOffset: 20,
+        rightOffset: 25,
         uniformDistribution: false,
         tickMarkFormatter: (time: number) => {
           const date = new Date((time * 1000) + (timezoneOffset * 60 * 60 * 1000));
@@ -726,8 +876,8 @@ export const TradingChart: React.FC<TradingChartProps> = ({
       rightPriceScale: {
         borderColor: colors.border,
         scaleMargins: {
-          top: 0.1, 
-          bottom: 0.1, 
+          top: 0.18, 
+          bottom: 0.18, 
         },
         visible: true,
         borderVisible: false,
@@ -738,16 +888,16 @@ export const TradingChart: React.FC<TradingChartProps> = ({
       crosshair: {
         mode: CrosshairMode.Normal,
         vertLine: {
-          color: 'rgba(255, 255, 255, 0.4)',
-          width: 1 as any,
+          color: colors.success,
+          width: 0.5 as any,
           style: 2,
-          labelBackgroundColor: '#ffffff',
+          labelBackgroundColor: colors.success,
         },
         horzLine: {
-          color: 'rgba(255, 255, 255, 0.4)',
-          width: 1 as any,
+          color: colors.success,
+          width: 0.5 as any,
           style: 2,
-          labelBackgroundColor: '#ffffff',
+          labelBackgroundColor: colors.success,
         },
       },
       handleScroll: {
@@ -779,6 +929,10 @@ export const TradingChart: React.FC<TradingChartProps> = ({
                 width: chartContainerRef.current.clientWidth,
                 height: chartContainerRef.current.clientHeight,
             });
+            // Immediately update coordinates after resize
+            updateTradeCoordsRef.current();
+            updateLatestCoordsRef.current();
+            updateDrawingCoordsRef.current();
         }
     };
     
@@ -791,36 +945,42 @@ export const TradingChart: React.FC<TradingChartProps> = ({
         resizeObserver.observe(chartContainerRef.current);
     }
 
-    const themeObserver = new MutationObserver(() => {
-        const newColors = getThemeColors();
-        chart.applyOptions({
-            layout: {
-                background: { type: ColorType.Solid, color: newColors.background },
-                textColor: newColors.secondaryText,
-            },
-            grid: {
-                vertLines: { color: newColors.border },
-                horzLines: { color: newColors.border },
-            },
-            timeScale: {
-                borderColor: newColors.border,
-            },
-            rightPriceScale: {
-                borderColor: newColors.border,
-                textColor: newColors.secondaryText,
-            }
-        });
-    });
-
-    themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
-
     return () => {
       resizeObserver.disconnect();
-      themeObserver.disconnect();
       chart.remove();
       chartRef.current = null;
     };
   }, []); // Only once, never destroy the container
+
+  // Handle Theme Changes
+  useEffect(() => {
+    if (!chartRef.current) return;
+    const chart = chartRef.current;
+    const newColors = getThemeColors();
+    
+    chart.applyOptions({
+        layout: {
+            background: { type: ColorType.Solid, color: newColors.background },
+            textColor: newColors.secondaryText,
+        },
+        grid: {
+            vertLines: { color: newColors.border },
+            horzLines: { color: newColors.border },
+        },
+        timeScale: {
+            borderColor: newColors.border,
+        },
+        rightPriceScale: {
+            borderColor: newColors.border,
+            textColor: newColors.secondaryText,
+        }
+    });
+
+    // Update coordinates because theme change might affect layout slightly
+    updateTradeCoordsRef.current();
+    updateLatestCoordsRef.current();
+    updateDrawingCoordsRef.current();
+  }, [currentThemeName]);
 
   // 1.5 Handle Series Persistence (When assetName or chartType changes)
   useEffect(() => {
@@ -848,56 +1008,57 @@ export const TradingChart: React.FC<TradingChartProps> = ({
     }
 
     const commonOptions = {
-        priceLineVisible: false,
-        lastValueVisible: false,
+        priceLineVisible: true,
+        lastValueVisible: true,
         priceFormat: {
           type: 'price' as const,
-          precision: 5,
-          minMove: 0.00001,
+          precision: precision,
+          minMove: minMove,
         },
       };
+
+      // Set professional margins to prevent "barcode" compressed look
+      chart.priceScale('right').applyOptions({
+        autoScale: true,
+        scaleMargins: {
+          top: 0.18,
+          bottom: 0.18,
+        },
+        borderVisible: false,
+        alignLabels: true,
+      });
   
       const getSeries = () => {
+        const colors = getThemeColors();
         switch (chartType) {
           case 'Area':
             return chart.addSeries(AreaSeries, {
               ...commonOptions,
-              lineColor: '#3b82f6',
-              topColor: 'rgba(59, 130, 246, 0.4)',
-              bottomColor: 'rgba(59, 130, 246, 0.0)',
-              lineWidth: 2,
+              lineColor: colors.success,
+              topColor: `${colors.success}55`, // opacity
+              bottomColor: `${colors.success}00`, // opacity
+              lineWidth: 3,
             });
           case 'Bar':
             return chart.addSeries(BarSeries, {
               ...commonOptions,
-              upColor: '#0ecb81',
-              downColor: '#f6465d',
+              upColor: colors.success,
+              downColor: colors.danger,
               thinBars: false,
             });
           case 'Heikin Ashi':
-            return chart.addSeries(CandlestickSeries, {
-              ...commonOptions,
-              upColor: '#0ecb81',
-              downColor: '#f6465d',
-              borderVisible: true,
-              wickVisible: true,
-              borderUpColor: '#0ecb81',
-              borderDownColor: '#f6465d',
-              wickUpColor: '#0ecb81',
-              wickDownColor: '#f6465d',
-            });
           case 'Candlestick':
           default:
             return chart.addSeries(CandlestickSeries, {
               ...commonOptions,
-              upColor: '#0ecb81',
-              downColor: '#f6465d',
+              upColor: colors.success,
+              downColor: colors.danger,
               borderVisible: true,
               wickVisible: true,
-              borderUpColor: '#0ecb81',
-              borderDownColor: '#f6465d',
-              wickUpColor: '#0ecb81',
-              wickDownColor: '#f6465d',
+              borderUpColor: colors.success,
+              borderDownColor: colors.danger,
+              wickUpColor: colors.success,
+              wickDownColor: colors.danger,
             });
         }
       };
@@ -924,12 +1085,20 @@ export const TradingChart: React.FC<TradingChartProps> = ({
               updateTradeCoordsRef.current();
               updateLatestCoordsRef.current();
               updateDrawingCoordsRef.current();
-              
-              if (logicalRange && logicalRange.from < 2000 && onLoadMoreHistory && !isLoadingHistoryLocal.current) {
-                  isLoadingHistoryLocal.current = true;
-                  onLoadMoreHistory();
-                  setTimeout(() => { isLoadingHistoryLocal.current = false; }, 2000);
+
+              if (logicalRange) {
+                const to = logicalRange.to;
+                const dataLength = dataRef.current.length;
+                // If the end of the visible range is behind the latest data point, we're scrolled back.
+                // We use a small buffer (5) to avoid flickering on minor adjustments.
+                setIsScrolledBack(to < dataLength - 5);
               }
+              
+            if (logicalRange && logicalRange.from < 100 && onLoadMoreHistory && !isLoadingHistoryLocal.current) {
+                isLoadingHistoryLocal.current = true;
+                onLoadMoreHistory();
+                setTimeout(() => { isLoadingHistoryLocal.current = false; }, 2000);
+            }
               rAF = null;
           });
       };
@@ -939,7 +1108,11 @@ export const TradingChart: React.FC<TradingChartProps> = ({
       // Initial data paint if already available
       if (dataRef.current.length > 0) {
           updateChartData(series, dataRef.current, chartType);
-          chart.timeScale().scrollToRealTime();
+          const dl = dataRef.current.length;
+          chart.timeScale().setVisibleLogicalRange({
+            from: Math.max(0, dl - 60),
+            to: dl + 10
+          });
       }
 
       return () => {
@@ -970,7 +1143,11 @@ export const TradingChart: React.FC<TradingChartProps> = ({
       if (timeScale && data.length > 0) {
         // Force scroll to real-time on major changes or first data population
         setTimeout(() => {
-          timeScale.scrollToRealTime();
+          const dl = data.length;
+          timeScale.setVisibleLogicalRange({
+            from: Math.max(0, dl - 60),
+            to: dl + 10
+          });
         }, 100);
       }
       lastAssetRef.current = assetName;
@@ -982,13 +1159,38 @@ export const TradingChart: React.FC<TradingChartProps> = ({
     updateLatestCoordsRef.current();
   }, [data, chartType, assetName, chartTimeFrame, updateChartData, isTradingEnabled]);
 
+  // Local real-time timer update for the bubble
+  useEffect(() => {
+    const timer = setInterval(() => {
+      if (!timerBubbleRef.current) return;
+      
+      const tfMs = getTimeFrameInMs(chartTimeFrame);
+      const now = Date.now() + serverTimeOffset;
+      const msElapsedInCandle = now % tfMs;
+      const msRemaining = tfMs - msElapsedInCandle;
+      
+      const seconds = Math.ceil(msRemaining / 1000);
+      const displayMins = Math.floor(seconds / 60);
+      const displaySecs = seconds % 60;
+      
+      const timerStr = `${displayMins.toString().padStart(2, '0')}:${displaySecs.toString().padStart(2, '0')}`;
+      timerStringRef.current = timerStr;
+      timerBubbleRef.current.innerText = timerStr;
+    }, 100);
+    return () => clearInterval(timer);
+  }, [chartTimeFrame, serverTimeOffset]);
+
   // Keep refs updated and trigger coordinate updates on data change
   useEffect(() => {
     tradesRef.current = trades;
     dataRef.current = data;
     updateTradeCoords();
+    // Second call to handle cases where DOM nodes were just created by React
+    const timer = setTimeout(updateTradeCoords, 10);
+    return () => clearTimeout(timer);
   }, [trades, data, updateTradeCoords]);
 
+  // Ensure trade coords are updated when they are first rendered
   useEffect(() => {
     updateDrawingCoords();
   }, [drawings, updateDrawingCoords]);
@@ -1159,7 +1361,7 @@ export const TradingChart: React.FC<TradingChartProps> = ({
             });
             rsiSeries.createPriceLine({
               price: 70,
-              color: 'rgba(255, 255, 255, 0.2)',
+              color: currentThemeName === 'Light' ? 'rgba(0, 0, 0, 0.2)' : 'rgba(255, 255, 255, 0.2)',
               lineWidth: 1,
               lineStyle: LineStyle.Dotted,
               axisLabelVisible: true,
@@ -1167,7 +1369,7 @@ export const TradingChart: React.FC<TradingChartProps> = ({
             });
             rsiSeries.createPriceLine({
               price: 30,
-              color: 'rgba(255, 255, 255, 0.2)',
+              color: currentThemeName === 'Light' ? 'rgba(0, 0, 0, 0.2)' : 'rgba(255, 255, 255, 0.2)',
               lineWidth: 1,
               lineStyle: LineStyle.Dotted,
               axisLabelVisible: true,
@@ -1205,7 +1407,7 @@ export const TradingChart: React.FC<TradingChartProps> = ({
             });
             cciSeries.createPriceLine({
               price: 100,
-              color: 'rgba(255, 255, 255, 0.2)',
+              color: currentThemeName === 'Light' ? 'rgba(0, 0, 0, 0.2)' : 'rgba(255, 255, 255, 0.2)',
               lineWidth: 1,
               lineStyle: LineStyle.Dotted,
               axisLabelVisible: true,
@@ -1213,7 +1415,7 @@ export const TradingChart: React.FC<TradingChartProps> = ({
             });
             cciSeries.createPriceLine({
               price: -100,
-              color: 'rgba(255, 255, 255, 0.2)',
+              color: currentThemeName === 'Light' ? 'rgba(0, 0, 0, 0.2)' : 'rgba(255, 255, 255, 0.2)',
               lineWidth: 1,
               lineStyle: LineStyle.Dotted,
               axisLabelVisible: true,
@@ -1238,14 +1440,14 @@ export const TradingChart: React.FC<TradingChartProps> = ({
             });
             wrSeries.createPriceLine({
               price: -20,
-              color: 'rgba(255, 255, 255, 0.2)',
+              color: currentThemeName === 'Light' ? 'rgba(0, 0, 0, 0.2)' : 'rgba(255, 255, 255, 0.2)',
               lineWidth: 1,
               lineStyle: LineStyle.Dotted,
               axisLabelVisible: true,
             });
             wrSeries.createPriceLine({
               price: -80,
-              color: 'rgba(255, 255, 255, 0.2)',
+              color: currentThemeName === 'Light' ? 'rgba(0, 0, 0, 0.2)' : 'rgba(255, 255, 255, 0.2)',
               lineWidth: 1,
               lineStyle: LineStyle.Dotted,
               axisLabelVisible: true,
@@ -1305,14 +1507,14 @@ export const TradingChart: React.FC<TradingChartProps> = ({
             });
             stochSeries.createPriceLine({
               price: 80,
-              color: 'rgba(255, 255, 255, 0.2)',
+              color: currentThemeName === 'Light' ? 'rgba(0, 0, 0, 0.2)' : 'rgba(255, 255, 255, 0.2)',
               lineWidth: 1,
               lineStyle: LineStyle.Dotted,
               axisLabelVisible: true,
             });
             stochSeries.createPriceLine({
               price: 20,
-              color: 'rgba(255, 255, 255, 0.2)',
+              color: currentThemeName === 'Light' ? 'rgba(0, 0, 0, 0.2)' : 'rgba(255, 255, 255, 0.2)',
               lineWidth: 1,
               lineStyle: LineStyle.Dotted,
               axisLabelVisible: true,
@@ -1819,22 +2021,18 @@ export const TradingChart: React.FC<TradingChartProps> = ({
   }, [tradeCoords.length, drawingCoords.length, isTradingEnabled]);
 
   return (
-    <div className="w-full h-full relative overflow-hidden bg-[var(--bg-primary)] flex-1 min-h-[300px] group" style={{ touchAction: 'none' }}>
-        {/* Gimbal UI Overlays - High Precision Glass & Depth */}
-        <div className="absolute inset-0 pointer-events-none z-[45] bg-[radial-gradient(circle_at_center,transparent_40%,rgba(0,0,0,0.15)_100%)]" />
-        <div className="absolute inset-0 pointer-events-none z-[45] shadow-[inset_0_0_80px_rgba(0,0,0,0.25)]" />
-        <div className="absolute top-0 left-0 right-0 h-[1px] bg-white/5 z-[45] pointer-events-none" />
-        <div className="absolute bottom-0 left-0 right-0 h-[1px] bg-white/5 z-[45] pointer-events-none" />
+    <div className="w-full h-full relative overflow-hidden bg-bg-primary flex-1 min-h-[300px] group" style={{ touchAction: 'none' }}>
+        {/* Gimbal UI Overlays - High Precision Glass & Depth - ONLY IN DARK THEME */}
+        {currentThemeName !== 'Light' && (
+            <>
+                <div className="absolute inset-0 pointer-events-none z-[45] bg-[radial-gradient(circle_at_center,transparent_40%,rgba(0,0,0,0.15)_100%)]" />
+                <div className="absolute inset-0 pointer-events-none z-[45] shadow-[inset_0_0_80px_rgba(0,0,0,0.25)]" />
+            </>
+        )}
+        <div className="absolute top-0 left-0 right-0 h-[1px] bg-bg-secondary z-[45] pointer-events-none" />
+        <div className="absolute bottom-0 left-0 right-0 h-[1px] bg-bg-secondary z-[45] pointer-events-none" />
         
-        {/* Subtitle Scanline Effect */}
-        <div className="absolute inset-0 pointer-events-none z-[46] opacity-[0.03] overflow-hidden">
-            <div className="absolute inset-0 h-2 w-full bg-white/30 animate-[scanline_8s_linear_infinite]" 
-                 style={{ 
-                    backgroundImage: 'linear-gradient(to bottom, transparent, currentColor, transparent)',
-                    animationName: 'scanline'
-                 }} 
-            />
-        </div>
+        {/* Subtitle Scanline Effect Removed */}
 
         <style>
             {`
@@ -1846,14 +2044,20 @@ export const TradingChart: React.FC<TradingChartProps> = ({
         </style>
 
         <AnimatePresence mode="wait">
-            {((isLoading && data.length === 0) || (data.length === 0 && !isStalled)) && (
+            {(isLoading || (data.length === 0 && !isStalled)) && (
                 <motion.div 
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
-                    className="absolute inset-0 z-50 bg-[var(--bg-primary)] flex items-center justify-center backdrop-blur-md"
+                    className="absolute inset-0 z-50 bg-bg-primary/50 backdrop-blur-sm flex items-center justify-center pointer-events-none"
                 >
-                    <ChartSkeleton />
+                    <div className="relative w-8 h-8">
+                        <motion.div
+                            animate={{ rotate: 360 }}
+                            transition={{ duration: 1.5, repeat: Infinity, ease: "linear" }}
+                            className="w-8 h-8 rounded-full border-2 border-border-color border-t-[var(--color-accent-color)]"
+                        />
+                    </div>
                 </motion.div>
             )}
         </AnimatePresence>
@@ -1861,7 +2065,7 @@ export const TradingChart: React.FC<TradingChartProps> = ({
         <motion.div 
             initial={{ opacity: 0 }}
             animate={{ 
-                opacity: (isLoading || data.length < 50 || isStalled) ? 0 : 1,
+                opacity: (data.length === 0 || isStalled) ? 0 : 1,
             }}
             transition={{ duration: 0.3 }}
             className="w-full h-full absolute inset-0"
@@ -1872,7 +2076,7 @@ export const TradingChart: React.FC<TradingChartProps> = ({
                 {drawings.length > 0 && (
                     <button 
                         onClick={(e) => { e.stopPropagation(); setDrawings([]); }}
-                        className="bg-[#1a1b1e]/80 backdrop-blur-md border border-white/10 text-white p-2 rounded-full shadow-xl hover:bg-red-500/20 transition-colors pointer-events-auto"
+                        className="bg-bg-tertiary/80 backdrop-blur-md border border-border-color text-white p-2 rounded-full shadow-xl hover:bg-red-500/20 transition-colors pointer-events-auto"
                         title="Clear all drawings"
                     >
                         <Trash2 size={16} />
@@ -2032,8 +2236,8 @@ export const TradingChart: React.FC<TradingChartProps> = ({
                                     const y = p1.y - fibDiff * level.val;
                                     return (
                                         <div key={level.val} className="absolute left-0 right-0 flex items-center" style={{ top: y }}>
-                                            <div className={`flex-1 h-[1px] ${isSelected ? "bg-blue-500" : "bg-white/40"}`} />
-                                            <span className="text-[10px] text-white font-mono px-1.5 py-0.5 bg-black/60 backdrop-blur-sm rounded-sm border border-white/10 ml-2">
+                                            <div className={`flex-1 h-[1px] ${isSelected ? "bg-blue-500" : (currentThemeName === 'Light' ? "bg-black/20" : "bg-white/40")}`} />
+                                            <span className="text-[10px] text-text-primary font-mono px-1.5 py-0.5 bg-black/60 backdrop-blur-sm rounded-sm border border-border-color ml-2">
                                                 {level.label}
                                             </span>
                                         </div>
@@ -2089,12 +2293,77 @@ export const TradingChart: React.FC<TradingChartProps> = ({
 
             {/* Custom Trade Overlays */}
             <div className="absolute inset-0 pointer-events-none z-20 overflow-hidden">
-                {/* Horizontal Line to Price Scale - Thin and Professional (Candle to Right) */}
+                {/* Zoom Controls & Scroll to Latest */}
+                <div className="absolute bottom-[40px] left-1/2 -translate-x-1/2 flex items-center bg-bg-tertiary/90 backdrop-blur-md rounded-lg border border-border-color overflow-hidden shadow-2xl z-[60] pointer-events-auto">
+                    <button 
+                        onClick={zoomOut}
+                        className="p-2.5 hover:bg-text-primary/10 transition-colors text-text-primary flex items-center justify-center cursor-pointer"
+                        aria-label="Zoom Out"
+                        style={{pointerEvents: 'auto'}}
+                    >
+                        <Minus size={16} />
+                    </button>
+                    <div className="w-[1px] h-4 bg-text-primary/10" />
+                    <button 
+                        onClick={zoomIn}
+                        className="p-2.5 hover:bg-text-primary/10 transition-colors text-text-primary flex items-center justify-center cursor-pointer"
+                        aria-label="Zoom In"
+                        style={{pointerEvents: 'auto'}}
+                    >
+                        <Plus size={16} />
+                    </button>
+                    <div className="w-[1px] h-4 bg-text-primary/10" />
+                    <button 
+                        onClick={fitContent}
+                        className="p-2.5 hover:bg-text-primary/10 transition-colors text-text-primary flex items-center justify-center cursor-pointer"
+                        aria-label="Fit Content"
+                        style={{pointerEvents: 'auto'}}
+                    >
+                        <ArrowUpDown size={16} />
+                    </button>
+
+                    <AnimatePresence>
+                        {isScrolledBack && (
+                            <motion.div
+                                initial={{ width: 0, opacity: 0 }}
+                                animate={{ width: 'auto', opacity: 1 }}
+                                exit={{ width: 0, opacity: 0 }}
+                                className="flex items-center"
+                            >
+                                <div className="w-[1px] h-4 bg-text-primary/10" />
+                                <button 
+                                    onClick={scrollToLatest}
+                                    className="p-2.5 hover:bg-text-primary/10 transition-colors text-[#22c55e] flex items-center justify-center cursor-pointer"
+                                    aria-label="Scroll to Latest"
+                                    style={{pointerEvents: 'auto'}}
+                                >
+                                    <ChevronRight size={18} strokeWidth={2.5} />
+                                </button>
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
+                </div>
+                
+                {/* Vertical Line for Current Candle - Precise and Technical */}
+                <div 
+                    id="current-candle-v-line"
+                    className={cn(
+                        "absolute top-0 bottom-0 w-[1px] border-l border-dashed z-[15] pointer-events-none hidden",
+                        currentThemeName === 'Light' ? "border-black/20" : "border-white/30"
+                    )}
+                    style={{ willChange: 'left' }}
+                />
+
+                {/* Horizontal Line to Price Scale - Precise Sharp Line */}
                 <div 
                     ref={horizontalLineRef}
-                    className="absolute right-0 h-[1px] border-t border-dashed border-white/40 pointer-events-none z-20 hidden"
+                    className={cn(
+                        "absolute right-0 h-[1px] z-30 pointer-events-none hidden",
+                        currentThemeName === 'Light' ? "bg-black/40" : "bg-white/70"
+                    )}
                     style={{ 
-                        boxShadow: '0 0 4px rgba(255,255,255,0.2)',
+                        boxShadow: currentThemeName === 'Light' ? 'none' : '0 0 4px rgba(255,255,255,0.2)',
+                        willChange: 'top, left'
                     }}
                 />
                 
@@ -2103,38 +2372,51 @@ export const TradingChart: React.FC<TradingChartProps> = ({
                     className="absolute z-[60] hidden pointer-events-none"
                     style={{ transform: 'translate(-50%, -50%)' }}
                 >
-                    <div className="bg-black/60 backdrop-blur-sm p-1 rounded-full border border-white/20">
-                        <Lock size={12} className="text-white" />
+                    <div className="bg-black/80 backdrop-blur-md p-1.5 rounded-full border border-white/20 shadow-[0_0_20px_rgba(0,0,0,0.5)]">
+                        <Lock size={16} className="text-text-primary" strokeWidth={2.5} />
                     </div>
                 </div>
                 
                 {/* Current Price Dot on Candle - Precise with Pulse */}
-                <div className="absolute z-40 bg-white rounded-full -translate-x-1/2 -translate-y-1/2 shadow-[0_0_15px_rgba(255,255,255,1)] pointer-events-none hidden"
+                <div className="absolute z-60 bg-white rounded-full -translate-x-1/2 -translate-y-1/2 shadow-[0_0_15px_rgba(255,255,255,1)] pointer-events-none hidden"
                         ref={priceDotRef}
-                        style={{ width: '8px', height: '8px' }}>
-                    <div className="absolute inset-0 rounded-full animate-ping bg-white opacity-80" />
+                        style={{ 
+                            width: '8px', 
+                            height: '8px',
+                            willChange: 'top, left'
+                        }}>
+                    <div className="absolute inset-0 rounded-full animate-ping bg-white opacity-60" />
                 </div>
 
-                {/* Timer and Price Bubbles - Always present in DOM, controlled via refs */}
+                {/* Timer and Price Bubbles - Precise UI Alignment */}
                 <div 
                     ref={bubbleGroupRef}
-                    className="absolute flex items-center pointer-events-none z-50 hidden"
-                    style={{ right: 0 }}
+                    className="absolute flex items-center pointer-events-none z-[100] hidden"
+                    style={{ 
+                        right: 0,
+                        willChange: 'top'
+                    }}
                 >
-                    {/* Timer Bubble (Dark) - Olymp Style */}
+                    {/* Timer Badge - Dark Minimal */}
                     <div 
                         ref={timerBubbleRef}
-                        className="bg-[#1a1b1e] text-white text-[11px] font-bold px-2 py-1 rounded-md border border-white/10 mr-1 shadow-xl whitespace-nowrap"
+                        className="bg-bg-tertiary text-text-primary text-[10px] font-black px-2 py-0.5 rounded-md border border-border-color mr-1 shadow-md whitespace-nowrap tracking-wide"
                     >
                         {timerStringRef.current}
                     </div>
                     
-                    {/* Price Bubble (White/Accent) - Olymp Style */}
-                    <div 
-                        ref={priceBubbleRef}
-                        className="bg-white text-black text-[12px] font-bold px-3 py-1 rounded-l-md shadow-2xl min-w-[70px] text-center border-y border-l border-white/20"
-                    >
-                        --
+                    {/* Price Pointer Badge */}
+                    <div className="flex items-center h-[30px] drop-shadow-md">
+                        {/* Triangle - Perfect 10px Arrow */}
+                        <div className="w-0 h-0 border-t-[10px] border-t-transparent border-b-[10px] border-b-transparent border-r-[10px] border-r-text-primary" />
+                        
+                        {/* Price Value Box */}
+                        <div 
+                            ref={priceBubbleRef}
+                            className="bg-text-primary text-bg-primary text-[13px] font-black h-full px-4 flex items-center justify-center rounded-r-lg min-w-[85px] text-center tracking-tight"
+                        >
+                            --
+                        </div>
                     </div>
                 </div>
 
@@ -2147,86 +2429,166 @@ export const TradingChart: React.FC<TradingChartProps> = ({
                 const isFaded = trade.status !== 'ACTIVE';
 
                 return (
-                    <div key={coord.id} className="absolute inset-0 pointer-events-none" style={{ opacity: isFaded ? 0.4 : 1 }}>
-                                {/* Entry Point Marker - Professional Style (Yellow Tag & Line) */}
+                    <div key={coord.id} className="absolute inset-0 pointer-events-none">
+                                {/* Horizontal Expiration Line (Solid with glow) */}
+                                <div 
+                                    id={`trade-line-h-${trade.id}`}
+                                    className="absolute h-[1px] z-30"
+                                    style={{ 
+                                        backgroundColor: color,
+                                        boxShadow: `0 0 10px ${isUp ? '#00ff5f44' : '#ff333344'}`,
+                                        opacity: isFaded ? 0.3 : 0.8,
+                                        visibility: 'hidden' 
+                                    }}
+                                />
+
+                                {/* Price Bubble at the end of the entry line */}
+                                <div 
+                                    id={`trade-line-h-bubble-${trade.id}`}
+                                    className="absolute right-0 h-5 -translate-y-1/2 flex items-center justify-center px-1.5 rounded-l-md text-[10px] font-black text-text-primary z-40"
+                                    style={{ 
+                                        backgroundColor: color,
+                                        opacity: isFaded ? 0.5 : 1,
+                                        visibility: 'hidden',
+                                        boxShadow: '0 2px 8px rgba(0,0,0,0.4)',
+                                        borderLeft: '1px solid rgba(255,255,255,0.3)'
+                                    }}
+                                />
+
+                                {/* Vertical Entry Time Line - New White Line */}
+                                <div 
+                                    id={`trade-line-v-start-${trade.id}`}
+                                    className={cn(
+                                        "absolute top-0 bottom-0 w-[0.5px] border-l border-dashed z-20 pointer-events-none",
+                                        currentThemeName === 'Light' ? "border-black/40" : "border-white/60"
+                                    )}
+                                    style={{ visibility: 'hidden', opacity: isFaded ? 0.3 : 0.6 }}
+                                />
+
+                                {/* Vertical Expiration Time Line */}
+                                <div 
+                                    id={`trade-line-v-${trade.id}`}
+                                    className="absolute top-0 bottom-0 w-[1.5px] bg-white/20 z-30"
+                                    style={{ visibility: 'hidden', opacity: isFaded ? 0.3 : 1 }}
+                                >
+                                    <div className="absolute bottom-10 left-1/2 -translate-x-1/2 p-1.5 bg-bg-tertiary backdrop-blur-sm rounded-full border border-white/20 text-text-primary shadow-lg">
+                                        <Flag size={12} fill="white" />
+                                    </div>
+                                </div>
+
+                                { /* Trade Entry Badge (Pill Shape with Arrow) */ }
                                 <div 
                                     id={`trade-entry-${trade.id}`}
-                                    className="absolute z-40 flex items-center flex-row-reverse"
+                                    className="absolute z-50 flex items-center justify-center -translate-y-1/2"
                                     style={{ 
                                         left: '-999px',
                                         top: '-999px',
-                                        transform: 'translate(-100%, -50%)',
                                         visibility: 'hidden'
                                     }}
                                 >
                                     <div 
-                                        className="relative flex items-center flex-row-reverse"
+                                        className="h-[20px] px-1.5 rounded-md flex items-center gap-1 border border-white/20 shadow-[0_2px_10px_rgba(0,0,0,0.4)] relative overflow-hidden"
+                                        style={{ backgroundColor: trade.type === 'UP' ? '#0ecb81' : '#f6465d' }}
                                     >
-                                        {/* Circle at Entry Point */}
-                                        <div className="w-4 h-4 bg-[#ffeb3b] rounded-full border-2 border-[#101114] shadow-[0_0_10px_rgba(255,235,59,0.6)] z-10" />
-                                        
-                                        {/* Line and Tag to the Left */}
-                                        <div className="flex items-center flex-row-reverse">
-                                            <div className="w-8 h-[2.5px] bg-[#ffeb3b] shadow-[0_0_10px_rgba(255,235,59,0.4)]" />
-                                            <div 
-                                                className="bg-[#ffeb3b] text-black font-black px-2 py-1 flex items-center justify-center shadow-[0_0_15px_rgba(255,235,59,0.5)] rounded-l-md"
-                                                style={{
-                                                    minWidth: '50px',
-                                                    height: '24px',
-                                                    fontSize: '11px',
-                                                    letterSpacing: '-0.5px',
-                                                    clipPath: 'polygon(0% 0%, 85% 0%, 100% 50%, 85% 100%, 0% 100%)',
-                                                    paddingRight: '10px'
-                                                }}
-                                            >
-                                                {currencySymbol}{Math.round(trade.amount * exchangeRate)}
+                                        <div className="flex items-center gap-1 pointer-events-none">
+                                            <span className="text-[10px] font-black text-text-primary leading-none flex items-center">
+                                                <span className="opacity-60 mr-0.5 text-[9px] font-bold">{currencySymbol}</span>
+                                                {Math.round(trade.amount * exchangeRate).toLocaleString()}
+                                            </span>
+                                            <div className="w-3.5 h-3.5 rounded-sm bg-white/20 flex items-center justify-center">
+                                                {trade.type === 'UP' ? 
+                                                    <ArrowUpRight size={10} color="white" strokeWidth={4} /> : 
+                                                    <ArrowDownRight size={10} color="white" strokeWidth={4} />
+                                                }
                                             </div>
                                         </div>
+                                        {trade.status === 'ACTIVE' && (
+                                            <div className="absolute inset-0 bg-text-primary/10 animate-pulse" />
+                                        )}
                                     </div>
+                                    {/* Small dot connected to the horizontal line */}
+                                    <div 
+                                        className="w-1.5 h-1.5 rounded-full border border-white/40 ml-1.5"
+                                        style={{ backgroundColor: trade.type === 'UP' ? '#0ecb81' : '#f6465d' }}
+                                    />
                                 </div>
 
                         {/* Exit Point Marker (if finished) - Olymp Style Result Bubble */}
                         {trade.status !== 'ACTIVE' && (
-                            <div 
-                                id={`trade-result-${trade.id}`}
-                                className="absolute z-40 flex flex-col items-center"
-                                style={{ 
-                                    left: '-999px',
-                                    top: '-999px',
-                                    transform: 'translate(-50%, -50%)',
-                                    visibility: 'hidden'
-                                }}
-                            >
-                                {/* Result Bubble */}
+                            <>
                                 <div 
-                                    className="mb-1 px-2 py-1 rounded-md text-[11px] font-black text-white shadow-2xl border border-white/20 whitespace-nowrap flex items-center gap-1.5"
+                                    id={`trade-result-${trade.id}`}
+                                    className="absolute z-[100] flex items-center pointer-events-auto" 
                                     style={{ 
-                                        backgroundColor: trade.status === 'WIN' ? '#0ecb81' : '#f6465d',
-                                        boxShadow: `0 4px 15px ${trade.status === 'WIN' ? '#0ecb8144' : '#f6465d44'}`
+                                        left: '-999px',
+                                        top: '-999px',
+                                        visibility: 'hidden',
+                                        display: dismissedResultsRef.current.has(trade.id) ? 'none' : undefined
                                     }}
                                 >
-                                    {trade.status === 'WIN' ? (
-                                        <TrendingUp size={12} strokeWidth={3} />
-                                    ) : (
-                                        <TrendingDown size={12} strokeWidth={3} />
-                                    )}
-                                    {trade.status === 'WIN' ? `+${currencySymbol}${Math.round(trade.amount * (trade.payout / 100) * exchangeRate)}` : `-${currencySymbol}${Math.round(trade.amount * exchangeRate)}`}
-                                </div>
-                                
-                                {/* Exit Dot with Pulse */}
-                                <div className="relative">
+                                    {/* Triangle Pointer */}
                                     <div 
-                                        className="w-4 h-4 rounded-full border-2 border-[#101114] shadow-2xl flex items-center justify-center z-10 relative"
+                                        className="w-0 h-0 border-t-[10px] border-t-transparent border-b-[10px] border-b-transparent border-r-[12px] filter drop-shadow-[-2px_0_4px_rgba(0,0,0,0.2)]"
+                                        style={{ borderRightColor: trade.status === 'WIN' ? '#0ecb81' : '#f6465d' }}
+                                    />
+                                    
+                                    {/* Main Container */}
+                                    <div 
+                                        className="min-w-[160px] px-4 py-3 rounded-xl shadow-[0_15px_40px_rgba(0,0,0,0.6)] relative flex flex-col gap-1 backdrop-blur-sm border border-border-color"
                                         style={{ backgroundColor: trade.status === 'WIN' ? '#0ecb81' : '#f6465d' }}
                                     >
-                                        <div className="w-1.5 h-1.5 bg-white rounded-full" />
+                                        {/* Close Button */}
+                                        <button 
+                                            className="absolute top-2.5 right-2.5 text-text-secondary/60 hover:text-text-primary transition-all p-1 hover:bg-text-primary/10 rounded-lg"
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                dismissedResultsRef.current.add(trade.id);
+                                                const el = document.getElementById(`trade-result-${trade.id}`);
+                                                if (el) el.style.display = 'none';
+                                            }}
+                                        >
+                                            <X size={16} strokeWidth={3} />
+                                        </button>
+                                        
+                                        {/* Status Glow behind */}
+                                        <div className="absolute inset-x-0 -bottom-1 h-2 blur-xl opacity-50 bg-bg-primary" />
+
+                                        {/* Header */}
+                                        <div className="text-[10px] font-black tracking-[0.2em] text-text-secondary/70 uppercase leading-none">
+                                            Result
+                                        </div>
+
+                                        {/* Amount - Large and Bold */}
+                                        <div className="text-[26px] font-black text-text-primary leading-tight flex items-baseline gap-1 mt-0.5">
+                                            <span className="text-[18px] opacity-80">{trade.status === 'WIN' ? '+' : '-'}</span>
+                                            <span className="text-[18px] opacity-90">{currencySymbol}</span>
+                                            {trade.status === 'WIN' ? 
+                                                (trade.amount * (trade.payout / 100) * exchangeRate).toFixed(1) : 
+                                                (trade.amount * exchangeRate).toFixed(1)
+                                            }
+                                        </div>
+
+                                        {/* Footer */}
+                                        <div className="text-[11px] font-bold text-text-primary/90 italic tracking-wide">
+                                            {trade.status === 'WIN' ? 'with a profit' : 'trade closed'}
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                {/* Exit Dot with Pulse (Keep it always visible on chart) */}
+                                <div className="relative z-50">
+                                    <div 
+                                        className="w-5 h-5 rounded-full border-2 border-[#101114] shadow-2xl flex items-center justify-center relative transition-transform hover:scale-125 cursor-pointer"
+                                        style={{ backgroundColor: trade.status === 'WIN' ? '#0ecb81' : '#f6465d' }}
+                                    >
+                                        <div className="w-2 h-2 bg-white rounded-full shadow-inner" />
                                     </div>
                                     <div 
                                         className="absolute inset-0 rounded-full animate-ping opacity-30"
                                         style={{ backgroundColor: trade.status === 'WIN' ? '#0ecb81' : '#f6465d' }}
                                     />
                                 </div>
-                            </div>
+                            </>
                         )}
                     </div>
                 );
@@ -2235,7 +2597,7 @@ export const TradingChart: React.FC<TradingChartProps> = ({
 
         {/* Global Market Closed Indicator */}
         {!isTradingEnabled && (
-            <div className="absolute inset-0 z-[100] bg-black/40 backdrop-blur-[3px] flex items-center justify-center pointer-events-none overflow-hidden">
+            <div className="absolute inset-0 z-[100] bg-bg-secondary backdrop-blur-[3px] flex items-center justify-center pointer-events-none overflow-hidden">
                 <motion.div 
                     initial={{ scale: 0.5, opacity: 0 }}
                     animate={{ 
@@ -2251,8 +2613,8 @@ export const TradingChart: React.FC<TradingChartProps> = ({
                     className="flex flex-col items-center gap-6"
                 >
                     <div className="relative">
-                        <div className="w-24 h-24 bg-white/5 rounded-[32px] border border-white/10 backdrop-blur-xl flex items-center justify-center shadow-[0_0_80px_rgba(255,255,255,0.15)] ring-1 ring-white/20">
-                            <Lock size={48} className="text-white drop-shadow-[0_0_15px_rgba(255,255,255,0.6)]" />
+                        <div className="w-24 h-24 bg-bg-secondary rounded-[32px] border border-border-color backdrop-blur-xl flex items-center justify-center shadow-[0_0_80px_rgba(255,255,255,0.15)] ring-1 ring-white/20">
+                            <Lock size={48} className="text-text-primary drop-shadow-[0_0_15px_rgba(255,255,255,0.6)]" />
                         </div>
                         {/* Glow effect */}
                         <div className="absolute inset-0 bg-white/20 blur-[40px] rounded-full -z-10 animate-pulse" />
@@ -2261,11 +2623,11 @@ export const TradingChart: React.FC<TradingChartProps> = ({
                         <motion.span 
                             animate={{ opacity: [0.3, 1, 0.3] }}
                             transition={{ duration: 3, repeat: Infinity }}
-                            className="text-white font-black text-[13px] uppercase tracking-[0.4em] drop-shadow-lg"
+                            className="text-text-primary font-black text-[13px] uppercase tracking-[0.4em] drop-shadow-lg"
                         >
                             Market Offline
                         </motion.span>
-                        <span className="text-white/40 text-[9px] uppercase tracking-widest font-bold">Trading Temporarily Disabled</span>
+                        <span className="text-text-secondary/40 text-[9px] uppercase tracking-widest font-bold">Trading Temporarily Disabled</span>
                     </div>
                 </motion.div>
             </div>

@@ -29,8 +29,8 @@ export default function ChartSettingsSheet({
         {/* Time Frame Section */}
         <div className="mb-6">
           <div className="flex items-center gap-2 px-4 mb-3">
-            <h3 className="text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider">Candle Time Frame</h3>
-            <div className="w-4 h-4 rounded-full border border-[var(--text-secondary)] flex items-center justify-center text-[10px] text-[var(--text-secondary)]">?</div>
+            <h3 className="text-xs font-bold text-text-secondary uppercase tracking-wider">Candle Time Frame</h3>
+            <div className="w-4 h-4 rounded-full border border-[var(--color-text-secondary)] flex items-center justify-center text-[10px] text-text-secondary">?</div>
           </div>
           
           <div className="overflow-x-auto scrollbar-hide px-4">
@@ -38,8 +38,7 @@ export default function ChartSettingsSheet({
               {TIME_FRAMES.filter(tf => {
                   const tooLong = ['15m', '30m', '1h', '4h', '1d', '7d', '1M'];
                   if (tooLong.includes(tf)) return false;
-                  if (isOTC) return true;
-                  return !['5s', '10s', '15s', '20s', '30s'].includes(tf);
+                  return true;
               }).map((tf) => (
                 <button
                   key={tf}
@@ -47,8 +46,8 @@ export default function ChartSettingsSheet({
                   className={cn(
                     "min-w-[50px] h-10 rounded-xl flex items-center justify-center text-sm font-bold transition-all active:scale-95",
                     currentTimeFrame === tf 
-                      ? "bg-[var(--bg-tertiary)] text-[var(--text-primary)] border border-[var(--border-color)]" 
-                      : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+                      ? "bg-bg-tertiary text-text-primary border border-border-color" 
+                      : "text-text-secondary hover:text-text-primary"
                   )}
                 >
                   {tf}
@@ -60,7 +59,7 @@ export default function ChartSettingsSheet({
 
         {/* Chart Type Section */}
         <div>
-          <h3 className="px-4 text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider mb-3">Chart Type</h3>
+          <h3 className="px-4 text-xs font-bold text-text-secondary uppercase tracking-wider mb-3">Chart Type</h3>
           
           <div className="overflow-x-auto scrollbar-hide px-4">
             <div className="flex items-center gap-3 w-max">
@@ -71,8 +70,8 @@ export default function ChartSettingsSheet({
                   className={cn(
                     "flex items-center gap-2 px-4 py-3 rounded-xl border transition-all active:scale-95",
                     currentChartType === type.id
-                      ? "bg-[var(--bg-tertiary)] border-[var(--border-color)] text-[var(--text-primary)]"
-                      : "border-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+                      ? "bg-bg-tertiary border-border-color text-text-primary"
+                      : "border-transparent text-text-secondary hover:text-text-primary"
                   )}
                 >
                   <type.icon size={20} />

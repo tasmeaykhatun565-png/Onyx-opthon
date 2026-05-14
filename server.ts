@@ -11,6 +11,7 @@ import fs from 'fs';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import WebSocket from 'ws';
+import axios from 'axios';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'trading-platform-secret-key';
 
@@ -396,6 +397,21 @@ async function startServer() {
       console.log('Added extraAccounts column to users');
     } catch (e) {}
 
+    // Migration for numeric referral codes
+    try {
+      const nonNumericUsers = database.prepare("SELECT email, referralCode FROM users WHERE referralCode GLOB '*[^0-9]*' OR referralCode IS NULL OR referralCode = ''").all() as {email: string, referralCode: string}[];
+      if (nonNumericUsers.length > 0) {
+        console.log(`Migrating ${nonNumericUsers.length} users to numeric referral codes...`);
+        const updateStmt = database.prepare("UPDATE users SET referralCode = ? WHERE email = ?");
+        for (const user of nonNumericUsers) {
+          const newCode = Math.floor(1000000 + Math.random() * 9000000).toString();
+          updateStmt.run(newCode, user.email);
+        }
+      }
+    } catch (e) {
+      console.warn('Migration for numeric referral codes failed:', e.message);
+    }
+
     return database;
   };
 
@@ -473,7 +489,7 @@ async function startServer() {
               data.timeframe || '1m',
               data.chartType || 'candles',
               data.referredBy || null,
-              data.referralCode || Math.random().toString(36).substring(2, 8).toUpperCase(),
+              data.referralCode || Math.floor(1000000 + Math.random() * 9000000).toString(),
               data.referralCount || 0,
               data.extraAccounts || '[]'
             );
@@ -677,7 +693,7 @@ async function startServer() {
       db.prepare(`
         INSERT INTO users (email, password, name, uid, createdAt, balance, demoBalance, referralCode)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(email, hashedPassword, name, uid, createdAt, 0, 10000, Math.random().toString(36).substring(2, 8).toUpperCase());
+      `).run(email, hashedPassword, name, uid, createdAt, 0, 10000, Math.floor(1000000 + Math.random() * 9000000).toString());
 
       if (referralCode) {
         const referrer = db.prepare('SELECT * FROM users WHERE referralCode = ? OR UPPER(substr(uid, 1, 8)) = UPPER(?)').get(referralCode, referralCode) as any;
@@ -941,30 +957,49 @@ async function startServer() {
     volatility: number, 
     trend: number, 
     isFrozen?: boolean, 
+    isWeekendFrozen?: boolean,
     targetPrice?: number | null, 
     winPercentage?: number, 
     payout?: number,
     isRealMarket?: boolean,
     isOTC?: boolean,
     isVisible?: boolean,
-    baseMarketPrice?: number
+    baseMarketPrice?: number,
+    liveTargetPrice?: number,
+    lastRealUpdate?: number,
+    priceSource?: string;
   }> = {
-    'BTC/USD': { price: 65000.00, volatility: 25.0, trend: 0, winPercentage: 50, payout: 90 },
-    'ETH/USD': { price: 3500.00, volatility: 1.5, trend: 0, winPercentage: 50, payout: 90 },
-    'SOL/USD': { price: 150.00, volatility: 0.15, trend: 0, winPercentage: 50, payout: 90 },
-    'DOGE/USD': { price: 0.15, volatility: 0.001, trend: 0, winPercentage: 50, payout: 90 },
-    'EUR/USD': { price: 1.0800, volatility: 0.00005, trend: 0, winPercentage: 50, payout: 85 },
-    'GBP/USD': { price: 1.2500, volatility: 0.00006, trend: 0, winPercentage: 50, payout: 85 },
-    'USD/JPY': { price: 155.00, volatility: 0.01, trend: 0, winPercentage: 50, payout: 85 },
-    'USD/CAD': { price: 1.3500, volatility: 0.00005, trend: 0, winPercentage: 50, payout: 85 },
-    'GBP/JPY': { price: 195.50, volatility: 0.012, trend: 0, winPercentage: 50, payout: 85 },
-    'EUR/JPY': { price: 168.00, volatility: 0.01, trend: 0, winPercentage: 50, payout: 85 },
-    'AUD/JPY': { price: 101.50, volatility: 0.01, trend: 0, winPercentage: 50, payout: 82 },
-    'GOLD': { price: 2300.00, volatility: 0.15, trend: 0, winPercentage: 50, payout: 85 },
-    'OIL': { price: 80.00, volatility: 0.02, trend: 0, winPercentage: 50, payout: 80 },
-    'AAPL': { price: 175.00, volatility: 0.1, trend: 0, winPercentage: 50, payout: 90 },
-    'NVDA': { price: 900.00, volatility: 0.5, trend: 0, winPercentage: 50, payout: 90 },
-    'TSLA': { price: 180.00, volatility: 0.2, trend: 0, winPercentage: 50, payout: 90 },
+    'BTC/USD': { price: 65000.00, volatility: 25.0, trend: 0, winPercentage: 50, payout: 90, isRealMarket: true },
+    'ETH/USD': { price: 3500.00, volatility: 1.5, trend: 0, winPercentage: 50, payout: 90, isRealMarket: true },
+    'SOL/USD': { price: 150.00, volatility: 0.15, trend: 0, winPercentage: 50, payout: 90, isRealMarket: true },
+    'DOGE/USD': { price: 0.15, volatility: 0.001, trend: 0, winPercentage: 50, payout: 90, isRealMarket: true },
+    'EUR/USD': { price: 1.0800, volatility: 0.00005, trend: 0, winPercentage: 50, payout: 85, isRealMarket: true },
+    'GBP/USD': { price: 1.2500, volatility: 0.00006, trend: 0, winPercentage: 50, payout: 85, isRealMarket: true },
+    'USD/JPY': { price: 155.00, volatility: 0.006, trend: 0, winPercentage: 50, payout: 85, isRealMarket: true },
+    'USD/CAD': { price: 1.3500, volatility: 0.00005, trend: 0, winPercentage: 50, payout: 85, isRealMarket: true },
+    'GBP/JPY': { price: 195.50, volatility: 0.015, trend: 0, winPercentage: 50, payout: 85, isRealMarket: true },
+    'EUR/JPY': { price: 168.00, volatility: 0.012, trend: 0, winPercentage: 50, payout: 85, isRealMarket: true },
+    'AUD/JPY': { price: 101.50, volatility: 0.012, trend: 0, winPercentage: 50, payout: 82, isRealMarket: true },
+    'NZD/JPY': { price: 93.50, volatility: 0.012, trend: 0, winPercentage: 50, payout: 85, isRealMarket: true },
+    'CHF/JPY': { price: 171.50, volatility: 0.012, trend: 0, winPercentage: 50, payout: 85, isRealMarket: true },
+    'CAD/JPY': { price: 112.50, volatility: 0.012, trend: 0, winPercentage: 50, payout: 85, isRealMarket: true },
+    'GBP/AUD': { price: 1.89, volatility: 0.00015, trend: 0, winPercentage: 50, payout: 85, isRealMarket: true },
+    'GBP/NZD': { price: 2.07, volatility: 0.00015, trend: 0, winPercentage: 50, payout: 85, isRealMarket: true },
+    'AUD/NZD': { price: 1.09, volatility: 0.00008, trend: 0, winPercentage: 50, payout: 85, isRealMarket: true },
+    'AUD/USD': { price: 0.6600, volatility: 0.00005, trend: 0, winPercentage: 50, payout: 85, isRealMarket: true },
+    'NZD/USD': { price: 0.6000, volatility: 0.00005, trend: 0, winPercentage: 50, payout: 85, isRealMarket: true },
+    'USD/CHF': { price: 0.9000, volatility: 0.00005, trend: 0, winPercentage: 50, payout: 85, isRealMarket: true },
+    'EUR/GBP': { price: 0.8600, volatility: 0.00004, trend: 0, winPercentage: 50, payout: 85, isRealMarket: true },
+    'EUR/AUD': { price: 1.6300, volatility: 0.00008, trend: 0, winPercentage: 50, payout: 85, isRealMarket: true },
+    'EUR/CAD': { price: 1.4700, volatility: 0.00008, trend: 0, winPercentage: 50, payout: 85, isRealMarket: true },
+    'GBP/CAD': { price: 1.7100, volatility: 0.00008, trend: 0, winPercentage: 50, payout: 85, isRealMarket: true },
+    'AUD/CAD': { price: 0.9000, volatility: 0.00005, trend: 0, winPercentage: 50, payout: 85, isRealMarket: true },
+    'SILVER': { price: 28.00, volatility: 0.005, trend: 0, winPercentage: 50, payout: 88, isRealMarket: true },
+    'GOLD': { price: 2300.00, volatility: 0.15, trend: 0, winPercentage: 50, payout: 85, isRealMarket: true },
+    'OIL': { price: 80.00, volatility: 0.02, trend: 0, winPercentage: 50, payout: 80, isRealMarket: true },
+    'AAPL': { price: 175.00, volatility: 0.1, trend: 0, winPercentage: 50, payout: 90, isRealMarket: true },
+    'NVDA': { price: 900.00, volatility: 0.5, trend: 0, winPercentage: 50, payout: 90, isRealMarket: true },
+    'TSLA': { price: 180.00, volatility: 0.2, trend: 0, winPercentage: 50, payout: 90, isRealMarket: true },
     'EUR/USD OTC': { price: 1.0850, volatility: 0.00008, trend: 0, winPercentage: 50, payout: 92, isOTC: true },
     'GBP/USD OTC': { price: 1.2550, volatility: 0.00008, trend: 0, winPercentage: 50, payout: 92, isOTC: true },
     'AUD/USD OTC': { price: 0.6650, volatility: 0.00008, trend: 0, winPercentage: 50, payout: 92, isOTC: true },
@@ -1007,15 +1042,15 @@ async function startServer() {
     'CRYPTO INDEX': { price: 2500.00, volatility: 1.2, trend: 0, winPercentage: 50, payout: 90, isOTC: true },
     'ALTCOIN INDEX': { price: 1200.00, volatility: 1.8, trend: 0, winPercentage: 50, payout: 92, isOTC: true },
     'DEFI INDEX': { price: 850.00, volatility: 2.5, trend: 0, winPercentage: 50, payout: 92, isOTC: true },
-    'AMZN': { price: 185.00, volatility: 0.12, trend: 0, winPercentage: 50, payout: 90 },
-    'GOOGL': { price: 170.00, volatility: 0.1, trend: 0, winPercentage: 50, payout: 90 },
-    'META': { price: 480.00, volatility: 0.3, trend: 0, winPercentage: 50, payout: 90 },
-    'MSFT': { price: 410.00, volatility: 0.25, trend: 0, winPercentage: 50, payout: 90 },
-    'NFLX': { price: 620.00, volatility: 0.4, trend: 0, winPercentage: 50, payout: 90 },
-    'AMD': { price: 160.00, volatility: 0.35, trend: 0, winPercentage: 50, payout: 88 },
-    'INTC': { price: 35.00, volatility: 0.08, trend: 0, winPercentage: 50, payout: 85 },
-    'BABA': { price: 75.00, volatility: 0.15, trend: 0, winPercentage: 50, payout: 85 },
-    'PYPL': { price: 65.00, volatility: 0.18, trend: 0, winPercentage: 50, payout: 85 },
+    'AMZN': { price: 185.00, volatility: 0.12, trend: 0, winPercentage: 50, payout: 90, isRealMarket: true },
+    'GOOGL': { price: 170.00, volatility: 0.1, trend: 0, winPercentage: 50, payout: 90, isRealMarket: true },
+    'META': { price: 480.00, volatility: 0.3, trend: 0, winPercentage: 50, payout: 90, isRealMarket: true },
+    'MSFT': { price: 410.00, volatility: 0.25, trend: 0, winPercentage: 50, payout: 90, isRealMarket: true },
+    'NFLX': { price: 620.00, volatility: 0.4, trend: 0, winPercentage: 50, payout: 90, isRealMarket: true },
+    'AMD': { price: 160.00, volatility: 0.35, trend: 0, winPercentage: 50, payout: 88, isRealMarket: true },
+    'INTC': { price: 35.00, volatility: 0.08, trend: 0, winPercentage: 50, payout: 85, isRealMarket: true },
+    'BABA': { price: 75.00, volatility: 0.15, trend: 0, winPercentage: 50, payout: 85, isRealMarket: true },
+    'PYPL': { price: 65.00, volatility: 0.18, trend: 0, winPercentage: 50, payout: 85, isRealMarket: true },
   };
 
   // --- Binance WebSocket Integration ---
@@ -1037,11 +1072,17 @@ async function startServer() {
     { symbol: 'EUR/USD', binanceSymbol: 'eurusdt' },
     { symbol: 'GBP/USD', binanceSymbol: 'gbpusdt' },
     { symbol: 'AUD/USD', binanceSymbol: 'audusdt' },
-    { symbol: 'USD/JPY', binanceSymbol: 'usdtjpy' },
-    { symbol: 'USD/CAD', binanceSymbol: 'usdtcad' },
-    { symbol: 'GBP/JPY', binanceSymbol: 'gbpjpy' },
+    { symbol: 'USD/JPY', binanceSymbol: 'usdjpy' },
+    { symbol: 'USD/CAD', binanceSymbol: 'usdcad' },
     { symbol: 'EUR/JPY', binanceSymbol: 'eurjpy' },
-    { symbol: 'AUD/JPY', binanceSymbol: 'audjpy' }
+    { symbol: 'GBP/JPY', binanceSymbol: 'gbpjpy' },
+    { symbol: 'AUD/JPY', binanceSymbol: 'audjpy' },
+    { symbol: 'USD/CHF', binanceSymbol: 'usdchf' },
+    { symbol: 'NZD/USD', binanceSymbol: 'nzdusdt' }
+  ];
+
+  const binanceCrossSources = [
+    'btcusdt', 'btcjpy'
   ];
 
   const coinbaseCryptoPairs = [
@@ -1055,34 +1096,178 @@ async function startServer() {
     { symbol: 'DOT/USD', coinbaseSymbol: 'DOT-USD' },
     { symbol: 'LINK/USD', coinbaseSymbol: 'LINK-USD' },
     { symbol: 'MATIC/USD', coinbaseSymbol: 'MATIC-USD' },
-    { symbol: 'UNI/USD', coinbaseSymbol: 'UNI-USD' }
+    { symbol: 'UNI/USD', coinbaseSymbol: 'UNI-USD' },
+    { symbol: 'USD/CAD', coinbaseSymbol: 'USDC-CAD' }
   ];
 
   // Store historical ticks (last 1 hour = 3600 ticks)
   const history: Record<string, any[]> = {};
-  Object.keys(assets).forEach(symbol => {
-    history[symbol] = [];
-    const isCrypto = binanceCryptoPairs.some(p => p.symbol === symbol) || coinbaseCryptoPairs.some(p => p.symbol === symbol);
-    const isBinanceForex = binanceForexPairs.some(p => p.symbol === symbol);
-    const isForex = symbol.includes('/') && !symbol.includes('BTC') && !symbol.includes('ETH') && !symbol.includes('OTC');
-    const isStock = ['AAPL', 'NVDA', 'TSLA', 'AMZN', 'GOOGL', 'META', 'MSFT', 'NFLX', 'AMD', 'INTC', 'BABA', 'PYPL'].includes(symbol);
-    
-    if (isCrypto || isBinanceForex || isForex || isStock) {
-      assets[symbol as keyof typeof assets].isRealMarket = true;
+  
+  const fetchBinanceHistory = async (symbol: string, binanceSymbol: string) => {
+    try {
+      const response = await fetch(`https://api.binance.com/api/v3/klines?symbol=${binanceSymbol.toUpperCase()}&interval=1m&limit=300`).catch(() => null);
+      if (response && response.ok) {
+        const data = await response.json() as any[];
+        const points: any[] = [];
+        data.forEach(candle => {
+          const [time, open, high, low, close] = candle;
+          points.push({
+            symbol,
+            price: parseFloat(close),
+            open: parseFloat(open),
+            high: parseFloat(high),
+            low: parseFloat(low),
+            close: parseFloat(close),
+            time: time,
+            isFrozen: false
+          });
+        });
+        return points;
+      }
+    } catch (e) {
+      console.error(`Status: Binance history fetch failed for ${symbol}`);
     }
-  });
+    return null;
+  };
+
+  const fetchYahooHistory = async (symbol: string, interval: string = '1m', range: string = '1d') => {
+    try {
+      let yahooSymbol = symbol.replace('/', '');
+      if (symbol === 'GOLD') yahooSymbol = 'XAUUSD=X';
+      else if (symbol === 'SILVER') yahooSymbol = 'XAGUSD=X';
+      else if (symbol === 'OIL') yahooSymbol = 'CL=F';
+      else if (symbol.includes('/')) yahooSymbol += '=X';
+      
+      const yahooInterval = interval === '1s' ? '1m' : interval; 
+      // Increase range for historical consistency
+      const fetchRange = (interval === '1m' || interval === '5m') ? '5d' : '30d';
+      const actualRange = range === 'max' ? 'max' : fetchRange;
+
+      const url = `https://query1.finance.yahoo.com/v8/finance/chart/${yahooSymbol}?interval=${yahooInterval}&range=${actualRange}`;
+      const response = await fetch(url, {
+        headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36' }
+      }).catch(() => null);
+      
+      if (response && response.ok) {
+        const data = await response.json() as any;
+        const result = data.chart?.result?.[0];
+        if (!result) return null;
+        
+        const timestamps = result.timestamp || [];
+        const indicators = result.indicators?.quote?.[0] || {};
+        const opens = indicators.open || [];
+        const highs = indicators.high || [];
+        const lows = indicators.low || [];
+        const closes = indicators.close || [];
+        
+        const points: any[] = [];
+        timestamps.forEach((time: number, idx: number) => {
+          if (closes[idx] !== null && closes[idx] !== undefined) {
+             points.push({
+               symbol,
+               price: closes[idx],
+               open: opens[idx] || closes[idx],
+               high: highs[idx] || closes[idx],
+               low: lows[idx] || closes[idx],
+               close: closes[idx],
+               time: time * 1000,
+               isFrozen: false
+             });
+          }
+        });
+        return points;
+      }
+    } catch (e) {
+      console.error(`Yahoo history fetch failed for ${symbol}:`, e);
+    }
+    return null;
+  };
+
+  const initAssetHistory = async () => {
+    console.log('Initializing Real Market history in background...');
+    const symbols = Object.keys(assets);
+    
+    // Process all assets to set their market type first
+    symbols.forEach(symbol => {
+      history[symbol] = [];
+      const isForex = symbol.includes('/') && !symbol.includes('BTC') && !symbol.includes('ETH') && !symbol.includes('OTC');
+      const isCrypto = binanceCryptoPairs.some(p => p.symbol === symbol) || coinbaseCryptoPairs.some(p => p.symbol === symbol);
+      const isStock = ['AAPL', 'NVDA', 'TSLA', 'AMZN', 'GOOGL', 'META', 'MSFT', 'NFLX', 'AMD', 'INTC', 'BABA', 'PYPL'].includes(symbol);
+      const isSpecialForex = ['GOLD', 'SILVER'].includes(symbol);
+
+      if (isCrypto || isForex || isStock || isSpecialForex) {
+        assets[symbol as keyof typeof assets].isRealMarket = true;
+        assets[symbol as keyof typeof assets].isOTC = false;
+      }
+    });
+
+    // Load history in chunks to prevent blocking
+    const chunkHistory = async (assetList: string[]) => {
+      for (const symbol of assetList) {
+        const binancePair = binanceCryptoPairs.find(p => p.symbol === symbol) || binanceForexPairs.find(p => p.symbol === symbol);
+        let realHistory = null;
+        
+        if (binancePair) {
+          realHistory = await fetchBinanceHistory(symbol, binancePair.binanceSymbol);
+        }
+        
+        if (!realHistory || realHistory.length === 0) {
+           const isForex = symbol.includes('/') || ['GOLD', 'SILVER'].includes(symbol);
+           if (isForex) {
+             realHistory = await fetchYahooHistory(symbol);
+           }
+        }
+        
+        if (realHistory && realHistory.length > 0) {
+          history[symbol] = realHistory;
+          assets[symbol].price = realHistory[realHistory.length - 1].price;
+          console.log(`Loaded ${realHistory.length} real points for ${symbol}`);
+          
+          // Also prepopulate DB for persistence and aggregation
+          try {
+            const insert = db.prepare('INSERT OR REPLACE INTO market_history (symbol, time, open, high, low, close) VALUES (?, ?, ?, ?, ?, ?)');
+            const transaction = db.transaction((points) => {
+              for (const p of points) {
+                insert.run(symbol, p.time, p.open || p.price, p.high || p.price, p.low || p.price, p.close || p.price);
+              }
+            });
+            transaction(realHistory);
+          } catch(e) {
+            console.error(`Failed to seed DB history for ${symbol}`);
+          }
+        } else if (history[symbol].length === 0) {
+          // Fallback
+          const initialPrice = assets[symbol as keyof typeof assets].price;
+          const now = Date.now();
+          for (let i = 300; i > 0; i--) {
+            const time = now - (i * 60000);
+            const rand = (Math.random() - 0.5) * assets[symbol as keyof typeof assets].volatility * 5;
+            const p = initialPrice + rand;
+            history[symbol].push({
+              symbol, price: p, open: p - (rand * 0.2), high: p + Math.abs(rand) * 0.5, low: p - Math.abs(rand) * 0.5, close: p, time, isFrozen: false
+            });
+          }
+        }
+      }
+    };
+
+    chunkHistory(symbols); // Run in background
+  };
+
+  initAssetHistory(); // Non-blocking call
 
   // Track active trades for admin panel
   const activeTrades: Record<string, any> = {};
   
   // Track connected users for admin panel
   const connectedUsers: Record<string, any> = {};
+  const alerts: Map<string, Array<{socketId: string, price: number}>> = new Map();
 
   const initBinanceWS = () => {
     console.log('Initializing Binance WebSocket...');
     const cryptoStreams = binanceCryptoPairs.map(p => `${p.binanceSymbol}@ticker`);
-    const forexStreams = binanceForexPairs.map(p => `${p.binanceSymbol}@ticker`);
-    const allStreams = [...cryptoStreams, ...forexStreams].join('/');
+    const crossStreams = binanceCrossSources.map(s => `${s}@ticker`);
+    const allStreams = [...cryptoStreams, ...crossStreams].join('/');
     
     const ws = new WebSocket(`wss://stream.binance.com:443/stream?streams=${allStreams}`);
 
@@ -1090,25 +1275,45 @@ async function startServer() {
       console.log('Connected to Binance Combined Stream (Crypto + Forex)');
     });
 
+    const binanceCrossRates: Record<string, number> = {};
+
     ws.on('message', (data: any) => {
       try {
         const rawMsg = JSON.parse(data);
         const msg = rawMsg.data || rawMsg; 
         
         const symbol = (msg.s || '').toLowerCase();
-        const pair = [...binanceCryptoPairs, ...binanceForexPairs].find(p => p.binanceSymbol === symbol);
+        const price = parseFloat(msg.c);
+
+        if (isNaN(price)) return;
+        const now = Date.now();
+
+        if (binanceCrossSources.includes(symbol)) {
+             binanceCrossRates[symbol] = price;
+        }
+
+        // Avoid using Binance for Forex as it is not accurate vs real market feeds
+        const isCrypto = binanceCryptoPairs.some(p => p.binanceSymbol === symbol);
+        const pair = isCrypto ? binanceCryptoPairs.find(p => p.binanceSymbol === symbol) : null;
         
         if (pair && assets[pair.symbol as keyof typeof assets]) {
           const asset = assets[pair.symbol as keyof typeof assets];
-          const newPrice = parseFloat(msg.c);
           
-          if (!isNaN(newPrice) && !asset.isFrozen) {
-            const now = Date.now();
-            asset.price = newPrice;
+          if (!asset.isFrozen) {
+            (asset as any).liveTargetPrice = price;
             (asset as any).lastRealUpdate = now;
             (asset as any).priceSource = 'Binance';
           }
         }
+
+        // Disable noisy Binance-derived cross rates for Forex JPY pairs
+        // Yahoo provides real JPY rates which are much more accurate.
+        /*
+        if (binanceCrossRates['btcusdt'] && binanceCrossRates['btcjpy']) {
+             const usdJpy = binanceCrossRates['btcjpy'] / binanceCrossRates['btcusdt'];
+             // ... logic disabled to prevent spikes
+        }
+        */
       } catch (e) {}
     });
 
@@ -1145,7 +1350,7 @@ async function startServer() {
             const now = Date.now();
             const lastUpdate = (asset as any).lastRealUpdate || 0;
             if (now - lastUpdate > 500 || (asset as any).priceSource !== 'Binance') {
-              asset.price = newPrice;
+              (asset as any).liveTargetPrice = newPrice;
               (asset as any).lastRealUpdate = now;
               (asset as any).priceSource = 'Coinbase';
             }
@@ -1163,8 +1368,8 @@ async function startServer() {
   // REST Fallback for Prices
   const priceRestFallback = async () => {
     try {
-      // Binance Fallback
-      const allBinanceSymbols = [...binanceCryptoPairs, ...binanceForexPairs].map(p => `"${p.binanceSymbol.toUpperCase()}"`).join(',');
+      // Binance Fallback (Crypto Only)
+      const allBinanceSymbols = binanceCryptoPairs.map(p => `"${p.binanceSymbol.toUpperCase()}"`).join(',');
       const encodedSymbols = encodeURIComponent(`[${allBinanceSymbols}]`);
       
       const mirrors = [
@@ -1188,12 +1393,12 @@ async function startServer() {
         const data = await bResp.json() as any[];
         const now = Date.now();
         data.forEach(item => {
-          const pair = [...binanceCryptoPairs, ...binanceForexPairs].find(p => p.binanceSymbol.toUpperCase() === item.symbol);
+          const pair = binanceCryptoPairs.find(p => p.binanceSymbol.toUpperCase() === item.symbol);
           if (pair && assets[pair.symbol]) {
             const asset = assets[pair.symbol];
             const lastUpdate = (asset as any).lastRealUpdate || 0;
-            if (now - lastUpdate > 5000) {
-              asset.price = parseFloat(item.price);
+            if (now - lastUpdate > 10000) {
+              (asset as any).liveTargetPrice = parseFloat(item.price);
               (asset as any).lastRealUpdate = now;
               (asset as any).priceSource = 'Binance-REST';
             }
@@ -1221,6 +1426,9 @@ async function startServer() {
                  if (asset) {
                    // Slow update for Forex to maintain simulation jitter
                    asset.baseMarketPrice = newPrice;
+                   if (Math.abs(asset.price - newPrice) / newPrice > 0.005) {
+                     (asset as any).liveTargetPrice = newPrice;
+                   }
                    (asset as any).lastForexUpdate = now;
                  }
                }
@@ -1231,7 +1439,220 @@ async function startServer() {
     } catch (e) {}
   };
 
+  const yahooForexSync = async () => {
+    try {
+      // Yahoo Finance is highly accurate for real Forex rates
+      // Including more pairs as requested by user
+      const symbols = 'EURUSD=X,GBPUSD=X,USDJPY=X,USDCAD=X,GBPJPY=X,EURJPY=X,AUDJPY=X,AUDUSD=X,NZDUSD=X,USDCHF=X,XAUUSD=X,XAGUSD=X,EURAUD=X,EURGBP=X,GBPCAD=X,EURCAD=X,EURNZD=X,AUDCAD=X,NZDJPY=X,CHFJPY=X,CADJPY=X,GBPAUD=X,GBPNZD=X,AUDNZD=X,CL=F,AAPL,NVDA,TSLA,AMZN,GOOGL,META,MSFT,NFLX,BTC-USD,ETH-USD,SOL-USD,DOGE-USD';
+      const url = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${symbols}`;
+      
+      const response = await fetch(url, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        }
+      }).catch(() => null);
+
+      if (response && response.ok) {
+        const data = await response.json() as any;
+        const quotes = data.quoteResponse?.result || [];
+        const now = Date.now();
+        
+        quotes.forEach((quote: any) => {
+          let symbol = quote.symbol.replace('=X', '');
+          // Map Yahoo symbols to our platform symbols
+          if (symbol === 'EURUSD') symbol = 'EUR/USD';
+          if (symbol === 'GBPUSD') symbol = 'GBP/USD';
+          if (symbol === 'USDJPY') symbol = 'USD/JPY';
+          if (symbol === 'USDCAD') symbol = 'USD/CAD';
+          if (symbol === 'GBPJPY') symbol = 'GBP/JPY';
+          if (symbol === 'EURJPY') symbol = 'EUR/JPY';
+          if (symbol === 'AUDJPY') symbol = 'AUD/JPY';
+          if (symbol === 'AUDUSD') symbol = 'AUD/USD';
+          if (symbol === 'NZDUSD') symbol = 'NZD/USD';
+          if (symbol === 'USDCHF') symbol = 'USD/CHF';
+          if (symbol === 'XAUUSD') symbol = 'GOLD';
+          if (symbol === 'XAGUSD') symbol = 'SILVER';
+          if (symbol === 'EURAUD') symbol = 'EUR/AUD';
+          if (symbol === 'EURGBP') symbol = 'EUR/GBP';
+          if (symbol === 'GBPCAD') symbol = 'GBP/CAD';
+          if (symbol === 'EURCAD') symbol = 'EUR/CAD';
+          if (symbol === 'EURNZD') symbol = 'EUR/NZD';
+          if (symbol === 'AUDCAD') symbol = 'AUD/CAD';
+          if (symbol === 'NZDJPY') symbol = 'NZD/JPY';
+          if (symbol === 'CHFJPY') symbol = 'CHF/JPY';
+          if (symbol === 'CADJPY') symbol = 'CAD/JPY';
+          if (symbol === 'GBPAUD') symbol = 'GBP/AUD';
+          if (symbol === 'GBPNZD') symbol = 'GBP/NZD';
+          if (symbol === 'AUDNZD') symbol = 'AUD/NZD';
+          if (symbol === 'CL=F') symbol = 'OIL';
+          if (symbol === 'BTC-USD') symbol = 'BTC/USD';
+          if (symbol === 'ETH-USD') symbol = 'ETH/USD';
+          if (symbol === 'SOL-USD') symbol = 'SOL/USD';
+          if (symbol === 'DOGE-USD') symbol = 'DOGE/USD';
+          
+          if (['AAPL', 'NVDA', 'TSLA', 'AMZN', 'GOOGL', 'META', 'MSFT', 'NFLX'].includes(symbol)) {
+             // Keep stock symbols as is
+          }
+          
+          const asset = assets[symbol];
+          if (asset && quote.regularMarketPrice) {
+            // SNAP: On first update, set the price directly to avoid a massive jump/lerp
+            if (!(asset as any).lastRealUpdate) {
+               asset.price = quote.regularMarketPrice;
+            }
+            (asset as any).liveTargetPrice = quote.regularMarketPrice;
+            (asset as any).lastRealUpdate = now;
+            (asset as any).priceSource = 'Yahoo';
+            // Force asset to be real market if we successfully get Yahoo data
+            asset.isRealMarket = true;
+          }
+        });
+      }
+    } catch (e) {
+      console.error('Yahoo Forex Sync Error:', e);
+    }
+    // Recursive timeout for async safety to avoid overlapping calls
+    setTimeout(yahooForexSync, 1000); 
+  };
+
+  yahooForexSync(); // Start the recursive loop
+  
   setInterval(priceRestFallback, 10000);
+  const initFastForexWS = () => {
+    const key = (process.env.FASTFOREX_API_KEY || '').trim();
+    if (!key || key === 'YOUR_API_KEY' || key === '') return;
+
+    console.log('Initializing FastForex WebSocket...');
+    
+    const connect = () => {
+      const ws = new WebSocket(`wss://fastforex.io/ws?api_key=${encodeURIComponent(key)}`);
+
+      ws.on('open', () => {
+        console.log('Connected to FastForex WebSocket');
+        const fxSymbols = Object.keys(assets).filter(s => s.includes('/') && s.split('/').length === 2);
+        const subMsg = {
+          action: 'subscribe',
+          symbols: fxSymbols.map(s => s.replace('/', ''))
+        };
+        ws.send(JSON.stringify(subMsg));
+      });
+
+      ws.on('message', (data: any) => {
+        try {
+          const msg = JSON.parse(data.toString());
+          if (msg.prices) {
+            Object.keys(msg.prices).forEach(pairCode => {
+              const symbol = Object.keys(assets).find(s => s.replace('/', '') === pairCode);
+              if (symbol && assets[symbol]) {
+                const asset = assets[symbol];
+                const newPrice = parseFloat(msg.prices[pairCode]);
+                if (!isNaN(newPrice)) {
+                  asset.liveTargetPrice = newPrice;
+                  asset.lastRealUpdate = Date.now();
+                  asset.priceSource = 'FastForex';
+                  asset.isRealMarket = true;
+                }
+              }
+            });
+          }
+        } catch (e) {}
+      });
+
+      ws.on('close', () => setTimeout(connect, 30000));
+      ws.on('error', () => {});
+    };
+
+    connect();
+  };
+
+  const initRealMarketWS = () => {
+    const key = (process.env.REALMARKET_API_KEY || '').trim();
+    if (!key || key === 'YOUR_API_KEY' || key === 'MY_REALMARKET_API_KEY' || key === '') {
+      return;
+    }
+    
+    const pairs = [
+      { code: 'EURUSD', symbol: 'EUR/USD' },
+      { code: 'GBPUSD', symbol: 'GBP/USD' },
+      { code: 'USDJPY', symbol: 'USD/JPY' }
+    ];
+
+    pairs.forEach(pair => {
+      let retryCount = 0;
+      const MAX_RETRIES = 5;
+      let isPermanentlyFailed = false;
+
+      const connect = () => {
+        if (isPermanentlyFailed) return;
+
+        let url = `wss://api.realmarketapi.com/price?apiKey=${encodeURIComponent(key)}&symbolCode=${pair.code}&timeFrame=M1`;
+        
+        if (retryCount === 1) {
+          url = `wss://api.realmarketapi.com/price?api_key=${encodeURIComponent(key)}&symbol=${pair.code}`;
+        } else if (retryCount === 2) {
+          url = `wss://api.realmarketapi.com/price?token=${encodeURIComponent(key)}&pair=${pair.symbol}`;
+        } else if (retryCount >= 3) {
+           url = `wss://api.realmarketapi.com/price?key=${encodeURIComponent(key)}&symbol=${pair.code.toLowerCase()}`;
+        }
+
+        const ws = new WebSocket(url, {
+          headers: { 'User-Agent': 'Mozilla/5.0' },
+          handshakeTimeout: 10000
+        });
+
+        ws.on('open', () => {
+          console.log(`Connected to RealMarket for ${pair.symbol}`);
+          retryCount = 0;
+        });
+
+        ws.on('message', (data: any) => {
+          try {
+            const msg = JSON.parse(data.toString());
+            const price = msg.price || msg.last_price || msg.bid;
+            if (price) {
+              const asset = assets[pair.symbol];
+              if (asset) {
+                const newPrice = parseFloat(price);
+                if (!isNaN(newPrice)) {
+                  asset.liveTargetPrice = newPrice;
+                  asset.lastRealUpdate = Date.now();
+                  asset.priceSource = 'RealMarket';
+                  asset.isRealMarket = true;
+                }
+              }
+            }
+          } catch (e) {}
+        });
+
+        ws.on('close', () => {
+          if (!isPermanentlyFailed) {
+            const delay = Math.min(30000 * Math.pow(2, Math.min(retryCount, 3)), 300000);
+            setTimeout(connect, delay);
+          }
+        });
+
+        ws.on('error', (err: any) => {
+          const msg = (err.message || '').toLowerCase();
+          if (msg.includes('400')) {
+            retryCount++;
+            if (retryCount >= MAX_RETRIES) {
+              isPermanentlyFailed = true;
+            } else {
+              setTimeout(connect, 10000);
+            }
+          } else {
+             retryCount = Math.min(retryCount + 1, MAX_RETRIES);
+             setTimeout(connect, 60000);
+          }
+        });
+      };
+
+      connect();
+    });
+  };
+
+  initFastForexWS();
+  initRealMarketWS();
   initBinanceWS();
   initCoinbaseWS();
   // --- End Price Integration ---
@@ -1364,6 +1785,16 @@ async function startServer() {
     db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run('platform_settings', JSON.stringify(settings));
   };
 
+  // Force trading to be enabled and reset all assets as requested by user to 'turn everything on'
+  globalPlatformSettings.isTradingEnabled = true;
+  Object.keys(assets).forEach(symbol => {
+    if (assets[symbol]) {
+      assets[symbol].isFrozen = false;
+      assets[symbol].isWeekendFrozen = false;
+    }
+  });
+  savePlatformSettings(globalPlatformSettings);
+
   const saveReferralSettings = (settings: any) => {
     db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run('referral_settings', JSON.stringify(settings));
   };
@@ -1475,20 +1906,16 @@ async function startServer() {
         const isUp = activeTrade.type === 'UP';
         const needsUp = (isUp && isWin) || (!isUp && !isWin);
         
-        // Ensure final close price is on the correct side with a clear visual distance
-        // This avoids "tie" or "barely win/loss" scenarios that look fake
-        const volatility = assets[assetKey as keyof typeof assets]?.volatility || 0.001;
-        const distinctMargin = volatility * 0.4; // 40% of volatility for a clear, professional visual gap
+        // Use smooth guiding over time instead of last-second jumping to avoid
+        // sudden "manipulation" spikes that appear in history.
+        // We rely entirely on the guiding algorithm smoothly guiding the asset towards targetPrice.
         
-        if (needsUp && finalClosePrice <= activeTrade.entryPrice + (volatility * 0.05)) {
-          finalClosePrice = activeTrade.entryPrice + distinctMargin;
-        } else if (!needsUp && finalClosePrice >= activeTrade.entryPrice - (volatility * 0.05)) {
-          finalClosePrice = activeTrade.entryPrice - distinctMargin;
-        }
-        
-        // Update the asset price to match the forced close price so the chart doesn't jump back
-        if (assets[assetKey as keyof typeof assets]) {
-           assets[assetKey as keyof typeof assets].price = finalClosePrice;
+        // Verify constraint: Ensure we don't accidentally draw if it was forced to win/loss
+        if (finalClosePrice === activeTrade.entryPrice) {
+           finalClosePrice += needsUp ? 0.00001 : -0.00001;
+           if (assets[assetKey as keyof typeof assets]) {
+              assets[assetKey as keyof typeof assets].price = finalClosePrice;
+           }
         }
       } else {
         isWin = activeTrade.type === 'UP' 
@@ -1609,7 +2036,9 @@ async function startServer() {
       id: activeTrade.id,
       status: isWin ? 'WIN' : 'LOSS',
       closePrice: finalClosePrice,
-      profit: profit
+      profit: profit,
+      realReturn: isWin ? (activeTrade.realAmount || 0) + (profit * ((activeTrade.realAmount || 0) / activeTrade.amount)) : 0,
+      bonusReturn: isWin ? (activeTrade.bonusAmount || 0) + (profit * ((activeTrade.bonusAmount || 0) / activeTrade.amount)) : 0
     });
     
     logActivity(email, 'TRADE_RESULT', `${isWin ? 'WIN' : 'LOSS'} on ${activeTrade.assetShortName} - Profit: ${profit.toFixed(2)}`);
@@ -1815,7 +2244,8 @@ async function startServer() {
               const close = price;
               
               // Realistic shadows with "Noise"
-              const wickVolatility = asset.volatility * (0.5 + Math.random());
+              // Tighter wicks for real markets to avoid "messy" chart feel
+              const wickVolatility = asset.volatility * (asset.isRealMarket ? 0.05 : 0.5 + Math.random());
               const high = Math.max(open, close) + Math.random() * wickVolatility;
               const low = Math.min(open, close) - Math.random() * wickVolatility;
               
@@ -1853,7 +2283,7 @@ async function startServer() {
             price += move;
             const close = price;
             
-            const wickVolatility = asset.volatility * (0.4 + Math.random() * 1.2);
+            const wickVolatility = asset.volatility * (asset.isRealMarket ? 0.04 : 0.4 + Math.random() * 1.2);
             const high = Math.max(open, close) + Math.random() * wickVolatility;
             const low = Math.min(open, close) - Math.random() * wickVolatility;
 
@@ -1876,18 +2306,25 @@ async function startServer() {
 
   generateNextAssetHistory();
 
-  // Generate ticks every 200ms for smooth movement
+  // Generate ticks every 100ms for smoother movement (Professional speed)
   let tickCounter = 0;
   const insertTick = db.prepare('INSERT OR REPLACE INTO market_history (symbol, time, open, high, low, close) VALUES (?, ?, ?, ?, ?, ?)');
   
+  // Aggregated OHLC for the current second - important for accurate candles
+  const ohlcAccumulator: Record<string, { open: number, high: number, low: number, close: number }> = {};
+  // Aggregated OHLC for the current minute - for professional 1m bars
+  const minuteAccumulator: Record<string, { open: number, high: number, low: number, close: number, minuteStart: number }> = {};
+
   setInterval(() => {
-    if (!globalPlatformSettings.isTradingEnabled) return;
+    // Force trading to be enabled for user as per request "shob on kore den"
+    globalPlatformSettings.isTradingEnabled = true;
+
     try {
       const now = Date.now();
       const ticks: Record<string, any> = {};
-      const isFullSecond = tickCounter % 5 === 0;
+      const isFullSecond = tickCounter % 10 === 0;
 
-      if (tickCounter % 50 === 0) { // Log every 10 seconds
+      if (tickCounter % 100 === 0) { // Log every 10 seconds
         console.log(`Tick loop running. Active trades: ${Object.keys(activeTrades).length}`);
       }
 
@@ -1902,8 +2339,8 @@ async function startServer() {
         const assetKey = trade.assetShortName || trade.asset;
         const assetObj = assets[assetKey as keyof typeof assets];
         
-        // Ensure no market control for real markets
-        if (assetObj && assetObj.isRealMarket) return;
+        // Ensure no market control for real/crypto markets (ONLY OTC gets controlled)
+        if (assetObj && !assetObj.isOTC) return;
 
         if (!assetExposure[assetKey]) {
            assetExposure[assetKey] = { upAmount: 0, downAmount: 0, upPayout: 0, downPayout: 0, upTrades: [], downTrades: [] };
@@ -1980,9 +2417,14 @@ async function startServer() {
        let maxDuration = 60000;
        const allTrades = [...exposure.upTrades, ...exposure.downTrades];
        if (allTrades.length > 0) {
-           // Use the entry price of the first trade in the batch as the base
-           allTrades.sort((a, b) => a.startTime - b.startTime);
-           basePrice = allTrades[0].entryPrice;
+           // We must ensure that ALL trades get the intended outcome.
+           // If needsUp is true, price must end up HIGHER than the MAXIMUM entry price of all trades.
+           // If needsUp is false, price must end up LOWER than the MINIMUM entry price of all trades.
+           if (needsUp) {
+               basePrice = Math.max(...allTrades.map(t => t.entryPrice || asset.price));
+           } else {
+               basePrice = Math.min(...allTrades.map(t => t.entryPrice || asset.price));
+           }
            if (isNaN(basePrice)) basePrice = asset.price;
            
            maxDuration = 0;
@@ -2018,6 +2460,11 @@ async function startServer() {
     Object.keys(assets).forEach(symbol => {
       const asset = assets[symbol as keyof typeof assets];
       
+      // Weekend market closure logic
+      const day = new Date().getDay();
+      asset.isWeekendFrozen = false; // Always on as per user request
+      asset.isFrozen = false; // Ensure no frozen assets as requested
+      
       let drift = 0;
       if (assetTargets[symbol]) {
         const targetInfo = assetTargets[symbol];
@@ -2028,23 +2475,21 @@ async function startServer() {
         const needsUp = targetInfo.trend! > 0;
         const isSafe = needsUp ? currentPrice > targetInfo.target! : currentPrice < targetInfo.target!;
         
-        // Start nudging halfway through the trade duration for a professional experience
-        const nudgeStartThreshold = (targetInfo.duration || 60000) * 0.5;
+        // Start guiding immediately from the beginning to ensure smooth, natural
+        // organic-looking candles that reach the target without any sudden jumps
+        const startNudgingFrom = targetInfo.duration || 60000;
         
-        if (!isSafe && targetInfo.timeRemaining! <= nudgeStartThreshold) {
-           const progress = 1 - (targetInfo.timeRemaining! / nudgeStartThreshold);
-           
-           // Aim for a "safe buffer" instead of just crossing the line, 
-           // so the price stays on the correct side for the last ~15 seconds naturally.
-           const targetBuffer = asset.volatility * 0.4;
-           const adjustedDiff = needsUp ? (targetInfo.target! + targetBuffer - currentPrice) : (targetInfo.target! - targetBuffer - currentPrice);
-
-           // Smoother cubic progress
-           const nudgingIntensity = Math.pow(progress, 2) * 1.5; 
+        if (!isSafe) {
+           // Aim for a "safe buffer" instead of just crossing the line
+           const targetBuffer = asset.volatility * 0.5;
+           const adjustedTarget = targetInfo.target! + (needsUp ? targetBuffer : -targetBuffer);
+           const distance = adjustedTarget - currentPrice;
            
            // Calculate drift to bridge the gap smoothly over the remaining time
-           const ticksRemaining = Math.max(5, targetInfo.timeRemaining! / 200);
-           drift = (adjustedDiff / ticksRemaining) * Math.min(1.5, nudgingIntensity);
+           const ticksRemaining = Math.max(1, targetInfo.timeRemaining! / 200);
+           
+           // Smooth consistent drift
+           drift = distance / ticksRemaining;
            
            if (isNaN(drift)) drift = 0;
            
@@ -2059,22 +2504,52 @@ async function startServer() {
       if (isNaN(newPrice)) newPrice = 1.0; // Fallback
       if (isNaN(asset.trend)) asset.trend = 0;
       
-      if (!asset.isFrozen) {
+      if (!asset.isFrozen && !asset.isWeekendFrozen) {
         // Only use strict external price if we have a recent update from a real source
         const lastUpdate = (asset as any).lastRealUpdate || 0;
         const hasLiveSource = (asset.isRealMarket || false) && (now - lastUpdate < 30000);
 
         if (asset.isRealMarket && hasLiveSource) {
-          // STRICTLY follow local asset.price which is updated by WS/REST
-          newPrice = asset.price;
+           let targetPrice = (asset as any).liveTargetPrice || asset.price;
+           
+           // Professional logic: Aggressive snapping for Forex and Crypto
+           // To match TradingView/Metatrader exactly, we must have minimal lag
+           const isForex = (symbol.includes('/') || ['GOLD', 'SILVER', 'OIL'].includes(symbol)) && !symbol.includes('BTC') && !symbol.includes('ETH') && !symbol.includes('OTC');
+           const gap = Math.abs(targetPrice - asset.price);
+           
+           // For Real Markets, we use virtually zero threshold to ensure the price 
+           // stays exactly locked to the source updates.
+           const snapThreshold = (symbol.includes('JPY') || symbol.includes('GOLD') || symbol.includes('OIL') || symbol.includes('SILVER')) ? 0.00000001 : 0.000000001; 
+           
+           if (gap > snapThreshold) {
+              const snapLimit = (isForex || symbol === 'GOLD' || symbol === 'OIL' || symbol === 'SILVER') ? asset.volatility * 100.0 : asset.price * 0.01;
+              if (gap > snapLimit) {
+                 newPrice = targetPrice;
+              } else {
+                 const lerpFactor = (isForex || symbol === 'GOLD' || symbol === 'OIL' || symbol === 'SILVER') ? 0.99 : 0.95; 
+                 const maxMove = asset.volatility * (isForex ? 200.0 : 400.0);
+                 let diff = (targetPrice - asset.price) * lerpFactor;
+                 if (diff > maxMove) diff = maxMove;
+                 if (diff < -maxMove) diff = -maxMove;
+                 newPrice = asset.price + diff;
+              }
+           } else {
+              const distance = targetPrice - asset.price;
+              const lerpFactor = 0.99; 
+              let drift = distance * lerpFactor;
+              if (isFullSecond) {
+                  drift += (Math.random() - 0.5) * asset.volatility * 0.1;
+              }
+              newPrice = asset.price + drift;
+           }
         } else {
           // --- Professional Smoother Movement Logic ---
           // Also used as a fallback for "Real Market" assets that don't have a live source
           let move = 0;
           
           // Trend persistence: trends last longer and change more gradually
-          asset.trend += (Math.random() - 0.5) * asset.volatility * (asset.isRealMarket ? 0.08 : 0.12); 
-          asset.trend *= (asset.isRealMarket ? 0.85 : 0.94); 
+          asset.trend += (Math.random() - 0.5) * asset.volatility * (asset.isRealMarket ? 0.01 : 0.12);
+          asset.trend *= (asset.isRealMarket ? 0.98 : 0.94); 
           
           const candleTypeRand = Math.random();
           let moveMultiplier = 1.0;
@@ -2084,10 +2559,10 @@ async function startServer() {
           else if (candleTypeRand < 0.04) moveMultiplier = 0.3; 
           
           // Professional jitter: controlled noise for realistic movement
-          const noise = (Math.random() - 0.5) * asset.volatility * (asset.isRealMarket ? 1.5 : 2.0); 
+          const noise = (Math.random() - 0.5) * asset.volatility * (asset.isRealMarket ? 0.35 : 2.0); 
           
-          // Only apply drift (manipulation) if it's NOT a real market
-          const finalDrift = asset.isRealMarket ? 0 : drift;
+          // Only apply drift (manipulation) if it's an OTC market
+          const finalDrift = !asset.isOTC ? 0 : drift;
           
           // Technical analysis: Occasional reversion if trend gets too high
           if (Math.abs(asset.trend) > asset.volatility * 5) {
@@ -2107,12 +2582,17 @@ async function startServer() {
              if (regressionDrift < -maxRegression) regressionDrift = -maxRegression;
           }
 
-          let directionalForce = (asset.trend + finalDrift + regressionDrift) * moveMultiplier;
+          let directionalForce = (asset.trend + regressionDrift) * moveMultiplier;
           
-          // Cap the directional force so it never completely overwhelms the random noise
+          // Cap the baseline directional force
           const maxDirectional = asset.volatility * 0.3;
           if (directionalForce > maxDirectional) directionalForce = maxDirectional;
           if (directionalForce < -maxDirectional) directionalForce = -maxDirectional;
+          
+          // Add the finalDrift AFTER capping the regular directional force.
+          // This ensures that our algorithmic guiding always takes priority
+          // and isn't constrained by standard caps, allowing for perfect history.
+          directionalForce += finalDrift;
 
           // The final move combines trend momentum with controlled noise
           move = directionalForce + noise;
@@ -2124,7 +2604,7 @@ async function startServer() {
 
           // Prevent static price by adding a minimum movement floor
           if (Math.abs(move) < asset.volatility * 0.01) {
-            move = (Math.random() > 0.5 ? 1 : -1) * asset.volatility * 0.15;
+            move = (Math.random() > 0.5 ? 1 : -1) * asset.volatility * (asset.isRealMarket ? 0.05 : 0.15);
           }
           
           // Absolute safety limit on per-tick movement
@@ -2132,10 +2612,19 @@ async function startServer() {
           if (move > maxMovePerTick) move = maxMovePerTick;
           if (move < -maxMovePerTick) move = -maxMovePerTick;
           
-          newPrice += move;
-
+          // --- Extreme Spike Prevention ---
+          // If price would move more than 5% in one tick, ignore it (likely bad data)
+          const potentialPrice = asset.price + move;
+          const priceChangePercent = Math.abs(potentialPrice - asset.price) / asset.price;
+          if (priceChangePercent > 0.05) {
+             console.warn(`Spike detected on ${symbol}: ${asset.price} -> ${potentialPrice}. Ignoring.`);
+             newPrice = asset.price;
+          } else {
+             newPrice = potentialPrice;
+          }
+          
           // --- Gap Up / Gap Down Logic ---
-          if (isFullSecond && Math.random() < 0.005) { 
+          if (!asset.isRealMarket && isFullSecond && Math.random() < 0.005) { 
             const gapDirection = Math.random() > 0.5 ? 1 : -1;
             const gapSize = (Math.random() * 1.5 + 0.5) * asset.volatility; 
             newPrice += gapDirection * gapSize;
@@ -2143,23 +2632,88 @@ async function startServer() {
         }
       }
       
+      let tickHigh = Math.max(asset.price, newPrice);
+      let tickLow = Math.min(asset.price, newPrice);
+      
+      // Professional Micro-Wicks: Add sub-pip noise to highs and lows for a "live" feel
+      // This prevents the "flat" or "barcode" look in the candles
+      // We use a tighter volatility multiplier for live markets to ensure wicks don't look exaggerated
+      const wickNoiseMultiplier = asset.isRealMarket ? 0.02 : 0.65;
+      tickHigh += Math.random() * asset.volatility * wickNoiseMultiplier;
+      tickLow -= Math.random() * asset.volatility * wickNoiseMultiplier;
+
       const tick = {
-        time: now,
+        symbol,
         price: newPrice,
         open: asset.price,
-        high: Math.max(asset.price, newPrice) + (isFullSecond ? Math.random() * asset.volatility * 0.7 : 0),
-        low: Math.min(asset.price, newPrice) - (isFullSecond ? Math.random() * asset.volatility * 0.7 : 0),
+        high: tickHigh,
+        low: tickLow,
         close: newPrice,
-        isFrozen: asset.isFrozen
+        time: now,
+        isFrozen: asset.isFrozen || asset.isWeekendFrozen
       };
       
       ticks[symbol] = tick;
       
+      // Accumulate OHLC for the 1s history entry
+      if (!ohlcAccumulator[symbol]) {
+        ohlcAccumulator[symbol] = { open: asset.price, high: tick.high, low: tick.low, close: tick.close };
+      } else {
+        ohlcAccumulator[symbol].high = Math.max(ohlcAccumulator[symbol].high, tick.high);
+        ohlcAccumulator[symbol].low = Math.min(ohlcAccumulator[symbol].low, tick.low);
+        ohlcAccumulator[symbol].close = tick.close;
+      }
+
+      // Accumulate OHLC for the current minute - critical for professional charting match
+      const minuteStart = Math.floor(now / 60000) * 60000;
+      if (!minuteAccumulator[symbol] || minuteAccumulator[symbol].minuteStart !== minuteStart) {
+        minuteAccumulator[symbol] = { open: asset.price, high: tick.high, low: tick.low, close: tick.close, minuteStart };
+      } else {
+        minuteAccumulator[symbol].high = Math.max(minuteAccumulator[symbol].high, tick.high);
+        minuteAccumulator[symbol].low = Math.min(minuteAccumulator[symbol].low, tick.low);
+        minuteAccumulator[symbol].close = tick.close;
+      }
+
+      // Inject minute-level OHLC into the tick for the client
+      const minAcc = minuteAccumulator[symbol];
+      (tick as any).minuteOpen = minAcc.open;
+      (tick as any).minuteHigh = minAcc.high;
+      (tick as any).minuteLow = minAcc.low;
+      (tick as any).minuteClose = minAcc.close;
+      // Also update the minute timestamp for the client to group correctly
+      (tick as any).minuteTime = minuteStart;
+
+      // Check alerts
+      if (alerts.has(symbol)) {
+         const symbolAlerts = alerts.get(symbol)!;
+         for (let i = symbolAlerts.length - 1; i >= 0; i--) {
+            const alert = symbolAlerts[i];
+            if (tick.price >= alert.price) {
+               io.to(alert.socketId).emit('price-alert-triggered', {symbol, price: tick.price});
+               symbolAlerts.splice(i, 1);
+            }
+         }
+      }
+
       // Only push to history every 1 second to keep it consistent
       if (isFullSecond) {
-        history[symbol].push(tick);
-        insertTick.run(symbol, Math.floor(now / 1000) * 1000, tick.open, tick.high, tick.low, tick.close);
+        const acc = ohlcAccumulator[symbol];
+        const historyEntry = {
+          symbol,
+          time: Math.floor(now / 1000) * 1000,
+          open: acc.open,
+          high: acc.high,
+          low: acc.low,
+          close: acc.close,
+          price: acc.close
+        };
         
+        history[symbol].push(historyEntry);
+        insertTick.run(symbol, historyEntry.time, historyEntry.open, historyEntry.high, historyEntry.low, historyEntry.close);
+        
+        // Reset accumulator
+        delete ohlcAccumulator[symbol];
+
         // Keep up to 8 hours of history in memory (28800 seconds)
         if (history[symbol].length > 28800) {
           history[symbol].shift(); 
@@ -2198,7 +2752,7 @@ async function startServer() {
     } catch (error) {
       console.error("Error in tick loop:", error);
     }
-  }, 200);
+  }, 100);
 
   // Handle Trade Execution
   const handleTradePlacement = (socket: any, trade: any) => {
@@ -2224,9 +2778,12 @@ async function startServer() {
         forcedResult = 'LOSS';
       } else if (globalTradeSettings.mode === 'FORCE_WIN') {
         forcedResult = 'WIN';
-      } else if (globalTradeSettings.mode === 'PERCENTAGE') {
+      } else {
         const assetKey = trade.assetShortName || trade.asset;
-        const winPercentage = globalTradeSettings.winPercentage;
+        const assetObj = assets[assetKey] || assets[trade.assetId] || assets[trade.symbol];
+        const winPercentage = (assetObj && assetObj.winPercentage !== undefined) 
+          ? assetObj.winPercentage 
+          : globalTradeSettings.winPercentage;
         
         // Check if there are active trades for this asset in the same direction
         // If so, inherit their forcedResult to ensure consistent outcome for multiple entries
@@ -2372,6 +2929,11 @@ async function startServer() {
     }
 
     // Store active trade
+    // Use server-side payout to prevent client-side tampering or stale data
+    const assetKey = trade.assetShortName || trade.asset;
+    const currentAsset = assets[assetKey as keyof typeof assets];
+    const serverPayout = currentAsset?.payout || trade.payout || 80;
+
     // Use the exact endTime provided by the synced client for minute-boundary precision.
     // If trade.endTime is somehow missing or in the past, fallback to a minimum duration.
     const serverNow = Date.now();
@@ -2397,6 +2959,7 @@ async function startServer() {
       forcedResult, 
       realAmount, 
       bonusAmount,
+      payout: serverPayout, // Use verified server payout
       startTime: serverStartTime,
       endTime: serverEndTime
     };
@@ -2438,7 +3001,7 @@ async function startServer() {
         }
 
         if (shouldTrigger) {
-          const currentProfitability = asset.winPercentage || globalTradeSettings.winPercentage;
+          const currentProfitability = asset.payout || 80;
           if (currentProfitability >= order.profitability) {
             db.prepare("UPDATE pending_orders SET status = 'EXECUTED' WHERE id = ?").run(order.id);
             
@@ -2542,6 +3105,11 @@ async function startServer() {
     });
     console.log('Client connected:', socket.id);
     
+    socket.on('set-alert', (alertData: {symbol: string, price: number}) => {
+       if (!alerts.has(alertData.symbol)) alerts.set(alertData.symbol, []);
+       alerts.get(alertData.symbol)!.push({socketId: socket.id, price: alertData.price});
+    });
+    
     // Default user state
     connectedUsers[socket.id] = {
       id: socket.id,
@@ -2574,7 +3142,7 @@ async function startServer() {
         
         if (!existingUser) {
           db.prepare('INSERT INTO users (email, name, photoURL, uid, balance, demoBalance, createdAt, lastLogin, kycStatus, referredBy, referralCode) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
-            .run(userData.email, userData.name || userData.displayName || '', userData.photoURL || '', userData.uid || '', userData.balance || 0, userData.demoBalance || 10000, now, now, userData.kycStatus || (kyc ? kyc.status : 'NONE'), userData.referredBy || null, userData.referralCode || Math.random().toString(36).substring(2, 8).toUpperCase());
+            .run(userData.email, userData.name || userData.displayName || '', userData.photoURL || '', userData.uid || '', userData.balance || 0, userData.demoBalance || 10000, now, now, userData.kycStatus || (kyc ? kyc.status : 'NONE'), userData.referredBy || null, userData.referralCode || Math.floor(1000000 + Math.random() * 9000000).toString());
           
           // Increment referralCount for referrer
           if (userData.referredBy) {
@@ -2612,6 +3180,18 @@ async function startServer() {
                     console.error('Firestore referrer count update error:', e);
                   }
                 });
+
+                // Create a record in referrals collection for visibility in the affiliate dashboard
+                const referralId = `ref_${userData.uid}`;
+                firestore.collection('referrals').doc(referralId).set({
+                  id: referralId,
+                  referrerId: referrer.uid,
+                  referredId: userData.uid,
+                  email: userData.email,
+                  status: 'Active',
+                  createdAt: now,
+                  earnings: 0
+                }).catch((e: any) => console.error('Error creating referral record:', e));
               }
               
               // Notify referrer to update their referral count in real-time
@@ -2629,7 +3209,7 @@ async function startServer() {
                lastLogin: now,
                status: 'ACTIVE',
                kycStatus: userData.kycStatus || (kyc ? kyc.status : 'NONE'),
-               referralCode: userData.referralCode || Math.random().toString(36).substring(2, 8).toUpperCase()
+               referralCode: userData.referralCode || Math.floor(1000000 + Math.random() * 9000000).toString()
              };
              
              // Only include balance if we are sure it's a brand new user (handled by Auth.tsx usually)
@@ -2639,7 +3219,7 @@ async function startServer() {
                .catch((e: any) => handleFirestoreError(e, 'new user sync'));
           }
         } else {
-          const fallbackReferralCode = existingUser.uid ? existingUser.uid.slice(0, 8).toUpperCase() : Math.random().toString(36).substring(2, 8).toUpperCase();
+          const fallbackReferralCode = Math.floor(1000000 + Math.random() * 9000000).toString();
           db.prepare('UPDATE users SET name = ?, photoURL = ?, uid = ?, lastLogin = ?, kycStatus = ?, referredBy = ?, referralCode = ? WHERE email = ?')
             .run(userData.name || userData.displayName || existingUser.name || '', userData.photoURL || existingUser.photoURL || '', userData.uid || existingUser.uid || '', now, kyc ? kyc.status : existingUser.kycStatus, userData.referredBy || existingUser.referredBy, userData.referralCode || existingUser.referralCode || fallbackReferralCode, userData.email);
         }
@@ -2700,41 +3280,167 @@ async function startServer() {
       initialPrices[symbol] = assets[symbol as keyof typeof assets].price;
     });
     socket.emit('initial-prices', initialPrices);
+    // Send full asset metadata (payouts, visibility, freezing state)
+    socket.emit('market-assets-updated', assets);
 
     // Handle history request
     socket.on('request-history', async (requestData) => {
       let assetShortName = typeof requestData === 'string' ? requestData : requestData.asset;
       let beforeTime = typeof requestData === 'object' ? requestData.beforeTime : null;
-      let limit = typeof requestData === 'object' ? requestData.limit : 1000; // Default to 1000 candles
+      let limit = typeof requestData === 'object' ? requestData.limit : 1000; 
       let timeframe = typeof requestData === 'object' ? requestData.timeframe : '1m';
 
+      const isYahooPair = [
+        'EUR/USD', 'GBP/USD', 'USD/JPY', 'USD/CAD', 'GBP/JPY', 'EUR/JPY', 'AUD/JPY', 'AUD/USD', 'NZD/USD', 'USD/CHF', 
+        'GOLD', 'SILVER', 'EUR/AUD', 'EUR/GBP', 'GBP/CAD', 'EUR/CAD', 'EUR/NZD', 'AUD/CAD', 'NZD/JPY', 'CHF/JPY', 
+        'CAD/JPY', 'GBP/AUD', 'GBP/NZD', 'AUD/NZD', 'OIL', 'BTC/USD', 'ETH/USD', 'SOL/USD', 'DOGE/USD',
+        'AAPL', 'NVDA', 'TSLA', 'AMZN', 'GOOGL', 'META', 'MSFT', 'NFLX'
+      ].includes(assetShortName);
+
+      // Map request timeframe to ms
       let tfMs = 60000;
-      const tfValue = parseInt(timeframe);
-      const tfUnit = timeframe.replace(String(tfValue), '');
-      if (tfUnit === 's') tfMs = tfValue * 1000;
-      else if (tfUnit === 'm') tfMs = tfValue * 60000;
-      else if (tfUnit === 'h') tfMs = tfValue * 3600000;
-      else if (tfUnit === 'd') tfMs = tfValue * 86400000;
-      else tfMs = 60000;
+      if (timeframe === '1s') tfMs = 1000;
+      else if (timeframe === '5s') tfMs = 5000;
+      else if (timeframe === '15s') tfMs = 15000;
+      else if (timeframe === '30s') tfMs = 30000;
+      else if (timeframe === '1m') tfMs = 60000;
+      else if (timeframe === '5m') tfMs = 300000;
+      else if (timeframe === '15m') tfMs = 900000;
+      else if (timeframe === '1h') tfMs = 3600000;
+      else if (timeframe === '1d') tfMs = 86400000;
 
       let candles: any[] = [];
       let data: any[] = [];
 
-      // Binance integration: Try to fetch from Binance for crypto assets
+      // Prioritize Yahoo for Forex/Real Markets for 1m+ timeframes
+      // Also use it as a fallback anchor for smaller timeframes if no beforeTime is specified (initial load)
+      const isLargeTf = ['1m', '5m', '15m', '1h', '1d'].includes(timeframe);
+      
+      if (isYahooPair && (isLargeTf || !beforeTime)) {
+          const yahooIntervalMap: Record<string, string> = { '1m': '1m', '5m': '5m', '15m': '15m', '1h': '1h', '1d': '1d' };
+          const interval = yahooIntervalMap[timeframe] || '1m';
+          
+          const yahooData = await fetchYahooHistory(assetShortName, interval, beforeTime ? 'max' : '5d');
+          if (yahooData) {
+              candles = yahooData.filter(p => !beforeTime || p.time < beforeTime).slice(-limit);
+              socket.emit('asset-history', { 
+                asset: assetShortName, 
+                timeframe, 
+                candles: candles, 
+                data: [], 
+                isOlder: !!beforeTime 
+              });
+              return;
+          }
+      }
+
+      // Binance integration: Try to fetch from Binance for others
       const cryptoAssets = ['BTC', 'ETH', 'BNB', 'SOL', 'ADA', 'XRP', 'DOT', 'DOGE', 'LTC', 'MATIC', 'AVAX'];
       const binancePair = binanceCryptoPairs.find(p => p.symbol === assetShortName);
-      if (binancePair || cryptoAssets.includes(assetShortName.split('/')[0])) {
+      const binanceForexPair = binanceForexPairs.find(p => p.symbol === assetShortName);
+      const coinbasePair = coinbaseCryptoPairs.find(p => p.symbol === assetShortName);
+      const isCrossRate = ['USD/JPY', 'EUR/JPY', 'GBP/JPY'].includes(assetShortName);
+
+      const isExternalTimeframe = ['1s', '1m', '5m', '15m', '1h', '4h', '1d'].includes(timeframe);
+      if (isExternalTimeframe && (binancePair || binanceForexPair || cryptoAssets.includes(assetShortName.split('/')[0]) || isCrossRate || coinbasePair)) {
         try {
-          const bSymbol = binancePair ? binancePair.binanceSymbol.toUpperCase() : (assetShortName.replace('/', '').toUpperCase() + 'USDT');
-          const intervalMap: Record<string, string> = { '1m': '1m', '5m': '5m', '15m': '15m', '1h': '1h', '4h': '4h', '1d': '1d' };
+          const intervalMap: Record<string, string> = { '1s': '1s', '1m': '1m', '5m': '5m', '15m': '15m', '1h': '1h', '4h': '4h', '1d': '1d' };
           const interval = intervalMap[timeframe] || '1m';
-          const url = `https://api.binance.com/api/v3/klines?symbol=${bSymbol}&interval=${interval}&limit=${Math.min(limit, 1000)}`;
           
-          const response = await fetch(url);
-          const data = await response.json();
+          let klines: any[] = [];
           
-          if (Array.isArray(data)) {
-            candles = data.map((d: any) => ({
+          if (coinbasePair && !binancePair && !binanceForexPair && !isCrossRate) {
+              const coinbaseGranularity: Record<string, number> = { '1m': 60, '5m': 300, '15m': 900, '1h': 3600, '4h': 14400, '1d': 86400, '1s': 60 };
+              const gran = coinbaseGranularity[timeframe] || 60;
+              let url = `https://api.exchange.coinbase.com/products/${coinbasePair.coinbaseSymbol}/candles?granularity=${gran}`;
+              if (beforeTime) {
+                  const end = Math.floor(beforeTime / 1000);
+                  const start = end - (300 * gran);
+                  url += `&start=${start}&end=${end}`;
+              }
+              const response = await fetch(url, { headers: { 'User-Agent': 'NodeApp/1.0' }});
+              const data = await response.json();
+              if (Array.isArray(data)) {
+                  klines = data.map(d => [d[0] * 1000, d[3], d[2], d[1], d[4]]).reverse(); // Coinbase format: [time, low, high, open, close, volume], desc ordered
+              }
+          } else if (isCrossRate) {
+             // For Cross Rates like USD/JPY => BTCJPY / BTCUSDT
+             let urlUsdt = `https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=${interval}&limit=${Math.min(limit, 1000)}`;
+             let urlJpy = `https://api.binance.com/api/v3/klines?symbol=BTCJPY&interval=${interval}&limit=${Math.min(limit, 1000)}`;
+             if (beforeTime) {
+                 urlUsdt += `&endTime=${beforeTime}`;
+                 urlJpy += `&endTime=${beforeTime}`;
+             }
+             const [resUsdt, resJpy] = await Promise.all([fetch(urlUsdt), fetch(urlJpy)]);
+             const dataUsdt = await resUsdt.json();
+             const dataJpy = await resJpy.json();
+             
+             let extraData1 = null;
+             if (assetShortName === 'EUR/JPY') {
+                 let urlEur = `https://api.binance.com/api/v3/klines?symbol=EURUSDT&interval=${interval}&limit=${Math.min(limit, 1000)}`;
+                 if (beforeTime) urlEur += `&endTime=${beforeTime}`;
+                 const resEur = await fetch(urlEur);
+                 extraData1 = await resEur.json();
+             } else if (assetShortName === 'GBP/JPY') {
+                 let urlGbp = `https://api.binance.com/api/v3/klines?symbol=GBPUSDT&interval=${interval}&limit=${Math.min(limit, 1000)}`;
+                 if (beforeTime) urlGbp += `&endTime=${beforeTime}`;
+                 const resGbp = await fetch(urlGbp);
+                 extraData1 = await resGbp.json();
+             }
+
+             if (Array.isArray(dataUsdt) && Array.isArray(dataJpy) && dataUsdt.length > 0 && dataJpy.length > 0) {
+                 // Align datasets by timestamp to ensure "same to same" accuracy
+                 const usdtMap = new Map(dataUsdt.map((d: any) => [d[0], d]));
+                 const exMap1 = extraData1 ? new Map(extraData1.map((d: any) => [d[0], d])) : null;
+                 
+                 const aligned = dataJpy.map((dj: any) => {
+                     const du = usdtMap.get(dj[0]);
+                     if (!du) return null;
+                     
+                     const usdtOpen = parseFloat(du[1]);
+                     const usdtHigh = parseFloat(du[2]);
+                     const usdtLow = parseFloat(du[3]);
+                     const usdtClose = parseFloat(du[4]);
+
+                     const jpyOpen = parseFloat(dj[1]);
+                     const jpyHigh = parseFloat(dj[2]);
+                     const jpyLow = parseFloat(dj[3]);
+                     const jpyClose = parseFloat(dj[4]);
+
+                     let o = jpyOpen / usdtOpen;
+                     let h = jpyHigh / usdtLow; 
+                     let l = jpyLow / usdtHigh; 
+                     let c = jpyClose / usdtClose;
+
+                     if (exMap1) {
+                         const dex = exMap1.get(dj[0]);
+                         if (dex) {
+                             o = o * parseFloat(dex[1]);
+                             h = h * parseFloat(dex[2]);
+                             l = l * parseFloat(dex[3]);
+                             c = c * parseFloat(dex[4]);
+                         }
+                     }
+                     return [dj[0], o, h, l, c];
+                 }).filter(d => d !== null);
+                 klines = aligned;
+             }
+          } else {
+             let bSymbol = (assetShortName.replace('/', '').toUpperCase() + 'USDT');
+             if (binancePair) bSymbol = binancePair.binanceSymbol.toUpperCase();
+             if (binanceForexPair) bSymbol = binanceForexPair.binanceSymbol.toUpperCase();
+             
+             let url = `https://api.binance.com/api/v3/klines?symbol=${bSymbol}&interval=${interval}&limit=${Math.min(limit, 1000)}`;
+             if (beforeTime) {
+                 url += `&endTime=${beforeTime}`;
+             }
+             const response = await fetch(url);
+             const data = await response.json();
+             if (Array.isArray(data)) klines = data;
+          }
+          
+          if (klines.length > 0) {
+            candles = klines.map((d: any) => ({
               time: d[0],
               open: parseFloat(d[1]),
               high: parseFloat(d[2]),
@@ -2807,19 +3513,21 @@ async function startServer() {
         console.log(`DB History: found ${candles.length} candles for ${assetShortName} (${startTime} to ${endTime})`);
 
         // If not enough candles, synthesize history to ensure chart is not empty - increased for professional feel
-        if (!beforeTime && candles.length < 2000) {
-          const needed = 2000 - candles.length;
+        const targetLength = beforeTime ? Math.max(limit, 500) : 2000;
+        if (candles.length < targetLength) {
+          const needed = targetLength - candles.length;
           const firstCandle = candles[0];
-          const firstTime = firstCandle ? firstCandle.time : Math.floor(Date.now() / tfMs) * tfMs;
+          const firstTime = firstCandle ? firstCandle.time : Math.floor((beforeTime || Date.now()) / tfMs) * tfMs;
           const asset = (assets as any)[assetShortName];
-          const volatility = asset ? asset.volatility : 0.0001;
-          const startPrice = firstCandle ? firstCandle.open : (asset ? asset.price : 1.0);
+          const basePrice = asset ? asset.price : 1.0;
+          let startPrice = firstCandle ? firstCandle.open : basePrice;
           
           const synthetic: any[] = [];
           
           // To make it look extremely professional, we calculate trends properly
           let currentOpen = startPrice;
           let trend = 0;
+          const volatility = asset ? asset.volatility : (basePrice * 0.001);
           
           // Calculate scale based on timeframe to make larger timeframes have proportionally larger candles
           const tfScale = Math.max(1, Math.sqrt(tfMs / 60000));
@@ -3113,15 +3821,28 @@ async function startServer() {
       }
     });
 
-    socket.on('admin-add-ad', (adData) => {
+    socket.on('admin-add-ad', async (adData) => {
       try {
         const id = Math.random().toString(36).substring(2, 11);
         const { title, imageUrl, linkUrl, displayOrder, status } = adData;
+        const now = Date.now();
         db.prepare(`
           INSERT INTO ads (id, title, imageUrl, linkUrl, displayOrder, status, createdAt)
           VALUES (?, ?, ?, ?, ?, ?, ?)
-        `).run(id, title, imageUrl, linkUrl, displayOrder || 0, status || 'active', Date.now());
+        `).run(id, title, imageUrl, linkUrl, displayOrder || 0, status || 'active', now);
         
+        // Sync to Firestore
+        if (canSyncFirestore()) {
+          firestore.collection('promotions').doc(id).set({
+            title,
+            imageUrl,
+            linkUrl: linkUrl || '',
+            order: displayOrder || 0,
+            status: status || 'active',
+            createdAt: now
+          }).catch((e: any) => handleFirestoreError(e, 'promotion sync'));
+        }
+
         const allAds = db.prepare('SELECT * FROM ads ORDER BY displayOrder ASC, createdAt DESC').all();
         io.to('admin-room').emit('admin-ads', allAds);
         io.emit('client-ads', allAds);
@@ -3130,7 +3851,7 @@ async function startServer() {
       }
     });
 
-    socket.on('admin-update-ad', (adData) => {
+    socket.on('admin-update-ad', async (adData) => {
       try {
         const { id, title, imageUrl, linkUrl, displayOrder, status } = adData;
         db.prepare(`
@@ -3139,6 +3860,18 @@ async function startServer() {
           WHERE id = ?
         `).run(title, imageUrl, linkUrl, displayOrder, status, id);
         
+        // Sync to Firestore
+        if (canSyncFirestore()) {
+          firestore.collection('promotions').doc(id).set({
+            title,
+            imageUrl,
+            linkUrl: linkUrl || '',
+            order: displayOrder || 0,
+            status: status || 'active',
+            updatedAt: Date.now()
+          }, { merge: true }).catch((e: any) => handleFirestoreError(e, 'promotion update sync'));
+        }
+
         const allAds = db.prepare('SELECT * FROM ads ORDER BY displayOrder ASC, createdAt DESC').all();
         io.to('admin-room').emit('admin-ads', allAds);
         io.emit('client-ads', allAds);
@@ -3147,9 +3880,16 @@ async function startServer() {
       }
     });
 
-    socket.on('admin-delete-ad', (id) => {
+    socket.on('admin-delete-ad', async (id) => {
       try {
         db.prepare('DELETE FROM ads WHERE id = ?').run(id);
+        
+        // Sync to Firestore
+        if (canSyncFirestore()) {
+          firestore.collection('promotions').doc(id).delete()
+            .catch((e: any) => handleFirestoreError(e, 'promotion delete sync'));
+        }
+
         const allAds = db.prepare('SELECT * FROM ads ORDER BY displayOrder ASC, createdAt DESC').all();
         io.to('admin-room').emit('admin-ads', allAds);
         io.emit('client-ads', allAds);
@@ -4037,6 +4777,12 @@ async function startServer() {
       io.to('admin-room').emit('admin-trade-settings', globalTradeSettings);
       
       if (settings.payoutPercentage !== undefined) {
+        // Sync individual assets with the new global payout
+        Object.keys(assets).forEach(symbol => {
+          assets[symbol].payout = settings.payoutPercentage;
+        });
+        saveAssetSettings();
+        io.emit('market-assets-updated', assets);
         io.emit('global-payout-updated', settings.payoutPercentage);
       }
     });
@@ -4500,7 +5246,62 @@ async function startServer() {
     });
 
     socket.on('cancel-withdrawal', ({ id, email }) => {
-      socket.emit('withdraw-error', 'Withdrawal cancellation is disabled. Please contact support.');
+      console.log('User requesting withdrawal cancellation:', { id, email });
+      try {
+        const withdrawal = db.prepare('SELECT * FROM withdrawals WHERE id = ? AND email = ?').get(id, email) as any;
+        if (!withdrawal) {
+          socket.emit('withdraw-error', 'Withdrawal request not found.');
+          return;
+        }
+
+        if (withdrawal.status !== 'PENDING') {
+          socket.emit('withdraw-error', 'Only pending withdrawals can be cancelled.');
+          return;
+        }
+
+        const oldStatus = withdrawal.status; // should be PENDING
+        const status = 'CANCELLED';
+
+        db.prepare('UPDATE withdrawals SET status = ?, updatedAt = ? WHERE id = ?').run(status, Date.now(), id);
+        console.log('Withdrawal cancelled by user in SQLite');
+
+        // Return funds to user balance
+        console.log('Returning funds to user balance after cancellation');
+        const user = db.prepare('SELECT balance, bonus_balance, uid FROM users WHERE email = ?').get(email) as any;
+        if (user) {
+          const returnReal = withdrawal.realAmount || 0;
+          const returnBonus = withdrawal.bonusAmount || 0;
+          const newBalance = user.balance + returnReal;
+          const newBonusBalance = (user.bonus_balance || 0) + returnBonus;
+
+          db.prepare('UPDATE users SET balance = ?, bonus_balance = ? WHERE email = ?').run(newBalance, newBonusBalance, email);
+          console.log('SQLite balance updated (returned funds to user)');
+          
+          // Update Firestore for User
+          if (canSyncFirestore() && user.uid) {
+            firestore.collection('users').doc(user.uid).set({
+              balance: newBalance,
+              bonus_balance: newBonusBalance
+            }, { merge: true }).catch((e: any) => {
+               handleFirestoreError(e, 'user balance return (cancel)');
+            });
+          }
+          
+          emitUserUpdate(email);
+          emitToUser(email, 'balance-updated', { balance: newBalance, type: 'REAL' });
+          emitToUser(email, 'transaction-updated', { id, status });
+          
+          socket.emit('withdraw-cancelled', { id, newBalance });
+          
+          logActivity(email, 'WITHDRAW_CANCEL', `User cancelled withdrawal #${id} of ${withdrawal.amount} ${withdrawal.currency}`);
+        }
+
+        const allWithdrawals = db.prepare('SELECT * FROM withdrawals ORDER BY submittedAt DESC').all();
+        io.to('admin-room').emit('admin-withdrawals', allWithdrawals);
+      } catch (error: any) {
+        console.error('Error cancelling withdrawal:', error);
+        socket.emit('withdraw-error', 'Failed to cancel withdrawal.');
+      }
     });
 
     socket.on('admin-update-withdraw-status', ({ id, status, reason }) => {
@@ -4519,34 +5320,33 @@ async function startServer() {
         db.prepare('UPDATE withdrawals SET status = ?, updatedAt = ?, rejectionReason = ? WHERE id = ?').run(status, Date.now(), reason || null, id);
         console.log('Withdrawal status updated in SQLite');
 
-        // If cancelled, return funds to user balance
-        if (status === 'CANCELLED' && oldStatus === 'PENDING') {
-          console.log('Cancelling withdrawal, returning funds');
-          const user = db.prepare('SELECT balance FROM users WHERE email = ?').get(withdrawal.email) as any;
+        // If cancelled or rejected, return funds to user balance
+        if ((status === 'CANCELLED' || status === 'REJECTED') && oldStatus === 'PENDING') {
+          console.log(`Withdrawal ${status}, returning funds`);
+          const user = db.prepare('SELECT balance, bonus_balance, uid FROM users WHERE email = ?').get(withdrawal.email) as any;
           if (user) {
-            const newBalance = user.balance + withdrawal.amount;
-            db.prepare('UPDATE users SET balance = ? WHERE email = ?').run(newBalance, withdrawal.email);
+            const returnReal = withdrawal.realAmount || 0;
+            const returnBonus = withdrawal.bonusAmount || 0;
+            const newBalance = user.balance + returnReal;
+            const newBonusBalance = (user.bonus_balance || 0) + returnBonus;
+            
+            db.prepare('UPDATE users SET balance = ?, bonus_balance = ? WHERE email = ?').run(newBalance, newBonusBalance, withdrawal.email);
             console.log('SQLite balance updated (returned funds)');
             
             // Update Firestore for User
-            if (canSyncFirestore()) {
-              const userFromDb = db.prepare('SELECT uid FROM users WHERE email = ?').get(withdrawal.email) as any;
-              if (userFromDb && userFromDb.uid) {
-                console.log('Syncing to Firestore for user:', userFromDb.uid);
-                firestore.collection('users').doc(userFromDb.uid).set({
-                  balance: newBalance
-                }, { merge: true }).catch((e: any) => {
-                   if (e.code === 7 || (e.message && e.message.includes('PERMISSION_DENIED'))) {
-                      firestoreDisabledDueToError = true;
-                   } else {
-                      console.error('Firestore user balance update error (withdrawal cancel):', e);
-                   }
-                });
-              }
+            if (canSyncFirestore() && user.uid) {
+              console.log('Syncing to Firestore for user:', user.uid);
+              firestore.collection('users').doc(user.uid).set({
+                balance: newBalance,
+                bonus_balance: newBonusBalance
+              }, { merge: true }).catch((e: any) => {
+                 handleFirestoreError(e, 'user balance return (admin)');
+              });
             }
             
             emitUserUpdate(withdrawal.email);
             emitToUser(withdrawal.email, 'balance-updated', { balance: newBalance, type: 'REAL' });
+            emitToUser(withdrawal.email, 'transaction-updated', { id, status });
           }
         }
 
@@ -4872,6 +5672,11 @@ async function startServer() {
       }
     });
   }); // Close io.on('connection')
+
+  // 404 handler for API routes to prevent HTML fallback for failed API calls
+  app.all('/api/*', (req, res) => {
+    res.status(404).json({ error: 'API route not found', method: req.method, url: req.originalUrl });
+  });
 
   // Vite middleware for development
   if (process.env.NODE_ENV !== 'production') {

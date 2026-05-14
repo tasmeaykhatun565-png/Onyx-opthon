@@ -15,9 +15,11 @@ import {
   Clock,
   ArrowRight,
   Filter,
-  Search
+  Search,
+  RefreshCw
 } from 'lucide-react';
 import BottomSheet from './BottomSheet';
+import { useToast } from './Toast';
 
 interface Transaction {
   id: number | string;
@@ -86,14 +88,39 @@ export default function TransactionHistory({ isOpen, onClose, currencySymbol, so
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedTx, setSelectedTx] = useState<Transaction | null>(null);
+  const [isCancelling, setIsCancelling] = useState(false);
+  const { showToast } = useToast();
   
   // Filters
   const [filterStatus, setFilterStatus] = useState('All statuses');
   const [filterAccount, setFilterAccount] = useState('All accounts');
   const [filterType, setFilterType] = useState('All types');
 
+  const selectedTxRef = React.useRef(selectedTx);
+  useEffect(() => {
+    selectedTxRef.current = selectedTx;
+  }, [selectedTx]);
+
   useEffect(() => {
     if (!socket || !isOpen || !userEmail) return;
+
+    socket.emit('get-transactions', userEmail);
+    
+    // Add listener for withdrawal cancelled
+    const handleWithdrawCancelled = ({ id }: { id: number }) => {
+      setIsCancelling(false);
+      showToast('Withdrawal cancelled successfully');
+      // Refresh transactions
+      socket.emit('get-transactions', userEmail);
+      if (selectedTxRef.current && (selectedTxRef.current.id === id || String(selectedTxRef.current.id) === String(id))) {
+        setSelectedTx(null);
+      }
+    };
+
+    const handleWithdrawError = (error: string) => {
+      setIsCancelling(false);
+      showToast(error, 'error');
+    };
 
     const handleUserTransactions = (data: { deposits: any[], withdrawals: any[] }) => {
       const userDeposits = data.deposits.map(d => ({ ...d, type: 'DEPOSIT' }));
@@ -103,6 +130,8 @@ export default function TransactionHistory({ isOpen, onClose, currencySymbol, so
     };
 
     socket.on('user-transactions', handleUserTransactions);
+    socket.on('withdraw-cancelled', handleWithdrawCancelled);
+    socket.on('withdraw-error', handleWithdrawError);
     socket.on('transaction-updated', () => {
       socket.emit('get-user-transactions', userEmail);
     });
@@ -111,9 +140,20 @@ export default function TransactionHistory({ isOpen, onClose, currencySymbol, so
 
     return () => {
       socket.off('user-transactions', handleUserTransactions);
+      socket.off('withdraw-cancelled', handleWithdrawCancelled);
+      socket.off('withdraw-error', handleWithdrawError);
       socket.off('transaction-updated');
     };
   }, [socket, isOpen, userEmail]);
+
+  const handleCancelWithdrawal = () => {
+    if (!socket || !selectedTx || selectedTx.status !== 'PENDING') return;
+
+    if (window.confirm('Are you sure you want to cancel this withdrawal? Funds will be returned to your account.')) {
+      setIsCancelling(true);
+      socket.emit('cancel-withdrawal', { id: selectedTx.id, email: userEmail });
+    }
+  };
 
   const formatDateLabel = (timestamp: number) => {
     const date = new Date(timestamp);
@@ -137,15 +177,15 @@ export default function TransactionHistory({ isOpen, onClose, currencySymbol, so
   const renderDetailView = (tx: Transaction) => (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-300 pb-10">
       <div className="flex flex-col items-center pt-4">
-        <div className="w-20 h-20 bg-white/5 rounded-2xl flex items-center justify-center mb-4 overflow-hidden border border-white/10 p-2">
+        <div className="w-20 h-20 bg-bg-secondary rounded-2xl flex items-center justify-center mb-4 overflow-hidden border border-border-color p-2">
           {getMethodLogo(tx.method) ? (
             <img src={getMethodLogo(tx.method)!} alt={tx.method} className="w-full h-full object-contain" />
           ) : (
             <Wallet size={40} className="text-[#00ff5f]" />
           )}
         </div>
-        <h3 className="text-xl font-bold text-white mb-1">{tx.type === 'DEPOSIT' ? 'Deposit' : 'Withdrawal'}</h3>
-        <p className="text-white/40 text-xs font-medium uppercase tracking-widest">{tx.currency} Account</p>
+        <h3 className="text-xl font-bold text-text-primary mb-1">{tx.type === 'DEPOSIT' ? 'Deposit' : 'Withdrawal'}</h3>
+        <p className="text-text-secondary/40 text-xs font-medium uppercase tracking-widest">{tx.currency} Account</p>
         <div className={cn("text-3xl font-black mt-6", tx.type === 'DEPOSIT' ? "text-[#00ff5f]" : "text-[#ff4757]")}>
           {tx.type === 'DEPOSIT' ? '+' : '-'}{tx.currency === 'BDT' ? 'BDT' : currencySymbol} {tx.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
         </div>
@@ -159,7 +199,7 @@ export default function TransactionHistory({ isOpen, onClose, currencySymbol, so
       )}
 
       <div className="space-y-6 pt-4">
-        <h4 className="text-white font-bold text-lg mb-2">Details</h4>
+        <h4 className="text-text-primary font-bold text-lg mb-2">Details</h4>
         <div className="space-y-4">
           <DetailItem label="Status" value={getStatusLabel(tx.status)} valueClass={getStatusColor(tx.status)} />
           <DetailItem label="Request number" value={`#${tx.id}`} copyable />
@@ -179,9 +219,26 @@ export default function TransactionHistory({ isOpen, onClose, currencySymbol, so
         </div>
       </div>
 
+      {tx.type === 'WITHDRAW' && tx.status === 'PENDING' && (
+        <button 
+          onClick={handleCancelWithdrawal}
+          disabled={isCancelling}
+          className="w-full bg-red-500 text-white font-bold py-4 rounded-2xl active:scale-95 transition mt-8 disabled:opacity-50 disabled:active:scale-100 flex items-center justify-center gap-2"
+        >
+          {isCancelling ? (
+            <RefreshCw className="animate-spin" size={20} />
+          ) : (
+            <>
+              <XCircle size={20} />
+              Cancel Withdrawal
+            </>
+          )}
+        </button>
+      )}
+
       <button 
         onClick={() => setSelectedTx(null)}
-        className="w-full bg-white/5 text-white font-bold py-4 rounded-2xl border border-white/10 active:scale-95 transition mt-8"
+        className="w-full bg-bg-secondary text-text-primary font-bold py-4 rounded-2xl border border-border-color active:scale-95 transition mt-4"
       >
         Close
       </button>
@@ -199,21 +256,21 @@ export default function TransactionHistory({ isOpen, onClose, currencySymbol, so
           className="fixed inset-0 z-[100] bg-[#121214] flex flex-col"
         >
           {/* Header */}
-          <div className="flex items-center justify-between p-4 px-6 border-b border-white/5">
+          <div className="flex items-center justify-between p-4 px-6 border-b border-border-color">
             <button 
               onClick={() => selectedTx ? setSelectedTx(null) : onClose()} 
-              className="p-2 -ml-2 text-white/60 hover:text-white transition"
+              className="p-2 -ml-2 text-text-secondary/60 hover:text-text-primary transition"
             >
               <ChevronLeft size={24} />
             </button>
-            <h2 className="text-2xl font-black text-white tracking-tight absolute left-1/2 -translate-x-1/2">
+            <h2 className="text-2xl font-black text-text-primary tracking-tight absolute left-1/2 -translate-x-1/2">
               {selectedTx ? 'Details' : 'Transactions'}
             </h2>
             <div className="flex items-center gap-2">
-              <button className="p-2 text-white/40 hover:text-white transition">
+              <button className="p-2 text-text-secondary/40 hover:text-text-primary transition">
                 <Info size={22} />
               </button>
-              <button onClick={onClose} className="p-2 text-white/40 hover:text-white transition">
+              <button onClick={onClose} className="p-2 text-text-secondary/40 hover:text-text-primary transition">
                 <X size={22} />
               </button>
             </div>
@@ -227,7 +284,7 @@ export default function TransactionHistory({ isOpen, onClose, currencySymbol, so
             ) : (
               <>
                 {/* Filters */}
-                <div className="p-4 px-6 flex items-center gap-3 overflow-x-auto no-scrollbar border-b border-white/5 bg-[#121214]/80 backdrop-blur-xl sticky top-0 z-10">
+                <div className="p-4 px-6 flex items-center gap-3 overflow-x-auto no-scrollbar border-b border-border-color bg-[#121214]/80 backdrop-blur-xl sticky top-0 z-10">
                   <FilterChip label={filterStatus} />
                   <FilterChip label={filterAccount} />
                   <FilterChip label={filterType} />
@@ -235,24 +292,68 @@ export default function TransactionHistory({ isOpen, onClose, currencySymbol, so
 
                 <div className="p-6 space-y-8">
                   {isLoading ? (
-                    <div className="flex flex-col items-center justify-center py-20 gap-4 opacity-40">
-                      <Loader2 className="animate-spin text-[#00ff5f]" size={40} />
-                      <p className="text-[10px] font-black uppercase tracking-[0.2em]">Synchronizing Ledger...</p>
+                    <div className="flex flex-col items-center justify-center py-24 relative overflow-hidden">
+                      {/* Background Ambience */}
+                      <div className="absolute inset-0 overflow-hidden pointer-events-none opacity-20">
+                        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[200px] h-[200px] bg-[#00ff5f]/5 blur-[60px] rounded-full" />
+                      </div>
+
+                      <div className="relative flex flex-col items-center justify-center">
+                        {/* Professional Gradient Spinner */}
+                        <div className="relative w-16 h-16 mb-8">
+                          {/* Static track */}
+                          <div className="absolute inset-0 rounded-full border-4 border-border-color" />
+                          
+                          {/* Animated Gradient Spinner */}
+                          <motion.div
+                            animate={{ rotate: 360 }}
+                            transition={{ duration: 0.8, repeat: Infinity, ease: "linear" }}
+                            className="absolute inset-0 rounded-full border-4 border-transparent border-t-[#00ff5f] border-r-[#00ff5f]/30 shadow-[0_0_20px_rgba(0,255,95,0.4)]"
+                          />
+                          
+                          {/* Glow effect */}
+                          <motion.div
+                            animate={{ opacity: [0.3, 0.6, 0.3] }}
+                            transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+                            className="absolute inset-[-6px] rounded-full bg-[#00ff5f]/10 blur-xl"
+                          />
+                        </div>
+
+                        <motion.div
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          className="flex flex-col items-center gap-2"
+                        >
+                          <p className="text-[#00ff5f] font-black text-[11px] uppercase tracking-[0.4em] drop-shadow-md">
+                            Synchronizing Ledger
+                          </p>
+                          <div className="flex gap-1">
+                            {[0, 1, 2].map((i) => (
+                              <motion.div
+                                key={i}
+                                animate={{ opacity: [0.2, 1, 0.2] }}
+                                transition={{ duration: 1.5, repeat: Infinity, delay: i * 0.2 }}
+                                className="w-1 h-1 bg-[#00ff5f] rounded-full"
+                              />
+                            ))}
+                          </div>
+                        </motion.div>
+                      </div>
                     </div>
                   ) : transactions.length === 0 ? (
                     <div className="text-center py-20 space-y-6 flex flex-col items-center">
-                      <div className="w-24 h-24 bg-white/5 rounded-full flex items-center justify-center">
-                        <History size={48} className="text-white/10" />
+                      <div className="w-24 h-24 bg-bg-secondary rounded-full flex items-center justify-center">
+                        <History size={48} className="text-text-secondary/10" />
                       </div>
                       <div className="space-y-1">
-                        <p className="text-xl font-bold text-white">No entries found</p>
-                        <p className="text-sm text-white/40 max-w-[200px] mx-auto">Your trading activity and payment history will appear here.</p>
+                        <p className="text-xl font-bold text-text-primary">No entries found</p>
+                        <p className="text-sm text-text-secondary/40 max-w-[200px] mx-auto">Your trading activity and payment history will appear here.</p>
                       </div>
                     </div>
                   ) : (
                     Object.keys(groupedTransactions).map(label => (
                       <div key={label} className="space-y-4">
-                        <h3 className="text-sm font-black text-white flex items-center gap-2">
+                        <h3 className="text-sm font-black text-text-primary flex items-center gap-2">
                           {label}
                         </h3>
                         <div className="space-y-3">
@@ -260,10 +361,10 @@ export default function TransactionHistory({ isOpen, onClose, currencySymbol, so
                             <button 
                               key={`${tx.type}-${tx.id}`}
                               onClick={() => setSelectedTx(tx)}
-                              className="w-full bg-[#1c1c1e] p-5 rounded-[1.5rem] flex items-center justify-between border border-white/5 hover:border-[#00ff5f]/20 transition-all active:scale-[0.98] group"
+                              className="w-full bg-bg-secondary p-5 rounded-[1.5rem] flex items-center justify-between border border-border-color hover:border-[#00ff5f]/20 transition-all active:scale-[0.98] group"
                             >
                               <div className="flex items-center gap-4">
-                                <div className="w-12 h-12 bg-white/5 rounded-2xl flex items-center justify-center overflow-hidden border border-white/10 p-1.5 shrink-0">
+                                <div className="w-12 h-12 bg-bg-secondary rounded-2xl flex items-center justify-center overflow-hidden border border-border-color p-1.5 shrink-0">
                                   {getMethodLogo(tx.method) ? (
                                     <img src={getMethodLogo(tx.method)!} alt={tx.method} className="w-full h-full object-contain" />
                                   ) : (
@@ -273,8 +374,8 @@ export default function TransactionHistory({ isOpen, onClose, currencySymbol, so
                                   )}
                                 </div>
                                 <div className="text-left">
-                                  <p className="font-bold text-white text-base">{tx.type === 'DEPOSIT' ? 'Deposit' : 'Withdrawal'}</p>
-                                  <p className="text-[11px] text-white/40 font-bold uppercase tracking-wider">{tx.currency} Account</p>
+                                  <p className="font-bold text-text-primary text-base">{tx.type === 'DEPOSIT' ? 'Deposit' : 'Withdrawal'}</p>
+                                  <p className="text-[11px] text-text-secondary/40 font-bold uppercase tracking-wider">{tx.currency} Account</p>
                                 </div>
                               </div>
                               <div className="text-right flex flex-col items-end">
@@ -303,7 +404,7 @@ export default function TransactionHistory({ isOpen, onClose, currencySymbol, so
 
 function FilterChip({ label }: { label: string }) {
   return (
-    <button className="whitespace-nowrap px-4 py-2 bg-white/5 border border-white/10 rounded-full text-white/60 font-bold text-xs flex items-center gap-2 hover:bg-white/10 hover:text-white transition group">
+    <button className="whitespace-nowrap px-4 py-2 bg-bg-secondary border border-border-color rounded-full text-text-secondary/60 font-bold text-xs flex items-center gap-2 hover:bg-bg-tertiary hover:text-text-primary transition group">
       {label}
       <ChevronRight size={14} className="opacity-40 group-hover:opacity-100 rotate-90" />
     </button>
@@ -313,11 +414,11 @@ function FilterChip({ label }: { label: string }) {
 function DetailItem({ label, value, valueClass, copyable }: { label: string; value: string; valueClass?: string; copyable?: boolean }) {
   return (
     <div className="flex justify-between items-center py-1">
-      <span className="text-white/40 font-medium text-sm">{label}</span>
+      <span className="text-text-secondary/40 font-medium text-sm">{label}</span>
       <div className="flex items-center gap-2">
         <span className={cn("text-white font-bold text-sm", valueClass)}>{value}</span>
         {copyable && (
-          <button className="text-white/20 hover:text-white">
+          <button className="text-text-secondary/20 hover:text-text-primary">
             <Copy size={16} />
           </button>
         )}

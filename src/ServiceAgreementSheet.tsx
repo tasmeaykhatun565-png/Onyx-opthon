@@ -11,19 +11,19 @@ interface ServiceAgreementProps {
 
 export default function ServiceAgreement({ isOpen, onClose, onAccept }: ServiceAgreementProps) {
   const content = (
-    <div className="flex flex-col h-full bg-[#1c1c1e] text-white border-r border-white/5 shadow-2xl">
+    <div className="flex flex-col h-full bg-bg-secondary text-white border-r border-border-color shadow-2xl">
       {/* Header */}
       <div className="flex flex-col px-6 pt-5 pb-3">
         <div className="flex items-center justify-between mb-4">
           <button 
             onClick={onClose}
-            className="text-white/40 hover:text-white transition-colors"
+            className="text-text-secondary/40 hover:text-white transition-colors"
           >
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
           </button>
           <button 
             onClick={onClose}
-            className="text-white/40 hover:text-white transition-colors p-1"
+            className="text-text-secondary/40 hover:text-white transition-colors p-1"
           >
             <X size={20} />
           </button>
@@ -33,7 +33,7 @@ export default function ServiceAgreement({ isOpen, onClose, onAccept }: ServiceA
 
       {/* Content Area */}
       <div className="flex-1 px-6 overflow-y-auto custom-scrollbar">
-        <div className="space-y-5 text-[14px] text-white/80 leading-relaxed font-medium pb-6 pt-2">
+        <div className="space-y-5 text-[14px] text-text-primary/80 leading-relaxed font-medium pb-6 pt-2">
           <p>
             Trading signals provided by the Company are an automated buy/sell
             signal system based on popular technical indicators (MA, RSI, etc) and
@@ -65,7 +65,7 @@ export default function ServiceAgreement({ isOpen, onClose, onAccept }: ServiceA
         </button>
         <button
           onClick={onClose}
-          className="w-full bg-[#3d3f44] hover:bg-[#4d4f54] text-white font-bold py-3.5 rounded-xl transition-colors text-[15px]"
+          className="w-full bg-bg-tertiary hover:bg-[#4d4f54] text-white font-bold py-3.5 rounded-xl transition-colors text-[15px]"
         >
           Cancel
         </button>
@@ -76,7 +76,7 @@ export default function ServiceAgreement({ isOpen, onClose, onAccept }: ServiceA
   return (
     <>
       <div className="md:hidden">
-        <BottomSheet isOpen={isOpen} onClose={onClose} className="h-[90vh] bg-[#1c1c1e]">
+        <BottomSheet isOpen={isOpen} onClose={onClose} className="h-[90vh] bg-bg-secondary">
            {content}
         </BottomSheet>
       </div>

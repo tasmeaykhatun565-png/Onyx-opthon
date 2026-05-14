@@ -27,6 +27,7 @@ import {
   Trash2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useTranslation } from './i18n';
 import { cn } from './utils';
 import { useToast } from './Toast';
 
@@ -45,7 +46,7 @@ interface DepositFlowProps {
   userId?: string;
 }
 
-type Step = 'SUMMARY' | 'PAYMENT_METHOD' | 'AMOUNT_SELECTION' | 'PROMO_SELECTION' | 'PAYMENT_DETAILS' | 'CONFIRMATION';
+type Step = 'SUMMARY' | 'PAYMENT_METHOD' | 'AMOUNT_SELECTION' | 'PROMO_SELECTION' | 'CONFIRM_PAYMENT' | 'PAYMENT_DETAILS' | 'CONFIRMATION';
 
 interface PaymentMethod {
   id: string;
@@ -57,34 +58,215 @@ interface PaymentMethod {
 }
 
 const PAYMENT_METHODS: PaymentMethod[] = [
-  { id: 'bkash_p2c', name: 'bKash', icon: <img src="https://raw.githubusercontent.com/t-asif/trading-assets/main/bkash.png" alt="bKash" className="w-10 h-10 object-contain" referrerPolicy="no-referrer" />, category: 'E-PAY', minAmount: '$10.00', isPopular: true },
-  { id: 'binance_pay', name: 'BinancePay', icon: <img src="https://raw.githubusercontent.com/t-asif/trading-assets/main/binance.png" alt="Binance Pay" className="w-8 h-8 object-contain" referrerPolicy="no-referrer" />, category: 'E-PAY', minAmount: '$10.00', isPopular: true },
-  { id: 'usdt_bep20', name: 'USDT (BSC BEP-20)', icon: <div className="w-8 h-8 bg-[#26a17b] rounded-full flex items-center justify-center text-[14px] font-bold text-white shadow-sm">T</div>, category: 'CRYPTO', minAmount: '$10.00', isPopular: true },
-  { id: 'bank_card', name: 'Bank card', icon: <div className="w-8 h-8 bg-[#00529b] rounded-lg flex items-center justify-center text-white shadow-sm"><CreditCard size={18} /></div>, category: 'E-PAY', minAmount: '$10.00', isPopular: true },
-  { id: 'usdt_trc20', name: 'USDT (TRC20)', icon: <div className="w-8 h-8 bg-[#26a17b] rounded-full flex items-center justify-center text-[14px] font-bold text-white shadow-sm">T</div>, category: 'CRYPTO', minAmount: '$10.00', isPopular: true },
-  { id: 'skrill', name: 'Skrill', icon: <div className="w-8 h-8 bg-[#8c1515] rounded-lg flex items-center justify-center text-[14px] font-bold text-white shadow-sm">S</div>, category: 'E-PAY', minAmount: '$10.00', isPopular: true },
-  { id: 'xrp', name: 'XRP', icon: <div className="w-8 h-8 bg-black rounded-full flex items-center justify-center text-[14px] font-bold text-white shadow-sm">X</div>, category: 'CRYPTO', minAmount: '$15.00', isPopular: true },
-  { id: 'usdt_ton', name: 'USDT (TON)', icon: <div className="w-8 h-8 bg-[#0088cc] rounded-full flex items-center justify-center text-[14px] font-bold text-white shadow-sm">T</div>, category: 'CRYPTO', minAmount: '$15.00', isPopular: true },
-  { id: 'bitcoin', name: 'Bitcoin', icon: <div className="w-8 h-8 bg-[#f7931a] rounded-full flex items-center justify-center text-[14px] font-bold text-white shadow-sm">B</div>, category: 'CRYPTO', minAmount: '$10.00', isPopular: true },
-  { id: 'usdc_erc20', name: 'USD Coin (ERC20)', icon: <div className="w-8 h-8 bg-[#2775ca] rounded-full flex items-center justify-center text-[14px] font-bold text-white shadow-sm">U</div>, category: 'CRYPTO', minAmount: '$10.00', isPopular: true },
-  { id: 'usdc_bep20', name: 'USD Coin (BSC BEP-20)', icon: <div className="w-8 h-8 bg-[#2775ca] rounded-full flex items-center justify-center text-[14px] font-bold text-white shadow-sm">U</div>, category: 'CRYPTO', minAmount: '$10.00', isPopular: true },
-  
-  { id: 'nagad_p2c', name: 'Nagad', icon: <img src="https://raw.githubusercontent.com/t-asif/trading-assets/main/nagad.png" alt="Nagad" className="w-10 h-10 object-contain" referrerPolicy="no-referrer" />, category: 'E-PAY', minAmount: '$10.00' },
-  { id: 'rocket_p2c', name: 'Rocket', icon: <img src="https://raw.githubusercontent.com/t-asif/trading-assets/main/rocket.png" alt="Rocket" className="w-10 h-10 object-contain" referrerPolicy="no-referrer" />, category: 'E-PAY', minAmount: '$10.00' },
-  { id: 'upay_p2c', name: 'Upay', icon: <img src="https://raw.githubusercontent.com/t-asif/trading-assets/main/upay.png" alt="Upay" className="w-10 h-10 object-contain" referrerPolicy="no-referrer" />, category: 'E-PAY', minAmount: '$10.00' },
-  { id: 'upi', name: 'UPI', icon: <div className="w-8 h-8 bg-[#ff5c00] rounded-lg flex items-center justify-center text-[10px] font-bold text-white shadow-sm">UPI</div>, category: 'E-PAY', minAmount: '$10.00' },
-  { id: 'perfect_money', name: 'Perfect Money', icon: <div className="w-8 h-8 bg-[#d4af37] rounded-lg flex items-center justify-center text-[10px] font-bold text-white shadow-sm">PM</div>, category: 'E-PAY', minAmount: '$10.00' },
-  { id: 'advcash', name: 'AdvCash', icon: <div className="w-8 h-8 bg-[#79b928] rounded-lg flex items-center justify-center text-[10px] font-bold text-white shadow-sm">ADV</div>, category: 'E-PAY', minAmount: '$10.00' },
-  { id: 'payeer', name: 'Payeer', icon: <div className="w-8 h-8 bg-[#00adef] rounded-lg flex items-center justify-center text-[10px] font-bold text-white shadow-sm">P</div>, category: 'E-PAY', minAmount: '$10.00' },
-  { id: 'webmoney', name: 'WebMoney', icon: <div className="w-8 h-8 bg-[#0072bc] rounded-lg flex items-center justify-center text-[10px] font-bold text-white shadow-sm">WM</div>, category: 'E-PAY', minAmount: '$10.00' },
-  { id: 'ethereum', name: 'Ethereum (ETH)', icon: <div className="w-8 h-8 bg-[#627eea] rounded-full flex items-center justify-center text-[12px] font-bold text-white">E</div>, category: 'CRYPTO', minAmount: '$10.00' },
-  { id: 'litecoin', name: 'Litecoin (LTC)', icon: <div className="w-8 h-8 bg-[#345d9d] rounded-full flex items-center justify-center text-[12px] font-bold text-white">L</div>, category: 'CRYPTO', minAmount: '$10.00' },
-  { id: 'stellar', name: 'Stellar (XLM)', icon: <div className="w-8 h-8 bg-black rounded-full flex items-center justify-center text-[10px] font-bold text-white shadow-sm">S</div>, category: 'CRYPTO', minAmount: '$10.00' },
-  { id: 'dogecoin', name: 'Dogecoin (DOGE)', icon: <div className="w-8 h-8 bg-[#ba9f33] rounded-full flex items-center justify-center text-[10px] font-bold text-white shadow-sm">D</div>, category: 'CRYPTO', minAmount: '$10.00' },
-  { id: 'paypal', name: 'PayPal', icon: <div className="w-8 h-8 bg-[#003087] rounded-lg flex items-center justify-center text-[14px] font-bold text-white shadow-sm">P</div>, category: 'E-PAY', minAmount: '$10.00' },
-  { id: 'neteller', name: 'Neteller', icon: <div className="w-8 h-8 bg-[#83bb26] rounded-lg flex items-center justify-center text-[14px] font-bold text-white shadow-sm">N</div>, category: 'E-PAY', minAmount: '$10.00' },
-  { id: 'onyx_option_pay', name: 'Onyx Option Pay', icon: <div className="w-8 h-8 bg-[#000000] rounded-lg flex items-center justify-center text-[14px] font-bold text-white shadow-sm">O</div>, category: 'E-PAY', minAmount: '$10.00' },
-  { id: 'hamproo_pay', name: 'Hamproo Pay', icon: <div className="w-8 h-8 bg-[#E2136E] rounded-lg flex items-center justify-center text-[14px] font-bold text-white shadow-sm">H</div>, category: 'E-PAY', minAmount: '$10.00', isPopular: true },
+  { 
+    id: 'bkash_p2c', 
+    name: 'bKash', 
+    icon: <div className="w-full h-full bg-[#E2136E] flex items-center justify-center rounded-lg p-1.5"><img src="https://raw.githubusercontent.com/t-asif/trading-assets/main/bkash.png" alt="bKash" className="w-full h-full object-contain invert brightness-0" referrerPolicy="no-referrer" /></div>, 
+    category: 'E-PAY', 
+    minAmount: '$10.00', 
+    isPopular: true 
+  },
+  { 
+    id: 'nagad_p2c', 
+    name: 'Nagad', 
+    icon: <div className="w-full h-full bg-[#EA1D25] flex items-center justify-center rounded-lg p-1.5"><img src="https://raw.githubusercontent.com/t-asif/trading-assets/main/nagad.png" alt="Nagad" className="w-full h-full object-contain invert brightness-0" referrerPolicy="no-referrer" /></div>, 
+    category: 'E-PAY', 
+    minAmount: '$10.00',
+    isPopular: true
+  },
+  { 
+    id: 'binance_pay', 
+    name: 'BinancePay', 
+    icon: <div className="w-full h-full bg-[#F3BA2F] flex items-center justify-center rounded-lg p-1.5"><img src="https://raw.githubusercontent.com/t-asif/trading-assets/main/binance.png" alt="Binance Pay" className="w-full h-full object-contain" referrerPolicy="no-referrer" /></div>, 
+    category: 'E-PAY', 
+    minAmount: '$10.00', 
+    isPopular: true 
+  },
+  { 
+    id: 'usdt_bep20', 
+    name: 'USDT (BSC BEP-20)', 
+    icon: <div className="w-full h-full bg-[#26A17B] flex items-center justify-center rounded-lg p-1.5 text-white font-bold text-lg">₮</div>, 
+    category: 'CRYPTO', 
+    minAmount: '$10.00', 
+    isPopular: true 
+  },
+  { 
+    id: 'bank_card', 
+    name: 'Bank card', 
+    icon: <div className="w-full h-full bg-[#00529B] flex items-center justify-center rounded-lg p-1.5 text-white"><CreditCard size={20} /></div>, 
+    category: 'E-PAY', 
+    minAmount: '$10.00', 
+    isPopular: true 
+  },
+  { 
+    id: 'usdt_trc20', 
+    name: 'USDT (TRC20)', 
+    icon: <div className="w-full h-full bg-[#26A17B] flex items-center justify-center rounded-lg p-1.5 text-white font-bold text-lg">₮</div>, 
+    category: 'CRYPTO', 
+    minAmount: '$10.00' 
+  },
+  { 
+    id: 'skrill', 
+    name: 'Skrill', 
+    icon: <div className="w-full h-full bg-[#8C1515] flex items-center justify-center rounded-lg p-1 text-white font-black text-xl">S</div>, 
+    category: 'E-PAY', 
+    minAmount: '$10.00' 
+  },
+  { 
+    id: 'bitcoin', 
+    name: 'Bitcoin', 
+    icon: <div className="w-full h-full bg-[#F7931A] flex items-center justify-center rounded-lg p-1.5"><Bitcoin size={20} color="white" /></div>, 
+    category: 'CRYPTO', 
+    minAmount: '$10.00',
+    isPopular: true
+  },
+  { 
+    id: 'ethereum', 
+    name: 'Ethereum', 
+    icon: <div className="w-full h-full bg-[#627EEA] flex items-center justify-center rounded-lg p-1.5 text-white font-bold text-lg">Ξ</div>, 
+    category: 'CRYPTO', 
+    minAmount: '$10.00' 
+  },
+  { 
+    id: 'neteller', 
+    name: 'Neteller', 
+    icon: <div className="w-full h-full bg-[#83BB26] flex items-center justify-center rounded-lg p-1 text-white font-black text-xl">N</div>, 
+    category: 'E-PAY', 
+    minAmount: '$10.00' 
+  },
+  { 
+    id: 'usdc_bep20', 
+    name: 'USD Coin (BSC BEP-20)', 
+    icon: <div className="w-full h-full bg-[#2775CA] flex items-center justify-center rounded-lg p-1.5 text-white font-bold text-lg">U</div>, 
+    category: 'CRYPTO', 
+    minAmount: '$10.00' 
+  },
+  { 
+    id: 'trx', 
+    name: 'TRX', 
+    icon: <div className="w-full h-full bg-[#FF0013] flex items-center justify-center rounded-lg p-1.5 text-white font-bold text-lg">T</div>, 
+    category: 'CRYPTO', 
+    minAmount: '$10.00' 
+  },
+  { 
+    id: 'dogecoin', 
+    name: 'Dogecoin (BSC BEP-20)', 
+    icon: <div className="w-full h-full bg-[#C2A633] flex items-center justify-center rounded-lg p-1.5 text-white font-bold text-lg">Ð</div>, 
+    category: 'CRYPTO', 
+    minAmount: '$10.00' 
+  },
+  { 
+    id: 'solana', 
+    name: 'Solana', 
+    icon: <div className="w-full h-full bg-[#14F195] flex items-center justify-center rounded-lg p-1.5 text-white font-bold text-lg">S</div>, 
+    category: 'CRYPTO', 
+    minAmount: '$10.00' 
+  },
+  { 
+    id: 'binance_coin', 
+    name: 'Binance Coin (BSC BEP-20)', 
+    icon: <div className="w-full h-full bg-[#F3BA2F] flex items-center justify-center rounded-lg p-1.5"><img src="https://raw.githubusercontent.com/t-asif/trading-assets/main/binance.png" alt="Binance Coin" className="w-full h-full object-contain" referrerPolicy="no-referrer" /></div>, 
+    category: 'CRYPTO', 
+    minAmount: '$10.00' 
+  },
+  { 
+    id: 'bybit_pay', 
+    name: 'Bybit Pay', 
+    icon: <div className="w-full h-full bg-[#FBBC05] flex items-center justify-center rounded-lg p-1.5"><img src="https://cryptologos.cc/logos/bybit-logo.png" alt="Bybit" className="w-full h-full object-contain" referrerPolicy="no-referrer" /></div>, 
+    category: 'E-PAY', 
+    minAmount: '$10.00' 
+  },
+  { 
+    id: 'usdt_ton', 
+    name: 'USDT (TON)', 
+    icon: <div className="w-full h-full bg-[#0088CC] flex items-center justify-center rounded-lg p-1.5 text-white font-bold text-lg">₮</div>, 
+    category: 'CRYPTO', 
+    minAmount: '$10.00' 
+  },
+  { 
+    id: 'usdc_erc20', 
+    name: 'USD Coin (ERC20)', 
+    icon: <div className="w-full h-full bg-[#2775CA] flex items-center justify-center rounded-lg p-1.5 text-white font-bold text-lg">U</div>, 
+    category: 'CRYPTO', 
+    minAmount: '$10.00' 
+  },
+  { 
+    id: 'usdc_polygon', 
+    name: 'USD Coin (Polygon)', 
+    icon: <div className="w-full h-full bg-[#8247E5] flex items-center justify-center rounded-lg p-1.5 text-white font-bold text-lg">U</div>, 
+    category: 'CRYPTO', 
+    minAmount: '$10.00' 
+  },
+  { 
+    id: 'shiba_inu', 
+    name: 'Shiba Inu', 
+    icon: <div className="w-full h-full bg-[#FFA500] flex items-center justify-center rounded-lg p-1.5 text-white font-bold text-lg text-center">SHIB</div>, 
+    category: 'CRYPTO', 
+    minAmount: '$10.00' 
+  },
+  { 
+    id: 'volet', 
+    name: 'Volet (ex. AdvCash)', 
+    icon: <div className="w-full h-full bg-[#79B928] flex items-center justify-center rounded-lg p-1 text-white font-bold text-xs">V</div>, 
+    category: 'E-PAY', 
+    minAmount: '$10.00' 
+  },
+  { 
+    id: 'xrp', 
+    name: 'XRP', 
+    icon: <div className="w-full h-full bg-bg-primary flex items-center justify-center rounded-lg p-1.5 text-text-primary font-bold text-lg">X</div>, 
+    category: 'CRYPTO', 
+    minAmount: '$10.00' 
+  },
+  { 
+    id: 'china_unionpay', 
+    name: 'China UnionPay', 
+    icon: <div className="w-full h-full bg-[#005489] flex items-center justify-center rounded-lg p-1.5 text-white font-bold text-[10px]">UP</div>, 
+    category: 'E-PAY', 
+    minAmount: '$10.00' 
+  },
+  { 
+    id: 'perfect_money', 
+    name: 'Perfect Money', 
+    icon: <div className="w-full h-full bg-[#D4AF37] flex items-center justify-center rounded-lg p-1 text-white font-bold text-[10px]">PM</div>, 
+    category: 'E-PAY', 
+    minAmount: '$10.00' 
+  },
+  { 
+    id: 'webmoney', 
+    name: 'WebMoney', 
+    icon: <div className="w-full h-full bg-[#0072BC] flex items-center justify-center rounded-lg p-1 text-white font-bold text-[10px]">WM</div>, 
+    category: 'E-PAY', 
+    minAmount: '$10.00' 
+  },
+  { 
+    id: 'rocket_p2c', 
+    name: 'Rocket', 
+    icon: <div className="w-full h-full bg-[#8C3494] flex items-center justify-center rounded-lg p-1.5"><img src="https://raw.githubusercontent.com/t-asif/trading-assets/main/rocket.png" alt="Rocket" className="w-full h-full object-contain invert brightness-0" referrerPolicy="no-referrer" /></div>, 
+    category: 'E-PAY', 
+    minAmount: '$10.00' 
+  },
+  { 
+    id: 'upay_p2c', 
+    name: 'Upay', 
+    icon: <div className="w-full h-full bg-[#FFCC00] flex items-center justify-center rounded-lg p-1.5"><img src="https://raw.githubusercontent.com/t-asif/trading-assets/main/upay.png" alt="Upay" className="w-full h-full object-contain" referrerPolicy="no-referrer" /></div>, 
+    category: 'E-PAY', 
+    minAmount: '$10.00' 
+  },
+  { 
+    id: 'litecoin', 
+    name: 'Litecoin', 
+    icon: <div className="w-full h-full bg-[#345D9D] flex items-center justify-center rounded-lg p-1.5 text-white font-bold text-lg">Ł</div>, 
+    category: 'CRYPTO', 
+    minAmount: '$10.00' 
+  },
+  { 
+    id: 'stellar', 
+    name: 'Stellar', 
+    icon: <div className="w-full h-full bg-bg-primary flex items-center justify-center rounded-lg p-1.5 text-text-primary font-bold text-lg">S</div>, 
+    category: 'CRYPTO', 
+    minAmount: '$10.00' 
+  },
 ];
 
 const PRESET_AMOUNTS = [10, 20, 50, 100, 250, 500];
@@ -111,50 +293,170 @@ const EXCHANGE_RATES: Record<string, number> = {
   VND: 24600
 };
 
-const SummaryView = ({ onClose, selectedMethod, amount, currencyCode, currencySymbol, promoInput, selectedPromo, setStep, userId, rawBalance, promoCodes, handleNextToDetails }: any) => {
+const ConfirmPaymentView = ({ handleBack, onConfirm, selectedMethod, amount, currencyCode, currencySymbol, promoInput, selectedPromo, promoCodes, userId, depositSettings }: any) => {
+  const { t } = useTranslation();
+  
+  // Calculate bonus: use promo code if active, otherwise use global default if amount meets min requirement
+  let effectiveBonusPercentage = 0;
+  const currentExchangeRates = { ...EXCHANGE_RATES, BDT: depositSettings?.exchangeRate || 120 };
+  
+  if (selectedPromo === 'ACTIVE') {
+    effectiveBonusPercentage = promoCodes.find((p: any) => p.code === promoInput)?.bonusPercentage || 0;
+  } else {
+    // Check if amount in USD is above minDepositForBonus
+    const rate = currentExchangeRates[currencyCode] || 1;
+    const amountUSD = amount / rate;
+    if (amountUSD >= (depositSettings?.minDepositForBonus || 50)) {
+      effectiveBonusPercentage = depositSettings?.bonusPercentage || 0;
+    }
+  }
+
+  const bonusAmount = Math.round(amount * (effectiveBonusPercentage / 100));
+  const totalDeposit = amount + bonusAmount;
+
   return (
-    <div className="flex flex-col flex-1 min-h-0 bg-[#0a0a0a] text-white">
+    <div className="flex flex-col flex-1 min-h-0 bg-bg-secondary text-text-primary">
       {/* Header */}
-      <div className="p-3 flex items-center justify-between shrink-0 border-b border-white/5">
-        <h2 className="text-lg font-bold text-white">Deposit</h2>
+      <div className="p-4 flex items-center justify-between shrink-0 border-b border-border-color">
+        <button onClick={handleBack} className="p-1.5 -ml-1 hover:bg-bg-tertiary rounded-full transition cursor-pointer">
+          <ChevronLeft size={24} className="text-text-primary" />
+        </button>
+        <h2 className="text-xl font-bold text-text-primary">{t('deposit.confirm_payment')}</h2>
+        <div className="w-8" />
+      </div>
+
+      <div className="flex-1 overflow-y-auto px-6 pt-8 space-y-8 scrollbar-hide pb-20">
+        {/* Large Amount Display */}
+        <div className="flex flex-col items-center justify-center space-y-4">
+          <div className="w-16 h-16 flex items-center justify-center bg-bg-secondary rounded-2xl border border-border-color shadow-2xl relative">
+            <div className="p-2 w-full h-full flex items-center justify-center">
+              {selectedMethod.icon}
+            </div>
+            {/* Glow */}
+            <div className="absolute inset-0 bg-bg-secondary blur-xl -z-10 rounded-full" />
+          </div>
+          <div className="text-center">
+            <p className="text-[#7E7E7E] text-xs font-bold uppercase tracking-widest mb-1">{t('deposit.amount')}</p>
+            <p className="text-4xl font-black text-text-primary">
+              {currencySymbol}{amount.toLocaleString()}
+            </p>
+          </div>
+        </div>
+
+        {/* Details Table */}
+        <div className="space-y-4 pt-4">
+          <div className="flex justify-between items-center py-3 border-b border-border-color">
+            <span className="text-[#7E7E7E] text-sm font-medium">{t('deposit.payment_method')}</span>
+            <span className="text-text-primary font-bold">{selectedMethod.name}</span>
+          </div>
+          <div className="flex justify-between items-center py-3 border-b border-border-color">
+            <span className="text-[#7E7E7E] text-sm font-medium">{t('deposit.receiving_account')}</span>
+            <span className="text-text-secondary/60 font-medium text-sm">{currencyCode} {t('common.account')} #{userId?.slice(-10).toUpperCase() || '2923648399'}</span>
+          </div>
+          <div className="flex justify-between items-center py-3 border-b border-border-color">
+            <span className="text-[#7E7E7E] text-sm font-medium">{t('deposit.currency')}</span>
+            <span className="text-text-primary font-bold">{currencyCode}</span>
+          </div>
+          <div className="flex justify-between items-center py-3 border-b border-border-color">
+            <span className="text-[#7E7E7E] text-sm font-medium">{t('deposit.status')}</span>
+            <span className="text-[#00ff00] font-black text-xs tracking-widest">EXPERT</span>
+          </div>
+          <div className="flex justify-between items-center py-3 border-b border-border-color">
+            <span className="text-[#7E7E7E] text-sm font-medium">{t('deposit.real_funds')}</span>
+            <span className="text-text-primary font-bold">{currencySymbol}{amount.toLocaleString()}</span>
+          </div>
+          
+          {bonusAmount > 0 && (
+            <>
+              <div className="flex justify-between items-center py-3 border-b border-border-color">
+                <span className={cn("text-sm font-medium", selectedPromo === 'ACTIVE' ? "text-blue-400" : "text-[#00ff00]")}>
+                  {selectedPromo === 'ACTIVE' ? `${t('deposit.promo_code')}: ${promoInput}` : t('deposit.deposit_bonus')}
+                </span>
+                <span className={cn("font-bold text-sm", selectedPromo === 'ACTIVE' ? "text-blue-400" : "text-[#00ff00]")}>
+                  {selectedPromo === 'ACTIVE' ? t('deposit.applied') : `${effectiveBonusPercentage}%`}
+                </span>
+              </div>
+              <div className="flex justify-between items-center py-3 border-b border-border-color">
+                <span className="text-[#7E7E7E] text-sm font-medium">{t('deposit.bonus_amount')}</span>
+                <span className="text-[#00ff00] font-bold">+{currencySymbol}{bonusAmount.toLocaleString()}</span>
+              </div>
+            </>
+          )}
+
+          <div className="flex justify-between items-center py-4 bg-bg-secondary rounded-xl px-4 mt-2 border border-border-color">
+            <span className="text-text-secondary/70 text-sm font-bold">{t('deposit.total_deposit')}</span>
+            <span className="text-xl font-black text-text-primary">{currencySymbol}{totalDeposit.toLocaleString()}</span>
+          </div>
+        </div>
+
+        {/* Footer Info */}
+        <div className="pt-4 space-y-6">
+          <button 
+            onClick={onConfirm}
+            className="w-full bg-[#00ff00] hover:bg-[#00e600] text-black font-black py-4 rounded-xl transition-all active:scale-[0.98] text-lg cursor-pointer shadow-[0_8px_25px_rgba(0,255,0,0.2)] uppercase tracking-widest"
+          >
+            Confirm
+          </button>
+          
+          <div className="flex flex-col items-center text-center space-y-2">
+            <p className="text-[10px] text-[#7E7E7E] font-medium max-w-[220px]">
+              You will be redirected to the payment system page afterwards
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const SummaryView = ({ onClose, selectedMethod, amount, currencyCode, currencySymbol, promoInput, selectedPromo, setStep, userId, rawBalance, promoCodes, handleNextToDetails }: any) => {
+  const { t } = useTranslation();
+  return (
+    <div className="flex flex-col flex-1 min-h-0 bg-bg-secondary text-text-primary">
+      {/* Header */}
+      <div className="p-4 flex items-center justify-between shrink-0 border-b border-border-color">
+        <h2 className="text-xl font-bold text-text-primary">{t('common.deposit')}</h2>
         <button 
           onClick={(e) => {
             e.stopPropagation();
             onClose();
           }} 
-          className="p-1.5 hover:bg-white/10 rounded-full transition cursor-pointer"
+          className="p-1.5 hover:bg-bg-tertiary rounded-full transition cursor-pointer"
         >
-          <X size={20} className="text-white" />
+          <X size={20} className="text-text-primary" />
         </button>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-3 space-y-3 pb-12 scrollbar-hide">
+      <div className="flex-1 overflow-y-auto px-4 space-y-4 pb-12 scrollbar-hide">
         {/* Account Info */}
-        <div className="px-1 pt-2">
-          <p className="text-[12px] text-[#7E7E7E] font-medium">
-            {currencyCode} Account #{userId?.slice(-10).toUpperCase() || '2914496110'}
+        <div className="pt-2">
+          <p className="text-[12px] text-[#7E7E7E] font-bold uppercase tracking-wider">
+  {currencyCode} {t('common.account').toUpperCase()}
+</p>
+          <p className="text-sm font-medium text-text-secondary/60">
+            #{userId?.slice(-10).toUpperCase() || '2914496110'}
           </p>
         </div>
 
-        <div className="space-y-2">
+        <div className="space-y-3">
           {/* Payment Method Selector */}
           <button 
             onClick={(e) => {
               e.stopPropagation();
               setStep('PAYMENT_METHOD');
             }}
-            className="w-full bg-[#1a1b1e] rounded-lg p-3 flex items-center justify-between hover:bg-[#25262b] transition-all cursor-pointer group border border-white/5"
+            className="w-full bg-bg-tertiary rounded-xl p-4 flex items-center justify-between hover:bg-[#222328] transition-all cursor-pointer border border-border-color shadow-xl"
           >
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 flex items-center justify-center bg-[#25262b] rounded-md">
+            <div className="flex items-center gap-4">
+              <div className="w-10 h-10 flex items-center justify-center bg-bg-tertiary rounded-lg overflow-hidden shrink-0">
                 {selectedMethod.icon}
               </div>
               <div className="text-left">
-                <p className="text-[11px] text-[#7E7E7E] font-medium">Payment method</p>
-                <p className="text-sm font-bold text-white">{selectedMethod.name}</p>
+                <p className="text-[11px] text-[#7E7E7E] font-bold uppercase tracking-tight">{t('deposit.payment_method')}</p>
+                <p className="text-base font-bold text-text-primary">{selectedMethod.name}</p>
               </div>
             </div>
-            <ChevronRight size={18} className="text-[#7E7E7E]" />
+            <ChevronRight size={20} className="text-[#555]" />
           </button>
 
           {/* Amount Selector */}
@@ -163,76 +465,80 @@ const SummaryView = ({ onClose, selectedMethod, amount, currencyCode, currencySy
               e.stopPropagation();
               setStep('AMOUNT_SELECTION');
             }}
-            className="w-full bg-[#1a1b1e] rounded-lg p-3 flex items-center justify-between hover:bg-[#25262b] transition-all cursor-pointer group border border-white/5"
+            className="w-full bg-bg-tertiary rounded-xl p-4 flex items-center justify-between hover:bg-[#222328] transition-all cursor-pointer border border-border-color shadow-xl"
           >
             <div className="text-left">
-              <p className="text-[11px] text-[#7E7E7E] font-medium">Amount</p>
-              <p className="text-sm font-bold text-white">{currencyCode} {amount.toLocaleString()}</p>
+              <p className="text-[11px] text-[#7E7E7E] font-bold uppercase tracking-tight">{t('deposit.amount')}</p>
+              <p className="text-2xl font-black text-text-primary">{currencySymbol}{amount.toLocaleString()}</p>
             </div>
-            <ChevronRight size={18} className="text-[#7E7E7E]" />
+            <ChevronRight size={20} className="text-[#555]" />
           </button>
 
           {/* Promo Code Selector */}
-          <button 
-            onClick={(e) => {
-              e.stopPropagation();
-              setStep('PROMO_SELECTION');
-            }}
-            className="w-full bg-[#1a1b1e] rounded-lg p-3 flex items-center justify-between hover:bg-[#25262b] transition-all cursor-pointer group border border-white/5"
-          >
-            <div className="text-left">
-              <p className="text-[11px] text-[#7E7E7E] font-medium">Promo Code</p>
-              <p className="text-sm font-bold text-white">
-                {selectedPromo === 'ACTIVE' ? promoInput : 'Choose Promo Code'}
-              </p>
-            </div>
-            <div className="flex items-center gap-2">
-              {selectedPromo === 'ACTIVE' ? (
-                <div className="bg-[#00ff00]/10 text-[#00ff00] text-[10px] font-bold px-1.5 py-0.5 rounded">
-                  {promoCodes.find((p: any) => p.code === promoInput)?.bonusPercentage || 0}% BONUS
-                </div>
-              ) : (
-                <span className="text-sm font-bold text-white">{promoCodes?.length || 0}</span>
-              )}
-              <ChevronRight size={18} className="text-[#7E7E7E]" />
-            </div>
-          </button>
+          <div className="space-y-2">
+            <button 
+              onClick={(e) => {
+                e.stopPropagation();
+                setStep('PROMO_SELECTION');
+              }}
+              className="w-full bg-bg-tertiary rounded-xl p-4 flex items-center justify-between hover:bg-[#222328] transition-all cursor-pointer border border-border-color shadow-xl"
+            >
+              <div className="text-left">
+                <p className="text-[11px] text-[#7E7E7E] font-bold uppercase tracking-tight">{t('deposit.promo_code')}</p>
+                <p className={cn(
+                  "text-base font-bold",
+                  selectedPromo === 'ACTIVE' ? "text-[#00ff00]" : "text-text-secondary/40"
+                )}>
+                  {selectedPromo === 'ACTIVE' ? promoInput : t('deposit.enter_or_choose_code')}
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                {selectedPromo === 'ACTIVE' && (
+                  <div className="bg-[#00ff00]/10 text-[#00ff00] text-[10px] font-black px-2 py-1 rounded-md border border-[#00ff00]/20">
+                    {promoCodes.find((p: any) => p.code === promoInput)?.bonusPercentage || 0}% BONUS
+                  </div>
+                )}
+                <ChevronRight size={20} className="text-[#555]" />
+              </div>
+            </button>
 
-          {selectedPromo === 'ACTIVE' && (
-            <div className="bg-[#00ff00]/5 border border-[#00ff00]/10 rounded-lg p-3">
-              <div className="flex justify-between items-center text-xs">
-                <span className="text-[#7E7E7E]">Bonus Amount</span>
-                <span className="text-[#00ff00] font-bold">
-                  +{currencyCode} {Math.round(amount * ((promoCodes.find((p: any) => p.code === promoInput)?.bonusPercentage || 0) / 100)).toLocaleString()}
-                </span>
+            {selectedPromo === 'ACTIVE' && (
+              <div className="bg-bg-tertiary border border-[#00ff00]/10 rounded-xl p-4 space-y-2 shadow-inner">
+                <div className="flex justify-between items-center text-xs">
+                  <span className="text-[#7E7E7E]">{t('deposit.bonus_amount')}</span>
+                  <span className="text-[#00ff00] font-black">
+                    +{currencySymbol}{Math.round(amount * ((promoCodes.find((p: any) => p.code === promoInput)?.bonusPercentage || 0) / 100)).toLocaleString()}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center pt-2 border-t border-border-color">
+                  <span className="text-xs text-[#7E7E7E]">{t('deposit.total_to_receive')}</span>
+                  <span className="text-lg font-black text-text-primary">
+                    {currencySymbol} {(amount + Math.round(amount * ((promoCodes.find((p: any) => p.code === promoInput)?.bonusPercentage || 0) / 100))).toLocaleString()}
+                  </span>
+                </div>
               </div>
-              <div className="flex justify-between items-center mt-1.5 pt-1.5 border-t border-white/5 text-xs">
-                <span className="text-[#7E7E7E]">Total to Receive</span>
-                <span className="text-white font-bold">
-                  {currencyCode} {(amount + Math.round(amount * ((promoCodes.find((p: any) => p.code === promoInput)?.bonusPercentage || 0) / 100))).toLocaleString()}
-                </span>
-              </div>
-            </div>
-          )}
+            )}
+          </div>
         </div>
 
-        <div className="pt-1 space-y-4">
+        <div className="pt-4 space-y-6">
           <button 
             onClick={(e) => {
               e.stopPropagation();
               handleNextToDetails();
             }}
-            className="w-full bg-[#00ff00] hover:bg-[#00e600] text-black font-bold py-3 rounded-lg transition-all active:scale-[0.98] text-base cursor-pointer shadow-lg shadow-green-500/10"
+            className="w-full bg-[#00ff00] hover:bg-[#00e600] text-black font-black py-4 rounded-xl transition-all active:scale-[0.98] text-lg cursor-pointer shadow-[0_8px_20px_rgba(0,255,0,0.15)] uppercase tracking-wider"
           >
-            Next
+            {t('common.next')}
           </button>
 
-          <div className="flex flex-col items-center text-center space-y-2">
-            <div className="w-8 h-8 rounded-lg flex items-center justify-center text-[#7E7E7E] border border-white/5">
-              <Lock size={18} />
+          <div className="flex flex-col items-center text-center space-y-3 pb-8">
+            <div className="flex items-center gap-2 px-3 py-1.5 bg-bg-secondary rounded-full border border-border-color">
+              <ShieldCheck size={14} className="text-[#00ff00]" />
+              <span className="text-[10px] font-bold text-text-secondary/50 uppercase tracking-widest">{t('deposit.safe_payment')}</span>
             </div>
-            <p className="text-[11px] text-[#7E7E7E] max-w-[260px] leading-tight">
-              Your data is encrypted using 256-bit SSL certificates, providing you with the strongest security available
+            <p className="text-[10px] text-[#7E7E7E] max-w-[240px] leading-relaxed font-medium">
+              Your transaction is protected by industry-standard 256-bit SSL encryption.
             </p>
           </div>
         </div>
@@ -242,6 +548,7 @@ const SummaryView = ({ onClose, selectedMethod, amount, currencyCode, currencySy
 };
 
 const PaymentMethodSelection = ({ handleBack, selectedMethod, setSelectedMethod, setStep, depositSettings, setHasManuallySelected }: any) => {
+    const { t } = useTranslation();
     const [activeCategory, setActiveCategory] = useState<'ALL' | 'RECOMMENDED' | 'E-PAY' | 'CRYPTO'>('ALL');
     const [searchQuery, setSearchQuery] = useState('');
 
@@ -250,7 +557,7 @@ const PaymentMethodSelection = ({ handleBack, selectedMethod, setSelectedMethod,
       ...(depositSettings?.customMethods || []).map((m: any) => ({
         id: m.id,
         name: m.name,
-        icon: m.logo ? <img src={m.logo} alt={m.name} className="w-10 h-10 object-contain" referrerPolicy="no-referrer" /> : <div className="w-10 h-10 flex items-center justify-center bg-gray-600 text-white rounded-md font-bold text-xs">{m.name.slice(0, 2)}</div>,
+        icon: m.logo ? <img src={m.logo} alt={m.name} className="w-10 h-10 object-contain" referrerPolicy="no-referrer" /> : <div className="w-10 h-10 flex items-center justify-center bg-gray-600 text-text-primary rounded-md font-bold text-xs">{m.name.slice(0, 2)}</div>,
         category: m.category === 'MOBILE' ? 'E-PAY' : m.category,
         minAmount: '$10.00'
       }))
@@ -271,81 +578,91 @@ const PaymentMethodSelection = ({ handleBack, selectedMethod, setSelectedMethod,
     });
 
     return (
-      <div className="flex flex-col flex-1 min-h-0 bg-[#0a0a0a] text-white">
+      <div className="flex flex-col flex-1 min-h-0 bg-bg-secondary text-text-primary">
         {/* Header */}
-        <div className="p-2 flex items-center justify-between border-b border-white/5">
+        <div className="p-3 flex items-center justify-between border-b border-border-color bg-bg-secondary sticky top-0 z-20">
           <button 
             onClick={(e) => {
               e.stopPropagation();
               handleBack();
             }} 
-            className="p-1.5 -ml-1 hover:bg-white/5 rounded-full transition cursor-pointer"
+            className="p-1.5 -ml-1 hover:bg-bg-secondary rounded-full transition cursor-pointer"
           >
-            <ChevronLeft size={20} className="text-white" />
+            <ChevronLeft size={22} className="text-text-primary" />
           </button>
-          <h2 className="text-sm font-bold text-white">Deposit</h2>
-          <div className="w-8" />
+          <h2 className="text-base font-bold text-text-primary">{t('deposit.payment_method')}</h2>
+          <button onClick={handleBack} className="p-1.5 hover:bg-bg-secondary rounded-full transition cursor-pointer">
+            <X size={20} className="text-text-primary" />
+          </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-2 space-y-2 scrollbar-hide pb-8">
-          {/* Selected Method Box (Matches Image Header) */}
-          <div className="w-full bg-[#1a1b1e] rounded-lg border border-blue-500/30 p-2.5 flex items-center justify-between shadow-lg">
-            <div className="flex items-center gap-2.5">
-              <div className="w-7 h-7 flex items-center justify-center bg-[#25262b] rounded-md">
-                {selectedMethod.icon}
+        <div className="flex-1 overflow-y-auto scrollbar-hide pb-20">
+          {/* Categories */}
+          <div className="p-3 pb-0 flex gap-2 overflow-x-auto scrollbar-hide shrink-0">
+            {['ALL', 'RECOMMENDED', 'E-PAY', 'CRYPTO'].map((cat) => (
+              <button
+                key={cat}
+                onClick={() => setActiveCategory(cat as any)}
+                className={cn(
+                  "px-4 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-all border",
+                  activeCategory === cat 
+                    ? "bg-bg-tertiary border-white/20 text-white" 
+                    : "bg-bg-tertiary border-transparent text-[#7E7E7E] hover:border-border-color"
+                )}
+              >
+                {cat === 'ALL' ? t('deposit.category_all') : cat === 'RECOMMENDED' ? t('deposit.category_recommended') : cat === 'E-PAY' ? t('deposit.category_epay') : t('deposit.category_crypto')}
+              </button>
+            ))}
+          </div>
+
+          <div className="p-3 space-y-4">
+            {/* Search Bar */}
+            <div className="relative">
+              <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none">
+                <Search size={16} className="text-[#555]" />
               </div>
-              <span className="text-base font-bold text-white">{selectedMethod.name}</span>
+              <input 
+                type="text"
+                placeholder={t('deposit.search_placeholder')}
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full bg-bg-tertiary border border-border-color rounded-xl py-2.5 pl-10 pr-3 text-text-primary text-sm focus:outline-none focus:border-blue-500/20 transition-all placeholder-[#555]"
+              />
             </div>
-            <ChevronRight size={18} className="text-white rotate-[-90deg]" />
-          </div>
 
-          {/* Search Bar (Matches Image) */}
-          <div className="relative">
-            <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none">
-              <Search size={16} className="text-[#7E7E7E]" />
+            {/* Methods List */}
+            <div className="space-y-1">
+              {filteredMethods
+                .filter(m => activeCategory === 'ALL' || (activeCategory === 'RECOMMENDED' ? m.isPopular : m.category === activeCategory))
+                .map(method => {
+                  const isSelected = method.id === selectedMethod.id;
+                  return (
+                    <button
+                      key={method.id}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedMethod(method);
+                        if (setHasManuallySelected) setHasManuallySelected(true);
+                        setStep('SUMMARY');
+                      }}
+                      className={cn(
+                        "w-full flex items-center gap-4 py-3 px-4 transition-all text-left cursor-pointer hover:bg-white/[0.02] active:bg-white/[0.05] border-b border-border-color",
+                        isSelected && "bg-white/[0.03]"
+                      )}
+                    >
+                      <div className="w-10 h-10 rounded-lg overflow-hidden shrink-0 shadow-lg shadow-black/20">
+                        {method.icon}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <span className="text-base font-medium text-text-primary/90 truncate block">
+                          {method.name}
+                        </span>
+                      </div>
+                      {isSelected && <div className="w-2 h-2 rounded-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.5)]" />}
+                    </button>
+                  );
+              })}
             </div>
-            <input 
-              type="text"
-              placeholder="Search by deposit method"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-[#1a1b1e] border border-white/5 rounded-lg py-2.5 pl-10 pr-3 text-white text-xs focus:outline-none focus:border-blue-500/20 transition-all placeholder-[#7E7E7E]"
-            />
-          </div>
-
-          {/* Methods List (Matches Image) */}
-          <div className="bg-[#1a1b1e] rounded-lg overflow-hidden border border-white/5">
-            {filteredMethods.map(method => {
-              const isSelected = method.id === selectedMethod.id;
-              return (
-                <button
-                  key={method.id}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setSelectedMethod(method);
-                    if (setHasManuallySelected) setHasManuallySelected(true);
-                    setStep('SUMMARY');
-                  }}
-                  className={cn(
-                    "w-full flex items-center gap-3 p-2.5 transition-all text-left cursor-pointer group",
-                    isSelected ? "bg-[#3b82f6] text-white" : "hover:bg-white/5 text-[#7E7E7E]"
-                  )}
-                >
-                  <div className={cn(
-                    "w-8 h-8 rounded-md flex items-center justify-center shrink-0 border transition-colors",
-                    isSelected ? "bg-white/20 border-white/20" : "bg-[#25262b] border-white/10"
-                  )}>
-                    {method.icon}
-                  </div>
-                  <span className={cn(
-                    "text-sm font-bold flex-1",
-                    isSelected ? "text-white" : "text-white/90"
-                  )}>
-                    {method.name}
-                  </span>
-                </button>
-              );
-            })}
           </div>
         </div>
       </div>
@@ -353,62 +670,62 @@ const PaymentMethodSelection = ({ handleBack, selectedMethod, setSelectedMethod,
 };
 
 const AmountSelection = ({ handleBack, amount, setAmount, amountError, setAmountError, currencyCode, currencySymbol, minDeposit, setStep }: any) => {
+    const { t } = useTranslation();
     const rate = EXCHANGE_RATES[currencyCode] || 1;
     const presets = currencyCode === 'BDT' 
       ? [10000, 5000, 2000, 1000, 500] 
       : [Math.round(500 * rate), Math.round(250 * rate), Math.round(100 * rate), Math.round(50 * rate), Math.round(20 * rate), Math.round(10 * rate)];
 
     return (
-      <div className="flex flex-col flex-1 min-h-0 bg-[#0a0a0a] text-white">
+      <div className="flex flex-col flex-1 min-h-0 bg-bg-secondary text-text-primary">
         {/* Header */}
-        <div className="p-2 flex items-center justify-between border-b border-white/5">
+        <div className="p-4 flex items-center justify-between border-b border-border-color">
           <button 
             onClick={(e) => {
               e.stopPropagation();
               handleBack();
             }} 
-            className="p-1.5 -ml-1 hover:bg-white/5 rounded-full transition cursor-pointer"
+            className="p-1.5 -ml-1 hover:bg-bg-secondary rounded-full transition cursor-pointer"
           >
-            <ChevronLeft size={20} className="text-white" />
+            <ChevronLeft size={22} className="text-text-primary" />
           </button>
-          <h2 className="text-sm font-bold text-white">Deposit</h2>
+          <h2 className="text-lg font-bold text-text-primary">{t('deposit.amount')}</h2>
           <div className="w-8" />
         </div>
 
-        <div className="px-3 pb-1 pt-2">
-          <h1 className="text-lg font-bold text-white mb-2">Deposit Amount</h1>
-        </div>
-
-        <div className="flex-1 overflow-y-auto px-3 space-y-4 pb-12 scrollbar-hide">
+        <div className="flex-1 overflow-y-auto px-4 space-y-6 pb-12 scrollbar-hide pt-4">
           {/* Input Field */}
-          <div className="space-y-1.5">
-            <label className="text-[10px] text-[#7E7E7E] font-black uppercase tracking-[0.15em] ml-1">Enter Amount</label>
+          <div className="space-y-3">
+            <label className="text-[11px] text-[#7E7E7E] font-black uppercase tracking-[0.1em] ml-1">{t('withdraw.enter_amount')}</label>
             <div className={cn(
-              "bg-[#1a1b1e] rounded-xl p-3 border-2 transition-all shadow-inner flex items-center gap-3",
-              amountError ? "border-red-500" : "border-transparent focus-within:border-[#00ff00]/20"
+              "bg-bg-tertiary rounded-2xl p-6 border-2 transition-all shadow-inner flex flex-col items-center gap-1",
+              amountError ? "border-red-500" : "border-border-color focus-within:border-[#00ff00]"
             )}>
-              <span className="text-xl font-black text-[#7E7E7E]">{currencySymbol}</span>
-              <input 
-                type="number" 
-                value={isNaN(amount) || !amount ? '' : amount}
-                onChange={(e) => {
-                  const val = e.target.value;
-                  let num = Number(val);
-                  setAmount(num);
-                  setAmountError(null);
-                }}
-                className="w-full bg-transparent text-2xl font-black text-white focus:outline-none placeholder-[#7E7E7E]/20"
-                placeholder="0.00"
-                autoFocus
-              />
+              <div className="flex items-center gap-2">
+                <span className="text-2xl font-black text-[#555]">{currencySymbol}</span>
+                <input 
+                  type="number" 
+                  value={isNaN(amount) || !amount ? '' : amount}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    let num = Number(val);
+                    setAmount(num);
+                    setAmountError(null);
+                  }}
+                  className="w-auto max-w-[200px] bg-transparent text-5xl font-black text-text-primary focus:outline-none placeholder-[#222] text-center"
+                  placeholder="0.00"
+                  autoFocus
+                />
+              </div>
+              <p className="text-[12px] font-bold text-[#7E7E7E] uppercase tracking-widest">{currencyCode} {t('common.balance')}</p>
             </div>
-            {amountError && <p className="text-[10px] text-red-500 font-bold ml-1">{amountError}</p>}
+            {amountError && <p className="text-[11px] text-red-500 font-bold text-center mt-2">{amountError}</p>}
           </div>
 
           {/* Preset Grid */}
-          <div className="space-y-2">
-            <label className="text-[10px] text-[#7E7E7E] font-black uppercase tracking-[0.15em] ml-1">Quick Select</label>
-            <div className="grid grid-cols-3 gap-1.5">
+          <div className="space-y-3">
+            <label className="text-[11px] text-[#7E7E7E] font-black uppercase tracking-[0.1em] ml-1">{t('common.quick_select')}</label>
+            <div className="grid grid-cols-3 gap-2">
               {presets.map(val => (
                 <button
                   key={val}
@@ -418,18 +735,19 @@ const AmountSelection = ({ handleBack, amount, setAmount, amountError, setAmount
                     setAmountError(null);
                   }}
                   className={cn(
-                    "py-2.5 rounded-lg bg-[#1a1b1e] transition-all font-black text-xs border-2 active:scale-95",
-                    amount === val ? "border-[#00ff00] text-[#00ff00] bg-[#00ff00]/5" : "border-transparent text-white hover:border-white/10"
+                    "py-4 rounded-xl bg-bg-tertiary transition-all font-black text-sm border-2 active:scale-95 shadow-lg",
+                    amount === val ? "border-[#00ff00] text-[#00ff00] bg-[#00ff00]/5" : "border-transparent text-text-primary/80 hover:border-border-color"
                   )}
                 >
-                  {currencySymbol}{val.toLocaleString()}
+                  <span className="opacity-40 text-[10px] mr-1">{currencySymbol}</span>
+                  {val.toLocaleString()}
                 </button>
               ))}
             </div>
           </div>
 
           {/* Confirm Button */}
-          <div className="pt-2">
+          <div className="pt-2 sticky bottom-0 bg-bg-secondary pb-6">
             <button 
               disabled={!!amountError || !amount || amount < minDeposit}
               onClick={(e) => {
@@ -437,16 +755,16 @@ const AmountSelection = ({ handleBack, amount, setAmount, amountError, setAmount
                 setStep('SUMMARY');
               }}
               className={cn(
-                "w-full font-black py-3 rounded-lg transition-all active:scale-[0.98] text-base shadow-lg cursor-pointer",
+                "w-full font-black py-4 rounded-xl transition-all active:scale-[0.98] text-lg shadow-[0_10px_25px_rgba(0,0,0,0.3)] cursor-pointer uppercase tracking-widest",
                 (!amountError && amount >= minDeposit) 
-                  ? "bg-[#00ff00] text-black shadow-green-500/10" 
-                  : "bg-[#1a1b1e] text-[#7E7E7E] cursor-not-allowed opacity-50"
+                  ? "bg-[#00ff00] text-black hover:bg-[#00e600]" 
+                  : "bg-bg-secondary text-[#333] cursor-not-allowed opacity-50"
               )}
             >
-              Confirm Amount
+              Confirm
             </button>
-            <p className="text-center text-[9px] text-[#7E7E7E] mt-3 font-medium">
-              Minimum deposit for {currencyCode} is {currencySymbol}{minDeposit}
+            <p className="text-center text-[10px] text-[#7E7E7E] mt-4 font-bold uppercase tracking-widest opacity-60">
+              Minimum deposit is {currencySymbol}{minDeposit} {currencyCode}
             </p>
           </div>
         </div>
@@ -455,14 +773,15 @@ const AmountSelection = ({ handleBack, amount, setAmount, amountError, setAmount
 };
 
 const PromoSelection = ({ handleBack, amount, currencyCode, currencySymbol, depositSettings, selectedPromo, setSelectedPromo, promoInput, setPromoInput, setStep, promoCodes }: any) => {
+    const { t } = useTranslation();
     const [manualCode, setManualCode] = useState('');
     const [error, setError] = useState<string | null>(null);
 
     const validateFormat = (code: string) => {
       if (!code) return null;
-      if (code.length < 4) return 'Code must be at least 4 characters';
-      if (code.length > 20) return 'Code is too long (max 20 characters)';
-      if (!/^[A-Z0-9_-]+$/.test(code)) return 'Only letters, numbers, underscores and hyphens allowed';
+      if (code.length < 4) return t('deposit.promo_min_chars');
+      if (code.length > 20) return t('deposit.promo_too_long');
+      if (!/^[A-Z0-9_-]+$/.test(code)) return t('deposit.promo_invalid_chars');
       return null;
     };
 
@@ -478,20 +797,20 @@ const PromoSelection = ({ handleBack, amount, currencyCode, currencySymbol, depo
       const promo = promoCodes.find((p: any) => p.code.toUpperCase() === code.toUpperCase());
       
       if (!promo) {
-        setError('Invalid promo code');
+        setError(t('deposit.invalid_code'));
         return;
       }
 
       const now = Date.now();
       if (promo.expiresAt && now > promo.expiresAt) {
-        setError('This promo code has expired');
+        setError(t('deposit.expired_code'));
         return;
       }
 
       const rate = EXCHANGE_RATES[currencyCode] || 1;
       const amountUSD = amount / rate;
       if (amountUSD < promo.minDeposit) {
-        setError(`Minimum deposit for this code is ${currencySymbol}${Math.round(promo.minDeposit * rate).toLocaleString()}`);
+        setError(t('deposit.min_deposit_error', { amount: `${currencySymbol}${Math.round(promo.minDeposit * rate).toLocaleString()}` }));
         return;
       }
 
@@ -501,30 +820,30 @@ const PromoSelection = ({ handleBack, amount, currencyCode, currencySymbol, depo
     };
 
     return (
-      <div className="flex flex-col flex-1 min-h-0 bg-[#0a0a0a] text-white">
+      <div className="flex flex-col flex-1 min-h-0 bg-bg-primary text-text-primary">
         {/* Header */}
-        <div className="p-2 flex items-center justify-between border-b border-white/5">
+        <div className="p-2 flex items-center justify-between border-b border-border-color">
           <button 
             onClick={(e) => {
               e.stopPropagation();
               handleBack();
             }} 
-            className="p-1.5 -ml-1 hover:bg-white/5 rounded-full transition cursor-pointer"
+            className="p-1.5 -ml-1 hover:bg-bg-secondary rounded-full transition cursor-pointer"
           >
-            <ChevronLeft size={20} className="text-white" />
+            <ChevronLeft size={20} className="text-text-primary" />
           </button>
-          <h2 className="text-sm font-bold text-white">Deposit</h2>
+          <h2 className="text-sm font-bold text-text-primary">Deposit</h2>
           <div className="w-8" />
         </div>
 
         <div className="px-3 pb-1 pt-2">
-          <h1 className="text-lg font-bold text-white mb-2">Choose Promo Code</h1>
+          <h1 className="text-lg font-bold text-text-primary mb-2">{t('deposit.choose_promo')}</h1>
         </div>
 
         <div className="flex-1 overflow-y-auto px-3 space-y-2 pb-12 scrollbar-hide">
           {/* Manual Entry */}
-          <div className="bg-[#1a1b1e] rounded-lg p-3 shadow-sm border border-white/5">
-            <label className="block text-[10px] text-[#7E7E7E] uppercase font-bold mb-1.5">Enter Manual Code</label>
+          <div className="bg-bg-tertiary rounded-lg p-3 shadow-sm border border-border-color">
+            <label className="block text-[10px] text-[#7E7E7E] uppercase font-bold mb-1.5">{t('deposit.enter_manual_code')}</label>
             <div className="flex gap-2">
               <input 
                 type="text"
@@ -536,8 +855,8 @@ const PromoSelection = ({ handleBack, amount, currencyCode, currencySymbol, depo
                 }}
                 placeholder="PROMO123"
                 className={cn(
-                  "flex-1 bg-black/20 border rounded-lg px-3 py-2 text-xs text-white focus:outline-none transition",
-                  error ? "border-red-500/50 focus:border-red-500" : "border-white/10 focus:border-[#00ff00]"
+                  "flex-1 bg-bg-tertiary border rounded-lg px-3 py-2 text-xs text-white focus:outline-none transition",
+                  error ? "border-red-500/50 focus:border-red-500" : "border-border-color focus:border-[#00ff00]"
                 )}
               />
               <button 
@@ -545,7 +864,7 @@ const PromoSelection = ({ handleBack, amount, currencyCode, currencySymbol, depo
                 disabled={!manualCode}
                 className="bg-[#00ff00] text-black font-bold px-4 rounded-lg hover:bg-[#00dd00] transition disabled:opacity-50 disabled:cursor-not-allowed text-xs"
               >
-                Apply
+                {t('common.apply')}
               </button>
             </div>
             {error && <p className="text-red-500 text-[10px] mt-1.5">{error}</p>}
@@ -553,10 +872,10 @@ const PromoSelection = ({ handleBack, amount, currencyCode, currencySymbol, depo
 
           <div className="relative py-1">
             <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-white/5"></div>
+              <div className="w-full border-t border-border-color"></div>
             </div>
             <div className="relative flex justify-center text-[10px] uppercase">
-              <span className="bg-[#0a0a0a] px-2 text-[#7E7E7E]">Or choose from active</span>
+              <span className="bg-bg-primary px-2 text-[#7E7E7E]">{t('deposit.or_choose_active')}</span>
             </div>
           </div>
 
@@ -569,22 +888,22 @@ const PromoSelection = ({ handleBack, amount, currencyCode, currencySymbol, depo
               const isMinNotMet = (amount / rate) < promo.minDeposit;
 
               return (
-                <div key={promo.id} className={`bg-[#1a1b1e] rounded-lg overflow-hidden shadow-sm border border-white/5 ${isExpired ? 'opacity-50 grayscale' : ''}`}>
+                <div key={promo.id} className={`bg-bg-tertiary rounded-lg overflow-hidden shadow-sm border border-border-color ${isExpired ? 'opacity-50 grayscale' : ''}`}>
                   <div className="p-3 relative">
                     <div className="text-[10px] text-[#7E7E7E] mb-0.5">
-                      {isExpired ? 'Expired' : `Expires on ${new Date(promo.expiresAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`}
+                      {isExpired ? t('common.expired') : `${t('deposit.expires_on')} ${new Date(promo.expiresAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`}
                     </div>
-                    <h3 className="text-base font-bold text-white mb-2">{promo.title || 'Deposit Bonus'}</h3>
+                    <h3 className="text-base font-bold text-text-primary mb-2">{promo.title || t('deposit.bonus_title')}</h3>
                     <p className="text-[12px] text-[#7E7E7E] max-w-[200px] leading-tight">
-                      Use {promo.code} when depositing {currencyCode} {Math.round(promo.minDeposit * rate).toLocaleString()}+
-                    </p>
+  {t('deposit.use_code_notice', { code: promo.code, amount: `${currencyCode} ${Math.round(promo.minDeposit * rate).toLocaleString()}` })}
+</p>
                     
                     {/* Badge */}
                     <div className="absolute top-3 right-3">
                       <div className="relative w-11 h-11 flex items-center justify-center">
                         <div className={`absolute inset-0 bg-[#00ff00] rounded-full opacity-20 ${!isExpired ? 'animate-pulse' : ''}`} />
                         <div className="bg-[#00ff00] text-black text-[9px] font-bold px-1.5 py-0.5 rounded-md rotate-[-15deg] shadow-sm z-10 text-center leading-tight">
-                          UP TO<br/>{promo.bonusPercentage}%
+                          {t('deposit.up_to')}<br/>{promo.bonusPercentage}%
                         </div>
                       </div>
                     </div>
@@ -598,16 +917,16 @@ const PromoSelection = ({ handleBack, amount, currencyCode, currencySymbol, depo
                       setSelectedPromo('ACTIVE');
                       setStep('SUMMARY');
                     }}
-                    className={`w-full py-2.5 border-t border-white/5 font-bold transition cursor-pointer text-xs ${isExpired || isMinNotMet ? 'text-[#7E7E7E] cursor-not-allowed' : 'text-[#00ff00] hover:bg-white/5'}`}
+                    className={`w-full py-2.5 border-t border-border-color font-bold transition cursor-pointer text-xs ${isExpired || isMinNotMet ? 'text-[#7E7E7E] cursor-not-allowed' : 'text-[#00ff00] hover:bg-bg-secondary'}`}
                   >
-                    {isExpired ? 'Expired' : isMinNotMet ? 'Min. Deposit Not Met' : 'Apply Promo Code'}
+                    {isExpired ? t('common.expired') : isMinNotMet ? t('deposit.min_deposit_not_met') : t('deposit.apply_promo_code')}
                   </button>
                 </div>
               );
             })
           ) : (
             <div className="text-center py-6 text-[#7E7E7E] text-xs">
-              No active promo codes available.
+              {t('deposit.no_active_codes')}
             </div>
           )}
         </div>
@@ -616,6 +935,7 @@ const PromoSelection = ({ handleBack, amount, currencyCode, currencySymbol, depo
 };
 
 const PaymentDetails = ({ handleBack, selectedMethod, amount, currencyCode, currencySymbol, depositSettings, transactionId, setTransactionId, handleSubmitDeposit, isProcessing }: any) => {
+    const { t } = useTranslation();
     const [copied, setCopied] = useState(false);
     const [timeLeft, setTimeLeft] = useState(3600); // 60 minutes as per image
     const [loading, setLoading] = useState(true);
@@ -639,7 +959,7 @@ const PaymentDetails = ({ handleBack, selectedMethod, amount, currencyCode, curr
     const numbers = getNumbersArray();
 
     useEffect(() => {
-        const timer = setTimeout(() => setLoading(false), 10000);
+        const timer = setTimeout(() => setLoading(false), 300);
         return () => clearTimeout(timer);
     }, []);
 
@@ -724,15 +1044,15 @@ const PaymentDetails = ({ handleBack, selectedMethod, amount, currencyCode, curr
 
     if (isCrypto && selectedMethod.id !== 'binance_pay') {
       return (
-        <div className="flex flex-col flex-1 min-h-0 bg-[#0a0a0a] text-white font-sans overflow-y-auto pb-20">
+        <div className="flex flex-col flex-1 min-h-0 bg-bg-primary text-text-primary font-sans overflow-y-auto pb-20">
           {/* Header */}
           <div className="p-6 space-y-6">
             <div className="flex flex-col items-center text-center space-y-2">
-              <div className="w-16 h-16 bg-white/5 rounded-2xl flex items-center justify-center border border-white/10 mb-2">
+              <div className="w-16 h-16 bg-bg-secondary rounded-2xl flex items-center justify-center border border-border-color mb-2">
                 {selectedMethod.icon}
               </div>
-              <h2 className="text-xl font-black tracking-tight">Deposit {selectedMethod.name}</h2>
-              <p className="text-sm text-gray-400 font-medium">Send only {selectedMethod.name} to this address</p>
+              <h2 className="text-xl font-black tracking-tight">{t('deposit.deposit_title', { name: selectedMethod.name })}</h2>
+<p className="text-sm text-gray-400 font-medium">{t('deposit.send_only_notice', { name: selectedMethod.name })}</p>
             </div>
 
             {/* QR Code Section */}
@@ -743,53 +1063,53 @@ const PaymentDetails = ({ handleBack, selectedMethod, amount, currencyCode, curr
                 ) : (
                   <div className="w-44 h-44 flex flex-col items-center justify-center border-2 border-dashed border-gray-200 rounded-2xl text-gray-400">
                     <QrCode size={40} strokeWidth={1.5} />
-                    <span className="text-[10px] font-bold mt-2 uppercase tracking-widest">QR Not Available</span>
+                    <span className="text-[10px] font-bold mt-2 uppercase tracking-widest">{t('common.qr_not_available')}</span>
                   </div>
                 )}
               </div>
-              <div className="flex items-center gap-2 px-4 py-1.5 bg-white/5 rounded-full border border-white/10">
+              <div className="flex items-center gap-2 px-4 py-1.5 bg-bg-secondary rounded-full border border-border-color">
                 <div className="w-2 h-2 bg-yellow-500 rounded-full animate-pulse"></div>
-                <span className="text-xs font-bold text-gray-300">Waiting for Payment...</span>
+                <span className="text-xs font-bold text-gray-300">{t('deposit.waiting_payment')}</span>
               </div>
             </div>
 
             {/* Details Card */}
             <div className="space-y-4">
-              <div className="bg-[#1a1b1e] rounded-3xl p-5 border border-white/5 space-y-4">
+              <div className="bg-bg-tertiary rounded-3xl p-5 border border-border-color space-y-4">
                 <div className="space-y-1.5">
                   <div className="flex justify-between items-center">
-                    <span className="text-xs font-bold text-gray-500 uppercase tracking-widest">Amount to Pay</span>
-                    <button onClick={() => handleCopy(amount.toString())} className="text-blue-500 text-[10px] font-black uppercase tracking-widest hover:text-blue-400 transition">Copy</button>
+                    <span className="text-xs font-bold text-gray-500 uppercase tracking-widest">{t('deposit.amount_to_pay')}</span>
+<button onClick={() => handleCopy(amount.toString())} className="text-blue-500 text-[10px] font-black uppercase tracking-widest hover:text-blue-400 transition">{copied ? t('common.copied') : t('common.copy')}</button>
                   </div>
                   <div className="flex items-baseline gap-2">
-                    <span className="text-2xl font-black text-white">{amount.toFixed(2)}</span>
+                    <span className="text-2xl font-black text-text-primary">{amount.toFixed(2)}</span>
                     <span className="text-sm font-bold text-gray-400">USD</span>
                   </div>
                 </div>
 
-                <div className="h-px bg-white/5 w-full"></div>
+                <div className="h-px bg-bg-secondary w-full"></div>
 
                 <div className="space-y-2">
                   <div className="flex justify-between items-center">
-                    <span className="text-xs font-bold text-gray-500 uppercase tracking-widest">Deposit Address</span>
-                    <button onClick={() => handleCopy(target.value)} className="text-blue-500 text-[10px] font-black uppercase tracking-widest hover:text-blue-400 transition">Copy</button>
+                    <span className="text-xs font-bold text-gray-500 uppercase tracking-widest">{t('deposit.deposit_address')}</span>
+<button onClick={() => handleCopy(target.value)} className="text-blue-500 text-[10px] font-black uppercase tracking-widest hover:text-blue-400 transition">{copied ? t('common.copied') : t('common.copy')}</button>
                   </div>
-                  <div className="bg-black/40 p-3 rounded-xl border border-white/5 break-all">
+                  <div className="bg-bg-secondary p-3 rounded-xl border border-border-color break-all">
                     <span className="text-sm font-mono text-gray-300 leading-relaxed">{target.value}</span>
                   </div>
                 </div>
               </div>
 
               {/* Transaction ID Input */}
-              <div className="bg-[#1a1b1e] rounded-3xl p-5 border border-white/5 space-y-4">
+              <div className="bg-bg-tertiary rounded-3xl p-5 border border-border-color space-y-4">
                 <div className="space-y-2">
-                  <label className="text-xs font-bold text-gray-500 uppercase tracking-widest">Transaction Hash / ID</label>
+                  <label className="text-xs font-bold text-gray-500 uppercase tracking-widest">{t('deposit.transaction_id')}</label>
                   <input 
                     type="text"
                     value={transactionId}
                     onChange={(e) => setTransactionId(e.target.value)}
-                    placeholder="Enter transaction hash"
-                    className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm font-bold text-white focus:outline-none focus:border-blue-500 transition"
+                    placeholder={t('deposit.enter_hash_placeholder')}
+                    className="w-full bg-bg-secondary border border-border-color rounded-xl px-4 py-3 text-sm font-bold text-text-primary focus:outline-none focus:border-blue-500 transition"
                   />
                 </div>
               </div>
@@ -797,11 +1117,11 @@ const PaymentDetails = ({ handleBack, selectedMethod, amount, currencyCode, curr
               <div className="flex items-center justify-between px-2">
                 <div className="flex items-center gap-2 text-gray-500">
                   <Clock size={14} />
-                  <span className="text-[10px] font-bold uppercase tracking-widest">Expires in {formatTime(timeLeft)}</span>
+                  <span className="text-[10px] font-bold uppercase tracking-widest">{t('deposit.expires_in', { time: formatTime(timeLeft) })}</span>
                 </div>
                 <div className="flex items-center gap-1 text-blue-500">
                   <ShieldCheck size={14} />
-                  <span className="text-[10px] font-bold uppercase tracking-widest">Secure Payment</span>
+                  <span className="text-[10px] font-bold uppercase tracking-widest">{t('deposit.secure_payment')}</span>
                 </div>
               </div>
 
@@ -810,15 +1130,15 @@ const PaymentDetails = ({ handleBack, selectedMethod, amount, currencyCode, curr
                 onClick={() => handleSubmitDeposit()}
                 className={cn(
                   "w-full py-4 rounded-2xl font-black text-base transition-all shadow-xl mt-2 uppercase tracking-widest",
-                  transactionId && !isProcessing ? "bg-blue-600 text-white active:scale-95 shadow-blue-500/20" : "bg-white/5 text-gray-600 cursor-not-allowed"
+                  transactionId && !isProcessing ? "bg-blue-600 text-white active:scale-95 shadow-blue-500/20" : "bg-bg-secondary text-gray-600 cursor-not-allowed"
                 )}
               >
                 {isProcessing ? (
-                  <div className="flex items-center justify-center gap-2">
-                    <Loader2 className="animate-spin size-5" />
-                    <span>Processing...</span>
-                  </div>
-                ) : "Confirm Deposit"}
+  <div className="flex items-center justify-center gap-2">
+    <Loader2 className="animate-spin size-5" />
+    <span>{t('common.processing')}</span>
+  </div>
+) : t('deposit.confirm_deposit')}
               </button>
             </div>
           </div>
@@ -828,7 +1148,7 @@ const PaymentDetails = ({ handleBack, selectedMethod, amount, currencyCode, curr
 
     if (selectedMethod.id === 'binance_pay') {
       return (
-        <div className="flex flex-col flex-1 min-h-0 bg-[#181a20] text-white font-sans overflow-y-auto">
+        <div className="flex flex-col flex-1 min-h-0 bg-bg-secondary text-text-primary font-sans overflow-y-auto">
           {/* Header */}
           <div className="flex items-center justify-between p-4 border-b border-gray-800">
             <div className="flex items-center gap-2">
@@ -838,8 +1158,8 @@ const PaymentDetails = ({ handleBack, selectedMethod, amount, currencyCode, curr
               <span className="text-[#f3ba2f] font-bold text-lg">BINANCE</span>
             </div>
             <div className="flex items-center gap-3">
-              <button className="bg-[#f3ba2f] text-black px-3 py-1 rounded text-sm font-medium">Sign Up</button>
-              <button className="text-white"><Menu size={20} /></button>
+              <button className="bg-[#f3ba2f] text-black px-3 py-1 rounded text-sm font-medium">{t('auth.sign_up')}</button>
+              <button className="text-text-primary"><Menu size={20} /></button>
             </div>
           </div>
 
@@ -848,16 +1168,16 @@ const PaymentDetails = ({ handleBack, selectedMethod, amount, currencyCode, curr
             <div className="bg-[#2b3139] rounded-lg p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
               <div className="flex items-center gap-2 text-gray-300">
                 <AlertCircle size={14} />
-                <span>Please do not close this window until the payment is confirmed.</span>
+                <span>{t('deposit.binance_warning')}</span>
               </div>
               <div className="text-gray-400">
-                Payment page expires in <span className="text-[#f3ba2f] font-mono">{formatTime(timeLeft)}</span>
+                {t('deposit.time_left')} <span className="text-[#f3ba2f] font-mono">{formatTime(timeLeft)}</span>
               </div>
             </div>
 
             {/* Main Card */}
             <div className="bg-[#1e2329] rounded-xl border border-gray-800 p-6 flex flex-col items-center">
-              <p className="text-gray-400 text-sm mb-2">Payment Amount</p>
+              <p className="text-gray-400 text-sm mb-2">{t('deposit.payment_amount')}</p>
               <div className="flex items-baseline gap-1 mb-6">
                 <span className="text-3xl font-bold">{amount.toFixed(2)}</span>
                 <span className="text-sm text-gray-400">USDT</span>
@@ -868,12 +1188,12 @@ const PaymentDetails = ({ handleBack, selectedMethod, amount, currencyCode, curr
                   <img src={depositSettings.binancePayQrCode} alt="Binance Pay QR" className="w-48 h-48 object-contain" />
                 ) : (
                   <div className="w-48 h-48 flex items-center justify-center border-2 border-dashed border-gray-300 rounded-lg">
-                    <span className="text-gray-400 text-sm">QR Code Not Set</span>
+                    <span className="text-gray-400 text-sm">{t('common.qr_not_available')}</span>
                   </div>
                 )}
               </div>
 
-              <p className="font-medium mb-6">Scan to Pay with Binance App</p>
+              <p className="font-medium mb-6">{t('deposit.scan_to_pay_binance')}</p>
 
               <div className="w-full flex items-center gap-4 mb-6">
                 <div className="flex-1 h-px bg-gray-800"></div>
@@ -889,22 +1209,22 @@ const PaymentDetails = ({ handleBack, selectedMethod, amount, currencyCode, curr
                 disabled={isProcessing}
                 className="w-full bg-[#f3ba2f] hover:bg-[#fcd535] text-black font-bold py-3 rounded-lg transition-colors mb-4"
               >
-                {isProcessing ? 'Processing...' : 'Continue on Browser'}
+                {isProcessing ? t('common.processing') : t('deposit.continue_browser')}
               </button>
 
               <p className="text-xs text-gray-500 text-center mb-8">
-                For first-time users, please <span className="text-[#f3ba2f]">register a Binance Account</span> and complete identity verification.
-              </p>
+  {t('deposit.binance_user_notice')}
+</p>
 
               <div className="w-full space-y-3 text-sm">
                 <div className="flex justify-between">
-                  <span className="text-gray-500">Merchant Name</span>
-                  <span className="font-medium">AOLLIKUS LIMITED</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-500">Product Name</span>
-                  <span className="font-medium">Deposit for an account</span>
-                </div>
+  <span className="text-gray-500">{t('deposit.merchant_name')}</span>
+  <span className="font-medium">AOLLIKUS LIMITED</span>
+</div>
+<div className="flex justify-between">
+  <span className="text-gray-500">{t('deposit.product_name')}</span>
+  <span className="font-medium">{t('deposit.deposit_product')}</span>
+</div>
               </div>
             </div>
           </div>
@@ -956,10 +1276,10 @@ const PaymentDetails = ({ handleBack, selectedMethod, amount, currencyCode, curr
         <div className="bg-[#4DD8F5] p-3 rounded-b-[20px] flex justify-between items-center text-[#1a1b1e] shadow-md">
           <div>
             <p className="text-xs font-bold opacity-80">{displayCurrency}</p>
-            <p className="text-xl font-black">{localAmount.toFixed(2)}</p>
-          </div>
-          <div className="text-right">
-            <p className="text-[11px] font-medium">Time left <span className="text-sm font-bold ml-1">{formatTime(timeLeft)}</span></p>
+<p className="text-xl font-black">{localAmount.toFixed(2).toLocaleString()}</p>
+</div>
+<div className="text-right">
+<p className="text-[11px] font-medium">{t('deposit.time_left')} <span className="text-sm font-bold ml-1">{formatTime(timeLeft)}</span></p>
           </div>
         </div>
 
@@ -972,7 +1292,7 @@ const PaymentDetails = ({ handleBack, selectedMethod, amount, currencyCode, curr
              <div className="flex flex-col">
                 <span className="text-base font-bold text-[#1a1b1e]">{selectedMethod.name}</span>
                 <span className="text-xs font-medium text-gray-500">
-                  {isLocalMethod ? target.paymentType : isCrypto ? 'Crypto Transfer' : 'E-Wallet Payment'}
+                  {isLocalMethod ? target.paymentType : isCrypto ? t('deposit.crypto_transfer') : t('deposit.ewallet_payment')}
                 </span>
              </div>
           </div>
@@ -985,10 +1305,10 @@ const PaymentDetails = ({ handleBack, selectedMethod, amount, currencyCode, curr
                   <p className="text-sm font-bold text-gray-700">{target.label}</p>
                 </div>
                 {isLocalMethod && (
-                  <p className="text-[11px] font-bold text-gray-500">
-                    এই নাম্বারে শুধুমাত্র {target.paymentType === 'Cash Out' ? 'ক্যাশআউট' : 'সেন্ড মানি'} গ্রহণ করা হয়
-                  </p>
-                )}
+  <p className="text-[11px] font-bold text-gray-500">
+    {t('deposit.send_only_local_notice', { type: target.paymentType === 'Cash Out' ? t('deposit.cashout') : t('deposit.send_money') })}
+  </p>
+)}
                 <div className="flex items-center justify-between border-b border-gray-200 pb-1.5 pt-2">
                     <span className={cn(
                       "font-bold tracking-wider break-all pr-3",
@@ -1007,15 +1327,15 @@ const PaymentDetails = ({ handleBack, selectedMethod, amount, currencyCode, curr
                 <AlertCircle size={24} />
             </div>
             <p className="text-sm font-bold text-pink-500 leading-tight">
-                {isLocalMethod ? 'এই নীচে তথ্য প্রবেশ করুন প্রদানের পরে' : 'Please enter the transaction details below after payment'}
-            </p>
+    {t('deposit.enter_info_notice')}
+</p>
           </div>
 
           {/* Step 2 - Compact */}
           <div className="relative bg-[#4DD8F5] rounded-[20px] p-4 overflow-hidden shadow-sm">
-            <div className="absolute -left-3 -bottom-6 text-[80px] font-black text-white/30 -z-0 leading-none select-none">2</div>
+            <div className="absolute -left-3 -bottom-6 text-[80px] font-black text-text-secondary/30 -z-0 leading-none select-none">2</div>
             <div className="relative z-10 space-y-3">
-                <p className="text-base font-bold text-[#1a1b1e]">Transaction ID / Hash</p>
+                <p className="text-base font-bold text-[#1a1b1e]">{t('deposit.transaction_id')}</p>
                 <p className="text-[12px] font-bold text-[#1a1b1e] opacity-80 leading-tight">
                     {isLocalMethod 
                       ? 'bKash/Nagad অ্যাপ থেকে লেনদেন (TrxID) আইডি কপি করুন এবং পেমেন্ট পৃষ্ঠার লেনদেন বাক্সে পেস্ট করুন।'
@@ -1046,11 +1366,11 @@ const PaymentDetails = ({ handleBack, selectedMethod, amount, currencyCode, curr
             )}
           >
             {isProcessing ? (
-              <div className="flex items-center justify-center gap-2">
-                <Loader2 className="animate-spin size-4" />
-                <span className="text-sm">Processing...</span>
-              </div>
-            ) : "Confirm Payment"}
+  <div className="flex items-center justify-center gap-2">
+    <Loader2 className="animate-spin size-4" />
+    <span className="text-sm">{t('common.processing')}</span>
+  </div>
+) : t('deposit.confirm_payment')}
           </button>
         </div>
       </div>
@@ -1058,8 +1378,9 @@ const PaymentDetails = ({ handleBack, selectedMethod, amount, currencyCode, curr
 };
 
 const Confirmation = ({ onClose, transactionId, selectedMethod, amount, currencyCode, currencySymbol, localAmount, depositStatus }: any) => {
+    const { t } = useTranslation();
     return (
-      <div className="flex flex-col flex-1 min-h-0 bg-[#0a0a0a] text-white p-4 items-center justify-center text-center overflow-y-auto pb-16">
+      <div className="flex flex-col flex-1 min-h-0 bg-bg-primary text-text-primary p-4 items-center justify-center text-center overflow-y-auto pb-16">
         {depositStatus === 'SUCCESS' ? (
           <>
             <motion.div
@@ -1070,10 +1391,10 @@ const Confirmation = ({ onClose, transactionId, selectedMethod, amount, currency
               <CheckCircle2 size={48} className="text-[#00ff00]" />
             </motion.div>
             
-            <h2 className="text-2xl font-black text-white mb-2">Success!</h2>
-            <p className="text-[#7E7E7E] mb-8 max-w-[280px]">
-              Your deposit of <span className="text-white font-bold">{currencySymbol}{localAmount.toLocaleString()}</span> has been added to your balance.
-            </p>
+            <h2 className="text-2xl font-black text-text-primary mb-2">{t('deposit.success_title')}</h2>
+<p className="text-[#7E7E7E] mb-8 max-w-[280px]">
+  {t('deposit.success_message', { amount: `${currencySymbol}${localAmount.toLocaleString()}` })}
+</p>
           </>
         ) : (
           <>
@@ -1085,26 +1406,26 @@ const Confirmation = ({ onClose, transactionId, selectedMethod, amount, currency
               <Clock size={48} className="text-[#00ff00] animate-pulse" />
             </motion.div>
             
-            <h2 className="text-2xl font-black text-white mb-2">Pending</h2>
-            <p className="text-[#7E7E7E] mb-8 max-w-[280px]">
-              Your deposit of <span className="text-white font-bold">{currencySymbol}{localAmount.toLocaleString()}</span> is being verified.
-            </p>
+            <h2 className="text-2xl font-black text-text-primary mb-2">{t('deposit.pending_title')}</h2>
+<p className="text-[#7E7E7E] mb-8 max-w-[280px]">
+  {t('deposit.pending_message', { amount: `${currencySymbol}${localAmount.toLocaleString()}` })}
+</p>
           </>
         )}
 
-        <div className="w-full bg-[#1a1b1e] rounded-2xl p-4 border border-white/10 space-y-4 mb-8">
+        <div className="w-full bg-bg-tertiary rounded-2xl p-4 border border-border-color space-y-4 mb-8">
           <div className="flex justify-between items-center">
-            <span className="text-[#7E7E7E] text-sm">Transaction ID</span>
-            <span className="text-white font-mono text-sm">{transactionId}</span>
+            <span className="text-[#7E7E7E] text-sm">{t('deposit.transaction_id')}</span>
+            <span className="text-text-primary font-mono text-sm">{transactionId}</span>
           </div>
           <div className="flex justify-between items-center">
-            <span className="text-[#7E7E7E] text-sm">Method</span>
-            <span className="text-white font-bold text-sm">{selectedMethod.name}</span>
+            <span className="text-[#7E7E7E] text-sm">{t('common.method')}</span>
+            <span className="text-text-primary font-bold text-sm">{selectedMethod.name}</span>
           </div>
           <div className="flex justify-between items-center">
-            <span className="text-[#7E7E7E] text-sm">Status</span>
+            <span className="text-[#7E7E7E] text-sm">{t('common.status')}</span>
             <span className="bg-[#00ff00]/10 text-[#00ff00] text-[10px] font-black px-2 py-1 rounded uppercase tracking-widest">
-              {depositStatus === 'SUCCESS' ? 'Completed' : 'Verifying'}
+              {depositStatus === 'SUCCESS' ? t('common.completed') : t('deposit.verifying')}
             </span>
           </div>
         </div>
@@ -1116,7 +1437,7 @@ const Confirmation = ({ onClose, transactionId, selectedMethod, amount, currency
           }}
           className="w-full bg-[#00ff00] text-black font-black py-4 rounded-xl text-lg shadow-lg shadow-green-500/20 active:scale-[0.98] transition-all cursor-pointer"
         >
-          Back to Trading
+          {t('deposit.back_to_trading')}
         </button>
       </div>
     );
@@ -1124,6 +1445,7 @@ const Confirmation = ({ onClose, transactionId, selectedMethod, amount, currency
 
 
 export default function DepositFlow({ isOpen, onClose, currencySymbol, currencyCode, initialPromoCode, socket, userEmail, rawBalance, userId }: DepositFlowProps) {
+  const { t } = useTranslation();
   const { showToast } = useToast();
   const [step, setStep] = useState<Step>('SUMMARY');
   const [isLoading, setIsLoading] = useState(true);
@@ -1147,9 +1469,11 @@ export default function DepositFlow({ isOpen, onClose, currencySymbol, currencyC
   useEffect(() => {
     if (isOpen) {
       setIsLoading(true);
+      // Simulate secure connection load time between 5 and 7 seconds
+      const loadTime = Math.floor(Math.random() * (7000 - 5000 + 1) + 5000);
       const timer = setTimeout(() => {
         setIsLoading(false);
-      }, 1500);
+      }, loadTime);
       return () => clearTimeout(timer);
     }
   }, [isOpen]);
@@ -1204,7 +1528,7 @@ export default function DepositFlow({ isOpen, onClose, currencySymbol, currencyC
       ...(depositSettings?.customMethods || []).map((m: any) => ({
         id: m.id,
         name: m.name,
-        icon: m.logo ? <img src={m.logo} alt={m.name} className="w-10 h-10 object-contain" referrerPolicy="no-referrer" /> : <div className="w-10 h-10 flex items-center justify-center bg-gray-600 text-white rounded-md font-bold text-xs">{m.name.slice(0, 2)}</div>,
+        icon: m.logo ? <img src={m.logo} alt={m.name} className="w-10 h-10 object-contain" referrerPolicy="no-referrer" /> : <div className="w-10 h-10 flex items-center justify-center bg-gray-600 text-text-primary rounded-md font-bold text-xs">{m.name.slice(0, 2)}</div>,
         category: m.category === 'MOBILE' ? 'E-PAY' : m.category,
         minAmount: '$10.00'
       }))
@@ -1291,6 +1615,14 @@ export default function DepositFlow({ isOpen, onClose, currencySymbol, currencyC
 
   const [isStepLoading, setIsStepLoading] = useState(false);
 
+  const handleConfirmPaymentTransition = () => {
+    setIsStepLoading(true);
+    setTimeout(() => {
+      setIsStepLoading(false);
+      setStep('PAYMENT_DETAILS');
+    }, 1500);
+  };
+
   // Auto-validate active promo code when amount or currency changes
   useEffect(() => {
     if (selectedPromo === 'ACTIVE' && promoInput && promoCodes.length > 0) {
@@ -1311,11 +1643,7 @@ export default function DepositFlow({ isOpen, onClose, currencySymbol, currencyC
   }, [amount, promoInput, promoCodes, displayCurrencyCode, selectedPromo]);
 
   const handleNextToDetails = () => {
-    setIsStepLoading(true);
-    setTimeout(() => {
-      setIsStepLoading(false);
-      setStep('PAYMENT_DETAILS');
-    }, 10000);
+    setStep('CONFIRM_PAYMENT');
   };
 
   if (!isOpen) return null;
@@ -1325,8 +1653,9 @@ export default function DepositFlow({ isOpen, onClose, currencySymbol, currencyC
     else if (step === 'PAYMENT_METHOD') setStep('SUMMARY');
     else if (step === 'AMOUNT_SELECTION') setStep('SUMMARY');
     else if (step === 'PROMO_SELECTION') setStep('SUMMARY');
+    else if (step === 'CONFIRM_PAYMENT') setStep('SUMMARY');
     else if (step === 'CONFIRMATION') onClose();
-    else if (step === 'PAYMENT_DETAILS') setStep('SUMMARY');
+    else if (step === 'PAYMENT_DETAILS') setStep('CONFIRM_PAYMENT');
     else setStep('SUMMARY');
   };
 
@@ -1334,13 +1663,13 @@ export default function DepositFlow({ isOpen, onClose, currencySymbol, currencyC
     if (!transactionId) return;
     
     if (displayCurrencyCode === 'BDT' && amount < 500) {
-      setAmountError("Minimum deposit is 500 BDT");
+      setAmountError(t('deposit.min_deposit_error', { amount: 500, currency: 'BDT' }));
       return;
     }
     
     setIsProcessing(true);
     
-    // Simulate professional 10-second processing
+    // Simulate professional processing
     setTimeout(() => {
       if (socket && userEmail) {
         socket.emit('submit-deposit', {
@@ -1354,9 +1683,9 @@ export default function DepositFlow({ isOpen, onClose, currencySymbol, currencyC
       } else {
         setIsProcessing(false);
         setDepositStatus('ERROR');
-        showToast("Connection lost or user not authenticated. Please try again.", "error");
+        showToast(t('common.auth_error'), "error");
       }
-    }, 10000);
+    }, 1500);
   };
 
   const getStepIndex = () => {
@@ -1372,12 +1701,12 @@ export default function DepositFlow({ isOpen, onClose, currencySymbol, currencyC
   };
 
   const steps = [
-    { id: 0, name: 'Method' },
-    { id: 1, name: 'Amount' },
-    { id: 2, name: 'Promo' },
-    { id: 3, name: 'Summary' },
-    { id: 4, name: 'Pay' },
-    { id: 5, name: 'Done' }
+    { id: 0, name: t('common.method') },
+    { id: 1, name: t('deposit.amount') },
+    { id: 2, name: t('auth.promo_code_label') },
+    { id: 3, name: t('deposit.summary') },
+    { id: 4, name: t('common.pay') },
+    { id: 5, name: t('common.done') }
   ];
 
   return (
@@ -1386,7 +1715,7 @@ export default function DepositFlow({ isOpen, onClose, currencySymbol, currencyC
       animate={{ y: 0 }}
       exit={{ y: "100%" }}
       transition={{ type: "spring", damping: 25, stiffness: 200 }}
-      className="fixed inset-0 z-[9999] bg-[#0a0a0a] flex flex-col pointer-events-auto"
+      className="fixed inset-0 z-[9999] bg-bg-primary flex flex-col pointer-events-auto"
     >
       <AnimatePresence mode="wait">
         {isLoading || isStepLoading ? (
@@ -1395,40 +1724,13 @@ export default function DepositFlow({ isOpen, onClose, currencySymbol, currencyC
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="flex-1 flex flex-col items-center justify-center bg-[#0a0a0a] space-y-6"
+            className="flex-1 flex flex-col items-center justify-center bg-bg-primary"
           >
-            <div className="relative">
-              <motion.div 
-                animate={{ scale: [1, 1.2, 1], opacity: [0.3, 0.6, 0.3] }}
-                transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
-                className="absolute inset-0 bg-[#00ff00] rounded-full blur-2xl"
-              />
-              <div className="relative w-20 h-20 bg-[#1a1b1e] rounded-2xl flex items-center justify-center border border-white/10 shadow-2xl">
-                <Wallet size={40} className="text-[#00ff00]" />
-              </div>
-            </div>
-            <div className="flex flex-col items-center space-y-4">
-              <div className="flex flex-col items-center space-y-2">
-                <div className="flex items-center gap-2">
-                  <Loader2 size={18} className="text-[#00ff00] animate-spin" />
-                  <span className="text-white font-bold tracking-wider uppercase text-xs">
-                    {isStepLoading ? "Preparing Secure Payment Page" : "Securing Connection"}
-                  </span>
-                </div>
-                <div className="w-48 h-1 bg-white/5 rounded-full overflow-hidden">
-                  <motion.div 
-                    initial={{ x: "-100%" }}
-                    animate={{ x: "100%" }}
-                    transition={{ duration: 1.5, repeat: Infinity, ease: "linear" }}
-                    className="w-full h-full bg-gradient-to-r from-transparent via-[#00ff00] to-transparent"
-                  />
-                </div>
-              </div>
-              {isStepLoading && (
-                <p className="text-[#7E7E7E] text-[10px] font-medium uppercase tracking-widest animate-pulse">
-                  Verifying gateway security...
-                </p>
-              )}
+            <div className="flex flex-col items-center space-y-6">
+              <div className="w-10 h-10 border-4 border-border-color border-t-accent-color rounded-full animate-spin" />
+              <p className="text-text-primary/70 font-medium text-sm animate-pulse">
+                {isStepLoading ? t('deposit.preparing_payment') : t('deposit.securing_connection')}
+              </p>
             </div>
           </motion.div>
         ) : (
@@ -1486,8 +1788,21 @@ export default function DepositFlow({ isOpen, onClose, currencySymbol, currencyC
             setStep={setStep}
             promoCodes={promoCodes}
           />}
+          {step === 'CONFIRM_PAYMENT' && <ConfirmPaymentView 
+            handleBack={handleBack}
+            onConfirm={handleConfirmPaymentTransition}
+            selectedMethod={selectedMethod}
+            amount={amount}
+            currencyCode={displayCurrencyCode}
+            currencySymbol={displayCurrencySymbol}
+            promoInput={promoInput}
+            selectedPromo={selectedPromo}
+            promoCodes={promoCodes}
+            userId={userId}
+            depositSettings={depositSettings}
+          />}
           {step === 'PAYMENT_DETAILS' && <PaymentDetails 
-            handleBack={() => setStep('SUMMARY')} 
+            handleBack={() => setStep('CONFIRM_PAYMENT')} 
             selectedMethod={selectedMethod} 
             amount={amount} 
             currencyCode={displayCurrencyCode} 
@@ -1521,19 +1836,19 @@ export default function DepositFlow({ isOpen, onClose, currencySymbol, currencyC
             exit={{ opacity: 0 }}
             className="absolute inset-0 z-[110] bg-black/80 backdrop-blur-md flex items-center justify-center"
           >
-            <div className="bg-[#1a1b1e] p-6 rounded-2xl border border-white/10 flex flex-col items-center space-y-6 w-72">
+            <div className="bg-bg-tertiary p-6 rounded-2xl border border-border-color flex flex-col items-center space-y-6 w-72">
               <div className="relative">
                 <Loader2 size={40} className="text-[#00ff00] animate-spin" />
               </div>
               <div className="text-center space-y-2">
-                <p className="text-white font-bold text-base">Processing Deposit</p>
-                <p className="text-white/50 text-sm">Please wait while we verify your transaction...</p>
+                <p className="text-text-primary font-bold text-base">Processing Deposit</p>
+                <p className="text-text-secondary/50 text-sm">Please wait while we verify your transaction...</p>
               </div>
-              <div className="w-full h-2 bg-white/10 rounded-full overflow-hidden">
+              <div className="w-full h-2 bg-bg-tertiary rounded-full overflow-hidden">
                 <motion.div 
                   initial={{ width: "0%" }}
                   animate={{ width: "100%" }}
-                  transition={{ duration: 10, ease: "linear" }}
+                  transition={{ duration: 1.5, ease: "linear" }}
                   className="h-full bg-[#00ff00]"
                 />
               </div>

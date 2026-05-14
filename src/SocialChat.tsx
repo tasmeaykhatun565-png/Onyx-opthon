@@ -100,20 +100,20 @@ export default function SocialChat({ onClose, userEmail, chatBackground, socket 
       animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0, x: '100%' }}
       transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-      className="fixed inset-0 z-50 bg-[var(--bg-primary)] flex flex-col h-full w-full md:max-w-md md:left-20 md:right-auto md:border-r md:border-[var(--border-color)] shadow-2xl"
+      className="fixed inset-0 z-50 bg-bg-primary flex flex-col h-full w-full md:max-w-md md:left-20 md:right-auto md:border-r md:border-border-color shadow-2xl"
     >
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--border-color)] bg-[var(--bg-secondary)]">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-border-color bg-bg-secondary">
         <div className="flex items-center gap-3">
           <div className="relative">
             <div className="w-10 h-10 rounded-full bg-indigo-600 flex items-center justify-center text-white">
               <Users size={20} />
             </div>
-            <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-[var(--bg-secondary)] rounded-full"></div>
+            <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-[var(--color-bg-secondary)] rounded-full"></div>
           </div>
           <div>
-            <h3 className="font-bold text-[var(--text-primary)]">Social Chat</h3>
-            <p className="text-xs text-[var(--text-secondary)] flex items-center gap-1">
+            <h3 className="font-bold text-text-primary">Social Chat</h3>
+            <p className="text-xs text-text-secondary flex items-center gap-1">
               <Globe size={10} />
               Global Community
             </p>
@@ -121,15 +121,14 @@ export default function SocialChat({ onClose, userEmail, chatBackground, socket 
         </div>
         <button 
           onClick={onClose}
-          className="p-2 text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--text-primary)]/5 rounded-full transition"
+          className="p-2 text-text-secondary hover:text-text-primary hover:bg-[var(--color-text-primary)]/5 rounded-full transition"
         >
           <X size={24} />
         </button>
       </div>
 
       {/* Content Area */}
-      <div 
-        className="flex-1 overflow-y-auto bg-white dark:bg-[#0f1117] touch-pan-y select-none relative"
+      <div className="flex-1 overflow-y-auto bg-bg-primary touch-pan-y select-none relative"
         style={{ 
           WebkitTapHighlightColor: 'transparent',
           backgroundImage: chatBackground ? `url(${chatBackground})` : 'none',
@@ -154,7 +153,7 @@ export default function SocialChat({ onClose, userEmail, chatBackground, socket 
                 )}
               >
                 {!isMe && (
-                  <span className="text-[10px] font-bold text-[var(--text-secondary)] mb-1 ml-1">
+                  <span className="text-[10px] font-bold text-text-secondary mb-1 ml-1">
                     {msg.name || msg.senderEmail.split('@')[0]}
                   </span>
                 )}
@@ -163,14 +162,14 @@ export default function SocialChat({ onClose, userEmail, chatBackground, socket 
                     "max-w-[85%] rounded-2xl px-4 py-2.5 leading-relaxed shadow-sm relative transition-all",
                     isMe 
                       ? "bg-indigo-600 text-white rounded-br-none shadow-md" 
-                      : "bg-[var(--bg-secondary)] text-[var(--text-primary)] rounded-bl-none border border-[var(--border-color)] shadow-sm dark:shadow-none"
+                      : "bg-bg-secondary text-text-primary rounded-bl-none border border-border-color shadow-sm dark:shadow-none"
                   )}
                 >
                   <p className="text-sm font-medium tracking-tight">{msg.text}</p>
                   <div 
                     className={cn(
                       "text-[9px] mt-1 opacity-70 text-right font-bold",
-                      isMe ? "text-indigo-100" : "text-[var(--text-secondary)]"
+                      isMe ? "text-indigo-100" : "text-text-secondary"
                     )}
                   >
                     {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
@@ -184,15 +183,15 @@ export default function SocialChat({ onClose, userEmail, chatBackground, socket 
       </div>
 
       {/* Input Area */}
-      <div className="p-4 bg-[var(--bg-secondary)] border-t border-[var(--border-color)]">
-        <div className="flex items-center gap-2 bg-[var(--bg-primary)] rounded-xl px-4 py-2 border border-[var(--border-color)] focus-within:border-indigo-500/50 transition">
+      <div className="p-4 bg-bg-secondary border-t border-border-color">
+        <div className="flex items-center gap-2 bg-bg-primary rounded-xl px-4 py-2 border border-border-color focus-within:border-indigo-500/50 transition">
           <input
             type="text"
             value={inputText}
             onChange={(e) => setInputText(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder="Share your thoughts..."
-            className="flex-1 bg-transparent text-[var(--text-primary)] placeholder-[var(--text-secondary)] focus:outline-none text-sm"
+            className="flex-1 bg-transparent text-text-primary placeholder-[var(--color-text-secondary)] focus:outline-none text-sm"
           />
           <button 
             onClick={handleSendMessage}
