@@ -2003,11 +2003,27 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
   useEffect(() => {
     const path = location.pathname;
     
+    // First, sync side sheets for pages that should display over TRADING
+    setIsActivitiesOpen(path === '/tournaments');
+    setIsWhatsNewOpen(path === '/whats-new');
+    setIsProfileOpen(path === '/profile-sheet'); // /profile is the full page
+    setIsTournamentsOpen(path === '/events');
+    setIsCalendarOpen(path === '/calendar-view');
+    
+    // Define active side panels based on url (For desktop slide-overs)
+    let panel = null;
+    if (path === '/indicators') panel = 'INDICATORS';
+    // If you want desktop to use sliding panels for these routes, you could do it here
+    // But currently /market, /trades, /help map to full pages via 'view'.
+    setActiveSidePanel(panel as any);
+
     // Handle specific views
     if (path === '/') setView('HOME');
-    else if (path === '/trade' || path === '/trade/live' || path === '/trading' || path === '/trading/live') {
+    else if (path === '/trade' || path === '/trade/live' || path === '/trading' || path === '/trading/live' || path === '/tournaments' || path === '/whats-new' || path === '/indicators') {
       setView('TRADING');
-      setActiveAccount('REAL');
+      if (path === '/trade' || path === '/trade/live' || path === '/trading' || path === '/trading/live') {
+          setActiveAccount('REAL');
+      }
     }
     else if (path === '/trade/demo' || path === '/trading/demo') {
       setView('TRADING');
@@ -2023,6 +2039,17 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
     else if (path === '/admin') setView('ADMIN');
     else if (path === '/leaderboard') setView('LEADERBOARD');
     else if (path === '/calendar') setView('CALENDAR');
+    else if (path.startsWith('/info/')) {
+      setView('INFO_PAGE');
+      const page = path.split('/').pop();
+      if (page === 'help') setInfoPageTitle('Help Center');
+      else if (page === 'education') setInfoPageTitle('Education Hub');
+      else if (page === 'tutorials') setInfoPageTitle('Trading Tutorials');
+      else if (page === 'assets') setInfoPageTitle('Assets Index');
+      else if (page === 'terms') setInfoPageTitle('Terms and Conditions');
+      else if (page === 'privacy') setInfoPageTitle('Privacy Policy');
+      else if (page === 'risk') setInfoPageTitle('Risk Disclosure');
+    }
 
     // Handle payment sheets
     if (path === '/deposit') {
@@ -2037,6 +2064,8 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
     } else if (path === '/history') {
       setView('TRADING');
       handleOpenPayments('HISTORY');
+    } else {
+      setIsPaymentsOpen(false);
     }
 
   }, [location.pathname, handleOpenPayments]);
@@ -2662,7 +2691,7 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
       if (userData.demoBalance !== undefined) setDemoBalance(prev => Math.abs(prev - userData.demoBalance) < 0.000001 ? prev : userData.demoBalance);
       if (userData.turnover_required !== undefined) setTurnoverRequired(prev => prev === userData.turnover_required ? prev : userData.turnover_required);
       if (userData.turnover_achieved !== undefined) setTurnoverAchieved(prev => prev === userData.turnover_achieved ? prev : userData.turnover_achieved);
-      if (userData.trades !== undefined) setTrades(prev => deepEqual(prev, userData.trades) ? prev : userData.trades);
+      // Removed userData.trades sync here as the trades subcollection onSnapshot listener is the source of truth for trades and handles updates safely.
       if (userData.extraAccounts !== undefined) setExtraAccounts(prev => deepEqual(prev, userData.extraAccounts) ? prev : userData.extraAccounts);
       
       if (userData.currency !== undefined && userData.currency !== null) {
@@ -3161,7 +3190,7 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
     return (
       <InfoPage 
         title={infoPageTitle} 
-        onBack={() => setView('HELP')} 
+        onBack={() => navigate('/help')} 
       />
     );
   }
@@ -4114,9 +4143,9 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
                       initialView="AUTO"
                       hideHeader={true}
                       onSupportClick={() => setIsChatOpen(true)}
-                      onHelpCenterClick={() => { setInfoPageTitle('Help Center'); setView('INFO_PAGE'); setActiveSidePanel(null); }}
-                      onEducationClick={() => { setInfoPageTitle('Education Hub'); setView('INFO_PAGE'); setActiveSidePanel(null); }}
-                      onTradingTutorialsClick={() => { setInfoPageTitle('Trading Tutorials'); setView('INFO_PAGE'); setActiveSidePanel(null); }}
+                      onHelpCenterClick={() => navigate('/info/help')}
+                      onEducationClick={() => navigate('/info/education')}
+                      onTradingTutorialsClick={() => navigate('/info/tutorials')}
                       currencySymbol={currency.symbol}
                       tutorials={tutorials}
                     />
@@ -4160,11 +4189,17 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
           <AdminPanel socket={socket} onBack={() => logout()} userEmail={user.email || ''} isRestricted={true} />
         ) : view === 'PROFILE' ? (
           <ProfilePage 
-            onBack={() => setView('TRADING')} 
-            onSettings={() => setView('SETTINGS')} 
+            onBack={() => navigate(activeAccount === 'DEMO' ? '/trade/demo' : '/trade')} 
+            onSettings={() => navigate('/settings')} 
             user={user} 
-            onAdmin={() => setView('ADMIN')} 
-            setView={setView}
+            onAdmin={() => navigate('/admin')} 
+            setView={(v) => {
+              if (v === 'REWARDS') navigate('/bonuses');
+              else if (v === 'REFERRAL') navigate('/affiliate');
+              else if (v === 'SETTINGS') navigate('/settings');
+              else if (v === 'ADMIN') navigate('/admin');
+              else setView(v as any);
+            }}
             balance={balance}
             bonusBalance={bonusBalance}
             turnoverRequired={turnoverRequired}
@@ -4178,7 +4213,7 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
           />
         ) : view === 'SETTINGS' ? (
           <SettingsPage 
-            onBack={() => setView('PROFILE')} 
+            onBack={() => navigate('/profile')} 
             onLogout={() => {
               logout();
             }} 
@@ -4484,23 +4519,14 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
                   bonusBalance={bonusBalance}
                   currency={currency}
                   setView={setView}
-                  onSettings={() => {
-                    setView('SETTINGS');
-                    setIsProfileOpen(false);
-                  }}
-                  onAdmin={() => {
-                    setView('ADMIN');
-                    setIsProfileOpen(false);
-                  }}
+                  onSettings={() => navigate('/settings')}
+                  onAdmin={() => navigate('/admin')}
                   notifications={notifications}
                   onNotificationsClick={() => setIsNotificationsOpen(true)}
                   turnoverRequired={turnoverRequired}
                   turnoverAchieved={turnoverAchieved}
-                  onDeposit={() => {
-                    setIsProfileOpen(false);
-                    handleOpenPayments('DEPOSIT');
-                  }}
-                  onClose={() => setIsProfileOpen(false)}
+                  onDeposit={() => navigate('/deposit')}
+                  onClose={() => navigate(activeAccount === 'DEMO' ? '/trade/demo' : '/trade')}
                 />
               )}
               {isPaymentsOpen && (
@@ -4630,9 +4656,9 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
                 <aside className="hidden md:flex flex-col w-80 border-r border-border-color bg-bg-secondary overflow-y-auto scrollbar-hide z-20">
                   <HelpPage 
                     onSupportClick={() => setIsChatOpen(true)} 
-                    onHelpCenterClick={() => { setInfoPageTitle('Help Center'); setView('INFO_PAGE'); setIsHelpOpen(false); }}
-                    onEducationClick={() => { setInfoPageTitle('Education Hub'); setView('INFO_PAGE'); setIsHelpOpen(false); }}
-                    onTradingTutorialsClick={() => { setInfoPageTitle('Trading Tutorials'); setView('INFO_PAGE'); setIsHelpOpen(false); }}
+                    onHelpCenterClick={() => navigate('/info/help')}
+                    onEducationClick={() => navigate('/info/education')}
+                    onTradingTutorialsClick={() => navigate('/info/tutorials')}
                     supportSettings={supportSettings}
                     tutorials={tutorials}
                     currencySymbol={currency.symbol}
@@ -4669,38 +4695,20 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
 
              <ActivitiesSheet
                 isOpen={isActivitiesOpen}
-                onClose={() => setIsActivitiesOpen(false)}
+                onClose={() => navigate(activeAccount === 'DEMO' ? '/trade/demo' : '/trade')}
                 unreadAnnouncementsCount={unreadAnnouncementsCount}
                 clientAds={clientAds}
-                onOpenLeaderboard={() => {
-                  setIsActivitiesOpen(false);
-                  setIsLeaderboardOpen(true);
-                }}
-                onOpenRewards={() => {
-                  setIsActivitiesOpen(false);
-                  setIsRewardsOpen(true);
-                }}
-                onOpenTournaments={() => {
-                  setIsActivitiesOpen(false);
-                  setIsTournamentsOpen(true);
-                }}
-                onOpenWhatsNew={() => {
-                  setIsActivitiesOpen(false);
-                  setIsWhatsNewOpen(true);
-                }}
-                onOpenReferral={() => {
-                  setIsActivitiesOpen(false);
-                  setView('REFERRAL');
-                }}
-                onOpenCalendar={() => {
-                  setIsActivitiesOpen(false);
-                  setIsCalendarOpen(true);
-                }}
+                onOpenLeaderboard={() => navigate('/leaderboard')}
+                onOpenRewards={() => navigate('/rewards')}
+                onOpenTournaments={() => navigate('/events')} // /events or something else since /tournaments is ActivitiesSheet itself! Oh wait! 
+                onOpenWhatsNew={() => navigate('/whats-new')}
+                onOpenReferral={() => navigate('/affiliate')}
+                onOpenCalendar={() => navigate('/calendar')}
               />
 
               <TournamentsPage 
                 isOpen={isTournamentsOpen}
-                onClose={() => setIsTournamentsOpen(false)}
+                onClose={() => navigate(activeAccount === 'DEMO' ? '/trade/demo' : '/trade')}
                 socket={socket}
                 currencySymbol={displayCurrencySymbol}
               />
@@ -5024,7 +5032,7 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
             currentTime={currentTime} 
             currentAssetShortName={selectedAsset.shortName}
             marketAssets={marketAssets}
-            onViewAsset={() => { setView('TRADING'); setIsAssetSelectorOpen(true); }} 
+            onViewAsset={() => { navigate(activeAccount === 'DEMO' ? '/trade/demo' : '/trade'); setIsAssetSelectorOpen(true); }} 
             currencySymbol={displayCurrencySymbol}
             exchangeRate={currentExchangeRate}
             onCancelPendingOrder={handleCancelPendingOrder}
@@ -5086,13 +5094,13 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
         {view === 'HELP' && (
           <HelpPage 
              onSupportClick={() => setIsChatOpen(true)}
-             onHelpCenterClick={() => { setInfoPageTitle('Help Center'); setView('INFO_PAGE'); }}
-             onEducationClick={() => { setInfoPageTitle('Education Hub'); setView('INFO_PAGE'); }}
-             onTradingTutorialsClick={() => { setInfoPageTitle('Trading Tutorials'); setView('INFO_PAGE'); }}
+             onHelpCenterClick={() => navigate('/info/help')}
+             onEducationClick={() => navigate('/info/education')}
+             onTradingTutorialsClick={() => navigate('/info/tutorials')}
              supportSettings={supportSettings}
              tutorials={tutorials}
              currencySymbol={currency.symbol}
-             onClose={() => setView('TRADING')}
+             onClose={() => navigate(activeAccount === 'DEMO' ? '/trade/demo' : '/trade')}
           />
         )}
 
@@ -5295,7 +5303,7 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
         <NavButton 
           icon={<Trophy size={22} strokeWidth={isActivitiesOpen ? 3 : 2} />} 
           active={isActivitiesOpen}
-          onClick={() => setIsActivitiesOpen(true)}
+          onClick={() => navigate('/tournaments')}
           label="Tournaments"
         />
         <NavButton 
@@ -5413,7 +5421,7 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              onClick={() => setIsCalendarOpen(false)}
+              onClick={() => navigate(activeAccount === 'DEMO' ? '/trade/demo' : '/trade')}
               className="absolute inset-0 bg-black/80 backdrop-blur-sm md:hidden"
             />
             
@@ -5424,7 +5432,7 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
               transition={{ type: "spring", damping: 30, stiffness: 300, mass: 0.8 }}
               className="relative h-full w-full md:w-[420px] bg-bg-primary shadow-2xl flex flex-col border-l border-border-color"
             >
-              <EconomicCalendar onBack={() => setIsCalendarOpen(false)} />
+              <EconomicCalendar onBack={() => navigate(activeAccount === 'DEMO' ? '/trade/demo' : '/trade')} />
             </motion.div>
           </motion.div>
         )}
@@ -5444,7 +5452,7 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              onClick={() => setIsLeaderboardOpen(false)}
+              onClick={() => navigate(activeAccount === 'DEMO' ? '/trade/demo' : '/trade')}
               className="absolute inset-0 bg-black/80 backdrop-blur-sm md:hidden"
             />
             
@@ -5457,7 +5465,7 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
             >
               <LeaderboardPage
                 socket={socket}
-                onBack={() => setIsLeaderboardOpen(false)} 
+                onBack={() => navigate(activeAccount === 'DEMO' ? '/trade/demo' : '/trade')} 
                 currencySymbol={displayCurrencySymbol} 
                 currentUser={leaderboardCurrentUser}
               />
@@ -5469,7 +5477,7 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
       {/* --- WhatsNew Overlay --- */}
       <WhatsNewSheet 
         isOpen={isWhatsNewOpen}
-        onClose={() => setIsWhatsNewOpen(false)}
+        onClose={() => navigate(activeAccount === 'DEMO' ? '/trade/demo' : '/trade')}
         announcements={announcements}
         onMarkAsRead={(id) => {
           try {
@@ -6767,7 +6775,14 @@ const DesktopSidebar = ({
   const tradePath = activeAccount === 'DEMO' ? '/trade/demo' : '/trade';
   
   const handleNavClick = (panelKey: string) => {
-    setActiveSidePanel(panelKey as any);
+    switch (panelKey) {
+      case 'TRADES': navigate('/trades'); break;
+      case 'MARKET': navigate('/market'); break;
+      case 'ACTIVITIES': navigate('/tournaments'); break;
+      case 'REWARDS': navigate('/rewards'); break;
+      case 'HELP': navigate('/help'); break;
+      default: setActiveSidePanel(panelKey as any); break;
+    }
   };
 
   return (

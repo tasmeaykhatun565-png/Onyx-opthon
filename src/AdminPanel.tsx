@@ -762,6 +762,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
       });
     });
 
+    socket.on('market-assets-updated', (updatedAssets) => {
+      setAssets(updatedAssets);
+    });
+
     socket.on('asset-payout-updated', ({ assetId, payout }) => {
       setAssets(prev => ({
         ...prev,
@@ -791,6 +795,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
       socket.off('admin-rewards');
       socket.off('admin-stats');
       socket.off('market-tick');
+      socket.off('market-assets-updated');
       socket.off('asset-payout-updated');
     };
   }, [socket, userEmail]);
