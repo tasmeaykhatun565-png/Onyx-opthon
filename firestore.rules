@@ -80,7 +80,7 @@ service cloud.firestore {
           return data.userId == request.auth.uid &&
                  data.amount is number &&
                  data.amount > 0 &&
-                 data.status in ['ACTIVE', 'WIN', 'LOSS'];
+                 data.status in ['ACTIVE', 'WIN', 'LOSS', 'DRAW', 'CANCELLED'];
         }
 
         allow create: if isOwner(userId) && isValidTrade(incoming());

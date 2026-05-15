@@ -9,6 +9,7 @@ import {
 import { cn, safeStringify } from './utils';
 import { useToast } from './Toast';
 import { useTranslation, languages, Language } from './i18n';
+import { useTheme } from './ThemeContext';
 
 interface SubPageProps {
   onBack: () => void;
@@ -20,9 +21,10 @@ export const PersonalInformationSettings: React.FC<SubPageProps & {
   timezoneOffset: number;
   setTimezoneOffset: (v: number) => void;
   user: any;
+  userReferralCode?: string | null;
   currency: any;
   setCurrency: (c: any) => void;
-}> = ({ onBack, timezoneOffset, setTimezoneOffset, user, currency, setCurrency }) => {
+}> = ({ onBack, timezoneOffset, setTimezoneOffset, user, userReferralCode, currency, setCurrency }) => {
   const { t } = useTranslation();
   const { showToast } = useToast();
   const [name, setName] = useState(() => localStorage.getItem('user-name') || user.displayName || 'John Doe');
@@ -33,7 +35,7 @@ export const PersonalInformationSettings: React.FC<SubPageProps & {
   const [isTimezoneOpen, setIsTimezoneOpen] = useState(false);
   const [isCurrencyOpen, setIsCurrencyOpen] = useState(false);
 
-  const referralCode = user.referralCode || 'LOGIN';
+  const referralCode = userReferralCode || user?.referralCode || 'LOGIN';
   const referralLink = `${window.location.origin}?ref=${referralCode}`;
 
   const handleCopyReferral = () => {
@@ -1573,7 +1575,7 @@ export const AppearanceSettings: React.FC<SubPageProps & {
 }> = ({ onBack, timezoneOffset = 0, setTimezoneOffset, currency, setCurrency, chatBackground, setChatBackground, savePreferences }) => {
   const { t, language, setLanguage } = useTranslation();
   const { showToast } = useToast();
-  const [theme, setTheme] = useState<string>(localStorage.getItem('app-theme') || 'dark');
+  const { theme, setTheme } = useTheme();
   const [sound, setSound] = useState(() => localStorage.getItem('app-sound') !== 'false');
   const [isCurrencyOpen, setIsCurrencyOpen] = useState(false);
   const [isTimezoneOpen, setIsTimezoneOpen] = useState(false);
@@ -1632,9 +1634,10 @@ export const AppearanceSettings: React.FC<SubPageProps & {
   ];
 
   const handleThemeChange = (newTheme: string) => {
-    setTheme(newTheme);
-    document.documentElement.setAttribute('data-theme', newTheme);
-    localStorage.setItem('app-theme', newTheme);
+    setTheme(newTheme as any);
+    if (savePreferences) {
+      savePreferences({ theme: newTheme });
+    }
     showToast('Theme updated', 'success');
   };
 

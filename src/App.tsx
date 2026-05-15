@@ -57,6 +57,7 @@ import PendingOrderSheet from './PendingOrderSheet';
 import { io, Socket } from 'socket.io-client';
 import { ToastProvider, useToast } from './Toast';
 import { useTranslation } from './i18n';
+import { useTheme } from './ThemeContext';
 import { useNavigate, useLocation, Routes, Route } from 'react-router-dom';
 
 // --- Types ---
@@ -95,6 +96,7 @@ type Trade = {
   assetShortName: string;
   assetFlag: string;
   assetCategory: 'Crypto' | 'Forex' | 'Stocks' | 'Commodities';
+  tradeMode?: 'TIMER' | 'CLOCK';
   userEmail?: string;
   userId?: string;
 };
@@ -1389,6 +1391,7 @@ export default function TradingPlatform() {
   const location = useLocation();
   const { t } = useTranslation();
   const { showToast } = useToast();
+  const { theme: currentTheme, setTheme: setGlobalTheme } = useTheme();
 
   // State
   const [socket, setSocket] = useState<Socket | null>(null);
@@ -1398,17 +1401,22 @@ export default function TradingPlatform() {
     language: localStorage.getItem('app-language') || 'en',
     currency: localStorage.getItem('app-currency') || 'USD',
     timeframe: localStorage.getItem('app-timeframe') || '1m',
-    chartType: localStorage.getItem('app-chartType') || 'candles',
-    theme: localStorage.getItem('app-theme') || 'dark'
+    chartType: localStorage.getItem('app-chartType') || 'Candlestick',
+    theme: localStorage.getItem('app-theme') || 'Dark'
   });
 
   const savePreferences = useCallback(async (newPrefs: Partial<typeof preferences>) => {
-    if (!user?.email) return;
+    console.log('savePreferences called with:', newPrefs);
+    if (!user?.email || !user?.uid) {
+      console.log('User not logged in, skipping preference save');
+      return;
+    }
     
     setPreferences(prev => ({ ...prev, ...newPrefs }));
 
     try {
-      await fetch('/api/user/preferences', {
+      // Sync with SQL backend
+      const response = await fetch('/api/user/preferences', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: safeStringify({
@@ -1416,8 +1424,28 @@ export default function TradingPlatform() {
           ...newPrefs
         })
       });
+      
+      console.log('Backend response status:', response.status);
+      if (!response.ok) {
+        throw new Error(`Server responded with ${response.status}`);
+      }
+      console.log('Backend response ok');
+
+      // Sync with Firestore for real-time remote updates
+      const userRef = doc(db, 'users', user.uid);
+      const firestoreUpdate: any = {};
+      if (newPrefs.theme) firestoreUpdate['preferences.theme'] = newPrefs.theme;
+      if (newPrefs.chartType) firestoreUpdate['preferences.chartType'] = newPrefs.chartType;
+      if (newPrefs.language) firestoreUpdate['preferences.language'] = newPrefs.language;
+      if (newPrefs.timeframe) firestoreUpdate['preferences.timeframe'] = newPrefs.timeframe;
+
+      if (Object.keys(firestoreUpdate).length > 0) {
+        const { updateDoc } = await import('firebase/firestore');
+        await updateDoc(userRef, firestoreUpdate);
+        console.log('Firestore update ok');
+      }
     } catch (error) {
-      console.error('Error saving preferences:', error);
+      console.error('Error saving preferences deeply:', error);
     }
   }, [user]);
   const { language, setLanguage } = useTranslation();
@@ -1440,6 +1468,12 @@ export default function TradingPlatform() {
     return localStorage.getItem('chartType') || 'Candlestick';
   });
 
+  useEffect(() => {
+    if (chartType !== preferences.chartType) {
+      savePreferences({ chartType: chartType });
+    }
+  }, [chartType, preferences.chartType, savePreferences]);
+
   const [currency, setCurrency] = useState(() => {
     const saved = localStorage.getItem('app-currency');
     if (saved) {
@@ -1461,6 +1495,7 @@ export default function TradingPlatform() {
   const [turnoverRequired, setTurnoverRequired] = useState(0);
   const [turnoverAchieved, setTurnoverAchieved] = useState(0);
   const [userBonuses, setUserBonuses] = useState<any[]>([]);
+  const [userReferralCode, setUserReferralCode] = useState<string | null>(null);
   const [clientAds, setClientAds] = useState<any[]>([]);
   const [activeAdIndex, setActiveAdIndex] = useState(0);
   const [extraAccounts, setExtraAccounts] = useState<Account[]>(() => {
@@ -1613,16 +1648,17 @@ export default function TradingPlatform() {
 
   // Smooth local clock that syncs with server
   useEffect(() => {
-    let lastUpdate = 0;
+    let lastTick = 0;
     const timer = setInterval(() => {
-      const now = Date.now();
-      // Throttle state updates for clock to every 1000ms if needed, 
-      // though setInterval is already 1000ms.
-      if (now - lastUpdate >= 1000) {
-        setCurrentTime(now + serverTimeOffset);
-        lastUpdate = now;
+      const now = Date.now() + (serverTimeOffset || 0);
+      currentTimeRef.current = now;
+      
+      // Update UI state every 1000ms to minimize re-renders
+      if (now - lastTick >= 1000) {
+        lastTick = now;
+        setCurrentTime(now);
       }
-    }, 1000); 
+    }, 100); 
     return () => clearInterval(timer);
   }, [serverTimeOffset]);
 
@@ -1776,6 +1812,9 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
             throw new Error(`Expected JSON but received ${contentType || 'unknown'}. Body: ${text.substring(0, 100)}...`);
           }
           const userData = await response.json();
+          if (userData.referralCode) {
+            setUserReferralCode(userData.referralCode);
+          }
           if (userData.language || userData.currency || userData.timeframe || userData.chartType || userData.theme) {
             setPreferences(prev => {
               const updates: any = {};
@@ -1790,10 +1829,14 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
               // Persist to localStorage as well for instant load on next refresh
               Object.entries(updates).forEach(([key, val]) => {
                 if (key === 'theme') {
-                  localStorage.setItem('app-theme', val as string);
-                  document.documentElement.setAttribute('data-theme', val as string);
+                  const themeVal = val as any;
+                  localStorage.setItem('app-theme', themeVal);
+                  setGlobalTheme(themeVal);
                 } else {
                   localStorage.setItem(`app-${key}`, val as string);
+                  if (key === 'chartType') {
+                    setChartType(val as string);
+                  }
                 }
               });
               
@@ -1842,8 +1885,11 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
       return;
     }
 
+    let isMounted = true;
+    
     // Main user doc listener
     const unsubscribeUser = onSnapshot(doc(db, 'users', user.uid), (doc) => {
+      if (!isMounted) return;
       if (doc.exists()) {
         const userData = doc.data();
         
@@ -1858,12 +1904,22 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
         if (userData.kycStatus !== undefined) setKycStatus(prev => prev === userData.kycStatus ? prev : userData.kycStatus);
         if (userData.turnover_required !== undefined) setTurnoverRequired(prev => prev === userData.turnover_required ? prev : userData.turnover_required);
         if (userData.turnover_achieved !== undefined) setTurnoverAchieved(prev => prev === userData.turnover_achieved ? prev : userData.turnover_achieved);
+        if (userData.referralCode !== undefined) setUserReferralCode(userData.referralCode);
+        
+        // Sync preferences from remote
+        if (userData.preferences) {
+          const { theme: remoteTheme, chartType: remoteChartType } = userData.preferences;
+          if (remoteTheme && remoteTheme !== currentTheme) {
+            setGlobalTheme(remoteTheme);
+          }
+          if (remoteChartType && remoteChartType !== chartType) {
+            setChartType(remoteChartType);
+          }
+        }
         
         if (userData.currency && userData.currencySymbol) {
           setCurrency(prev => {
             if (prev.code === userData.currency && prev.symbol === userData.currencySymbol) return prev;
-            
-            // Only update from Firestore if it hasn't been changed manually very recently
             if (Date.now() - lastCurrencyChangeRef.current > 15000) {
               return {
                 code: userData.currency,
@@ -1875,32 +1931,80 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
             return prev;
           });
         }
-        
         setIsUserDataLoaded(true);
       }
     }, (error) => {
+      if (!isMounted) return;
       handleFirestoreError(error, OperationType.GET, `users/${user.uid}`);
     });
 
     // Trades subcollection listener
     const tradesQuery = query(collection(db, 'users', user.uid, 'trades'), orderBy('startTime', 'desc'), limit(100));
     const unsubscribeTrades = onSnapshot(tradesQuery, (snapshot) => {
+      if (!isMounted) return;
       const tradesData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Trade));
-      setTrades(prev => deepEqual(prev, tradesData) ? prev : tradesData);
+      
+      setTrades(prev => {
+        const now = Date.now() + (serverTimeOffset || 0);
+        const merged = tradesData.map(remoteTrade => {
+          if (remoteTrade.status === 'ACTIVE' && resolvedTradeIdsRef.current.has(remoteTrade.id)) {
+            const localTrade = prev.find(t => t.id === remoteTrade.id);
+            if (localTrade && localTrade.status !== 'ACTIVE') return localTrade;
+          }
+          
+          if (remoteTrade.status === 'ACTIVE' && remoteTrade.endTime < now) {
+             const localTrade = prev.find(t => t.id === remoteTrade.id);
+             if (localTrade && localTrade.status !== 'ACTIVE') return localTrade;
+          }
+          return remoteTrade;
+        });
+
+        const activeIds = new Set(merged.map(t => t.id));
+        const uniquelyLocal = prev.filter(t => !activeIds.has(t.id) && t.status === 'ACTIVE');
+        
+        const all = [...uniquelyLocal, ...merged];
+        const seen = new Set();
+        const final = all.filter(t => {
+          if (seen.has(t.id)) return false;
+          seen.add(t.id);
+          return true;
+        }).sort((a, b) => (b.startTime || 0) - (a.startTime || 0)).slice(0, 100);
+
+        return deepEqual(prev, final) ? prev : final;
+      });
     }, (error) => {
+      if (!isMounted) return;
       handleFirestoreError(error, OperationType.LIST, `users/${user.uid}/trades`);
     });
 
     return () => {
+      isMounted = false;
       unsubscribeUser();
       unsubscribeTrades();
     };
-  }, [user]);
+  }, [user?.uid, currentTheme, chartType, setGlobalTheme]); // Use UID and sync prefs for stability
 
   const currentTimeRef = useRef(currentTime);
+
+  // Proactive local trade resolution to ensure UI reflects expiry immediately
   useEffect(() => {
-    currentTimeRef.current = currentTime;
-  }, [currentTime]);
+    const checkTimer = setInterval(() => {
+      const now = currentTimeRef.current;
+      setTrades(prev => {
+        let changed = false;
+        const next = prev.map(t => {
+          // If a trade is expired locally, mark it as RESOLVING to show it's closing
+          if (t.status === 'ACTIVE' && t.endTime <= now) {
+            changed = true;
+            return { ...t, status: 'RESOLVING' as any };
+          }
+          return t;
+        });
+        return changed ? next : prev;
+      });
+    }, 500);
+    return () => clearInterval(checkTimer);
+  }, []);
 
   // Force candle update on interval
   useEffect(() => {
@@ -2603,6 +2707,7 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
     };
 
     const handlePayoutUpdate = (data: { assetId: string, payout: number }) => {
+      console.log('Received payout update:', data);
       setMarketAssets(prev => ({
         ...prev,
         [data.assetId]: {
@@ -2610,6 +2715,11 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
           payout: data.payout
         }
       }));
+
+      // Sync active selectedAsset payout
+      if (selectedAssetRef.current.shortName === data.assetId) {
+        setSelectedAsset(prev => ({ ...prev, payout: data.payout }));
+      }
     };
 
     const handleGlobalPayoutUpdate = (payout: number) => {
@@ -2620,6 +2730,7 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
         });
         return updated;
       });
+      setSelectedAsset(prev => ({ ...prev, payout: payout }));
     };
 
     socket.on('connect', () => {
@@ -2691,6 +2802,7 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
       if (userData.demoBalance !== undefined) setDemoBalance(prev => Math.abs(prev - userData.demoBalance) < 0.000001 ? prev : userData.demoBalance);
       if (userData.turnover_required !== undefined) setTurnoverRequired(prev => prev === userData.turnover_required ? prev : userData.turnover_required);
       if (userData.turnover_achieved !== undefined) setTurnoverAchieved(prev => prev === userData.turnover_achieved ? prev : userData.turnover_achieved);
+      if (userData.referralCode !== undefined) setUserReferralCode(userData.referralCode);
       // Removed userData.trades sync here as the trades subcollection onSnapshot listener is the source of truth for trades and handles updates safely.
       if (userData.extraAccounts !== undefined) setExtraAccounts(prev => deepEqual(prev, userData.extraAccounts) ? prev : userData.extraAccounts);
       
@@ -2807,7 +2919,7 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
   const activeTradesCount = useMemo(() => trades.filter(t => t.status === 'ACTIVE').length, [trades]);
   
   useEffect(() => {
-    if (!socket || !user || !trades) return;
+    if (!socket || !user) return;
     
     const activeTrades = trades.filter(t => t.status === 'ACTIVE');
     activeTrades.forEach(trade => {
@@ -2816,7 +2928,7 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
         socket.emit('place-trade', trade);
       }
     });
-  }, [socket, user, activeTradesCount]);
+  }, [socket, user?.uid, activeTradesCount]);
 
   // Handle Trade Results from Server
   useEffect(() => {
@@ -2831,15 +2943,54 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
       resolvedTradeIdsRef.current.add(result.id);
 
       const isWin = result.status === 'WIN';
-      const profit = result.profit !== undefined ? result.profit : (isWin ? trade.amount * (trade.payout / 100) : -trade.amount);
+      const isDraw = result.status === 'DRAW';
+      
+      let profit = result.profit;
+      if (profit === undefined && trade) {
+        if (isWin) profit = trade.amount * (trade.payout / 100);
+        else if (isDraw) profit = 0;
+        else profit = -trade.amount;
+      }
       
       if (isWin) {
         playSound('win');
+      } else if (isDraw) {
+        // No sound or draw sound for draw
       } else {
         playSound('loss');
       }
 
-      // If trade is already updated by user-data-updated, don't update state again
+      // Update the trades array locally for zero latency
+      setTrades(prev => prev.map(t => {
+        if (t.id === result.id) {
+          return {
+            ...t,
+            status: result.status,
+            profit: profit || 0,
+            closePrice: result.closePrice,
+            endTime: result.endTime || Date.now()
+          };
+        }
+        return t;
+      }));
+
+      // Professional Firestore Update for Trade Result
+      if (user) {
+        try {
+          // Update the specific trade document immediately, even if local trade state hasn't caught up
+          const tradeDocRef = doc(db, 'users', user.uid, 'trades', result.id);
+          setDoc(tradeDocRef, {
+            status: result.status,
+            profit: profit,
+            closePrice: result.closePrice,
+            endTime: Date.now()
+          }, { merge: true });
+        } catch (error) {
+          console.error("Error updating trade result:", error);
+        }
+      }
+
+      // If trade is already updated by user-data-updated or missing locally, don't update local wallet balances directly
       if (!trade || trade.status !== 'ACTIVE') return;
 
       // Update results locally for immediate feedback
@@ -2854,25 +3005,8 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
         }
       }
 
-      // Professional Firestore Update for Trade Result
-      if (user) {
-        try {
-          // Update the specific trade document
-          const tradeDocRef = doc(db, 'users', user.uid, 'trades', result.id);
-          
-          setDoc(tradeDocRef, {
-            status: result.status,
-            profit: profit,
-            closePrice: result.closePrice,
-            endTime: Date.now()
-          }, { merge: true });
-        } catch (error) {
-          console.error("Error updating trade result:", error);
-        }
-      }
-
       // Add to results toast
-      setTradeResults(r => [...r, { id: result.id, profit: result.profit, isWin: result.status === 'WIN' }]);
+      setTradeResults(r => [...r, { id: result.id, profit: profit, isWin }]);
     };
 
     socket.on('trade-result', handleTradeResult);
@@ -3050,6 +3184,7 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
       endTime: expirationTime,
       duration: tradeDurationSeconds,
       status: 'ACTIVE',
+      tradeMode: tradeMode,
       accountType: activeAccount,
       payout: currentPayout,
       asset: selectedAsset.name,
@@ -3139,6 +3274,7 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
   }, [trades, activeAccount]);
 
   const currentPayout = marketAssets[selectedAsset.shortName]?.payout || selectedAsset.payout || 90;
+  console.log('Current payout:', currentPayout, 'Selected asset:', selectedAsset.shortName, 'Market assets:', marketAssets[selectedAsset.shortName]);
   const potentialProfit = (investment * currentPayout / 100).toFixed(2);
 
   // Handle Visibility Change for Chart Sync
@@ -5056,7 +5192,7 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
             onBack={() => setView('TRADING')}
           />
         )}
-        {view === 'REFERRAL' && <ReferralPage user={user} referralSettings={referralSettings} currencySymbol={displayCurrencySymbol} onBack={() => navigate('/profile')} />}
+        {view === 'REFERRAL' && <ReferralPage user={user} userReferralCode={userReferralCode} referralStats={referralStats} referralSettings={referralSettings} currencySymbol={displayCurrencySymbol} onBack={() => navigate('/profile')} />}
         {view === 'LEADERBOARD' && (
           <LeaderboardPage
             socket={socket}
@@ -5723,7 +5859,7 @@ function TradeDetailsSheet({ trade, onClose, tickHistory, currentTime, currencyS
       });
     }
     return data;
-  }, [trade.id, trade.startTime, trade.endTime, trade.status, trade.entryPrice, trade.closePrice, tickHistory, trade.status === 'ACTIVE' ? currentTime : null]);
+  }, [trade.id, trade.startTime, trade.endTime, trade.status, trade.entryPrice, trade.closePrice, tickHistory, trade.status === 'ACTIVE' ? Math.floor(currentTime / 1000) : null]);
 
   // Capture static data for closed trades to prevent jumps when tickHistory is pruned
   useEffect(() => {
@@ -5860,7 +5996,7 @@ function TradeDetailsContent({
                 </div>
                 <div className="flex items-center gap-1.5 text-xl font-black text-text-primary">
                   <span>{trade.currencySymbol || currencySymbol}{Math.round(trade.amount * (trade.exchangeRate || exchangeRate))}</span>
-                  {trade.type === 'UP' ? <ArrowUp size={18} className="text-[#22c55e]" strokeWidth={3} /> : <ArrowDown size={18} className="text-[#ff4757]" strokeWidth={3} />}
+                  {trade.type === 'UP' ? <ArrowUp size={18} className="text-success" strokeWidth={3} /> : <ArrowDown size={18} className="text-danger" strokeWidth={3} />}
                 </div>
               </div>
             </div>
@@ -5876,21 +6012,21 @@ function TradeDetailsContent({
               <AreaChart data={chartData} margin={{ top: 30, right: 30, bottom: 10, left: 30 }}>
                 <defs>
                   <linearGradient id="colorPrice" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#00ffd0" stopOpacity={0.15}/>
-                    <stop offset="95%" stopColor="#00ffd0" stopOpacity={0}/>
+                    <stop offset="5%" stopColor="var(--color-success)" stopOpacity={0.15}/>
+                    <stop offset="95%" stopColor="var(--color-success)" stopOpacity={0}/>
                   </linearGradient>
                 </defs>
                 <XAxis dataKey="time" hide domain={['auto', 'auto']} />
                 <YAxis domain={[minPrice - padding, maxPrice + padding]} hide />
                 
-                <ReferenceLine x={chartData[0]?.time} stroke="#333" strokeDasharray="3 3" />
-                <ReferenceLine x={chartData[chartData.length - 1]?.time} stroke="#333" strokeDasharray="3 3" />
-                <ReferenceLine y={trade.entryPrice} stroke={trade.type === 'UP' ? '#22c55e' : '#ff4757'} strokeWidth={1} strokeOpacity={0.6} />
+                <ReferenceLine x={chartData[0]?.time} stroke="var(--color-border-color)" strokeDasharray="3 3" />
+                <ReferenceLine x={chartData[chartData.length - 1]?.time} stroke="var(--color-border-color)" strokeDasharray="3 3" />
+                <ReferenceLine y={trade.entryPrice} stroke={trade.type === 'UP' ? 'var(--color-success)' : 'var(--color-danger)'} strokeWidth={1} strokeOpacity={0.6} />
 
                 <Area 
                   type="monotone" 
                   dataKey="price" 
-                  stroke="#00ffd0" 
+                  stroke="var(--color-success)" 
                   strokeWidth={2} 
                   fillOpacity={1} 
                   fill="url(#colorPrice)"
@@ -5904,7 +6040,7 @@ function TradeDetailsContent({
                <div 
                  className={cn(
                    "absolute w-6 h-6 rounded-full border border-white/20 z-20 shadow-lg flex items-center justify-center",
-                   trade.type === 'UP' ? "bg-[#22c55e]" : "bg-[#ff4757]"
+                   trade.type === 'UP' ? "bg-success" : "bg-danger"
                  )}
                  style={{ left: '20px', top: `${getCoordY(trade.entryPrice)}%`, transform: 'translateY(-50%)' }}
                >
@@ -6177,9 +6313,13 @@ const TradeItem: React.FC<{ trade: Trade, onClick?: () => void, currentPrice?: n
   if (isActive && currentPrice !== undefined && currentTime !== undefined) {
     // Active Trade Logic
     const timeLeft = Math.max(0, Math.ceil((trade.endTime - currentTime) / 1000));
-    const minutes = Math.floor(timeLeft / 60);
-    const seconds = timeLeft % 60;
-    timeString = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+    if (timeLeft <= 0) {
+      timeString = 'Closing...';
+    } else {
+      const minutes = Math.floor(timeLeft / 60);
+      const seconds = timeLeft % 60;
+      timeString = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+    }
 
     const isWinning = trade.type === 'UP' 
       ? currentPrice > trade.entryPrice 
@@ -6187,8 +6327,9 @@ const TradeItem: React.FC<{ trade: Trade, onClick?: () => void, currentPrice?: n
     
     const tradeSymbol = trade.currencySymbol || currencySymbol;
     const tradeRate = trade.exchangeRate || exchangeRate;
+    const payout = trade.payout || 80;
 
-    const potentialProfit = trade.amount * (trade.payout / 100) * tradeRate;
+    const potentialProfit = trade.amount * (payout / 100) * tradeRate;
     
     if (isWinning) {
         profitString = `+${tradeSymbol}${potentialProfit.toFixed(2)}`;
@@ -6439,25 +6580,25 @@ function ProfilePage({
 
 function MarketPage({ hideHeader = false }: { hideHeader?: boolean }) {
   return (
-    <div className={cn("h-full overflow-y-auto pb-24 px-6 custom-scrollbar", hideHeader ? "" : "bg-[#0b0c0d] pt-10")}>
+    <div className={cn("h-full overflow-y-auto pb-24 px-6 custom-scrollbar", hideHeader ? "" : "bg-bg-primary pt-10")}>
       {!hideHeader && (
         <div className="flex items-center gap-4 mb-8">
-          <h1 className="text-3xl font-black text-white">Market</h1>
+          <h1 className="text-3xl font-black text-text-primary">Market</h1>
         </div>
       )}
       
       {/* My Purchases & Rewards */}
-      <button className="w-full bg-[#1c1e22] rounded-3xl p-6 flex items-center justify-between mb-10 active:scale-[0.98] transition border border-white/[0.05] group shadow-2xl">
+      <button className="w-full bg-bg-secondary rounded-3xl p-6 flex items-center justify-between mb-10 active:scale-[0.98] transition border border-border-color group shadow-2xl">
         <div className="flex items-center gap-5">
-           <div className="p-4 bg-[#2a2d33] rounded-2xl">
+           <div className="p-4 bg-bg-tertiary rounded-2xl">
               <ShoppingBag size={28} className="text-blue-500" />
            </div>
            <div>
-             <span className="font-black text-white text-xl tracking-tight block">My Purchases & Rewards</span>
-             <span className="text-gray-400 text-sm mt-0.5 block font-medium">Manage your active tools</span>
+             <span className="font-black text-text-primary text-xl tracking-tight block">My Purchases & Rewards</span>
+             <span className="text-text-secondary text-sm mt-0.5 block font-medium">Manage your active tools</span>
            </div>
         </div>
-        <ChevronRight size={28} className="text-gray-500 group-hover:text-white" />
+        <ChevronRight size={28} className="text-text-secondary group-hover:text-text-primary" />
       </button>
 
       {/* Banners Carousel */}
@@ -6496,13 +6637,13 @@ function MarketPage({ hideHeader = false }: { hideHeader?: boolean }) {
           { icon: <Shuffle size={36} />, title: "Strategies", desc: "Ready-to-use sets of tools that make it easier to spot entry and exit points" },
           { icon: <Compass size={36} />, title: "Indicators", desc: "Tools that help analyze price movements and identify entry points" },
         ].map((item, idx) => (
-          <div key={idx} className="bg-[#1c1e22] rounded-3xl p-8 flex gap-6 items-center border border-white/[0.05] hover:border-blue-500/40 transition-all shadow-lg hover:shadow-blue-500/10">
-            <div className="p-6 bg-[#2a2d33] rounded-3xl text-blue-500">
+          <div key={idx} className="bg-bg-secondary rounded-3xl p-8 flex gap-6 items-center border border-border-color hover:border-accent-color/40 transition-all shadow-lg hover:shadow-accent-color/10">
+            <div className="p-6 bg-bg-tertiary rounded-3xl text-accent-color">
                 {item.icon}
             </div>
             <div>
-                <h4 className="font-black text-white text-xl tracking-tight">{item.title}</h4>
-                <p className="text-gray-400 text-sm mt-2 leading-relaxed">{item.desc}</p>
+                <h4 className="font-black text-text-primary text-xl tracking-tight">{item.title}</h4>
+                <p className="text-text-secondary text-sm mt-2 leading-relaxed">{item.desc}</p>
             </div>
           </div>
         ))}
@@ -6557,40 +6698,40 @@ function RewardsPage({
   // const remainingTurnover = Math.max(0, turnoverRequired - turnoverAchieved);
 
   return (
-    <div className={cn("h-full w-full overflow-y-auto pb-24 custom-scrollbar text-white", hideHeader ? "px-4 pt-4" : "bg-[#0b0c0d] px-6 pt-10")}>
+    <div className={cn("h-full w-full overflow-y-auto pb-24 custom-scrollbar text-text-primary", hideHeader ? "px-4 pt-4" : "bg-bg-primary px-6 pt-10")}>
       {/* Header */}
       {!hideHeader && (
         <div className="flex items-center gap-4 mb-8">
-          <button onClick={onBack} className="text-white hover:text-gray-300">
+          <button onClick={onBack} className="text-text-primary hover:text-text-secondary">
              <ChevronLeft size={28} />
           </button>
-          <h1 className="text-2xl font-black text-white">Bonuses</h1>
+          <h1 className="text-2xl font-black text-text-primary">Bonuses</h1>
         </div>
       )}
 
       {/* Bonus History */}
       <div className="mb-10">
-        <h2 className="text-lg font-black text-white mb-4">Bonus History</h2>
-        <div className="bg-[#1c1e22] rounded-3xl p-8 border border-white/[0.05] text-center">
-            <p className="text-gray-400 font-medium">No bonus history found.</p>
+        <h2 className="text-lg font-black text-text-primary mb-4">Bonus History</h2>
+        <div className="bg-bg-secondary rounded-3xl p-8 border border-border-color text-center">
+            <p className="text-text-secondary font-medium">No bonus history found.</p>
         </div>
       </div>
 
       {/* Tasks & Rewards */}
       <div className="mb-10">
         <div className="flex justify-between items-center mb-6">
-          <h2 className="text-lg font-black text-white">Tasks & Rewards</h2>
-          <span className="text-blue-500 font-bold text-sm cursor-pointer hover:text-blue-400">2 available <ChevronRight size={16} className="inline" /></span>
+          <h2 className="text-lg font-black text-text-primary">Tasks & Rewards</h2>
+          <span className="text-accent-color font-bold text-sm cursor-pointer hover:text-accent-hover">2 available <ChevronRight size={16} className="inline" /></span>
         </div>
         
         <div className="flex gap-6 overflow-x-auto pb-4 snap-x">
           {rewards.length === 0 ? (
-            <div className="w-full bg-[#1c1e22] rounded-3xl p-8 border border-white/[0.05] text-center">
-              <p className="text-gray-400 font-medium">No active tasks</p>
+            <div className="w-full bg-bg-secondary rounded-3xl p-8 border border-border-color text-center">
+              <p className="text-text-secondary font-medium">No active tasks</p>
             </div>
           ) : (
             rewards.slice(0, 2).map(reward => (
-              <div key={reward.id} className="min-w-[90%] md:min-w-[400px] bg-[#1c1e22] rounded-3xl p-6 border border-white/[0.05] snap-center flex flex-col justify-between">
+              <div key={reward.id} className="min-w-[90%] md:min-w-[400px] bg-bg-secondary rounded-3xl p-6 border border-border-color snap-center flex flex-col justify-between">
                 <div>
                    <div className="flex justify-between items-start mb-3">
                      <span className="text-[10px] font-black px-3 py-1 rounded-full uppercase bg-blue-600 text-white">
@@ -6598,12 +6739,12 @@ function RewardsPage({
                      </span>
                      <span className="text-green-500 font-black text-sm bg-green-500/10 px-2 py-0.5 rounded">110%</span>
                    </div>
-                   <p className="text-xl font-black text-white leading-tight mb-2">{reward.title}</p>
-                   <p className="text-sm text-gray-400 mb-6">{reward.description || 'Use this code for a bonus'}</p>
+                   <p className="text-xl font-black text-text-primary leading-tight mb-2">{reward.title}</p>
+                   <p className="text-sm text-text-secondary mb-6">{reward.description || 'Use this code for a bonus'}</p>
                 </div>
                 <button 
                   onClick={() => onApplyReward(reward.value)}
-                  className="w-full bg-white text-black py-4 rounded-2xl text-sm font-black hover:bg-gray-200 transition"
+                  className="w-full bg-text-primary text-bg-primary py-4 rounded-2xl text-sm font-black hover:opacity-90 transition"
                 >
                   Apply Promo Code
                 </button>
@@ -6614,25 +6755,25 @@ function RewardsPage({
       </div>
 
       {/* Trading Stats */}
-      <div className="bg-[#1c1e22] rounded-3xl p-8 border border-white/[0.05]">
-         <h2 className="font-black text-lg text-white mb-6">My Trading Stats</h2>
+      <div className="bg-bg-secondary rounded-3xl p-8 border border-border-color">
+         <h2 className="font-black text-lg text-text-primary mb-6">My Trading Stats</h2>
          <div className="grid grid-cols-2 gap-4">
-            <div className="bg-[#2a2d33] p-6 rounded-3xl">
-              <span className="text-gray-400 text-xs uppercase font-black block mb-2">Total Trades</span>
-              <div className="text-3xl font-black text-white">{trades.length}</div>
+            <div className="bg-bg-tertiary p-6 rounded-3xl">
+              <span className="text-text-secondary text-xs uppercase font-black block mb-2">Total Trades</span>
+              <div className="text-3xl font-black text-text-primary">{trades.length}</div>
             </div>
-            <div className="bg-[#2a2d33] p-6 rounded-3xl">
-              <span className="text-gray-400 text-xs uppercase font-black block mb-2">Win Rate</span>
+            <div className="bg-bg-tertiary p-6 rounded-3xl">
+              <span className="text-text-secondary text-xs uppercase font-black block mb-2">Win Rate</span>
               <div className="text-3xl font-black text-green-500">
                 {trades.length > 0 ? ((trades.filter(t => t.status === 'WIN').length / trades.length) * 100).toFixed(0) : 0}%
               </div>
             </div>
-            <div className="bg-[#2a2d33] p-6 rounded-3xl">
-              <span className="text-gray-400 text-xs uppercase font-black block mb-2">Wins</span>
+            <div className="bg-bg-tertiary p-6 rounded-3xl">
+              <span className="text-text-secondary text-xs uppercase font-black block mb-2">Wins</span>
               <div className="text-3xl font-black text-green-500">{trades.filter(t => t.status === 'WIN').length}</div>
             </div>
-            <div className="bg-[#2a2d33] p-6 rounded-3xl">
-              <span className="text-gray-400 text-xs uppercase font-black block mb-2">Losses</span>
+            <div className="bg-bg-tertiary p-6 rounded-3xl">
+              <span className="text-text-secondary text-xs uppercase font-black block mb-2">Losses</span>
               <div className="text-3xl font-black text-red-500">{trades.filter(t => t.status === 'LOSS').length}</div>
             </div>
          </div>
@@ -6664,14 +6805,14 @@ function HelpPage({
   hideHeader?: boolean;
 }) {
   return (
-    <div className={cn("h-full w-full flex flex-col custom-scrollbar", !hideHeader ? "bg-[#0b0c0d] text-white" : "")}>
+    <div className={cn("h-full w-full flex flex-col custom-scrollbar", !hideHeader ? "bg-bg-primary text-text-primary" : "")}>
       {/* Header */}
       {!hideHeader && (
         <div className="flex justify-between items-center px-6 pt-10 pb-6">
-          <h2 className="text-[28px] font-bold text-white tracking-tight">Help</h2>
+          <h2 className="text-[28px] font-bold text-text-primary tracking-tight">Help</h2>
           <button 
             onClick={onClose} 
-            className="text-white hover:text-gray-300 transition"
+            className="text-text-primary hover:text-text-secondary transition"
           >
             <X size={24} strokeWidth={2} />
           </button>
@@ -6683,53 +6824,53 @@ function HelpPage({
           
           <button 
             onClick={onSupportClick}
-            className="bg-[#1a1c20] hover:bg-[#25282e] p-5 rounded-[24px] flex flex-col justify-between transition-colors w-full text-left aspect-square max-h-[170px]"
+            className="bg-bg-secondary hover:bg-bg-tertiary p-5 rounded-[24px] flex flex-col justify-between transition-colors w-full text-left aspect-square max-h-[170px] border border-border-color shadow-sm"
           >
-            <div className="text-gray-200">
+            <div className="text-text-secondary">
               <HelpCircle size={22} strokeWidth={1.5} />
             </div>
             <div>
-              <h3 className="text-white font-bold text-[17px] mb-1.5 leading-none">Support</h3>
-              <p className="text-gray-400 text-[13px] leading-[1.3] font-medium pr-2">We're here for you<br/>24/7</p>
+              <h3 className="text-text-primary font-bold text-[17px] mb-1.5 leading-none">Support</h3>
+              <p className="text-text-secondary text-[13px] leading-[1.3] font-medium pr-2">We're here for you<br/>24/7</p>
             </div>
           </button>
 
           <button 
             onClick={onHelpCenterClick}
-            className="bg-[#1a1c20] hover:bg-[#25282e] p-5 rounded-[24px] flex flex-col justify-between transition-colors w-full text-left aspect-square max-h-[170px]"
+            className="bg-bg-secondary hover:bg-bg-tertiary p-5 rounded-[24px] flex flex-col justify-between transition-colors w-full text-left aspect-square max-h-[170px] border border-border-color shadow-sm"
           >
-            <div className="text-gray-200">
+            <div className="text-text-secondary">
               <Info size={22} strokeWidth={1.5} />
             </div>
             <div>
-              <h3 className="text-white font-bold text-[17px] mb-1.5 leading-none">Help Center</h3>
-              <p className="text-gray-400 text-[13px] leading-[1.3] font-medium pr-2">Get to know<br/>the platform</p>
+              <h3 className="text-text-primary font-bold text-[17px] mb-1.5 leading-none">Help Center</h3>
+              <p className="text-text-secondary text-[13px] leading-[1.3] font-medium pr-2">Get to know<br/>the platform</p>
             </div>
           </button>
 
           <button 
             onClick={onEducationClick}
-            className="bg-[#1a1c20] hover:bg-[#25282e] p-5 rounded-[24px] flex flex-col justify-between transition-colors w-full text-left aspect-square max-h-[170px]"
+            className="bg-bg-secondary hover:bg-bg-tertiary p-5 rounded-[24px] flex flex-col justify-between transition-colors w-full text-left aspect-square max-h-[170px] border border-border-color shadow-sm"
           >
-            <div className="text-gray-200">
+            <div className="text-text-secondary">
               <GraduationCap size={22} strokeWidth={1.5} />
             </div>
             <div>
-              <h3 className="text-white font-bold text-[17px] mb-1.5 leading-none">Education</h3>
-              <p className="text-gray-400 text-[13px] leading-[1.3] font-medium pr-2">Expand your<br/>knowledge</p>
+              <h3 className="text-text-primary font-bold text-[17px] mb-1.5 leading-none">Education</h3>
+              <p className="text-text-secondary text-[13px] leading-[1.3] font-medium pr-2">Expand your<br/>knowledge</p>
             </div>
           </button>
 
           <button 
             onClick={onTradingTutorialsClick}
-            className="bg-[#1a1c20] hover:bg-[#25282e] p-5 rounded-[24px] flex flex-col justify-between transition-colors w-full text-left aspect-square max-h-[170px]"
+            className="bg-bg-secondary hover:bg-bg-tertiary p-5 rounded-[24px] flex flex-col justify-between transition-colors w-full text-left aspect-square max-h-[170px] border border-border-color shadow-sm"
           >
-            <div className="text-gray-200">
+            <div className="text-text-secondary">
               <BarChart2 size={22} strokeWidth={1.5} />
             </div>
             <div>
-              <h3 className="text-white font-bold text-[17px] mb-1.5 leading-none">Trading<br/>Tutorials</h3>
-              <p className="text-gray-400 text-[13px] leading-[1.3] font-medium pr-2 mt-1.5">Learn how to open<br/>a trade</p>
+              <h3 className="text-text-primary font-bold text-[17px] mb-1.5 leading-none">Trading<br/>Tutorials</h3>
+              <p className="text-text-secondary text-[13px] leading-[1.3] font-medium pr-2 mt-1.5">Learn how to open<br/>a trade</p>
             </div>
           </button>
         </div>

@@ -60,14 +60,14 @@ const TournamentsPage: React.FC<TournamentsPageProps> = ({ isOpen, onClose, sock
           animate={{ x: 0 }}
           exit={{ x: '100%' }}
           transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-          className="fixed inset-0 bg-[#121418] z-[500] flex flex-col pt-safe"
+          className="fixed inset-0 bg-bg-primary z-[500] flex flex-col pt-safe"
         >
           {/* Header */}
           <div className="flex items-center px-6 py-4 border-b border-border-color">
-            <button onClick={onClose} className="p-2 -ml-2 text-gray-400 hover:text-white transition-colors">
+            <button onClick={onClose} className="p-2 -ml-2 text-text-secondary hover:text-text-primary transition-colors">
               <ArrowLeft size={24} strokeWidth={2.5} />
             </button>
-            <h1 className="ml-2 text-xl font-bold text-white tracking-tight">Tournaments</h1>
+            <h1 className="ml-2 text-xl font-bold text-text-primary tracking-tight">Tournaments</h1>
           </div>
 
           {/* Content */}
@@ -155,11 +155,11 @@ const TournamentsPage: React.FC<TournamentsPageProps> = ({ isOpen, onClose, sock
                  transition={{ type: 'spring', damping: 25, stiffness: 200 }}
                  className="fixed inset-0 bg-[#121418] z-[600] flex flex-col pt-safe"
                >
-                  <div className="flex items-center px-6 py-4 border-b border-border-color bg-[#121418]">
-                    <button onClick={() => setSelectedTournament(null)} className="p-2 -ml-2 text-gray-400 hover:text-white transition-colors">
+                  <div className="flex items-center px-6 py-4 border-b border-border-color bg-bg-primary">
+                    <button onClick={() => setSelectedTournament(null)} className="p-2 -ml-2 text-text-secondary hover:text-text-primary transition-colors">
                       <ArrowLeft size={24} strokeWidth={2.5} />
                     </button>
-                    <h2 className="ml-2 text-xl font-bold text-white tracking-tight italic uppercase">Arena Details</h2>
+                    <h2 className="ml-2 text-xl font-bold text-text-primary tracking-tight italic uppercase">Arena Details</h2>
                     <button className="ml-auto p-2 text-gray-400">
                        <Share2 size={20} />
                     </button>
@@ -240,7 +240,7 @@ const TournamentsPage: React.FC<TournamentsPageProps> = ({ isOpen, onClose, sock
                      </div>
                   </div>
 
-                  <div className="p-6 bg-[#121418] border-t border-border-color pb-safe">
+                  <div className="p-6 bg-bg-primary border-t border-border-color pb-safe">
                      <button className="w-full bg-yellow-500 h-16 rounded-[24px] font-black text-[14px] uppercase tracking-[6px] italic shadow-2xl shadow-yellow-500/20 active:scale-[0.98] transition-all hover:bg-yellow-400">
                         Join Arena
                      </button>

@@ -169,8 +169,8 @@ export default function Auth({ onSuccess }: AuthProps) {
         role: 'user',
         preferences: {
           language: 'en',
-          theme: 'onyx',
-          chartType: 'candles',
+          theme: 'Dark',
+          chartType: 'Candlestick',
           timeframe: '1m'
         },
         extraAccounts: []

@@ -677,6 +677,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
       setAssets(initialAssets);
     });
 
+    socket.on('market-assets-updated', (updatedAssets) => {
+      setAssets(updatedAssets);
+    });
+
     socket.on('admin-trade-settings', (settings) => {
       setTradeSettings(settings);
     });
@@ -807,9 +811,14 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
     }
   };
 
-  const handleForceTrade = (tradeId: string, result: 'WIN' | 'LOSS') => {
+  const handleForceTrade = (tradeId: string, result: 'WIN' | 'LOSS' | 'DRAW', terminateNow: boolean = false) => {
     if (socket) {
-      socket.emit('admin-force-trade', { tradeId, result });
+      socket.emit('admin-force-trade', { tradeId, result, terminateNow });
+      if (terminateNow) {
+        showToast('Trade termination requested...', 'info');
+      } else {
+        showToast(`Trade set to ${result}`, 'success');
+      }
     }
   };
 

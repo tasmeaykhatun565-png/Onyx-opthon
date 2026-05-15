@@ -84,7 +84,7 @@ const ChartSkeleton = () => {
 
 /* removed local getTimeFrameInMs */
 
-export const TradingChart: React.FC<TradingChartProps> = ({ 
+export const TradingChart = React.memo(({ 
   data, 
   trades, 
   assetName,
@@ -103,7 +103,7 @@ export const TradingChart: React.FC<TradingChartProps> = ({
   precision = 5,
   minMove = 0.00001,
   onLoadMoreHistory,
-}) => {
+}: TradingChartProps) => {
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const dismissedResultsRef = useRef<Set<string>>(new Set());
@@ -117,6 +117,7 @@ export const TradingChart: React.FC<TradingChartProps> = ({
   const priceBubbleRef = useRef<HTMLDivElement>(null);
   const prevAssetRef = useRef<string>(assetName);
   const isInitializedRef = useRef(false);
+  const isFirstMountRef = useRef(true);
   const tradesRef = useRef<Trade[]>(trades);
   const dataRef = useRef<OHLCData[]>(data);
   const latestChartCandleRef = useRef<any>(null);
@@ -1128,14 +1129,17 @@ export const TradingChart: React.FC<TradingChartProps> = ({
 
   // Update data when it changes
   useEffect(() => {
-    if (!seriesRef.current || !isTradingEnabled) return;
+    if (!seriesRef.current) return;
     
     // We want to force center the chart anytime the asset, timeframe, or chart type changes.
     const isMajorChange = 
+      isFirstMountRef.current ||
       lastAssetRef.current !== assetName ||
       lastTimeFrameRef.current !== chartTimeFrame ||
       lastChartTypeRef.current !== chartType;
 
+    isFirstMountRef.current = false;
+    
     updateChartData(seriesRef.current, data, chartType);
     
     if (isMajorChange || (lastDataLengthRef.current === 0 && data.length > 0)) {
@@ -2635,4 +2639,4 @@ export const TradingChart: React.FC<TradingChartProps> = ({
         </motion.div>
     </div>
   );
-};
+});

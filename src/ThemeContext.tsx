@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 
-type Theme = 'Dark' | 'Light' | 'Classic' | 'Purple Haze' | 'Inspire';
+type Theme = 'Dark' | 'Light' | 'Classic' | 'Purple Haze' | 'Inspire' | 'onyx';
 
 interface ThemeContextType {
   theme: Theme;
@@ -22,21 +22,19 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const root = window.document.documentElement;
+    // Map theme names to data-theme attribute values
     const themeMap: Record<Theme, string> = {
       'Dark': 'dark',
       'Light': 'light',
       'Classic': 'classic',
       'Purple Haze': 'purple',
       'Inspire': 'inspire',
+      'onyx': 'onyx',
     };
     
-    // Remove all possible theme classes/attributes first
-    Object.values(themeMap).forEach(t => {
-      root.removeAttribute('data-theme');
-    });
-    
     // Set the new theme
-    root.setAttribute('data-theme', themeMap[theme]);
+    const themeClass = themeMap[theme] || 'dark';
+    root.setAttribute('data-theme', themeClass);
   }, [theme]);
 
   return (

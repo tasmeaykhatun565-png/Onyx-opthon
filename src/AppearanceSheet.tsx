@@ -12,11 +12,17 @@ interface AppearanceSheetProps {
 export default function AppearanceSheet({ isOpen, onClose }: AppearanceSheetProps) {
   const { t } = useTranslation();
   const { theme, setTheme } = useTheme();
+  // Note: Assuming timeframe state is managed via localStorage/global state; 
+  // for now using local state as per example style, but this needs proper integration in App.tsx
   const [activeDropdown, setActiveDropdown] = useState<'sound' | 'theme' | null>(null);
   const [soundPack, setSoundPack] = useState('Default Pack');
 
   const soundPacks = ['Default Pack', 'Soft Pack', 'Action Pack'];
   const themes = ['Dark', 'Light', 'Classic', 'Purple Haze', 'Inspire'];
+
+  const toggleDropdown = (dropdown: 'sound' | 'theme') => {
+    setActiveDropdown(activeDropdown === dropdown ? null : dropdown);
+  };
 
   return (
     <AnimatePresence>
@@ -43,7 +49,7 @@ export default function AppearanceSheet({ isOpen, onClose }: AppearanceSheetProp
             {/* Sound Setting */}
             <div className="space-y-2">
               <div 
-                onClick={() => setActiveDropdown(activeDropdown === 'sound' ? null : 'sound')}
+                onClick={() => toggleDropdown('sound')}
                 className={`bg-bg-secondary rounded-2xl p-4 flex items-center justify-between cursor-pointer transition active:scale-[0.99] ${activeDropdown === 'sound' ? 'ring-1 ring-[var(--color-border-color)]' : ''}`}
               >
                 <div className="flex items-center gap-4 overflow-hidden">
@@ -88,7 +94,7 @@ export default function AppearanceSheet({ isOpen, onClose }: AppearanceSheetProp
             {/* Color Theme Setting */}
             <div className="space-y-2">
               <div 
-                onClick={() => setActiveDropdown(activeDropdown === 'theme' ? null : 'theme')}
+                onClick={() => toggleDropdown('theme')}
                 className={`bg-bg-secondary rounded-2xl p-4 flex items-center justify-between cursor-pointer transition active:scale-[0.99] ${activeDropdown === 'theme' ? 'ring-1 ring-[var(--color-border-color)]' : ''}`}
               >
                 <div className="flex items-center gap-4 overflow-hidden">

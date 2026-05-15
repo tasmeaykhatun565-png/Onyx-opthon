@@ -1083,7 +1083,7 @@ const PaymentDetails = ({ handleBack, selectedMethod, amount, currencyCode, curr
                   </div>
                   <div className="flex items-baseline gap-2">
                     <span className="text-2xl font-black text-text-primary">{amount.toFixed(2)}</span>
-                    <span className="text-sm font-bold text-gray-400">USD</span>
+                    <span className="text-sm font-bold text-gray-400">USDT</span>
                   </div>
                 </div>
 
@@ -1453,11 +1453,13 @@ export default function DepositFlow({ isOpen, onClose, currencySymbol, currencyC
   const [hasManuallySelected, setHasManuallySelected] = useState(false);
 
   const isBdtMethod = ['bkash_p2c', 'nagad_p2c', 'rocket_p2c', 'upay_p2c'].includes(selectedMethod.id);
-  const displayCurrencyCode = isBdtMethod ? 'BDT' : currencyCode;
-  const displayCurrencySymbol = isBdtMethod ? 'BDT ' : currencySymbol;
+  const isCryptoOrBinance = selectedMethod.category === 'CRYPTO' || selectedMethod.id === 'binance_pay';
+  
+  const displayCurrencyCode = isBdtMethod ? 'BDT' : (isCryptoOrBinance ? 'USDT' : currencyCode);
+  const displayCurrencySymbol = isBdtMethod ? '৳' : (isCryptoOrBinance ? '₮' : currencySymbol);
 
   const rate = EXCHANGE_RATES[displayCurrencyCode] || 1;
-  const minDeposit = displayCurrencyCode === 'BDT' ? 500 : Math.round(10 * rate);
+  const minDeposit = displayCurrencyCode === 'BDT' ? 500 : (isCryptoOrBinance ? 5 : Math.round(10 * rate));
   const [amount, setAmount] = useState<number>(minDeposit);
 
   useEffect(() => {

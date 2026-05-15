@@ -24,7 +24,7 @@ const ActivitiesSheet: React.FC<ActivitiesSheetProps> = ({
 }) => {
   const content = (
     <div className={cn(
-      "h-full w-full bg-[#121418] flex flex-col pt-safe scrollbar-hide",
+      "h-full w-full bg-bg-primary flex flex-col pt-safe scrollbar-hide",
       !inSidebar && "fixed md:relative right-0 top-0 md:w-80 border-l border-border-color z-50 shadow-2xl"
     )}>
       {/* Header */}

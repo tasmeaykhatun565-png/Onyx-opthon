@@ -106,10 +106,10 @@ export default function SocialChat({ onClose, userEmail, chatBackground, socket 
       <div className="flex items-center justify-between px-4 py-3 border-b border-border-color bg-bg-secondary">
         <div className="flex items-center gap-3">
           <div className="relative">
-            <div className="w-10 h-10 rounded-full bg-indigo-600 flex items-center justify-center text-white">
+            <div className="w-10 h-10 rounded-full bg-accent-color flex items-center justify-center text-white">
               <Users size={20} />
             </div>
-            <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-[var(--color-bg-secondary)] rounded-full"></div>
+            <div className="absolute bottom-0 right-0 w-3 h-3 bg-success border-2 border-[var(--color-bg-secondary)] rounded-full"></div>
           </div>
           <div>
             <h3 className="font-bold text-text-primary">Social Chat</h3>
@@ -161,7 +161,7 @@ export default function SocialChat({ onClose, userEmail, chatBackground, socket 
                   className={cn(
                     "max-w-[85%] rounded-2xl px-4 py-2.5 leading-relaxed shadow-sm relative transition-all",
                     isMe 
-                      ? "bg-indigo-600 text-white rounded-br-none shadow-md" 
+                      ? "bg-accent-color text-white rounded-br-none shadow-md" 
                       : "bg-bg-secondary text-text-primary rounded-bl-none border border-border-color shadow-sm dark:shadow-none"
                   )}
                 >
@@ -169,7 +169,7 @@ export default function SocialChat({ onClose, userEmail, chatBackground, socket 
                   <div 
                     className={cn(
                       "text-[9px] mt-1 opacity-70 text-right font-bold",
-                      isMe ? "text-indigo-100" : "text-text-secondary"
+                      isMe ? "text-white/80" : "text-text-secondary"
                     )}
                   >
                     {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
@@ -196,7 +196,7 @@ export default function SocialChat({ onClose, userEmail, chatBackground, socket 
           <button 
             onClick={handleSendMessage}
             disabled={!inputText.trim() || isSending}
-            className="p-2 text-indigo-500 hover:text-indigo-400 disabled:opacity-50 disabled:cursor-not-allowed transition"
+            className="p-2 text-accent-color hover:text-accent-hover disabled:opacity-50 disabled:cursor-not-allowed transition"
           >
             {isSending ? <Loader2 size={20} className="animate-spin" /> : <Send size={20} />}
           </button>

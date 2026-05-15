@@ -5,9 +5,20 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-export function deepEqual(a: any, b: any): boolean {
+export function deepEqual(a: any, b: any, depth = 0): boolean {
   if (a === b) return true;
+  if (depth > 10) return true; // Safety break for very deep objects
   if (typeof a !== 'object' || a === null || typeof b !== 'object' || b === null) return false;
+  
+  // Handle Firestore Timestamps or similar objects with seconds/nanoseconds
+  if (a.seconds !== undefined && a.nanoseconds !== undefined && b.seconds !== undefined && b.nanoseconds !== undefined) {
+    return a.seconds === b.seconds && a.nanoseconds === b.nanoseconds;
+  }
+
+  // Handle Date objects
+  if (a instanceof Date && b instanceof Date) {
+    return a.getTime() === b.getTime();
+  }
   
   const keysA = Object.keys(a);
   const keysB = Object.keys(b);
@@ -15,7 +26,7 @@ export function deepEqual(a: any, b: any): boolean {
   if (keysA.length !== keysB.length) return false;
   
   for (const key of keysA) {
-    if (!keysB.includes(key) || !deepEqual(a[key], b[key])) return false;
+    if (!Object.prototype.hasOwnProperty.call(b, key) || !deepEqual(a[key], b[key], depth + 1)) return false;
   }
   
   return true;

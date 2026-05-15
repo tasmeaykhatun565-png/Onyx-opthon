@@ -154,10 +154,10 @@ export function LeaderboardPage({ onBack, currencySymbol = '$', currentUser, soc
                  <span className="text-[10px] text-text-secondary font-black uppercase tracking-widest leading-none mt-1">Traders</span>
               </div>
               <div className="flex flex-col items-center">
-                 <span className={`text-[18px] md:text-[22px] font-bold tracking-tight ${currentUser?.profit !== undefined && currentUser.profit < 0 ? 'text-red-500' : 'text-emerald-500'}`}>
+                 <span className={`text-[18px] md:text-[22px] font-bold tracking-tight ${currentUser?.profit !== undefined && currentUser.profit < 0 ? 'text-danger' : 'text-success'}`}>
                    {currentUser?.profit !== undefined ? (currentUser.profit < 0 ? `-$${Math.abs(Math.floor(currentUser.profit)).toLocaleString()}` : `$${Math.floor(currentUser.profit).toLocaleString()}`) : '$0'}
                  </span>
-                 <span className={`text-[10px] font-black uppercase tracking-widest leading-none mt-1 text-center ${currentUser?.profit !== undefined && currentUser.profit < 0 ? 'text-red-500/60' : 'text-emerald-500/60'}`}>
+                 <span className={`text-[10px] font-black uppercase tracking-widest leading-none mt-1 text-center ${currentUser?.profit !== undefined && currentUser.profit < 0 ? 'text-danger/60' : 'text-success/60'}`}>
                    Your Profit
                  </span>
               </div>
@@ -207,7 +207,7 @@ export function LeaderboardPage({ onBack, currencySymbol = '$', currentUser, soc
                   className={cn(
                     "flex items-center justify-between px-3 rounded-2xl py-3.5 transition-all", 
                     entry.isCurrentUser 
-                      ? "bg-gradient-to-r from-emerald-500/20 to-emerald-500/5 border border-emerald-500/30 shadow-[0_0_15px_rgba(16,185,129,0.1)]" 
+                      ? "bg-gradient-to-r from-[var(--color-success)]/20 to-[var(--color-success)]/5 border border-success/30 shadow-[0_0_15px_rgba(16,185,129,0.1)]" 
                       : "hover:bg-bg-secondary"
                   )}
                 >
@@ -235,12 +235,12 @@ export function LeaderboardPage({ onBack, currencySymbol = '$', currentUser, soc
                             <span className={cn(
                               "text-[14px] font-bold tracking-tight leading-tight",
                               isTop3 ? "text-text-primary" : "text-text-primary",
-                              entry.isCurrentUser ? "text-emerald-400" : ""
+                              entry.isCurrentUser ? "text-success" : ""
                             )}>
                               {entry.name.toUpperCase()}
                             </span>
                             {entry.isCurrentUser && (
-                               <span className="text-[10px] font-black text-emerald-500/80 uppercase tracking-widest mt-0.5">
+                               <span className="text-[10px] font-black text-success/80 uppercase tracking-widest mt-0.5">
                                  Your Daily Performance
                                </span>
                             )}
@@ -251,7 +251,7 @@ export function LeaderboardPage({ onBack, currencySymbol = '$', currentUser, soc
                    <div className="flex flex-col items-end">
                       <span className={cn(
                         "text-[16px] font-black tabular-nums tracking-tighter", 
-                        entry.isCurrentUser ? "text-emerald-400" : (isTop3 ? "text-text-primary" : "text-text-primary")
+                        entry.isCurrentUser ? "text-success" : (isTop3 ? "text-text-primary" : "text-text-primary")
                       )}>
                         {entry.profit < 0 ? `-$${Math.abs(entry.profit).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : `$${entry.profit.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
                         {entry.profit >= 2500 && <span className="ml-0.5 text-[10px] opacity-60">+</span>}
