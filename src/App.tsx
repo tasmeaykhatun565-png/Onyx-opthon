@@ -53,6 +53,7 @@ import { EconomicCalendar } from './EconomicCalendar';
 import TournamentsPage from './TournamentsPage';
 import OnboardingModal from './OnboardingModal';
 import PendingOrderSheet from './PendingOrderSheet';
+import PaymentOrderPage from './PaymentOrderPage';
 
 import { io, Socket } from 'socket.io-client';
 import { ToastProvider, useToast } from './Toast';
@@ -197,7 +198,6 @@ const ASSETS: Asset[] = [
   { id: 'chf_jpy_otc', name: 'CHF/JPY OTC', shortName: 'CHF/JPY OTC', payout: 92, category: 'Forex', flag: '🇨🇭🇯🇵', basePrice: 171.50, volatility: 0.012, isOTC: true },
   { id: 'gbp_aud_otc', name: 'GBP/AUD OTC', shortName: 'GBP/AUD OTC', payout: 92, category: 'Forex', flag: '🇬🇧🇦🇺', basePrice: 1.8950, volatility: 0.00015, isOTC: true },
   { id: 'gbp_nzd_otc', name: 'GBP/NZD OTC', shortName: 'GBP/NZD OTC', payout: 92, category: 'Forex', flag: '🇬🇧🇳🇿', basePrice: 2.0750, volatility: 0.00015, isOTC: true },
-  { id: 'eur_nzd_otc', name: 'EUR/NZD OTC', shortName: 'EUR/NZD OTC', payout: 92, category: 'Forex', flag: '🇪🇺🇳🇿', basePrice: 1.7850, volatility: 0.00015, isOTC: true },
   { id: 'aud_nzd_otc', name: 'AUD/NZD OTC', shortName: 'AUD/NZD OTC', payout: 92, category: 'Forex', flag: '🇦🇺🇳🇿', basePrice: 1.0950, volatility: 0.0001, isOTC: true },
   { id: 'usd_try_otc', name: 'USD/TRY OTC', shortName: 'USD/TRY OTC', payout: 90, category: 'Forex', flag: '🇺🇸🇹🇷', basePrice: 32.50, volatility: 0.005, isOTC: true },
   { id: 'usd_brl_otc', name: 'USD/BRL OTC', shortName: 'USD/BRL OTC', payout: 90, category: 'Forex', flag: '🇺🇸🇧🇷', basePrice: 5.15, volatility: 0.0008, isOTC: true },
@@ -255,7 +255,6 @@ const ASSETS: Asset[] = [
   { id: 'gbp_aud', name: 'GBP/AUD', shortName: 'GBP/AUD', payout: 85, category: 'Forex', flag: '🇬🇧🇦🇺', basePrice: 1.89, volatility: 0.0002, isOTC: false, precision: 5 },
   { id: 'gbp_nzd', name: 'GBP/NZD', shortName: 'GBP/NZD', payout: 85, category: 'Forex', flag: '🇬🇧🇳🇿', basePrice: 2.07, volatility: 0.0002, isOTC: false, precision: 5 },
   { id: 'aud_nzd', name: 'AUD/NZD', shortName: 'AUD/NZD', payout: 85, category: 'Forex', flag: '🇦🇺🇳🇿', basePrice: 1.09, volatility: 0.00015, isOTC: false, precision: 5 },
-  { id: 'eur_nzd', name: 'EUR/NZD', shortName: 'EUR/NZD', payout: 85, category: 'Forex', flag: '🇪🇺🇳🇿', basePrice: 1.78, volatility: 0.0002, isOTC: false, precision: 5 },
   { id: 'gold', name: 'Gold', shortName: 'GOLD', payout: 85, category: 'Commodities', flag: '🟡', basePrice: 2300, volatility: 2.0, isOTC: false, precision: 2 },
   { id: 'silver', name: 'Silver', shortName: 'SILVER', payout: 88, category: 'Commodities', flag: '💍', basePrice: 28.0, volatility: 0.05, isOTC: false, precision: 3 },
   { id: 'oil', name: 'WTI Crude Oil', shortName: 'OIL', payout: 80, category: 'Commodities', flag: '🛢️', basePrice: 80, volatility: 0.5, isOTC: false, precision: 2 },
@@ -502,6 +501,10 @@ function AssetSelector({
     if (activeTab === 'Crypto' && asset.category !== 'Crypto') return false;
 
     return true;
+  }).sort((a, b) => {
+    const payoutA = marketAssets[a.shortName]?.payout || a.payout;
+    const payoutB = marketAssets[b.shortName]?.payout || b.payout;
+    return payoutB - payoutA; // Higher payout first
   });
 
   if (!isOpen) return null;
@@ -1397,6 +1400,10 @@ export default function TradingPlatform() {
   const [socket, setSocket] = useState<Socket | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [user, setUser] = useState<FirebaseUser | null>(null);
+  const [chartType, setChartType] = useState(() => {
+    return localStorage.getItem('chartType') || 'Candlestick';
+  });
+  const [view, setView] = useState<'HOME' | 'TRADING' | 'PROFILE' | 'MARKET' | 'REWARDS' | 'REFERRAL' | 'HELP' | 'TRADES' | 'SETTINGS' | 'ADMIN' | 'INFO_PAGE' | 'NEWS' | 'LEADERBOARD' | 'CALENDAR' | 'PAY_ORDER'>('HOME');
   const [preferences, setPreferences] = useState({
     language: localStorage.getItem('app-language') || 'en',
     currency: localStorage.getItem('app-currency') || 'USD',
@@ -1455,7 +1462,18 @@ export default function TradingPlatform() {
       setLanguage(preferences.language as any);
     }
   }, [preferences.language, setLanguage, language]);
-  const [view, setView] = useState<'HOME' | 'TRADING' | 'PROFILE' | 'MARKET' | 'REWARDS' | 'REFERRAL' | 'HELP' | 'TRADES' | 'SETTINGS' | 'ADMIN' | 'INFO_PAGE' | 'NEWS' | 'LEADERBOARD' | 'CALENDAR'>('HOME');
+
+  useEffect(() => {
+    if (preferences.theme && preferences.theme !== currentTheme) {
+      setGlobalTheme(preferences.theme as any);
+    }
+  }, [preferences.theme, currentTheme, setGlobalTheme]);
+
+  useEffect(() => {
+    if (preferences.chartType && preferences.chartType !== chartType) {
+      setChartType(preferences.chartType);
+    }
+  }, [preferences.chartType, chartType]);
   const [infoPageTitle, setInfoPageTitle] = useState<string>('');
   const [data, setData] = useState<OHLCData[]>([]);
   const [tickHistory, setTickHistory] = useState<Record<string, TickData[]>>({});
@@ -1463,9 +1481,6 @@ export default function TradingPlatform() {
   const [activeAccount, setActiveAccount] = useState<string>('DEMO');
   const [chartTimeFrame, setChartTimeFrame] = useState(() => {
     return localStorage.getItem('chartTimeFrame') || '1m';
-  });
-  const [chartType, setChartType] = useState(() => {
-    return localStorage.getItem('chartType') || 'Candlestick';
   });
 
   useEffect(() => {
@@ -1586,7 +1601,7 @@ export default function TradingPlatform() {
     email: 'support@onyxtrade.com',
     supportStatus: 'online' as 'online' | 'offline'
   });
-  const [referralSettings, setReferralSettings] = useState({ bonusAmount: 10, referralPercentage: 5, minDepositForBonus: 20 });
+  const [referralSettings, setReferralSettings] = useState({ bonusAmount: 10, referralPercentage: 25, minDepositForBonus: 20 });
   const [notifications, setNotifications] = useState<any[]>([]);
   const [tutorials, setTutorials] = useState<any[]>([]);
   const [announcements, setAnnouncements] = useState<any[]>([]);
@@ -1732,7 +1747,10 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
     });
   }, []);
 
-  const [rewards, setRewards] = useState<any[]>([]);
+  const [rewards, setRewards] = useState<any[]>([
+    { id: 'lunar2026', title: '110% Deposit Bonus', description: 'Use LUNAR2026 when depositing $10.00+', value: 'LUNAR2026', percentage: 110, category: 'PROMO CODE' },
+    { id: 'welcome', title: 'Welcome Bonus', description: 'Get 50% extra on your first deposit', value: 'WELCOME50', percentage: 50, category: 'WELCOME' }
+  ]);
   const [selectedRewardCode, setSelectedRewardCode] = useState<string | null>(null);
   const [referralStats, setReferralStats] = useState({
     totalEarnings: 0,
@@ -1824,23 +1842,14 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
               if (userData.chartType && userData.chartType !== prev.chartType) updates.chartType = userData.chartType;
               if (userData.theme && userData.theme !== prev.theme) updates.theme = userData.theme;
               
-              if (Object.keys(updates).length === 0) return prev;
-              
-              // Persist to localStorage as well for instant load on next refresh
-              Object.entries(updates).forEach(([key, val]) => {
-                if (key === 'theme') {
-                  const themeVal = val as any;
-                  localStorage.setItem('app-theme', themeVal);
-                  setGlobalTheme(themeVal);
-                } else {
-                  localStorage.setItem(`app-${key}`, val as string);
-                  if (key === 'chartType') {
-                    setChartType(val as string);
-                  }
-                }
-              });
-              
-              return { ...prev, ...updates };
+              if (userData.theme) localStorage.setItem('app-theme', userData.theme);
+              if (userData.chartType) localStorage.setItem('app-chartType', userData.chartType);
+              if (userData.language) localStorage.setItem('app-language', userData.language);
+              if (userData.currency) localStorage.setItem('app-currency', userData.currency);
+              if (userData.timeframe) localStorage.setItem('app-timeframe', userData.timeframe);
+
+              if (Object.keys(updates).length > 0) return { ...prev, ...updates };
+              return prev;
             });
           }
           if (userData.currency && userData.currencySymbol) {
@@ -1909,12 +1918,13 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
         // Sync preferences from remote
         if (userData.preferences) {
           const { theme: remoteTheme, chartType: remoteChartType } = userData.preferences;
-          if (remoteTheme && remoteTheme !== currentTheme) {
-            setGlobalTheme(remoteTheme);
-          }
-          if (remoteChartType && remoteChartType !== chartType) {
-            setChartType(remoteChartType);
-          }
+          setPreferences(prev => {
+            const updates: any = {};
+            if (remoteTheme && remoteTheme !== prev.theme) updates.theme = remoteTheme;
+            if (remoteChartType && remoteChartType !== prev.chartType) updates.chartType = remoteChartType;
+            if (Object.keys(updates).length > 0) return { ...prev, ...updates };
+            return prev;
+          });
         }
         
         if (userData.currency && userData.currencySymbol) {
@@ -2143,6 +2153,7 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
     else if (path === '/admin') setView('ADMIN');
     else if (path === '/leaderboard') setView('LEADERBOARD');
     else if (path === '/calendar') setView('CALENDAR');
+    else if (path.startsWith('/pay/')) setView('PAY_ORDER');
     else if (path.startsWith('/info/')) {
       setView('INFO_PAGE');
       const page = path.split('/').pop();
@@ -2177,7 +2188,9 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
   // Auth Protection for secured routes
   useEffect(() => {
     const publicPaths = ['/', '/login', '/register', '/signup'];
-    if (!authLoading && !user && !publicPaths.includes(location.pathname)) {
+    const isPublicPath = publicPaths.includes(location.pathname) || location.pathname.startsWith('/pay/');
+    
+    if (!authLoading && !user && !isPublicPath) {
       navigate('/login');
     }
   }, [user, authLoading, location.pathname, navigate]);
@@ -3053,6 +3066,14 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
   const handleTrade = (type: 'UP' | 'DOWN') => {
     if (selectedAsset.isFrozen) return showToast(t('trade.closed_assets'), "error");
     
+    // Demo trade limit check
+    if (activeAccount === 'DEMO') {
+      const activeDemoTradesCount = trades.filter(t => t.status === 'ACTIVE' && t.accountType === 'DEMO').length;
+      if (activeDemoTradesCount >= 10) {
+        return showToast(t('trade.max_active_reached'), "error");
+      }
+    }
+
     let currentBalance = 0;
     let rate = 1;
     let accountName = '';
@@ -4376,6 +4397,8 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
               setView('TRADING');
             }
           }} userEmail={user.email || ''} />
+        ) : view === 'PAY_ORDER' ? (
+          <PaymentOrderPage />
         ) : null}
 
         {/* --- Top Navbar & Main Trading Area --- */}
@@ -6695,56 +6718,64 @@ function RewardsPage({
 }) {
   const { t } = useTranslation();
   const bonusProgress = turnoverRequired > 0 ? Math.min(100, (turnoverAchieved / turnoverRequired) * 100) : 0;
-  // const remainingTurnover = Math.max(0, turnoverRequired - turnoverAchieved);
 
   return (
-    <div className={cn("h-full w-full overflow-y-auto pb-24 custom-scrollbar text-text-primary", hideHeader ? "px-4 pt-4" : "bg-bg-primary px-6 pt-10")}>
+    <div className={cn("h-full w-full overflow-y-auto pb-24 scrollbar-hide text-text-primary", hideHeader ? "px-4 pt-4" : "bg-bg-primary px-5 pt-8")}>
       {/* Header */}
       {!hideHeader && (
-        <div className="flex items-center gap-4 mb-8">
-          <button onClick={onBack} className="text-text-primary hover:text-text-secondary">
-             <ChevronLeft size={28} />
+        <div className="flex items-center gap-4 mb-10">
+          <button onClick={onBack} className="text-text-primary hover:text-text-secondary w-10 h-10 flex items-center justify-center rounded-full bg-bg-secondary/50">
+             <ChevronLeft size={24} strokeWidth={2.5} />
           </button>
-          <h1 className="text-2xl font-black text-text-primary">Bonuses</h1>
+          <h1 className="text-[24px] font-black text-text-primary tracking-tight">Bonuses</h1>
         </div>
       )}
 
       {/* Bonus History */}
-      <div className="mb-10">
-        <h2 className="text-lg font-black text-text-primary mb-4">Bonus History</h2>
-        <div className="bg-bg-secondary rounded-3xl p-8 border border-border-color text-center">
-            <p className="text-text-secondary font-medium">No bonus history found.</p>
+      <div className="mb-12">
+        <h2 className="text-[17px] font-black text-text-primary mb-5 px-1 tracking-tight">Bonus History</h2>
+        <div className="bg-bg-secondary/40 rounded-[28px] py-12 px-6 border border-border-color/50 text-center backdrop-blur-sm shadow-xl shadow-black/5">
+            <p className="text-text-secondary font-bold text-[15px] opacity-60">No bonus history found.</p>
         </div>
       </div>
 
       {/* Tasks & Rewards */}
-      <div className="mb-10">
+      <div className="mb-12 px-1">
         <div className="flex justify-between items-center mb-6">
-          <h2 className="text-lg font-black text-text-primary">Tasks & Rewards</h2>
-          <span className="text-accent-color font-bold text-sm cursor-pointer hover:text-accent-hover">2 available <ChevronRight size={16} className="inline" /></span>
+          <h2 className="text-[17px] font-black text-text-primary tracking-tight">Tasks & Rewards</h2>
+          <div className="flex items-center gap-1 text-[#3b82f6] font-bold text-[13px] cursor-pointer hover:text-blue-400 group">
+            <span>2 available</span>
+            <ChevronRight size={16} strokeWidth={2.5} className="group-hover:translate-x-0.5 transition-transform" />
+          </div>
         </div>
         
-        <div className="flex gap-6 overflow-x-auto pb-4 snap-x">
+        <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide snap-x -mx-1 px-1">
           {rewards.length === 0 ? (
-            <div className="w-full bg-bg-secondary rounded-3xl p-8 border border-border-color text-center">
+            <div className="w-full bg-bg-secondary rounded-[28px] p-8 border border-border-color text-center">
               <p className="text-text-secondary font-medium">No active tasks</p>
             </div>
           ) : (
-            rewards.slice(0, 2).map(reward => (
-              <div key={reward.id} className="min-w-[90%] md:min-w-[400px] bg-bg-secondary rounded-3xl p-6 border border-border-color snap-center flex flex-col justify-between">
-                <div>
-                   <div className="flex justify-between items-start mb-3">
-                     <span className="text-[10px] font-black px-3 py-1 rounded-full uppercase bg-blue-600 text-white">
-                       PROMO CODE
-                     </span>
-                     <span className="text-green-500 font-black text-sm bg-green-500/10 px-2 py-0.5 rounded">110%</span>
+            rewards.map(reward => (
+              <div key={reward.id} className="min-w-[88%] bg-[#121418] rounded-[32px] p-7 border border-white/5 snap-center flex flex-col justify-between shadow-2xl relative overflow-hidden group">
+                {/* Decorative background glow */}
+                <div className="absolute -top-24 -right-24 w-48 h-48 bg-blue-500/10 blur-[80px] rounded-full" />
+                
+                <div className="relative z-10">
+                   <div className="flex justify-between items-start mb-6">
+                     <div className="bg-[#3b82f6] text-white text-[9px] font-black px-3.5 py-1.5 rounded-full uppercase tracking-wider shadow-lg shadow-blue-500/20">
+                       {reward.category || 'PROMO CODE'}
+                     </div>
+                     <div className="text-[#22c55e] font-black text-[13px] bg-[#22c55e]/10 px-3 py-1 rounded-xl">
+                       {reward.percentage || '110'}%
+                     </div>
                    </div>
-                   <p className="text-xl font-black text-text-primary leading-tight mb-2">{reward.title}</p>
-                   <p className="text-sm text-text-secondary mb-6">{reward.description || 'Use this code for a bonus'}</p>
+                   <h3 className="text-[22px] font-black text-text-primary leading-tight mb-3 tracking-tighter">{reward.title}</h3>
+                   <p className="text-[14px] text-text-secondary font-medium leading-relaxed opacity-80 mb-8">{reward.description}</p>
                 </div>
+
                 <button 
                   onClick={() => onApplyReward(reward.value)}
-                  className="w-full bg-text-primary text-bg-primary py-4 rounded-2xl text-sm font-black hover:opacity-90 transition"
+                  className="w-full bg-white text-black py-4 rounded-2xl text-[15px] font-black hover:bg-gray-100 active:scale-[0.98] transition-all relative z-10 shadow-lg"
                 >
                   Apply Promo Code
                 </button>
@@ -6754,30 +6785,8 @@ function RewardsPage({
         </div>
       </div>
 
-      {/* Trading Stats */}
-      <div className="bg-bg-secondary rounded-3xl p-8 border border-border-color">
-         <h2 className="font-black text-lg text-text-primary mb-6">My Trading Stats</h2>
-         <div className="grid grid-cols-2 gap-4">
-            <div className="bg-bg-tertiary p-6 rounded-3xl">
-              <span className="text-text-secondary text-xs uppercase font-black block mb-2">Total Trades</span>
-              <div className="text-3xl font-black text-text-primary">{trades.length}</div>
-            </div>
-            <div className="bg-bg-tertiary p-6 rounded-3xl">
-              <span className="text-text-secondary text-xs uppercase font-black block mb-2">Win Rate</span>
-              <div className="text-3xl font-black text-green-500">
-                {trades.length > 0 ? ((trades.filter(t => t.status === 'WIN').length / trades.length) * 100).toFixed(0) : 0}%
-              </div>
-            </div>
-            <div className="bg-bg-tertiary p-6 rounded-3xl">
-              <span className="text-text-secondary text-xs uppercase font-black block mb-2">Wins</span>
-              <div className="text-3xl font-black text-green-500">{trades.filter(t => t.status === 'WIN').length}</div>
-            </div>
-            <div className="bg-bg-tertiary p-6 rounded-3xl">
-              <span className="text-text-secondary text-xs uppercase font-black block mb-2">Losses</span>
-              <div className="text-3xl font-black text-red-500">{trades.filter(t => t.status === 'LOSS').length}</div>
-            </div>
-         </div>
-      </div>
+      {/* Small detail to match UI density */}
+      <div className="opacity-0 pb-10">Bottom spacer</div>
     </div>
   );
 }

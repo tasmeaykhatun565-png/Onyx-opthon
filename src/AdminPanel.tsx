@@ -5,7 +5,7 @@ import {
   Anchor, Play, Pause, Target, HelpCircle, X, Gift, Bell, CreditCard, 
   Check, Trash2, ShieldCheck, ShieldAlert, User, ArrowUp, ArrowDown, 
   Percent, Info, Send, Phone, Mail, Video, Trophy, FileText, Plus, BarChart2, Wallet, RefreshCw, CheckCircle2, XCircle, Search,
-  ArrowUpCircle, ArrowDownCircle, MessageSquare, Edit, Smartphone, Globe, Shield, DollarSign, Layout, Bitcoin, ExternalLink, Megaphone, Eye, EyeOff
+  ArrowUpCircle, ArrowDownCircle, MessageSquare, Edit, Smartphone, Globe, Shield, DollarSign, Layout, Bitcoin, ExternalLink, Megaphone, Eye, EyeOff, Loader2, Paperclip
 } from 'lucide-react';
 import { cn, safeStringify } from './utils';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -436,6 +436,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
   const [selectedChatMessages, setSelectedChatMessages] = useState<any[]>([]);
   const [selectedChat, setSelectedChat] = useState<string | null>(null);
   const [adminInput, setAdminInput] = useState('');
+  const [isAdminUploading, setIsAdminUploading] = useState(false);
+  const adminFileInputRef = useRef<HTMLInputElement>(null);
   const [isChatOpen, setIsChatOpen] = useState(true);
   const [platformSettings, setPlatformSettings] = useState({
     isTradingEnabled: true,
@@ -524,17 +526,42 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
     }
   }, [tab, socket]);
 
-  const handleAdminSendMessage = (text?: string) => {
+  const handleAdminSendMessage = (text?: string, imageUrl?: string) => {
     const messageText = text || adminInput;
-    if (!messageText.trim() || !selectedChat || !socket) return;
+    if ((!messageText.trim() && !imageUrl) || !selectedChat || !socket) return;
     
     if (!text) setAdminInput('');
 
     socket.emit('chat-message', {
       email: selectedChat,
       text: messageText,
-      sender: 'admin'
+      sender: 'admin',
+      imageUrl
     });
+  };
+
+  const handleAdminFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 2 * 1024 * 1024) {
+      alert("File is too large. Max 2MB.");
+      return;
+    }
+
+    setIsAdminUploading(true);
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const base64String = event.target?.result as string;
+      handleAdminSendMessage('', base64String);
+      setIsAdminUploading(false);
+      if (adminFileInputRef.current) adminFileInputRef.current.value = '';
+    };
+    reader.onerror = () => {
+      setIsAdminUploading(false);
+      alert("Error reading file.");
+    };
+    reader.readAsDataURL(file);
   };
 
   const handleCloseChat = (chatId: string) => {
@@ -601,7 +628,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
     turnoverMultiplier: 3,
     methodLogos: {} as Record<string, string>
   });
-  const [referralSettings, setReferralSettings] = useState({ bonusAmount: 10, referralPercentage: 5, minDepositForBonus: 20 });
+  const [referralSettings, setReferralSettings] = useState({ bonusAmount: 10, referralPercentage: 25, minDepositForBonus: 20 });
   const [requests, setRequests] = useState<any[]>([]);
   const [notifications, setNotifications] = useState<any[]>([]);
   const [tutorials, setTutorials] = useState<any[]>([]);
@@ -631,6 +658,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
   const [newAnnouncement, setNewAnnouncement] = useState({
     title: '', message: '', imageUrl: '', linkUrl: ''
   });
+  const [marketSearch, setMarketSearch] = useState('');
+  const [marketSort, setMarketSort] = useState<'name' | 'payout'>('payout');
   const [newPromo, setNewPromo] = useState({
     code: '',
     description: '',
@@ -1578,14 +1607,29 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
               </div>
             </div>
 
-            <div className="flex justify-between items-center mb-2">
-              <h2 className="text-lg font-bold">Market Manipulation</h2>
-              <div className="flex gap-2">
-                <button className="bg-bg-secondary text-text-secondary p-2 rounded-xl hover:text-text-primary transition">
-                  <Activity size={18} />
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-2">
+              <h2 className="text-lg font-bold">OTC Market Management</h2>
+              <div className="flex w-full md:w-auto gap-2">
+                <div className="relative flex-1 md:w-64">
+                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-text-secondary" size={16} />
+                   <input 
+                      type="text" 
+                      placeholder="Search OTC assets..." 
+                      value={marketSearch}
+                      onChange={(e) => setMarketSearch(e.target.value)}
+                      className="w-full bg-bg-secondary border border-border-color rounded-xl py-2.5 pl-10 pr-4 text-xs focus:outline-none focus:border-blue-500 transition"
+                   />
+                </div>
+                <button 
+                  onClick={() => setMarketSort(prev => prev === 'name' ? 'payout' : 'name')}
+                  className="bg-bg-secondary text-text-secondary px-4 py-2.5 rounded-xl hover:text-text-primary transition border border-border-color flex items-center gap-2 text-xs font-bold"
+                >
+                  <BarChart2 size={16} />
+                  Sort: {marketSort === 'name' ? 'Name' : 'Payout'}
                 </button>
               </div>
             </div>
+            
             <div className="space-y-8">
               <div>
                 <h3 className="text-lg font-bold text-text-primary mb-4 flex items-center gap-2">
@@ -1593,9 +1637,15 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                   OTC Markets (Full Control)
                 </h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {Object.keys(assets).filter(symbol => !assets[symbol].isRealMarket).map(symbol => (
-                    <AssetControl key={symbol} symbol={symbol} asset={assets[symbol]} socket={socket} />
-                  ))}
+                  {Object.keys(assets)
+                    .filter(symbol => !assets[symbol].isRealMarket && symbol.toLowerCase().includes(marketSearch.toLowerCase()))
+                    .sort((a, b) => {
+                       if (marketSort === 'payout') return (assets[b].payout || 0) - (assets[a].payout || 0);
+                       return a.localeCompare(b);
+                    })
+                    .map(symbol => (
+                      <AssetControl key={symbol} symbol={symbol} asset={assets[symbol]} socket={socket} />
+                    ))}
                 </div>
               </div>
             </div>
@@ -1605,15 +1655,44 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
         {tab === 'REAL_MARKETS' && (
           <div className="space-y-6 pb-10">
             <div className="bg-bg-secondary rounded-3xl border border-border-color p-6 shadow-xl">
-              <h2 className="text-xl font-bold flex items-center gap-2 mb-2">
-                <Bitcoin size={24} className="text-yellow-500" /> Real Crypto Markets (Binance)
-              </h2>
-              <p className="text-[10px] text-text-secondary font-bold uppercase tracking-widest mb-6">Easily manage profit limits and win percentages for real market pairs</p>
+              <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-8">
+                <div>
+                  <h2 className="text-xl font-bold flex items-center gap-2 mb-2">
+                    <Bitcoin size={24} className="text-yellow-500" /> Real Crypto Markets (Binance)
+                  </h2>
+                  <p className="text-[10px] text-text-secondary font-black uppercase tracking-widest">Easily manage profit limits and win percentages for real market pairs</p>
+                </div>
+                <div className="flex w-full md:w-auto gap-2">
+                  <div className="relative flex-1 md:w-64">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-text-secondary" size={16} />
+                    <input 
+                        type="text" 
+                        placeholder="Search real assets..." 
+                        value={marketSearch}
+                        onChange={(e) => setMarketSearch(e.target.value)}
+                        className="w-full bg-bg-primary border border-border-color rounded-xl py-2.5 pl-10 pr-4 text-xs focus:outline-none focus:border-blue-500 transition"
+                    />
+                  </div>
+                  <button 
+                    onClick={() => setMarketSort(prev => prev === 'name' ? 'payout' : 'name')}
+                    className="bg-bg-primary text-text-secondary px-4 py-2.5 rounded-xl hover:text-text-primary transition border border-border-color flex items-center gap-2 text-xs font-bold"
+                  >
+                    <BarChart2 size={16} />
+                    Sort: {marketSort === 'name' ? 'Name' : 'Payout'}
+                  </button>
+                </div>
+              </div>
               
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-6">
-                {Object.keys(assets).filter(symbol => assets[symbol].isRealMarket).map(symbol => (
-                  <AssetControl key={symbol} symbol={symbol} asset={assets[symbol]} socket={socket} />
-                ))}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {Object.keys(assets)
+                  .filter(symbol => assets[symbol].isRealMarket && symbol.toLowerCase().includes(marketSearch.toLowerCase()))
+                  .sort((a, b) => {
+                    if (marketSort === 'payout') return (assets[b].payout || 0) - (assets[a].payout || 0);
+                    return a.localeCompare(b);
+                  })
+                  .map(symbol => (
+                    <AssetControl key={symbol} symbol={symbol} asset={assets[symbol]} socket={socket} />
+                  ))}
               </div>
             </div>
           </div>
@@ -1956,6 +2035,16 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                             </div>
                           ) : (
                             <div className={`p-3 rounded-2xl max-w-[80%] shadow-sm ${msg.sender === 'admin' ? 'bg-green-600 text-white rounded-tr-none' : 'bg-bg-primary border border-border-color rounded-tl-none'}`}>
+                              {msg.imageUrl && (
+                                <div className="mb-2 max-w-full overflow-hidden rounded-lg">
+                                  <img 
+                                    src={msg.imageUrl} 
+                                    alt="Attachment" 
+                                    className="max-w-full h-auto object-cover cursor-pointer hover:opacity-90 transition"
+                                    onClick={() => window.open(msg.imageUrl, '_blank')}
+                                  />
+                                </div>
+                              )}
                               <div className="text-sm leading-relaxed">{msg.text}</div>
                               <div className={`text-[8px] mt-1 font-bold uppercase opacity-50 ${msg.sender === 'admin' ? 'text-right' : 'text-left'}`}>
                                 {msg.timestamp?.toDate ? new Date(msg.timestamp.toDate()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Just now'}
@@ -1980,6 +2069,20 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                     </div>
 
                     <div className="flex gap-2">
+                       <input 
+                        type="file" 
+                        ref={adminFileInputRef} 
+                        className="hidden" 
+                        accept="image/*" 
+                        onChange={handleAdminFileChange}
+                      />
+                      <button 
+                        onClick={() => adminFileInputRef.current?.click()}
+                        disabled={isAdminUploading}
+                        className="p-3 bg-bg-primary border border-border-color text-text-secondary hover:text-text-primary transition shrink-0 rounded-2xl flex items-center justify-center"
+                      >
+                        {isAdminUploading ? <Loader2 size={18} className="animate-spin" /> : <Paperclip size={18} />}
+                      </button>
                       <input 
                         type="text" 
                         value={adminInput}

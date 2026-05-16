@@ -1692,15 +1692,15 @@ export const AppearanceSettings: React.FC<SubPageProps & {
           <h2 className="text-xs font-bold text-text-secondary uppercase tracking-wider">{t('settings.appearance')}</h2>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
             <ThemeButton 
-              active={theme === 'dark'} 
-              onClick={() => handleThemeChange('dark')}
+              active={theme === 'Dark'} 
+              onClick={() => handleThemeChange('Dark')}
               icon={<Moon size={20} />}
               label="Dark"
               color="#101114"
             />
             <ThemeButton 
-              active={theme === 'onyx'} 
-              onClick={() => handleThemeChange('onyx')}
+              active={theme === 'Onyx'} 
+              onClick={() => handleThemeChange('Onyx')}
               icon={<ShieldCheck size={20} />}
               label="Onyx"
               color="#000000"

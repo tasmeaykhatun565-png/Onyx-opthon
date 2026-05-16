@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 import { cn } from './utils';
 import { useToast } from './Toast';
-import { db, handleFirestoreError, OperationType } from './firebase';
+import { db, handleFirestoreError, OperationType, auth } from './firebase';
 import { collection, query, where, onSnapshot } from 'firebase/firestore'; 
 
 interface ReferralPageProps {
@@ -24,9 +24,16 @@ export const ReferralPage: React.FC<ReferralPageProps> = ({ user, userReferralCo
   const referralCode = userReferralCode || user?.referralCode || 'LOGIN';
   const referralLink = `${window.location.origin}?ref=${referralCode}`;
   const [copied, setCopied] = useState(false);
-  const [activeTab, setActiveTab] = useState<'DASHBOARD' | 'STATISTICS' | 'PAYOUTS' | 'PROMO'>('DASHBOARD');
+  const [activeTab, setActiveTab] = useState<'DASHBOARD' | 'STATISTICS' | 'PAYOUTS' | 'PROMO' | 'TIERS'>('DASHBOARD');
   const [withdrawing, setWithdrawing] = useState(false);
   
+  const partnerTiers = [
+    { rank: 'ELITE', range: '0-50', share: 25, color: '#94a3b8', icon: <Users size={20} />, active: true },
+    { rank: 'COMMANDER', range: '51-200', share: 35, color: '#3b82f6', icon: <Zap size={20} />, active: false },
+    { rank: 'VISIONARY', range: '201-1000', share: 50, color: '#a855f7', icon: <Sparkles size={20} />, active: false },
+    { rank: 'ARCHITECT', range: '1000+', share: 70, color: '#d4af37', icon: <Crown size={20} />, active: false },
+  ];
+
   // Create our stats by combining server-provided aggregated stats using math heuristics for missing points
   const registrations = Math.max((propsReferralStats?.referralCount || 0), (user?.referralCount || 0));
   
@@ -71,7 +78,7 @@ export const ReferralPage: React.FC<ReferralPageProps> = ({ user, userReferralCo
     ftds: referralStats.depositors,
     activeTraders: referralStats.activeTraders,
     conversionRate: referralStats.registrations ? ((referralStats.depositors / referralStats.registrations) * 100).toFixed(1) : "0.0",
-    revenueShare: referralSettings.referralPercentage || 50,
+    revenueShare: referralSettings.referralPercentage || 25,
   };
 
   const handleCopy = () => {
@@ -82,16 +89,34 @@ export const ReferralPage: React.FC<ReferralPageProps> = ({ user, userReferralCo
     });
   };
 
-  const handleWithdraw = () => {
-    if (stats.balance < 10) {
-      showToast(`Minimum payout amount is ${currencySymbol}10.00`, 'error');
+  const handleWithdraw = async () => {
+    if (stats.balance < 20) {
+      showToast(`Minimum payout amount is $20.00`, 'error');
       return;
     }
+    
     setWithdrawing(true);
-    setTimeout(() => {
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      if (!token) throw new Error('Authentication required');
+
+      const response = await fetch('/api/withdraw-referral', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Failed to withdraw');
+
+      showToast('Funds transferred to Live Balance successfully!', 'success');
+      // Trigger a local refresh of stats if needed, but the socket should handle it via emitUserUpdate
+    } catch (err: any) {
+      showToast(err.message || 'Withdrawal failed', 'error');
+    } finally {
       setWithdrawing(false);
-      showToast('Payout request submitted successfully!', 'success');
-    }, 1500);
+    }
   };
 
   if (isLoading) {
@@ -170,13 +195,13 @@ export const ReferralPage: React.FC<ReferralPageProps> = ({ user, userReferralCo
                     <span className="text-[10px] font-black text-gray-300 uppercase tracking-[0.2em]">Available Payout</span>
                   </div>
                   <div className="text-6xl md:text-[5rem] font-black text-white tracking-tighter drop-shadow-2xl tabular-nums leading-none">
-                    <span className="text-[#d4af37]/60 text-4xl md:text-5xl mr-2 font-black">{currencySymbol}</span>
+                    <span className="text-[#d4af37]/60 text-4xl md:text-5xl mr-2 font-black">$</span>
                     {stats.balance.toFixed(2)}
                   </div>
                 </div>
                 <button 
                   onClick={handleWithdraw}
-                  disabled={withdrawing || stats.balance < 10}
+                  disabled={withdrawing || stats.balance < 20}
                   className="w-full md:w-auto px-10 py-5 bg-gradient-to-r from-[#d4af37] via-[#cfab36] to-[#b89528] hover:from-[#e8c34f] hover:to-[#d4af37] text-black rounded-[1.5rem] font-black text-sm uppercase tracking-[0.2em] transition-all shadow-[0_10px_30px_rgba(212,175,55,0.3)] hover:shadow-[0_15px_40px_rgba(212,175,55,0.4)] hover:-translate-y-1 active:scale-95 disabled:opacity-50 disabled:grayscale disabled:hover:translate-y-0 flex items-center justify-center gap-3"
                 >
                   {withdrawing ? 'Processing...' : (
@@ -191,16 +216,16 @@ export const ReferralPage: React.FC<ReferralPageProps> = ({ user, userReferralCo
                 <div className="space-y-2">
                   <div className="text-[10px] md:text-xs font-bold text-gray-500 uppercase tracking-[0.2em]">Today's Profit</div>
                   <div className="text-xl md:text-2xl font-black text-[#22c55e] flex items-center gap-2">
-                    <TrendingUp size={18} /> +{currencySymbol}0.00
+                    <TrendingUp size={18} /> +$0.00
                   </div>
                 </div>
                 <div className="space-y-2 md:border-l border-white/[0.05] md:pl-6">
                   <div className="text-[10px] md:text-xs font-bold text-gray-500 uppercase tracking-[0.2em]">Yesterday</div>
-                  <div className="text-xl md:text-2xl font-bold text-gray-300">{currencySymbol}0.00</div>
+                  <div className="text-xl md:text-2xl font-bold text-gray-300">$0.00</div>
                 </div>
                 <div className="space-y-2 border-t md:border-t-0 md:border-l border-white/[0.05] pt-6 md:pt-0 md:pl-6 col-span-2 md:col-span-1">
                   <div className="text-[10px] md:text-xs font-bold text-gray-500 uppercase tracking-[0.2em]">Total Lifetime</div>
-                  <div className="text-xl md:text-2xl font-black text-white">{currencySymbol}{stats.earnings.toFixed(2)}</div>
+                  <div className="text-xl md:text-2xl font-black text-white">${stats.earnings.toFixed(2)}</div>
                 </div>
               </div>
             </div>
@@ -314,7 +339,7 @@ export const ReferralPage: React.FC<ReferralPageProps> = ({ user, userReferralCo
           <div className="relative mx-auto lg:mx-0 w-fit">
             <div className="absolute inset-0 bg-gradient-to-r from-blue-500/10 via-[#d4af37]/10 to-transparent blur-xl pointer-events-none" />
             <div className="flex gap-2 p-2 bg-[#0a0a0c]/80 backdrop-blur-xl border border-white/10 rounded-2xl overflow-x-auto relative z-10 no-scrollbar shadow-2xl">
-              {['DASHBOARD', 'STATISTICS', 'PAYOUTS', 'PROMO'].map((tab) => (
+              {['DASHBOARD', 'STATISTICS', 'TIERS', 'PAYOUTS', 'PROMO'].map((tab) => (
                 <button 
                   key={tab}
                   onClick={() => setActiveTab(tab as any)}
@@ -343,33 +368,134 @@ export const ReferralPage: React.FC<ReferralPageProps> = ({ user, userReferralCo
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -15, transition: { duration: 0.2 } }}
                 transition={{ duration: 0.4, ease: [0.23, 1, 0.32, 1] }}
-                className="grid grid-cols-2 xl:grid-cols-4 gap-6"
+                className="space-y-8"
               >
-                 {[
-                   { label: 'Total Clicks', value: stats.clicks, icon: <MousePointer2 size={24} strokeWidth={1.5} />, color: 'blue', glow: 'rgba(59,130,246,0.5)' },
-                   { label: 'Registrations', value: stats.registrations, icon: <UserPlus size={24} strokeWidth={1.5} />, color: 'amber', glow: 'rgba(212,175,55,0.5)' },
-                   { label: '1st Time Dep.', value: stats.ftds, icon: <Wallet size={24} strokeWidth={1.5} />, color: 'emerald', glow: 'rgba(52,211,153,0.5)' },
-                   { label: 'Active Traders', value: stats.activeTraders, icon: <Zap size={24} strokeWidth={1.5} />, color: 'purple', glow: 'rgba(168,85,247,0.5)' },
-                 ].map((card, i) => (
-                   <motion.div 
-                      key={i} 
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: i * 0.1, duration: 0.5, ease: 'easeOut' }}
-                      className="bg-[#0a0a0c]/80 backdrop-blur-md border border-white/[0.05] p-8 md:p-10 rounded-[2.5rem] shadow-2xl relative overflow-hidden group hover:border-white/10 transition-colors"
-                    >
-                      <div className={`absolute top-0 right-0 w-48 h-48 bg-${card.color}-500/10 blur-[50px] -mr-24 -mt-24 pointer-events-none transition-transform group-hover:scale-[1.8] duration-1000 ease-out`} style={{ backgroundColor: card.glow.replace('0.5', '0.05') }} />
-                      <div className="flex flex-col h-full justify-between relative z-10">
-                        <div className={`p-4 rounded-2xl bg-white/[0.03] border border-white/[0.05] w-fit mb-8 shadow-inner`} style={{ color: card.glow.replace('0.5', '1') }}>
-                          {card.icon}
+                 <div className="grid grid-cols-2 xl:grid-cols-4 gap-6">
+                   {[
+                     { label: 'Total Clicks', value: stats.clicks, icon: <MousePointer2 size={24} strokeWidth={1.5} />, color: 'blue', glow: 'rgba(59,130,246,0.5)' },
+                     { label: 'Registrations', value: stats.registrations, icon: <UserPlus size={24} strokeWidth={1.5} />, color: 'amber', glow: 'rgba(212,175,55,0.5)' },
+                     { label: 'Network FTDs', value: stats.ftds, icon: <Wallet size={24} strokeWidth={1.5} />, color: 'emerald', glow: 'rgba(52,211,153,0.5)' },
+                     { label: 'Active Users', value: stats.activeTraders, icon: <Zap size={24} strokeWidth={1.5} />, color: 'purple', glow: 'rgba(168,85,247,0.5)' },
+                   ].map((card, i) => (
+                     <motion.div 
+                        key={i} 
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: i * 0.1, duration: 0.5, ease: 'easeOut' }}
+                        className="bg-[#0a0a0c]/80 backdrop-blur-md border border-white/[0.05] p-8 md:p-10 rounded-[2.5rem] shadow-2xl relative overflow-hidden group hover:border-white/10 transition-colors"
+                      >
+                        <div className={`absolute top-0 right-0 w-48 h-48 bg-${card.color}-500/10 blur-[50px] -mr-24 -mt-24 pointer-events-none transition-transform group-hover:scale-[1.8] duration-1000 ease-out`} style={{ backgroundColor: card.glow.replace('0.5', '0.05') }} />
+                        <div className="flex flex-col h-full justify-between relative z-10">
+                          <div className={`p-4 rounded-2xl bg-white/[0.03] border border-white/[0.05] w-fit mb-8 shadow-inner`} style={{ color: card.glow.replace('0.5', '1') }}>
+                            {card.icon}
+                          </div>
+                          <div>
+                            <div className="text-4xl md:text-5xl font-black text-white mb-2 drop-shadow-md tracking-tighter tabular-nums">{card.value}</div>
+                            <div className="text-[10px] md:text-[11px] font-black text-gray-500 uppercase tracking-[0.25em]">{card.label}</div>
+                          </div>
                         </div>
-                        <div>
-                          <div className="text-4xl md:text-5xl font-black text-white mb-2 drop-shadow-md tracking-tighter tabular-nums">{card.value}</div>
-                          <div className="text-[10px] md:text-[11px] font-black text-gray-500 uppercase tracking-[0.25em]">{card.label}</div>
+                     </motion.div>
+                   ))}
+                 </div>
+
+                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="bg-gradient-to-br from-[#0a0a0c] to-[#050507] border border-white/[0.05] rounded-[2.5rem] p-10 relative overflow-hidden">
+                       <div className="flex items-center gap-4 mb-8">
+                         <div className="w-12 h-12 rounded-2xl bg-blue-500/10 flex items-center justify-center text-blue-400 border border-blue-500/20">
+                            <TrendingUp size={24} />
+                         </div>
+                         <h3 className="text-xl font-black text-white tracking-tight">Conversion Velocity</h3>
+                       </div>
+                       <div className="flex items-baseline gap-2 mb-2">
+                         <span className="text-5xl font-black text-white">{stats.conversionRate}</span>
+                         <span className="text-xl font-bold text-gray-500">%</span>
+                       </div>
+                       <p className="text-sm font-medium text-gray-500 max-w-sm">Ratio of registrations resulting in an initial deposit. Industry average is ~15%.</p>
+                       <div className="mt-8 flex gap-4 overflow-hidden">
+                          {Array.from({ length: 12 }).map((_, i) => (
+                            <div key={i} className="flex-1 bg-white/5 rounded-t-lg relative" style={{ height: `${20 + Math.random() * 80}px` }}>
+                               <div className="absolute inset-0 bg-blue-500/10 hover:bg-blue-500/30 transition-colors" />
+                            </div>
+                          ))}
+                       </div>
+                    </div>
+                    <div className="bg-gradient-to-br from-[#0a0a0c] to-[#050507] border border-white/[0.05] rounded-[2.5rem] p-10 relative overflow-hidden">
+                       <div className="flex items-center gap-4 mb-8">
+                         <div className="w-12 h-12 rounded-2xl bg-[#d4af37]/10 flex items-center justify-center text-[#d4af37] border border-[#d4af37]/20">
+                            <Users size={24} />
+                         </div>
+                         <h3 className="text-xl font-black text-white tracking-tight">Avg. Lifetime Value</h3>
+                       </div>
+                       <div className="flex items-baseline gap-2 mb-2">
+                         <span className="text-5xl font-black text-white">$142.10</span>
+                         <span className="text-xl font-bold text-gray-500">USD</span>
+                       </div>
+                       <p className="text-sm font-medium text-gray-500 max-w-sm">Estimated lifetime commission generated per active referral.</p>
+                       <div className="mt-8 flex items-end gap-1 overflow-hidden h-24">
+                          {Array.from({ length: 30 }).map((_, i) => (
+                            <div key={i} className="flex-1 bg-[#d4af37]/10 rounded-full" style={{ height: `${10 + Math.random() * 90}%` }} />
+                          ))}
+                       </div>
+                    </div>
+                 </div>
+              </motion.div>
+            )}
+
+            {activeTab === 'TIERS' && (
+              <motion.div 
+                key="tiers"
+                initial={{ opacity: 0, scale: 0.98 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.98 }}
+                transition={{ duration: 0.5 }}
+                className="space-y-8"
+              >
+                <div className="text-center max-w-2xl mx-auto space-y-4 mb-12">
+                   <h2 className="text-4xl font-black text-white tracking-tighter">Elite Progression Protocol</h2>
+                   <p className="text-base font-medium text-gray-500 leading-relaxed">Advance through prestige tiers to unlock aggressive commission multiples and VIP assets.</p>
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
+                   {partnerTiers.map((tier, i) => (
+                     <div 
+                        key={i}
+                        className={cn(
+                          "relative overflow-hidden rounded-[2.5rem] p-8 border transition-all duration-500 group",
+                          tier.active 
+                            ? "bg-white/[0.03] border-white/20 shadow-[0_20px_50px_rgba(0,0,0,0.5)] scale-[1.05] z-10" 
+                            : "bg-[#0a0a0c]/80 border-white/5 opacity-60 grayscale hover:grayscale-0 hover:opacity-100"
+                        )}
+                      >
+                        {tier.active && (
+                           <div className="absolute top-4 right-6 bg-[#d4af37] text-black text-[9px] font-black px-3 py-1 rounded-full uppercase tracking-widest shadow-lg shadow-[#d4af37]/20">Active</div>
+                        )}
+                        <div className="absolute -bottom-20 -right-20 w-48 h-48 blur-[60px] opacity-20 group-hover:opacity-40 transition-opacity" style={{ backgroundColor: tier.color }} />
+                        
+                        <div className="relative z-10 space-y-6">
+                           <div className="w-14 h-14 rounded-2xl flex items-center justify-center border transition-all duration-500" style={{ backgroundColor: `${tier.color}15`, borderColor: `${tier.color}30`, color: tier.color }}>
+                              {tier.icon}
+                           </div>
+                           <div>
+                              <h4 className="text-xs font-black uppercase tracking-[0.2em] opacity-50 mb-1" style={{ color: tier.active ? tier.color : undefined }}>Rank</h4>
+                              <h3 className="text-2xl font-black text-white tracking-tight">{tier.rank}</h3>
+                           </div>
+                           <div>
+                              <div className="flex justify-between text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-2">
+                                 <span>Revenue Share</span>
+                                 <span className="text-white">{tier.share}%</span>
+                              </div>
+                              <div className="w-full h-1.5 bg-black/40 rounded-full overflow-hidden">
+                                 <div className="h-full rounded-full transition-all duration-1000" style={{ width: `${tier.share}%`, backgroundColor: tier.color }} />
+                              </div>
+                           </div>
+                           <div className="pt-6 border-t border-white/5">
+                              <span className="text-[10px] font-medium text-gray-500 uppercase tracking-widest">Requirement</span>
+                              <div className="text-sm font-black text-white mt-1">{tier.range} Referrals</div>
+                           </div>
                         </div>
-                      </div>
-                   </motion.div>
-                 ))}
+                     </div>
+                   ))}
+                </div>
               </motion.div>
             )}
 
@@ -406,7 +532,7 @@ export const ReferralPage: React.FC<ReferralPageProps> = ({ user, userReferralCo
                            <th className="px-6 py-4 text-[10px] font-black text-gray-500 uppercase tracking-[0.25em] min-w-[200px]">Client ID</th>
                            <th className="px-6 py-4 text-[10px] font-black text-gray-500 uppercase tracking-[0.25em] min-w-[150px]">Date Joined</th>
                            <th className="px-6 py-4 text-[10px] font-black text-gray-500 uppercase tracking-[0.25em] min-w-[150px]">Status</th>
-                           <th className="px-6 py-4 text-[10px] font-black text-gray-500 uppercase tracking-[0.25em] text-right min-w-[200px]">Commission Generated</th>
+                           <th className="px-6 py-4 text-[10px] font-black text-gray-500 uppercase tracking-[0.25em] text-right min-w-[200px]">Commission Generated (USD)</th>
                          </tr>
                        </thead>
                        <tbody>
@@ -432,7 +558,7 @@ export const ReferralPage: React.FC<ReferralPageProps> = ({ user, userReferralCo
                                  </span>
                                </td>
                                <td className="px-6 py-5 text-base font-black text-right text-white rounded-r-2xl">
-                                 {currencySymbol}{ref.earnings?.toFixed(2) || '0.00'}
+                                 ${ref.earnings?.toFixed(2) || '0.00'}
                                </td>
                              </tr>
                            ))
@@ -472,7 +598,7 @@ export const ReferralPage: React.FC<ReferralPageProps> = ({ user, userReferralCo
                    <div className="space-y-6 relative z-10">
                      {[
                        { title: 'Real-Time Accrual', desc: 'Earnings are instantly calculated and deposited upon referral trade closure.' },
-                       { title: 'Withdrawal Threshold', desc: `Minimum required balance is ${currencySymbol}10.00 to execute a payout.` },
+                       { title: 'Withdrawal Threshold', desc: `Minimum required balance is $20.00 to execute a payout.` },
                        { title: 'Transfer Destination', desc: 'Funds directly settle in your primary OnyxTrade wallet.' },
                        { title: 'Audit Verification', desc: 'All requests undergo automated compliance auditing within 24 hours.' }
                      ].map((item, i) => (
@@ -536,6 +662,44 @@ export const ReferralPage: React.FC<ReferralPageProps> = ({ user, userReferralCo
               </motion.div>
             )}
           </AnimatePresence>
+        </div>
+
+        {/* Global Support & Professional Benefits */}
+        <div className="mt-24 space-y-12">
+          <div className="text-center md:text-left">
+            <h2 className="text-3xl font-black text-white tracking-tight mb-2">Elite Support & Resources</h2>
+            <p className="text-sm font-medium text-gray-500 uppercase tracking-widest">Scaling your network with institutional-grade assets</p>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {[
+              { 
+                title: 'Personalized Strategy', 
+                desc: 'Access back-office data insights to optimize your conversion funnels and targeting.',
+                icon: <Target className="text-blue-500" />
+              },
+              { 
+                title: 'Priority Settlement', 
+                desc: 'Visionary and Architect tiers enjoy near-instant payout processing 24/7.',
+                icon: <Zap className="text-purple-500" />
+              },
+              { 
+                title: 'Brand Integration', 
+                desc: 'Request custom domain mapping and white-label co-branding for large networks.',
+                icon: <ShieldCheck className="text-emerald-500" />
+              }
+            ].map((benefit, i) => (
+              <div key={i} className="bg-[#0a0a0c]/40 backdrop-blur-sm border border-white/5 rounded-[2rem] p-8 hover:bg-white/[0.03] transition-all group">
+                <div className="w-12 h-12 rounded-2xl bg-white/5 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
+                  {benefit.icon}
+                </div>
+                <h4 className="text-lg font-black text-text-primary mb-3 tracking-tight">{benefit.title}</h4>
+                <p className="text-sm font-medium text-text-secondary leading-relaxed opacity-70">
+                  {benefit.desc}
+                </p>
+              </div>
+            ))}
+          </div>
         </div>
 
       </div>

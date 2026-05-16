@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 
-type Theme = 'Dark' | 'Light' | 'Classic' | 'Purple Haze' | 'Inspire' | 'onyx';
+type Theme = 'Dark' | 'Light' | 'Classic' | 'Purple Haze' | 'Inspire' | 'Onyx';
 
 interface ThemeContextType {
   theme: Theme;
@@ -29,7 +29,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       'Classic': 'classic',
       'Purple Haze': 'purple',
       'Inspire': 'inspire',
-      'onyx': 'onyx',
+      'Onyx': 'onyx',
     };
     
     // Set the new theme

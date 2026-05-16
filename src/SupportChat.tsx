@@ -8,6 +8,7 @@ type Message = {
   text: string;
   sender: 'user' | 'support' | 'admin' | 'system';
   timestamp: number;
+  imageUrl?: string;
 };
 
 
@@ -34,7 +35,9 @@ export default function SupportChat({ onClose, supportSettings, socket, userEmai
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState('');
   const [isTyping, setIsTyping] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [retryCount, setRetryCount] = useState(0);
   const [activeAgent] = useState(AGENTS[0]); // Primary agent taking the chat
 
@@ -121,9 +124,9 @@ export default function SupportChat({ onClose, supportSettings, socket, userEmai
     setRetryCount(prev => prev + 1);
   };
 
-  const handleSendMessage = (overrideText?: string) => {
+  const handleSendMessage = (overrideText?: string, imageUrl?: string) => {
     const textToSend = overrideText || inputText;
-    if (!textToSend.trim() || !socket || chatStatus === 'closed') return;
+    if ((!textToSend.trim() && !imageUrl) || !socket || chatStatus === 'closed') return;
 
     if (!overrideText) setInputText('');
     setIsTyping(true);
@@ -131,8 +134,34 @@ export default function SupportChat({ onClose, supportSettings, socket, userEmai
     socket.emit('chat-message', {
       email: userEmail,
       text: textToSend,
-      sender: 'user'
+      sender: 'user',
+      imageUrl
     });
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Check size (e.g., 2MB limit for base64)
+    if (file.size > 2 * 1024 * 1024) {
+      alert("File is too large. Please select an image smaller than 2MB.");
+      return;
+    }
+
+    setIsUploading(true);
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const base64String = event.target?.result as string;
+      handleSendMessage('', base64String);
+      setIsUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    };
+    reader.onerror = () => {
+      setIsUploading(false);
+      alert("Error reading file.");
+    };
+    reader.readAsDataURL(file);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -259,6 +288,16 @@ export default function SupportChat({ onClose, supportSettings, socket, userEmai
                                   : "bg-bg-secondary text-text-primary rounded-t-2xl rounded-br-2xl rounded-bl-sm border border-border-color hover:border-text-secondary/20"
                               )}
                             >
+                              {msg.imageUrl && (
+                                <div className="mb-2 max-w-full overflow-hidden rounded-lg">
+                                  <img 
+                                    src={msg.imageUrl} 
+                                    alt="Attachment" 
+                                    className="max-w-full h-auto object-cover cursor-pointer hover:opacity-90 transition"
+                                    onClick={() => window.open(msg.imageUrl, '_blank')}
+                                  />
+                                </div>
+                              )}
                               {msg.text}
                             </div>
                             <div className="flex items-center gap-1 mt-1 px-1">
@@ -336,9 +375,20 @@ export default function SupportChat({ onClose, supportSettings, socket, userEmai
               </div>
             ) : (
               <div className="flex flex-col gap-3">
+                <input 
+                  type="file" 
+                  ref={fileInputRef} 
+                  className="hidden" 
+                  accept="image/*" 
+                  onChange={handleFileChange}
+                />
                 <div className="flex items-end bg-bg-secondary rounded-2xl p-2 border border-border-color focus-within:border-blue-500/50 shadow-sm transition-all relative">
-                  <button className="p-2 text-text-secondary hover:text-text-primary transition shrink-0 rounded-full hover:bg-bg-tertiary">
-                    <Paperclip size={20} />
+                  <button 
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={isUploading}
+                    className="p-2 text-text-secondary hover:text-text-primary transition shrink-0 rounded-full hover:bg-bg-tertiary"
+                  >
+                    {isUploading ? <Loader2 size={20} className="animate-spin" /> : <Paperclip size={20} />}
                   </button>
                   <textarea
                     rows={1}

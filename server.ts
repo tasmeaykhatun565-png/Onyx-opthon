@@ -122,7 +122,24 @@ async function startServer() {
         console.log('Theme column might already exist, ignoring:', err);
     }
 
+    // Migration: Add imageUrl to support_chat if missing
+    try {
+        database.exec('ALTER TABLE support_chat ADD COLUMN imageUrl TEXT');
+    } catch (err) {}
+
     database.exec(`
+      CREATE TABLE IF NOT EXISTS payment_orders (
+        id TEXT PRIMARY KEY,
+        email TEXT,
+        amount REAL,
+        currency TEXT,
+        methodId TEXT,
+        methodName TEXT,
+        status TEXT DEFAULT 'PENDING',
+        timestamp INTEGER,
+        details TEXT
+      );
+
       CREATE TABLE IF NOT EXISTS market_history (
         symbol TEXT,
         time INTEGER,
@@ -306,7 +323,8 @@ async function startServer() {
         email TEXT,
         text TEXT,
         sender TEXT,
-        timestamp INTEGER
+        timestamp INTEGER,
+        imageUrl TEXT
       );
 
       CREATE TABLE IF NOT EXISTS chat_sessions (
@@ -559,6 +577,76 @@ async function startServer() {
     return null;
   };
 
+  app.post('/api/payment-orders', (req, res) => {
+    const { email, amount, currency, methodId, methodName, details } = req.body;
+    if (!email || !amount || !methodId) return res.status(400).json({ error: 'Missing required fields' });
+
+    const id = Math.random().toString(36).substring(2, 11).toUpperCase();
+    const timestamp = Date.now();
+    
+    try {
+      db.prepare('INSERT INTO payment_orders (id, email, amount, currency, methodId, methodName, timestamp, details) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+        .run(id, email, amount, currency, methodId, methodName, timestamp, JSON.stringify(details || {}));
+      
+      res.json({ id, url: `${req.protocol}://${req.get('host')}/pay/${id}` });
+    } catch (e) {
+      console.error('Error creating payment order:', e);
+      res.status(500).json({ error: 'Failed to create payment order' });
+    }
+  });
+
+  app.get('/api/payment-orders/:id', (req, res) => {
+    const { id } = req.params;
+    try {
+      const order = db.prepare('SELECT * FROM payment_orders WHERE id = ?').get(id);
+      if (!order) return res.status(404).json({ error: 'Order not found' });
+      
+      // Parse details if it's a string
+      if (typeof order.details === 'string') {
+        try {
+          order.details = JSON.parse(order.details);
+        } catch(e) {
+          order.details = {};
+        }
+      }
+      
+      res.json(order);
+    } catch (e) {
+      console.error('Error fetching payment order:', e);
+      res.status(500).json({ error: 'Internal error' });
+    }
+  });
+
+  app.post('/api/payment-orders/:id/submit', async (req, res) => {
+    const { id } = req.params;
+    const { transactionId, screenshot } = req.body;
+    
+    try {
+      const order = db.prepare('SELECT * FROM payment_orders WHERE id = ?').get(id) as any;
+      if (!order) return res.status(404).json({ error: 'Order not found' });
+      if (order.status !== 'PENDING') return res.status(400).json({ error: 'Order already processed' });
+
+      const now = Date.now();
+      
+      // Update order status
+      db.prepare('UPDATE payment_orders SET status = "SUBMITTED" WHERE id = ?').run(id);
+
+      // Create a deposit record
+      db.prepare('INSERT INTO deposits (email, amount, currency, method, transactionId, status, submittedAt, updatedAt, screenshot) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
+        .run(order.email, order.amount, order.currency, order.methodName, transactionId, 'PENDING', now, now, screenshot);
+
+      // Add notification for user
+      const notifId = Math.random().toString(36).substring(2, 11);
+      db.prepare('INSERT INTO notifications (id, email, title, message, type, timestamp) VALUES (?, ?, ?, ?, ?, ?)')
+        .run(notifId, order.email, 'Payment Submitted', `Your payment of ${order.amount} ${order.currency} via ${order.methodName} has been submitted and is pending verification. Order ID: ${id}`, 'DEPOSIT', now);
+
+      res.json({ success: true, message: 'Payment submitted successfully' });
+    } catch (e) {
+      console.error('Error submitting payment order:', e);
+      res.status(500).json({ error: 'Failed to submit payment' });
+    }
+  });
+
   app.get('/api/user', async (req, res) => {
     console.log('API /api/user called with query:', req.query);
     const { email } = req.query;
@@ -634,6 +722,11 @@ async function startServer() {
           timestamp: Date.now()
         });
       });
+
+      // Update in-memory user balance for future emissions in this turn
+      if (typeof user.balance === 'number') {
+        user.balance += withdrawAmount;
+      }
 
       res.json({ 
         success: true, 
@@ -1053,7 +1146,6 @@ async function startServer() {
     'CHF/JPY OTC': { price: 171.50, volatility: 0.012, trend: 0, winPercentage: 50, payout: 92, isOTC: true },
     'GBP/AUD OTC': { price: 1.8950, volatility: 0.00015, trend: 0, winPercentage: 50, payout: 92, isOTC: true },
     'GBP/NZD OTC': { price: 2.0750, volatility: 0.00015, trend: 0, winPercentage: 50, payout: 92, isOTC: true },
-    'EUR/NZD OTC': { price: 1.7850, volatility: 0.00015, trend: 0, winPercentage: 50, payout: 92, isOTC: true },
     'AUD/NZD OTC': { price: 1.0950, volatility: 0.0001, trend: 0, winPercentage: 50, payout: 92, isOTC: true },
     'USD/TRY OTC': { price: 32.50, volatility: 0.005, trend: 0, winPercentage: 50, payout: 90, isOTC: true },
     'USD/BRL OTC': { price: 5.15, volatility: 0.0008, trend: 0, winPercentage: 50, payout: 90, isOTC: true },
@@ -1469,7 +1561,7 @@ async function startServer() {
     try {
       // Yahoo Finance is highly accurate for real Forex rates
       // Including more pairs as requested by user
-      const symbols = 'EURUSD=X,GBPUSD=X,USDJPY=X,USDCAD=X,GBPJPY=X,EURJPY=X,AUDJPY=X,AUDUSD=X,NZDUSD=X,USDCHF=X,XAUUSD=X,XAGUSD=X,EURAUD=X,EURGBP=X,GBPCAD=X,EURCAD=X,EURNZD=X,AUDCAD=X,NZDJPY=X,CHFJPY=X,CADJPY=X,GBPAUD=X,GBPNZD=X,AUDNZD=X,CL=F,AAPL,NVDA,TSLA,AMZN,GOOGL,META,MSFT,NFLX,BTC-USD,ETH-USD,SOL-USD,DOGE-USD';
+      const symbols = 'EURUSD=X,GBPUSD=X,USDJPY=X,USDCAD=X,GBPJPY=X,EURJPY=X,AUDJPY=X,AUDUSD=X,NZDUSD=X,USDCHF=X,XAUUSD=X,XAGUSD=X,EURAUD=X,EURGBP=X,GBPCAD=X,EURCAD=X,AUDCAD=X,NZDJPY=X,CHFJPY=X,CADJPY=X,GBPAUD=X,GBPNZD=X,AUDNZD=X,CL=F,AAPL,NVDA,TSLA,AMZN,GOOGL,META,MSFT,NFLX,BTC-USD,ETH-USD,SOL-USD,DOGE-USD';
       const url = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${symbols}`;
       
       const response = await fetch(url, {
@@ -1502,7 +1594,6 @@ async function startServer() {
           if (symbol === 'EURGBP') symbol = 'EUR/GBP';
           if (symbol === 'GBPCAD') symbol = 'GBP/CAD';
           if (symbol === 'EURCAD') symbol = 'EUR/CAD';
-          if (symbol === 'EURNZD') symbol = 'EUR/NZD';
           if (symbol === 'AUDCAD') symbol = 'AUD/CAD';
           if (symbol === 'NZDJPY') symbol = 'NZD/JPY';
           if (symbol === 'CHFJPY') symbol = 'CHF/JPY';
@@ -1771,9 +1862,9 @@ async function startServer() {
 
   let globalReferralSettings = {
     bonusAmount: 10, // Fixed bonus for referrer
-    referralPercentage: 20, // Percentage of first deposit
+    referralPercentage: 25, // Percentage of first deposit
     minDepositForBonus: 20,
-    minWithdrawal: 10
+    minWithdrawal: 20
   };
 
   const savedDepositSettings = db.prepare('SELECT value FROM settings WHERE key = ?').get('deposit_settings') as any;
@@ -1798,7 +1889,14 @@ async function startServer() {
   const saveAssetSettings = () => {
     const toSave: Record<string, any> = {};
     Object.keys(assets).forEach(symbol => {
-      toSave[symbol] = { winPercentage: assets[symbol].winPercentage, payout: assets[symbol].payout, volatility: assets[symbol].volatility };
+      toSave[symbol] = { 
+        winPercentage: assets[symbol].winPercentage, 
+        payout: assets[symbol].payout, 
+        volatility: assets[symbol].volatility,
+        isRealMarket: assets[symbol].isRealMarket,
+        isFrozen: assets[symbol].isFrozen,
+        isVisible: assets[symbol].isVisible
+      };
     });
     db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run('asset_settings', JSON.stringify(toSave));
   };
@@ -3333,7 +3431,7 @@ async function startServer() {
 
       const isYahooPair = [
         'EUR/USD', 'GBP/USD', 'USD/JPY', 'USD/CAD', 'GBP/JPY', 'EUR/JPY', 'AUD/JPY', 'AUD/USD', 'NZD/USD', 'USD/CHF', 
-        'GOLD', 'SILVER', 'EUR/AUD', 'EUR/GBP', 'GBP/CAD', 'EUR/CAD', 'EUR/NZD', 'AUD/CAD', 'NZD/JPY', 'CHF/JPY', 
+        'GOLD', 'SILVER', 'EUR/AUD', 'EUR/GBP', 'GBP/CAD', 'EUR/CAD', 'AUD/CAD', 'NZD/JPY', 'CHF/JPY', 
         'CAD/JPY', 'GBP/AUD', 'GBP/NZD', 'AUD/NZD', 'OIL', 'BTC/USD', 'ETH/USD', 'SOL/USD', 'DOGE/USD',
         'AAPL', 'NVDA', 'TSLA', 'AMZN', 'GOOGL', 'META', 'MSFT', 'NFLX'
       ].includes(assetShortName);
@@ -4204,10 +4302,10 @@ async function startServer() {
       }
     });
 
-    socket.on('chat-message', ({ email, text, sender }) => {
+    socket.on('chat-message', ({ email, text, sender, imageUrl }) => {
       const id = Math.random().toString(36).substr(2, 9);
       const timestamp = Date.now();
-      const message = { id, email, text, sender, timestamp };
+      const message = { id, email, text, sender, timestamp, imageUrl };
       
       try {
         // Ensure session exists and is active
@@ -4222,8 +4320,8 @@ async function startServer() {
 
         const tableExists = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='support_chat'").get();
         if (tableExists) {
-          db.prepare('INSERT INTO support_chat (id, email, text, sender, timestamp) VALUES (?, ?, ?, ?, ?)')
-            .run(id, email, text, sender, timestamp);
+          db.prepare('INSERT INTO support_chat (id, email, text, sender, timestamp, imageUrl) VALUES (?, ?, ?, ?, ?, ?)')
+            .run(id, email, text, sender, timestamp, imageUrl);
         } else {
           console.warn('Table support_chat does not exist, skipping message insertion.');
         }
@@ -4385,22 +4483,23 @@ async function startServer() {
       }
     });
 
-    socket.on('admin-chat-message', ({ email, text, sender }) => {
+    socket.on('admin-chat-message', ({ email, text, sender, imageUrl }) => {
       const id = Math.random().toString(36).substr(2, 9);
       const timestamp = Date.now();
       const message = {
         id,
         text,
         sender,
-        timestamp
+        timestamp,
+        imageUrl
       };
 
       // Sync to SQLite
       try {
         const tableExists = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='support_chat'").get();
         if (tableExists) {
-          db.prepare('INSERT INTO support_chat (id, email, text, sender, timestamp) VALUES (?, ?, ?, ?, ?)')
-            .run(id, email, text, sender, timestamp);
+          db.prepare('INSERT INTO support_chat (id, email, text, sender, timestamp, imageUrl) VALUES (?, ?, ?, ?, ?, ?)')
+            .run(id, email, text, sender, timestamp, imageUrl);
         }
       } catch (e) {
         console.error('Error saving admin chat message to SQLite:', e);
@@ -4903,6 +5002,7 @@ async function startServer() {
     socket.on('admin-toggle-real-market', ({ asset, isRealMarket }) => {
       if (assets[asset]) {
         assets[asset].isRealMarket = isRealMarket;
+        saveAssetSettings();
         io.emit('market-assets-updated', assets);
       }
     });
@@ -4910,6 +5010,15 @@ async function startServer() {
     socket.on('admin-toggle-freeze', ({ asset, isFrozen }) => {
       if (assets[asset]) {
         assets[asset].isFrozen = isFrozen;
+        saveAssetSettings();
+        io.emit('market-assets-updated', assets);
+      }
+    });
+
+    socket.on('admin-toggle-visibility', ({ asset, isVisible }) => {
+      if (assets[asset]) {
+        assets[asset].isVisible = isVisible;
+        saveAssetSettings();
         io.emit('market-assets-updated', assets);
       }
     });

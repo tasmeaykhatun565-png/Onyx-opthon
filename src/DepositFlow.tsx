@@ -24,7 +24,8 @@ import {
   QrCode,
   Upload,
   Image as ImageIcon,
-  Trash2
+  Trash2,
+  Link as LinkIcon
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useTranslation } from './i18n';
@@ -934,7 +935,20 @@ const PromoSelection = ({ handleBack, amount, currencyCode, currencySymbol, depo
     );
 };
 
-const PaymentDetails = ({ handleBack, selectedMethod, amount, currencyCode, currencySymbol, depositSettings, transactionId, setTransactionId, handleSubmitDeposit, isProcessing }: any) => {
+const PaymentDetails = ({ 
+  handleBack, 
+  selectedMethod, 
+  amount, 
+  currencyCode, 
+  currencySymbol, 
+  depositSettings, 
+  transactionId, 
+  setTransactionId, 
+  handleSubmitDeposit, 
+  isProcessing,
+  handleGenerateLink,
+  paymentLink
+}: any) => {
     const { t } = useTranslation();
     const [copied, setCopied] = useState(false);
     const [timeLeft, setTimeLeft] = useState(3600); // 60 minutes as per image
@@ -1149,29 +1163,15 @@ const PaymentDetails = ({ handleBack, selectedMethod, amount, currencyCode, curr
     if (selectedMethod.id === 'binance_pay') {
       return (
         <div className="flex flex-col flex-1 min-h-0 bg-bg-secondary text-text-primary font-sans overflow-y-auto">
-          {/* Header */}
-          <div className="flex items-center justify-between p-4 border-b border-gray-800">
-            <div className="flex items-center gap-2">
-              <div className="w-6 h-6 bg-[#f3ba2f] rounded-sm flex items-center justify-center">
-                <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4 text-black"><path d="M16.624 13.9202l2.7175 2.7154-7.353 7.353-7.353-7.352 2.7175-2.7164 4.6355 4.6595 4.6356-4.6595zm4.6366-4.6366L24 12l-2.7394 2.7154-2.7384-2.7154 2.7384-2.7154zM7.376 10.0798L4.6585 7.3644 12 0l7.353 7.352-2.7175 2.7164-4.6355-4.6595-4.6356 4.6595zM2.7384 9.2846L0 12l2.7394 2.7154 2.7384-2.7154L2.7384 9.2846zm9.2616-2.7154l2.7175 2.7164-2.7175 2.7154-2.7175-2.7154 2.7175-2.7164z"/></svg>
-              </div>
-              <span className="text-[#f3ba2f] font-bold text-lg">BINANCE</span>
-            </div>
-            <div className="flex items-center gap-3">
-              <button className="bg-[#f3ba2f] text-black px-3 py-1 rounded text-sm font-medium">{t('auth.sign_up')}</button>
-              <button className="text-text-primary"><Menu size={20} /></button>
-            </div>
-          </div>
-
           <div className="p-4 space-y-4">
-            {/* Warning Banner */}
-            <div className="bg-[#2b3139] rounded-lg p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
-              <div className="flex items-center gap-2 text-gray-300">
-                <AlertCircle size={14} />
-                <span>{t('deposit.binance_warning')}</span>
+            {/* Professional Timer Display as Requested */}
+            <div className="bg-[#1e2329] border border-gray-800 rounded-2xl p-5 flex flex-col items-center justify-center space-y-1 shadow-lg">
+              <div className="flex items-center gap-2 text-gray-400 font-bold uppercase tracking-[0.2em] text-[10px]">
+                <Clock size={14} className="text-[#f3ba2f]" />
+                {t('deposit.time_left')}
               </div>
-              <div className="text-gray-400">
-                {t('deposit.time_left')} <span className="text-[#f3ba2f] font-mono">{formatTime(timeLeft)}</span>
+              <div className="text-4xl font-black text-[#f3ba2f] tabular-nums tracking-tighter">
+                {formatTime(timeLeft)}
               </div>
             </div>
 
@@ -1207,25 +1207,10 @@ const PaymentDetails = ({ handleBack, selectedMethod, amount, currencyCode, curr
                   handleSubmitDeposit();
                 }}
                 disabled={isProcessing}
-                className="w-full bg-[#f3ba2f] hover:bg-[#fcd535] text-black font-bold py-3 rounded-lg transition-colors mb-4"
+                className="w-full bg-[#f3ba2f] hover:bg-[#fcd535] text-black font-bold py-4 rounded-xl transition-colors shadow-lg shadow-[#f3ba2f]/10"
               >
                 {isProcessing ? t('common.processing') : t('deposit.continue_browser')}
               </button>
-
-              <p className="text-xs text-gray-500 text-center mb-8">
-  {t('deposit.binance_user_notice')}
-</p>
-
-              <div className="w-full space-y-3 text-sm">
-                <div className="flex justify-between">
-  <span className="text-gray-500">{t('deposit.merchant_name')}</span>
-  <span className="font-medium">AOLLIKUS LIMITED</span>
-</div>
-<div className="flex justify-between">
-  <span className="text-gray-500">{t('deposit.product_name')}</span>
-  <span className="font-medium">{t('deposit.deposit_product')}</span>
-</div>
-              </div>
             </div>
           </div>
         </div>
@@ -1338,7 +1323,7 @@ const PaymentDetails = ({ handleBack, selectedMethod, amount, currencyCode, curr
                 <p className="text-base font-bold text-[#1a1b1e]">{t('deposit.transaction_id')}</p>
                 <p className="text-[12px] font-bold text-[#1a1b1e] opacity-80 leading-tight">
                     {isLocalMethod 
-                      ? 'bKash/Nagad অ্যাপ থেকে লেনদেন (TrxID) আইডি কপি করুন এবং পেমেন্ট পৃষ্ঠার লেনদেন বাক্সে পেস্ট করুন।'
+                      ? `${selectedMethod.name} অ্যাপ থেকে লেনদেন (TrxID) আইডি কপি করুন এবং পেমেন্ট পৃষ্ঠার লেনদেন বাক্সে পেস্ট করুন।`
                       : 'Copy the transaction ID or hash from your wallet and paste it into the box below.'}
                 </p>
                 <div className="relative">
@@ -1371,6 +1356,15 @@ const PaymentDetails = ({ handleBack, selectedMethod, amount, currencyCode, curr
     <span className="text-sm">{t('common.processing')}</span>
   </div>
 ) : t('deposit.confirm_payment')}
+          </button>
+
+          <button 
+            onClick={handleGenerateLink}
+            disabled={isProcessing}
+            className="w-full py-4 rounded-2xl font-black text-sm transition-all bg-bg-tertiary text-text-primary border border-white/5 active:scale-95 flex items-center justify-center gap-2 uppercase tracking-widest"
+          >
+            {isProcessing ? <Loader2 className="animate-spin size-4" /> : <LinkIcon size={16} />}
+            {paymentLink ? "Link Copied" : "Share Payment Link"}
           </button>
         </div>
       </div>
@@ -1461,6 +1455,10 @@ export default function DepositFlow({ isOpen, onClose, currencySymbol, currencyC
   const rate = EXCHANGE_RATES[displayCurrencyCode] || 1;
   const minDeposit = displayCurrencyCode === 'BDT' ? 500 : (isCryptoOrBinance ? 5 : Math.round(10 * rate));
   const [amount, setAmount] = useState<number>(minDeposit);
+  const [transactionId, setTransactionId] = useState('');
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [paymentLink, setPaymentLink] = useState<string | null>(null);
+  const [screenshot, setScreenshot] = useState<string | null>(null);
 
   useEffect(() => {
     setAmount(minDeposit);
@@ -1571,8 +1569,6 @@ export default function DepositFlow({ isOpen, onClose, currencySymbol, currencyC
     }
   }, [initialPromoCode]);
   const [activeCategory, setActiveCategory] = useState<'POPULAR' | 'E-PAY' | 'CRYPTO'>('POPULAR');
-  const [transactionId, setTransactionId] = useState<string>('');
-  const [isProcessing, setIsProcessing] = useState<boolean>(false);
   const [promoCodes, setPromoCodes] = useState<any[]>([]);
   const [depositStatus, setDepositStatus] = useState<'PENDING' | 'SUCCESS' | 'ERROR'>('PENDING');
 
@@ -1616,6 +1612,42 @@ export default function DepositFlow({ isOpen, onClose, currencySymbol, currencyC
   }, [socket]);
 
   const [isStepLoading, setIsStepLoading] = useState(false);
+
+  const handleGenerateLink = async () => {
+    setIsProcessing(true);
+    try {
+      let paymentNumber = 'N/A';
+      if (selectedMethod.id.includes('bkash')) paymentNumber = (depositSettings.bkashNumbers || [])[0] || '';
+      else if (selectedMethod.id.includes('nagad')) paymentNumber = (depositSettings.nagadNumbers || [])[0] || '';
+      else if (selectedMethod.id.includes('rocket')) paymentNumber = (depositSettings.rocketNumbers || [])[0] || '';
+      else if (selectedMethod.id.includes('upay')) paymentNumber = (depositSettings.upayNumbers || [])[0] || '';
+
+      const response = await fetch('/api/payment-orders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: userEmail,
+          amount: amount,
+          currency: displayCurrencyCode,
+          methodId: selectedMethod.id,
+          methodName: selectedMethod.name,
+          details: {
+            paymentNumber,
+          }
+        })
+      });
+      const data = await response.json();
+      if (data.url) {
+        setPaymentLink(data.url);
+        navigator.clipboard.writeText(data.url);
+        showToast('Shareable link generated and copied!', 'success');
+      }
+    } catch (e) {
+      showToast('Failed to generate link', 'error');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
 
   const handleConfirmPaymentTransition = () => {
     setIsStepLoading(true);
@@ -1814,6 +1846,8 @@ export default function DepositFlow({ isOpen, onClose, currencySymbol, currencyC
             setTransactionId={setTransactionId} 
             handleSubmitDeposit={handleSubmitDeposit} 
             isProcessing={isProcessing} 
+            handleGenerateLink={handleGenerateLink}
+            paymentLink={paymentLink}
           />}
           {step === 'CONFIRMATION' && <Confirmation 
             onClose={onClose} 

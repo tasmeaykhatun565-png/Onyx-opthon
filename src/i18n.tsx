@@ -631,6 +631,18 @@ export const translations: TranslationData = {
     vi: 'Giao dịch hiện đang đóng cho tài sản này.',
     id: 'Trading saat ini ditutup untuk aset ini.',
   },
+  'trade.max_active_reached': {
+    en: 'Maximum 10 active trades allowed on Demo account',
+    bn: 'ডেমো অ্যাকাউন্টে একসাথে সর্বোচ্চ ১০টি ট্রেড করা যাবে',
+    hi: 'डेমো खाते पर अधिकतम 10 सक्रिय ट्रेडों की अनुमति है',
+    es: 'Se permiten un máximo de 10 operaciones activas en la cuenta Demo',
+    pt: 'Máximo de 10 negociações ativas permitidas na conta Demo',
+    ru: 'На демо-счете разрешено максимум 10 активных сделок',
+    ar: 'يُسمح بحد أقصى 10 تداولات نشطة في الحساب التجريبي',
+    tr: 'Demo hesabında en fazla 10 aktif işleme izin verilir',
+    vi: 'Tối đa 10 giao dịch đang hoạt động được phép trên tài khoản Demo',
+    id: 'Maksimum 10 perdagangan aktif diizinkan di akun Demo'
+  },
 
   // Withdraw
   'withdraw.title': {

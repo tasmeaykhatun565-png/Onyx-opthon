@@ -584,14 +584,7 @@ export const TradingChart = React.memo(({
         }
     }
 
-    const vLineEl = document.getElementById('current-candle-v-line');
-    if (vLineEl && xBase !== null) {
-        vLineEl.style.left = `${xBase}px`;
-        vLineEl.style.display = 'block';
-    } else if (vLineEl) {
-        vLineEl.style.display = 'none';
-    }
-    
+
     if (bubbleGroupRef.current && y !== null) {
         // Vertical offset for centering: 
         // Price bubble container is h-[30px], so its center is 15px.
@@ -889,16 +882,16 @@ export const TradingChart = React.memo(({
       crosshair: {
         mode: CrosshairMode.Normal,
         vertLine: {
-          color: colors.success,
-          width: 0.5 as any,
+          color: '#00c853',
+          width: 0.8 as any, // Slightly thicker
           style: 2,
-          labelBackgroundColor: colors.success,
+          labelBackgroundColor: '#00c853',
         },
         horzLine: {
-          color: colors.success,
-          width: 0.5 as any,
+          color: '#00c853',
+          width: 0.8 as any, // Slightly thicker
           style: 2,
-          labelBackgroundColor: colors.success,
+          labelBackgroundColor: '#00c853',
         },
       },
       handleScroll: {
@@ -1035,31 +1028,33 @@ export const TradingChart = React.memo(({
           case 'Area':
             return chart.addSeries(AreaSeries, {
               ...commonOptions,
-              lineColor: colors.success,
-              topColor: `${colors.success}55`, // opacity
-              bottomColor: `${colors.success}00`, // opacity
+              lineColor: '#00c853',
+              topColor: 'rgba(0, 200, 83, 0.4)', // opacity
+              bottomColor: 'rgba(0, 200, 83, 0)', // opacity
               lineWidth: 3,
             });
           case 'Bar':
             return chart.addSeries(BarSeries, {
               ...commonOptions,
-              upColor: colors.success,
-              downColor: colors.danger,
+              upColor: '#00c853',
+              downColor: '#ff1744',
               thinBars: false,
             });
-          case 'Heikin Ashi':
+        case 'Heikin Ashi':
           case 'Candlestick':
           default:
             return chart.addSeries(CandlestickSeries, {
               ...commonOptions,
-              upColor: colors.success,
-              downColor: colors.danger,
+              upColor: '#00c853', // Deeper green
+              downColor: '#ff1744', // Deeper red
               borderVisible: true,
               wickVisible: true,
-              borderUpColor: colors.success,
-              borderDownColor: colors.danger,
-              wickUpColor: colors.success,
-              wickDownColor: colors.danger,
+              borderUpColor: '#00c853',
+              borderDownColor: '#ff1744',
+              wickUpColor: '#05ff8b', // Brighter wick for visibility
+              wickDownColor: '#ff5252', // Brighter wick for visibility
+              // @ts-ignore
+              wickWidth: 2, // Slightly thicker wick as requested
             });
         }
       };
@@ -2348,25 +2343,16 @@ export const TradingChart = React.memo(({
                     </AnimatePresence>
                 </div>
                 
-                {/* Vertical Line for Current Candle - Precise and Technical */}
-                <div 
-                    id="current-candle-v-line"
-                    className={cn(
-                        "absolute top-0 bottom-0 w-[1px] border-l border-dashed z-[15] pointer-events-none hidden",
-                        currentThemeName === 'Light' ? "border-black/20" : "border-white/30"
-                    )}
-                    style={{ willChange: 'left' }}
-                />
 
                 {/* Horizontal Line to Price Scale - Precise Sharp Line */}
                 <div 
                     ref={horizontalLineRef}
                     className={cn(
-                        "absolute right-0 h-[1px] z-30 pointer-events-none hidden",
-                        currentThemeName === 'Light' ? "bg-black/40" : "bg-white/70"
+                        "absolute right-0 h-[1.5px] z-30 pointer-events-none hidden",
+                        currentThemeName === 'Light' ? "bg-black/50" : "bg-[#00c853]"
                     )}
                     style={{ 
-                        boxShadow: currentThemeName === 'Light' ? 'none' : '0 0 4px rgba(255,255,255,0.2)',
+                        boxShadow: currentThemeName === 'Light' ? 'none' : '0 0 8px rgba(0,200,83,0.4)',
                         willChange: 'top, left'
                     }}
                 />
@@ -2429,7 +2415,7 @@ export const TradingChart = React.memo(({
                 if (!trade) return null;
 
                 const isUp = trade.type === 'UP';
-                const color = isUp ? '#0ecb81' : '#f6465d';
+                const color = isUp ? '#00c853' : '#ff1744';
                 const isFaded = trade.status !== 'ACTIVE';
 
                 return (
