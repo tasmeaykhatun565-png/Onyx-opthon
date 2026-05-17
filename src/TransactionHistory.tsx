@@ -45,7 +45,7 @@ interface TransactionHistoryProps {
 const getMethodLogo = (method: string) => {
   const m = method.toLowerCase();
   if (m.includes('binance')) return 'https://raw.githubusercontent.com/t-asif/trading-assets/main/binance.png';
-  if (m.includes('bkash')) return 'https://raw.githubusercontent.com/t-asif/trading-assets/main/bkash.png';
+  if (m.includes('bkash') || m === 'bkas') return 'https://raw.githubusercontent.com/t-asif/trading-assets/main/bkash.png';
   if (m.includes('nagad')) return 'https://raw.githubusercontent.com/t-asif/trading-assets/main/nagad.png';
   if (m.includes('rocket')) return 'https://raw.githubusercontent.com/t-asif/trading-assets/main/rocket.png';
   if (m.includes('upay')) return 'https://raw.githubusercontent.com/t-asif/trading-assets/main/upay.png';

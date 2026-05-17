@@ -27,6 +27,8 @@ process.on('unhandledRejection', (reason: any, promise) => {
   } else if (reason && (reason.code === 5 || (reason.message && reason.message.includes('NOT_FOUND')))) {
     firestoreDisabledDueToError = true;
     console.warn('Firestore sync disabled globally due to NOT_FOUND database. Please verify your Firestore Database ID.');
+  } else if (reason && (reason.code === 8 || (reason.message && (reason.message.includes('Quota exceeded') || reason.message.includes('RESOURCE_EXHAUSTED'))))) {
+    console.warn('Firestore QUOTA_EXCEEDED encountered. Skipping this operation, but sync remains enabled for future attempts.');
   } else {
     console.error('Unhandled Rejection at:', promise, 'reason:', reason);
   }
@@ -43,8 +45,10 @@ const handleFirestoreError = (e: any, context: string) => {
   } else if (e.code === 5 || (e.message && e.message.includes('NOT_FOUND'))) {
     firestoreDisabledDueToError = true;
     console.warn(`Firestore sync disabled globally due to NOT_FOUND database during ${context}. Please verify your Firestore Database ID.`);
+  } else if (e.code === 8 || (e.message && (e.message.includes('Quota exceeded') || e.message.includes('RESOURCE_EXHAUSTED')))) {
+    console.warn(`Firestore QUOTA_EXCEEDED during ${context}. Skipping this operation. Please upgrade your Firebase plan or wait for quota reset.`);
   } else {
-    console.error(`Firestore ${context} error:`, e);
+    console.error(`Firestore ${context} error:`, e.message || e);
   }
 };
 
@@ -693,7 +697,7 @@ async function startServer() {
         return res.status(404).json({ error: 'User not found' });
       }
 
-      const minWithdrawal = globalReferralSettings.minWithdrawal || 10;
+      const minWithdrawal = globalReferralSettings.minWithdrawal || 20;
       if (!user.referralBalance || user.referralBalance < minWithdrawal) {
         return res.status(400).json({ error: `Minimum withdrawal is USD ${minWithdrawal}` });
       }
@@ -735,7 +739,7 @@ async function startServer() {
       });
     } catch (error: any) {
       console.error('Withdraw referral error:', error);
-      res.status(500).json({ error: error.message || 'Internal server error' });
+      res.status(500).json({ error: 'Withdrawal failed. Please try again later.' });
     }
   });
 
@@ -1149,10 +1153,6 @@ async function startServer() {
     'AUD/NZD OTC': { price: 1.0950, volatility: 0.0001, trend: 0, winPercentage: 50, payout: 92, isOTC: true },
     'USD/TRY OTC': { price: 32.50, volatility: 0.005, trend: 0, winPercentage: 50, payout: 90, isOTC: true },
     'USD/BRL OTC': { price: 5.15, volatility: 0.0008, trend: 0, winPercentage: 50, payout: 90, isOTC: true },
-    'LATAM INDEX OTC': { price: 3200, volatility: 2.5, trend: 0, winPercentage: 50, payout: 93, isOTC: true },
-    'ASIA INDEX OTC': { price: 1800, volatility: 1.5, trend: 0, winPercentage: 50, payout: 93, isOTC: true },
-    'EUROPE INDEX OTC': { price: 4500, volatility: 1.2, trend: 0, winPercentage: 50, payout: 93, isOTC: true },
-    'COMMODITIES INDEX OTC': { price: 950, volatility: 0.8, trend: 0, winPercentage: 50, payout: 93, isOTC: true },
     'GOLD OTC': { price: 2310.00, volatility: 0.18, trend: 0, winPercentage: 50, payout: 90, isOTC: true },
     'OIL OTC': { price: 81.00, volatility: 0.025, trend: 0, winPercentage: 50, payout: 90, isOTC: true },
     'SILVER OTC': { price: 28.50, volatility: 0.005, trend: 0, winPercentage: 50, payout: 88, isOTC: true },
@@ -5057,9 +5057,14 @@ async function startServer() {
         return;
       }
       try {
-        const { email, amount, currency, method, transactionId, promoCode, screenshot } = depositData;
+        let { email, amount, currency, method, transactionId, promoCode, screenshot } = depositData;
         console.log(`Processing deposit for ${email}: ${amount} ${currency} via ${method}`);
         
+        const m = method.toLowerCase();
+        if (m.includes('bkash') || m.includes('nagad') || m.includes('rocket') || m.includes('upay')) {
+          currency = 'BDT';
+        }
+
         // Check for existing transactionId
         const existing = db.prepare('SELECT id FROM deposits WHERE transactionId = ?').get(transactionId);
         if (existing) {
@@ -5132,19 +5137,32 @@ async function startServer() {
           if (user) {
             console.log('User found for balance update:', user.email, 'Current Balance:', user.balance);
             const getExchangeRate = (currency: string) => {
-               if (currency === 'BDT' && globalDepositSettings?.exchangeRate) return globalDepositSettings.exchangeRate;
+               if (currency === 'BDT') {
+                 const rate = globalDepositSettings?.exchangeRate || EXCHANGE_RATES['BDT'] || 110;
+                 return rate > 1 ? rate : 110;
+               }
                return EXCHANGE_RATES[currency] || 1;
             };
             const depositRate = getExchangeRate(deposit.currency);
             const userRate = getExchangeRate(user.currency || 'USD');
             
+            console.log('DEBUG DEPOSIT:', {
+              depositCurrency: deposit.currency,
+              userCurrency: user.currency,
+              depositRate,
+              userRate,
+              depositAmount: deposit.amount,
+              bonusAmount: deposit.bonusAmount
+            });
+
             const depositAmountUSD = deposit.amount / depositRate;
             const bonusAmountUSD = (deposit.bonusAmount || 0) / depositRate;
             
-            const amountToAdd = depositAmountUSD * userRate;
-            const bonusToAdd = bonusAmountUSD * userRate;
-
-            console.log('Deposit Details - Amount:', deposit.amount, 'Currency:', deposit.currency, 'depositRate:', depositRate, 'USD:', depositAmountUSD, 'amountToAdd (user currency):', amountToAdd);
+             // Use deposit USD amount directly to ensure consistency
+             const amountToAdd = depositAmountUSD;
+             const bonusToAdd = bonusAmountUSD;
+             
+             console.log('Deposit Details - Amount:', deposit.amount, 'Currency:', deposit.currency, 'depositRate:', depositRate, 'USD:', depositAmountUSD, 'amountToAdd (USD):', amountToAdd);
 
             const newBalance = (parseFloat(user.balance) || 0) + amountToAdd;
             const newBonusBalance = (parseFloat(user.bonus_balance) || 0) + bonusToAdd;

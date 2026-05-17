@@ -1446,7 +1446,7 @@ export default function DepositFlow({ isOpen, onClose, currencySymbol, currencyC
   const [selectedMethod, setSelectedMethod] = useState<PaymentMethod>(PAYMENT_METHODS[0]);
   const [hasManuallySelected, setHasManuallySelected] = useState(false);
 
-  const isBdtMethod = ['bkash_p2c', 'nagad_p2c', 'rocket_p2c', 'upay_p2c'].includes(selectedMethod.id);
+  const isBdtMethod = ['bkash', 'nagad', 'rocket', 'upay'].some(m => selectedMethod.id.toLowerCase().includes(m) || selectedMethod.name.toLowerCase().includes(m));
   const isCryptoOrBinance = selectedMethod.category === 'CRYPTO' || selectedMethod.id === 'binance_pay';
   
   const displayCurrencyCode = isBdtMethod ? 'BDT' : (isCryptoOrBinance ? 'USDT' : currencyCode);

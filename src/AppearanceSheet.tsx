@@ -7,9 +7,10 @@ import { useTheme } from './ThemeContext';
 interface AppearanceSheetProps {
   isOpen: boolean;
   onClose: () => void;
+  onThemeChange?: (theme: string) => void;
 }
 
-export default function AppearanceSheet({ isOpen, onClose }: AppearanceSheetProps) {
+export default function AppearanceSheet({ isOpen, onClose, onThemeChange }: AppearanceSheetProps) {
   const { t } = useTranslation();
   const { theme, setTheme } = useTheme();
   // Note: Assuming timeframe state is managed via localStorage/global state; 
@@ -123,7 +124,11 @@ export default function AppearanceSheet({ isOpen, onClose }: AppearanceSheetProp
                       {themes.map((t) => (
                         <button 
                           key={t}
-                          onClick={() => { setTheme(t as any); setActiveDropdown(null); }}
+                          onClick={() => { 
+                             if (onThemeChange) onThemeChange(t);
+                             setTheme(t as any); 
+                             setActiveDropdown(null); 
+                          }}
                           className={`w-full flex items-center justify-between px-4 py-3.5 rounded-xl transition-all ${theme === t ? 'bg-[var(--color-text-primary)]/5 text-text-primary' : 'text-text-secondary hover:bg-[var(--color-text-primary)]/[0.02] hover:text-text-primary'}`}
                         >
                           <span className="text-[15px] font-medium">{t}</span>

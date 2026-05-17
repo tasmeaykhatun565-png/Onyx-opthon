@@ -201,10 +201,6 @@ const ASSETS: Asset[] = [
   { id: 'aud_nzd_otc', name: 'AUD/NZD OTC', shortName: 'AUD/NZD OTC', payout: 92, category: 'Forex', flag: '🇦🇺🇳🇿', basePrice: 1.0950, volatility: 0.0001, isOTC: true },
   { id: 'usd_try_otc', name: 'USD/TRY OTC', shortName: 'USD/TRY OTC', payout: 90, category: 'Forex', flag: '🇺🇸🇹🇷', basePrice: 32.50, volatility: 0.005, isOTC: true },
   { id: 'usd_brl_otc', name: 'USD/BRL OTC', shortName: 'USD/BRL OTC', payout: 90, category: 'Forex', flag: '🇺🇸🇧🇷', basePrice: 5.15, volatility: 0.0008, isOTC: true },
-  { id: 'latam_index_otc', name: 'LATAM INDEX OTC', shortName: 'LATAM INDEX', payout: 93, category: 'Stocks', flag: '🌎', basePrice: 3200, volatility: 2.5, isOTC: true },
-  { id: 'asia_index_otc', name: 'ASIA INDEX OTC', shortName: 'ASIA INDEX', payout: 93, category: 'Stocks', flag: '🌏', basePrice: 1800, volatility: 1.5, isOTC: true },
-  { id: 'europe_index_otc', name: 'EUROPE INDEX OTC', shortName: 'EUROPE INDEX', payout: 93, category: 'Stocks', flag: '🌍', basePrice: 4500, volatility: 1.2, isOTC: true },
-  { id: 'commodity_index_otc', name: 'COMMODITIES INDEX OTC', shortName: 'COMMODITY', payout: 93, category: 'Commodities', flag: '🏗️', basePrice: 950, volatility: 0.8, isOTC: true },
   
   // Crypto
   { id: 'btc_usd', name: 'Bitcoin', shortName: 'BTC/USD', payout: 90, category: 'Crypto', flag: '₿', basePrice: 65000, volatility: 25.0, isOTC: false },
@@ -881,6 +877,10 @@ function SettingsPage({
       <AppearanceSheet 
         isOpen={isAppearanceSheetOpen} 
         onClose={() => setIsAppearanceSheetOpen(false)} 
+        onThemeChange={(theme) => {
+           savePreferences({ theme });
+           setIsAppearanceSheetOpen(false);
+        }}
       />
       <div className="flex items-center justify-between p-4 border-b border-border-color">
         <button onClick={onBack} className="text-text-secondary/70 hover:text-text-primary transition">
@@ -1038,7 +1038,27 @@ function PersonalInformationPage({ onBack, user }: { onBack: () => void, user: a
 
         {/* Profile Image Circle */}
         <div className="flex justify-center mb-10">
-          <button className="w-32 h-32 rounded-full bg-bg-secondary flex items-center justify-center relative overflow-hidden group border border-border-color shadow-xl">
+          <button 
+             onClick={() => fileInputRef.current?.click()}
+             className="w-32 h-32 rounded-full bg-bg-secondary flex items-center justify-center relative overflow-hidden group border border-border-color shadow-xl"
+           >
+             <input
+               type="file"
+               ref={fileInputRef}
+               className="hidden"
+               accept="image/*"
+               onChange={(e) => {
+                 const file = e.target.files?.[0];
+                 if (file) {
+                   const reader = new FileReader();
+                   reader.onload = (e) => {
+                     // In a real app, update user profile URL here
+                     console.log('File uploaded:', e.target?.result);
+                   };
+                   reader.readAsDataURL(file);
+                 }
+               }}
+             />
              {user?.photoURL ? (
                <img src={user.photoURL} alt="Profile" className="w-full h-full object-cover opacity-60" />
              ) : (
@@ -1398,6 +1418,7 @@ export default function TradingPlatform() {
 
   // State
   const [socket, setSocket] = useState<Socket | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [user, setUser] = useState<FirebaseUser | null>(null);
   const [chartType, setChartType] = useState(() => {
@@ -1449,10 +1470,9 @@ export default function TradingPlatform() {
       if (Object.keys(firestoreUpdate).length > 0) {
         const { updateDoc } = await import('firebase/firestore');
         await updateDoc(userRef, firestoreUpdate);
-        console.log('Firestore update ok');
       }
     } catch (error) {
-      console.error('Error saving preferences deeply:', error);
+      console.warn('Network or sync error while saving preferences (non-critical):', error);
     }
   }, [user]);
   const { language, setLanguage } = useTranslation();
@@ -1463,11 +1483,11 @@ export default function TradingPlatform() {
     }
   }, [preferences.language, setLanguage, language]);
 
-  useEffect(() => {
-    if (preferences.theme && preferences.theme !== currentTheme) {
-      setGlobalTheme(preferences.theme as any);
-    }
-  }, [preferences.theme, currentTheme, setGlobalTheme]);
+  // useEffect(() => {
+  //   if (preferences.theme && preferences.theme !== currentTheme) {
+  //     setGlobalTheme(preferences.theme as any);
+  //   }
+  // }, [preferences.theme, currentTheme, setGlobalTheme]);
 
   useEffect(() => {
     if (preferences.chartType && preferences.chartType !== chartType) {
@@ -1482,12 +1502,6 @@ export default function TradingPlatform() {
   const [chartTimeFrame, setChartTimeFrame] = useState(() => {
     return localStorage.getItem('chartTimeFrame') || '1m';
   });
-
-  useEffect(() => {
-    if (chartType !== preferences.chartType) {
-      savePreferences({ chartType: chartType });
-    }
-  }, [chartType, preferences.chartType, savePreferences]);
 
   const [currency, setCurrency] = useState(() => {
     const saved = localStorage.getItem('app-currency');
@@ -1594,6 +1608,47 @@ export default function TradingPlatform() {
     isLoadingRef.current = loading;
     setIsLoadingState(loading);
   }, []);
+
+  const handleChartTypeChange = useCallback((type: string) => {
+    if (type === chartType) return;
+    
+    // Close menus right away
+    setIsChartSettingsOpen(false);
+    setActiveDesktopChartMenu(null);
+    
+    // Show spinner immediately so user gets feedback
+    setIsLoading(true);
+    
+    // Give the UI a very brief moment to paint the spinner, 
+    // then apply the chart type changes to underlying state that will cause TradingChart to re-render.
+    setTimeout(() => {
+      setChartType(type);
+      savePreferences({ chartType: type });
+      localStorage.setItem('app-chartType', type);
+      localStorage.setItem('chartType', type);
+      
+      // Let chart setup occur, then gracefully fade out the spinner
+      setTimeout(() => setIsLoading(false), 800);
+    }, 150);
+  }, [chartType, savePreferences, setIsLoading]);
+
+  const handleTimeFrameChange = useCallback((tf: string) => {
+    if (tf === chartTimeFrame) return;
+    
+    setIsChartSettingsOpen(false);
+    setActiveDesktopChartMenu(null);
+    
+    setIsLoading(true);
+    setTimeout(() => {
+      setChartTimeFrame(tf);
+      savePreferences({ timeframe: tf });
+      localStorage.setItem('app-timeframe', tf);
+      localStorage.setItem('chartTimeFrame', tf);
+      
+      setTimeout(() => setIsLoading(false), 800);
+    }, 150);
+  }, [chartTimeFrame, savePreferences, setIsLoading]);
+
   const [platformSettings, setPlatformSettings] = useState<any>({});
   const [supportSettings, setSupportSettings] = useState({ 
     telegram: 'https://t.me/onyxtrade_support', 
@@ -1992,7 +2047,7 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
       unsubscribeUser();
       unsubscribeTrades();
     };
-  }, [user?.uid, currentTheme, chartType, setGlobalTheme]); // Use UID and sync prefs for stability
+  }, [user?.uid]); // Reduced dependencies to prevent infinite Firestore reads
 
   const currentTimeRef = useRef(currentTime);
 
@@ -2067,7 +2122,7 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
           });
         }
       } catch (err) {
-        console.error("Failed to update custom demo balance", err);
+        handleFirestoreError(err, OperationType.UPDATE, `users/${user.uid}`);
       }
     }
   };
@@ -2755,6 +2810,9 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
     socket.on('trade-accepted', ({ id, startTime, endTime }) => {
       setTrades(prev => prev.map(t => t.id === id ? { ...t, startTime, endTime } : t));
     });
+    socket.on('trade-error', (msg: string) => {
+      showToast(msg, 'error');
+    });
 
     socket.on('initial-prices', (prices: Record<string, any>) => {
       setMarketAssets(prev => {
@@ -2816,7 +2874,17 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
       if (userData.turnover_required !== undefined) setTurnoverRequired(prev => prev === userData.turnover_required ? prev : userData.turnover_required);
       if (userData.turnover_achieved !== undefined) setTurnoverAchieved(prev => prev === userData.turnover_achieved ? prev : userData.turnover_achieved);
       if (userData.referralCode !== undefined) setUserReferralCode(userData.referralCode);
-      // Removed userData.trades sync here as the trades subcollection onSnapshot listener is the source of truth for trades and handles updates safely.
+      // Restore userData.trades sync so users don't lose trade history if Firestore quota is exceeded
+      if (userData.trades !== undefined) {
+         setTrades(prev => {
+            const serverTrades = (typeof userData.trades === 'string' ? JSON.parse(userData.trades) : userData.trades) as Trade[];
+            // Only update if there are more/different trades
+            if (serverTrades.length > 0 && JSON.stringify(serverTrades) !== JSON.stringify(prev)) {
+                return serverTrades;
+            }
+            return prev;
+         });
+      }
       if (userData.extraAccounts !== undefined) setExtraAccounts(prev => deepEqual(prev, userData.extraAccounts) ? prev : userData.extraAccounts);
       
       if (userData.currency !== undefined && userData.currency !== null) {
@@ -2997,7 +3065,10 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
             profit: profit,
             closePrice: result.closePrice,
             endTime: Date.now()
-          }, { merge: true });
+          }, { merge: true }).catch(err => {
+             // Let handleFirestoreError log without crashing
+             handleFirestoreError(err, OperationType.UPDATE, `users/${user.uid}/trades/${result.id}`);
+          });
         } catch (error) {
           console.error("Error updating trade result:", error);
         }
@@ -3240,15 +3311,18 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
             }
     
             // Add trade to subcollection
-            setDoc(doc(db, 'users', user.uid, 'trades', tradeId), newTrade);
+            setDoc(doc(db, 'users', user.uid, 'trades', tradeId), newTrade).catch(error => {
+              handleFirestoreError(error, OperationType.CREATE, `users/${user.uid}/trades/${tradeId}`);
+            });
           } catch (error) {
-        handleFirestoreError(error, OperationType.WRITE, `users/${user.uid}/trades/${tradeId}`);
-      }
+            console.error('Caught error (should not be reached if handled in catch block):', error);
+          }
     }
     
     if (socket) {
       sentTradesRef.current.add(newTrade.id);
       socket.emit('place-trade', newTrade);
+      setTrades(prev => [newTrade, ...prev]);
       playSound('trade');
     }
   };
@@ -4987,10 +5061,7 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
                           {TIME_FRAMES.map((tf) => (
                             <button
                               key={tf}
-                              onClick={() => {
-                                setChartTimeFrame(tf);
-                                setActiveDesktopChartMenu(null);
-                              }}
+                              onClick={() => handleTimeFrameChange(tf)}
                               className={cn(
                                 "flex items-center justify-center h-11 rounded-lg text-[13px] font-bold transition-all",
                                 chartTimeFrame === tf 
@@ -5022,10 +5093,7 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
                           {CHART_TYPES.map((type, idx) => (
                             <button
                               key={type.id}
-                              onClick={() => {
-                                setChartType(type.id);
-                                setActiveDesktopChartMenu(null);
-                              }}
+                              onClick={() => handleChartTypeChange(type.id)}
                               className={cn(
                                 "w-full flex items-center justify-between px-5 py-4 transition-all group relative",
                                 chartType === type.id ? "bg-bg-tertiary" : "hover:bg-bg-secondary",
@@ -5508,17 +5576,9 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
         onClose={() => setIsChartSettingsOpen(false)}
         currentTimeFrame={chartTimeFrame}
         isOTC={!!selectedAsset.isOTC}
-        onTimeFrameChange={(tf) => {
-          setChartTimeFrame(tf);
-          setIsChartSettingsOpen(false);
-        }}
+        onTimeFrameChange={handleTimeFrameChange}
         currentChartType={chartType}
-        onChartTypeChange={(type) => {
-          setIsLoading(true);
-          setChartType(type);
-          setTimeout(() => setIsLoading(false), 800); // Faster loading duration
-          setIsChartSettingsOpen(false);
-        }}
+        onChartTypeChange={handleChartTypeChange}
       />
 
       <AnimatePresence>

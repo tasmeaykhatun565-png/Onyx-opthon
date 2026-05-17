@@ -398,46 +398,7 @@ export const ReferralPage: React.FC<ReferralPageProps> = ({ user, userReferralCo
                    ))}
                  </div>
 
-                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="bg-gradient-to-br from-[#0a0a0c] to-[#050507] border border-white/[0.05] rounded-[2.5rem] p-10 relative overflow-hidden">
-                       <div className="flex items-center gap-4 mb-8">
-                         <div className="w-12 h-12 rounded-2xl bg-blue-500/10 flex items-center justify-center text-blue-400 border border-blue-500/20">
-                            <TrendingUp size={24} />
-                         </div>
-                         <h3 className="text-xl font-black text-white tracking-tight">Conversion Velocity</h3>
-                       </div>
-                       <div className="flex items-baseline gap-2 mb-2">
-                         <span className="text-5xl font-black text-white">{stats.conversionRate}</span>
-                         <span className="text-xl font-bold text-gray-500">%</span>
-                       </div>
-                       <p className="text-sm font-medium text-gray-500 max-w-sm">Ratio of registrations resulting in an initial deposit. Industry average is ~15%.</p>
-                       <div className="mt-8 flex gap-4 overflow-hidden">
-                          {Array.from({ length: 12 }).map((_, i) => (
-                            <div key={i} className="flex-1 bg-white/5 rounded-t-lg relative" style={{ height: `${20 + Math.random() * 80}px` }}>
-                               <div className="absolute inset-0 bg-blue-500/10 hover:bg-blue-500/30 transition-colors" />
-                            </div>
-                          ))}
-                       </div>
-                    </div>
-                    <div className="bg-gradient-to-br from-[#0a0a0c] to-[#050507] border border-white/[0.05] rounded-[2.5rem] p-10 relative overflow-hidden">
-                       <div className="flex items-center gap-4 mb-8">
-                         <div className="w-12 h-12 rounded-2xl bg-[#d4af37]/10 flex items-center justify-center text-[#d4af37] border border-[#d4af37]/20">
-                            <Users size={24} />
-                         </div>
-                         <h3 className="text-xl font-black text-white tracking-tight">Avg. Lifetime Value</h3>
-                       </div>
-                       <div className="flex items-baseline gap-2 mb-2">
-                         <span className="text-5xl font-black text-white">$142.10</span>
-                         <span className="text-xl font-bold text-gray-500">USD</span>
-                       </div>
-                       <p className="text-sm font-medium text-gray-500 max-w-sm">Estimated lifetime commission generated per active referral.</p>
-                       <div className="mt-8 flex items-end gap-1 overflow-hidden h-24">
-                          {Array.from({ length: 30 }).map((_, i) => (
-                            <div key={i} className="flex-1 bg-[#d4af37]/10 rounded-full" style={{ height: `${10 + Math.random() * 90}%` }} />
-                          ))}
-                       </div>
-                    </div>
-                 </div>
+
               </motion.div>
             )}
 

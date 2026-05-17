@@ -77,6 +77,18 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
     operationType,
     path
   }
-  console.error('Firestore Error: ', safeStringify(errInfo));
-  throw new Error(safeStringify(errInfo));
+  
+  const errorMessage = safeStringify(errInfo);
+  
+  // Do not throw for non-critical errors to prevent app crashes
+  // Quota exceeded is a common issue with free tier
+  if (errorMessage.includes('Quota exceeded')) {
+     console.warn('Firestore Quota Exceeded - App will continue in degraded/SQL-only mode where possible.');
+     return;
+  }
+
+  console.error('Firestore Error: ', errorMessage);
+
+  // For other errors, we might still want to know, but throwing can crash React loops.
+  // We'll log it and return instead of throwing.
 }
