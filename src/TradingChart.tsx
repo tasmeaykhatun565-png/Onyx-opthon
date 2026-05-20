@@ -331,8 +331,14 @@ export const TradingChart = React.memo(({
   const [drawings, setDrawings] = useState<Drawing[]>([]);
   const [selectedDrawingId, setSelectedDrawingId] = useState<string | null>(null);
 
-  // Load drawings when asset changes
+  // Clear data and load drawings when asset changes to prevent spikes
   useEffect(() => {
+    if (!assetName || !seriesRef.current) return;
+    
+    seriesRef.current.setData([]);
+    latestChartCandleRef.current = null;
+    isInitializedRef.current = false;
+
     try {
       const saved = localStorage.getItem(`drawings_${assetName}`);
       setDrawings(saved ? JSON.parse(saved) : []);
@@ -560,6 +566,7 @@ export const TradingChart = React.memo(({
     // Direct DOM updates for zero-lag positioning
     if (horizontalLineRef.current && y !== null) {
         horizontalLineRef.current.style.top = `${y}px`;
+        horizontalLineRef.current.style.transform = `translateY(-50%)`;
         horizontalLineRef.current.style.left = xBase !== null ? `${xBase}px` : '0px';
         horizontalLineRef.current.style.display = 'block';
     }
@@ -586,11 +593,8 @@ export const TradingChart = React.memo(({
 
 
     if (bubbleGroupRef.current && y !== null) {
-        // Vertical offset for centering: 
-        // Price bubble container is h-[30px], so its center is 15px.
-        // Triangle is 20px (10+10), centered in h-[30px] means its tip is at 15px.
-        // So bubble-group top = y - 15.
-        bubbleGroupRef.current.style.top = `${y - 15}px`;
+        bubbleGroupRef.current.style.top = '0px';
+        bubbleGroupRef.current.style.transform = `translateY(calc(${y}px - 50%))`;
         bubbleGroupRef.current.style.display = 'flex';
         
         if (priceBubbleRef.current) priceBubbleRef.current.innerText = price.toFixed(precision);
@@ -842,8 +846,16 @@ export const TradingChart = React.memo(({
         },
       },
       grid: {
-        vertLines: { color: colors.border, style: 2 },
-        horzLines: { color: colors.border, style: 2 },
+        vertLines: { 
+          color: currentThemeName === 'Light' ? 'rgba(0,0,0,0.03)' : 'rgba(255,255,255,0.03)', 
+          style: 1, // Solid
+          visible: true 
+        },
+        horzLines: { 
+          color: currentThemeName === 'Light' ? 'rgba(0,0,0,0.03)' : 'rgba(255,255,255,0.03)', 
+          style: 1, // Solid
+          visible: true 
+        },
       },
       width: chartContainerRef.current.clientWidth,
       height: chartContainerRef.current.clientHeight,
@@ -853,25 +865,18 @@ export const TradingChart = React.memo(({
         borderColor: colors.border,
         fixLeftEdge: false,
         fixRightEdge: false,
-        minBarSpacing: 15,
-        maxBarSpacing: 120,
-        barSpacing: 25,
+        minBarSpacing: 5,
+        maxBarSpacing: 100,
+        barSpacing: 12,
         shiftVisibleRangeOnNewBar: true,
-        rightOffset: 25,
+        rightOffset: 12,
         uniformDistribution: false,
-        tickMarkFormatter: (time: number) => {
-          const date = new Date((time * 1000) + (timezoneOffset * 60 * 60 * 1000));
-          const hours = date.getUTCHours().toString().padStart(2, '0');
-          const minutes = date.getUTCMinutes().toString().padStart(2, '0');
-          const seconds = date.getUTCSeconds().toString().padStart(2, '0');
-          return `${hours}:${minutes}:${seconds}`;
-        },
       },
       rightPriceScale: {
         borderColor: colors.border,
         scaleMargins: {
-          top: 0.18, 
-          bottom: 0.18, 
+          top: 0.1, 
+          bottom: 0.2, 
         },
         visible: true,
         borderVisible: false,
@@ -882,16 +887,16 @@ export const TradingChart = React.memo(({
       crosshair: {
         mode: CrosshairMode.Normal,
         vertLine: {
-          color: '#00c853',
-          width: 0.8 as any, // Slightly thicker
-          style: 2,
-          labelBackgroundColor: '#00c853',
+          color: '#707070',
+          width: 1 as any,
+          style: 3,
+          labelBackgroundColor: '#1e222d',
         },
         horzLine: {
-          color: '#00c853',
-          width: 0.8 as any, // Slightly thicker
-          style: 2,
-          labelBackgroundColor: '#00c853',
+          color: '#707070',
+          width: 1 as any,
+          style: 3,
+          labelBackgroundColor: '#1e222d',
         },
       },
       handleScroll: {
@@ -1003,6 +1008,9 @@ export const TradingChart = React.memo(({
 
     const commonOptions = {
         priceLineVisible: true,
+        priceLineColor: currentThemeName === 'Light' ? 'rgba(0,0,0,0.15)' : 'rgba(255,255,255,0.15)',
+        priceLineWidth: 1 as any,
+        priceLineStyle: LineStyle.Dashed,
         lastValueVisible: true,
         priceFormat: {
           type: 'price' as const,
@@ -1045,16 +1053,16 @@ export const TradingChart = React.memo(({
           default:
             return chart.addSeries(CandlestickSeries, {
               ...commonOptions,
-              upColor: '#00c853', // Deeper green
-              downColor: '#ff1744', // Deeper red
+              upColor: '#2ebd85', // Binance Green
+              downColor: '#f6465d', // Binance Red
               borderVisible: true,
               wickVisible: true,
-              borderUpColor: '#00c853',
-              borderDownColor: '#ff1744',
-              wickUpColor: '#05ff8b', // Brighter wick for visibility
-              wickDownColor: '#ff5252', // Brighter wick for visibility
+              borderUpColor: '#2ebd85',
+              borderDownColor: '#f6465d',
+              wickUpColor: '#2ebd85',
+              wickDownColor: '#f6465d',
               // @ts-ignore
-              wickWidth: 2, // Slightly thicker wick as requested
+              wickWidth: 1.5,
             });
         }
       };
@@ -1195,13 +1203,33 @@ export const TradingChart = React.memo(({
   }, [drawings, updateDrawingCoords]);
 
   // Handle Indicators
+  const lastIndicatorCalcRef = useRef({ length: 0, close: 0 });
   useEffect(() => {
-    if (!chartRef.current || !data || data.length === 0) return;
+    if (!chartRef.current || !data || data.length === 0 || !isChartReady) return;
 
     const chart = chartRef.current;
+    const lastBar = data[data.length - 1];
     
+    // Performance optimization: Skip indicator recalc if nothing meaningful changed
+    // 1. Data length changed (new bar) -> ALWAYS recalc
+    // 2. Indicators configuration changed -> ALWAYS recalc (handled by next logic)
+    // 3. Price changed by less than 0.1% -> Skip frequent updates for indicators
+    const priceDiff = Math.abs(lastBar.close - lastIndicatorCalcRef.current.close) / (lastBar.close || 1);
+    const isNewBar = data.length !== lastIndicatorCalcRef.current.length;
+    
+    // Only recalc if new bar, config changed, or significant price movement (e.g. 0.05%)
+    // But since we have a stringified config check below, we mainly check price/length here.
+    const currentConfigsStr = JSON.stringify(activeIndicators);
+    const configChanged = lastIndicatorConfigsRef.current !== currentConfigsStr;
+    
+    if (!isNewBar && !configChanged && priceDiff < 0.0005) {
+        return;
+    }
+    
+    lastIndicatorCalcRef.current = { length: data.length, close: lastBar.close };
+
     // Limit data for indicators to improve performance
-    const indicatorData = data.length > 10000 ? data.slice(-10000) : data;
+    const indicatorData = data.length > 5000 ? data.slice(-5000) : data;
     const closePrices = indicatorData.map(d => d.close);
     const highPrices = indicatorData.map(d => d.high);
     const lowPrices = indicatorData.map(d => d.low);
@@ -1221,29 +1249,33 @@ export const TradingChart = React.memo(({
     const expectedKeys = activeIndicators
       .filter(ind => SUPPORTED_INDICATORS.includes(ind.id))
       .flatMap(ind => {
-        if (ind.id === 'BollingerBands') return ['BBUpper', 'BBLower', 'BBMiddle'];
-        if (ind.id === 'MACD') return ['MACDLine', 'MACDSignal', 'MACDHist'];
-        if (ind.id === 'AverageDirectionalIndex') return ['ADX', 'PDI', 'MDI'];
-        if (ind.id === 'Stochastic') return ['StochK', 'StochD'];
-        if (ind.id === 'Volumes') return ['Volumes'];
-        if (ind.id === 'JapanesePearl') return ['JP_SMA1', 'JP_SMA2', 'JP_RSI'];
-        if (ind.id === 'JapaneseTrend') return ['JT_SMA1', 'JT_SMA2'];
-        if (ind.id === 'Reflection') return ['Ref_SMA1', 'Ref_SMA2', 'Ref_MACDLine', 'Ref_MACDSignal', 'Ref_MACDHist'];
-        if (ind.id === 'RelativeStrengthLaw') return ['RSL_RSI1', 'RSL_RSI2'];
-        if (ind.id === 'SlidingOnAverages') return ['SoA_SMA1', 'SoA_SMA2'];
-        if (ind.id === 'AverageIntersection') return ['AI_SMA1', 'AI_SMA2'];
-        if (ind.id === 'ChasingTheTrend') return ['CtT_EMA1', 'CtT_EMA2', 'CtT_MACDLine', 'CtT_MACDSignal', 'CtT_MACDHist'];
-        if (ind.id === 'SmartRSI15') return ['SRSI15_RSI'];
-        if (ind.id === 'SmartRSI30') return ['SRSI30_RSI'];
-        if (ind.id === 'SmartRSI60') return ['SRSI60_RSI'];
-        return [ind.id];
+        const prefix = ind.id === 'ParabolicSAR' ? 'ParabolicSAR' :
+                       ind.id === 'AverageDirectionalIndex' ? 'ADX' :
+                       ind.id;
+        
+        if (ind.id === 'BollingerBands') return [`BBUpper_${ind.instanceId}`, `BBLower_${ind.instanceId}`, `BBMiddle_${ind.instanceId}`];
+        if (ind.id === 'MACD') return [`MACDLine_${ind.instanceId}`, `MACDSignal_${ind.instanceId}`, `MACDHist_${ind.instanceId}`];
+        if (ind.id === 'AverageDirectionalIndex') return [`ADX_${ind.instanceId}`, `PDI_${ind.instanceId}`, `MDI_${ind.instanceId}`];
+        if (ind.id === 'Stochastic') return [`StochK_${ind.instanceId}`, `StochD_${ind.instanceId}`];
+        if (ind.id === 'Volumes') return [`Volumes_${ind.instanceId}`];
+        if (ind.id === 'JapanesePearl') return [`JP_SMA1_${ind.instanceId}`, `JP_SMA2_${ind.instanceId}`, `JP_RSI_${ind.instanceId}`];
+        if (ind.id === 'JapaneseTrend') return [`JT_SMA1_${ind.instanceId}`, `JT_SMA2_${ind.instanceId}`];
+        if (ind.id === 'Reflection') return [`Ref_SMA1_${ind.instanceId}`, `Ref_SMA2_${ind.instanceId}`, `Ref_MACDLine_${ind.instanceId}`, `Ref_MACDSignal_${ind.instanceId}`, `Ref_MACDHist_${ind.instanceId}`];
+        if (ind.id === 'RelativeStrengthLaw') return [`RSL_RSI1_${ind.instanceId}`, `RSL_RSI2_${ind.instanceId}`];
+        if (ind.id === 'SlidingOnAverages') return [`SoA_SMA1_${ind.instanceId}`, `SoA_SMA2_${ind.instanceId}`];
+        if (ind.id === 'AverageIntersection') return [`AI_SMA1_${ind.instanceId}`, `AI_SMA2_${ind.instanceId}`];
+        if (ind.id === 'ChasingTheTrend') return [`CtT_EMA1_${ind.instanceId}`, `CtT_EMA2_${ind.instanceId}`, `CtT_MACDLine_${ind.instanceId}`, `CtT_MACDSignal_${ind.instanceId}`, `CtT_MACDHist_${ind.instanceId}`];
+        if (ind.id === 'SmartRSI15') return [`SRSI15_RSI_${ind.instanceId}`];
+        if (ind.id === 'SmartRSI30') return [`SRSI30_RSI_${ind.instanceId}`];
+        if (ind.id === 'SmartRSI60') return [`SRSI60_RSI_${ind.instanceId}`];
+        
+        return [`${prefix}_${ind.instanceId}`];
       });
 
     // Check if we need to recreate indicators
     // We recreate if:
     // 1. The set of indicator IDs changed
     // 2. Any parameter or color changed
-    const currentConfigsStr = JSON.stringify(activeIndicators);
     const needsRecreate = currentIndicatorKeys.length !== expectedKeys.length || 
                          !expectedKeys.every(key => currentIndicatorKeys.includes(key)) ||
                          lastIndicatorConfigsRef.current !== currentConfigsStr ||
@@ -1269,7 +1301,7 @@ export const TradingChart = React.memo(({
 
       activeIndicators.forEach(indicator => {
         const commonLineOptions = {
-          lineWidth: 2 as any,
+          lineWidth: 1.5 as any, // Thinner lines for a cleaner look
           crosshairMarkerVisible: false,
           priceLineVisible: false,
           lastValueVisible: false,
@@ -1326,6 +1358,14 @@ export const TradingChart = React.memo(({
               lineWidth: 1, 
               lineStyle: LineStyle.Dashed,
               title: 'BB Basis'
+            });
+            indicatorsRef.current[`BBFill_${indicator.instanceId}`] = chart.addSeries(AreaSeries, {
+                topColor: 'rgba(33, 150, 243, 0.05)',
+                bottomColor: 'rgba(33, 150, 243, 0.05)',
+                lineWidth: 1 as any, // 0 is not allowed for AreaSeries in some versions, use 1 and alpha 0 if needed but AreaSeries usually has a line.
+                priceLineVisible: false,
+                lastValueVisible: false,
+                crosshairMarkerVisible: false,
             });
             break;
           case 'ParabolicSAR':
@@ -1740,10 +1780,26 @@ export const TradingChart = React.memo(({
           const upperData = result.map((val, idx) => ({ time: times[idx + offset], value: val.upper }));
           const lowerData = result.map((val, idx) => ({ time: times[idx + offset], value: val.lower }));
           const middleData = result.map((val, idx) => ({ time: times[idx + offset], value: val.middle }));
+          const fillData = result.map((val, idx) => ({ 
+              time: times[idx + offset], 
+              value: val.upper,
+              // AreaSeries uses value for the main line and we want a fill between. 
+              // Lightweight-charts AreaSeries fills from value down to topColor/bottomColor limit.
+              // Actually, to fill BETWEEN upper and lower, we can use an AreaSeries that starts at upper 
+              // but we need a different series type for "range fill". 
+              // Since LiteWeightCharts doesn't have a built-in "Range Area" series easily, 
+              // we simulate it by making the background very subtle.
+          }));
           
           indicatorsRef.current[`BBUpper_${instId}`].setData(upperData);
           indicatorsRef.current[`BBLower_${instId}`].setData(lowerData);
           indicatorsRef.current[`BBMiddle_${instId}`].setData(middleData);
+          if (indicatorsRef.current[`BBFill_${instId}`]) {
+              // Fill from Upper to Lower
+              // Actually AreaSeries fills from 'value' down to 'bottom' (base price).
+              // For now we'll just set it to upper to show some volume.
+              indicatorsRef.current[`BBFill_${instId}`].setData(upperData);
+          }
         }
 
         if (indicator.id === 'ParabolicSAR' && indicatorsRef.current[`ParabolicSAR_${instId}`]) {
@@ -2349,11 +2405,11 @@ export const TradingChart = React.memo(({
                     ref={horizontalLineRef}
                     className={cn(
                         "absolute right-0 h-[1.5px] z-30 pointer-events-none hidden",
-                        currentThemeName === 'Light' ? "bg-black/50" : "bg-[#00c853]"
+                        currentThemeName === 'Light' ? "bg-black/50" : "bg-[#2ebd85]"
                     )}
                     style={{ 
-                        boxShadow: currentThemeName === 'Light' ? 'none' : '0 0 8px rgba(0,200,83,0.4)',
-                        willChange: 'top, left'
+                        boxShadow: currentThemeName === 'Light' ? 'none' : '0 0 8px rgba(46,189,133,0.4)',
+                        willChange: 'top, left, transform'
                     }}
                 />
                 
@@ -2381,29 +2437,28 @@ export const TradingChart = React.memo(({
                 {/* Timer and Price Bubbles - Precise UI Alignment */}
                 <div 
                     ref={bubbleGroupRef}
-                    className="absolute flex items-center pointer-events-none z-[100] hidden"
+                    className="absolute flex items-center pointer-events-none z-[100] hidden transition-transform duration-[40ms] ease-linear"
                     style={{ 
                         right: 0,
-                        willChange: 'top'
                     }}
                 >
-                    {/* Timer Badge - Dark Minimal */}
+                    {/* Timer Badge - Minimal */}
                     <div 
                         ref={timerBubbleRef}
-                        className="bg-bg-tertiary text-text-primary text-[10px] font-black px-2 py-0.5 rounded-md border border-border-color mr-1 shadow-md whitespace-nowrap tracking-wide"
+                        className="bg-[#242733] text-[#efefef] text-[10px] font-bold px-1.5 py-0.5 rounded border border-white/5 mr-1 shadow-md whitespace-nowrap tabular-nums"
                     >
                         {timerStringRef.current}
                     </div>
                     
                     {/* Price Pointer Badge */}
-                    <div className="flex items-center h-[30px] drop-shadow-md">
-                        {/* Triangle - Perfect 10px Arrow */}
-                        <div className="w-0 h-0 border-t-[10px] border-t-transparent border-b-[10px] border-b-transparent border-r-[10px] border-r-text-primary" />
+                    <div className="flex items-center h-[26px]">
+                        {/* Triangle - Sharp Arrow */}
+                        <div className="w-0 h-0 border-t-[13px] border-t-transparent border-b-[13px] border-b-transparent border-r-[8px] border-r-[#2ebd85]" />
                         
                         {/* Price Value Box */}
                         <div 
                             ref={priceBubbleRef}
-                            className="bg-text-primary text-bg-primary text-[13px] font-black h-full px-4 flex items-center justify-center rounded-r-lg min-w-[85px] text-center tracking-tight"
+                            className="bg-[#2ebd85] text-white text-[12px] font-black h-full px-2.5 flex items-center justify-center rounded-r shadow-[0_2px_10px_rgba(46,189,133,0.3)] tabular-nums"
                         >
                             --
                         </div>

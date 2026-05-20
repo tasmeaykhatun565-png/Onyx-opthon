@@ -42,7 +42,7 @@ import InfoPage from './InfoPage';
 import { ReferralPage } from './ReferralPage';
 import { LeaderboardPage } from './LeaderboardPage';
 import WhatsNewSheet from './WhatsNewSheet';
-import IndicatorSheet from './IndicatorSheet';
+import IndicatorSheet, { IndicatorSheetContent } from './IndicatorSheet';
 import ServiceAgreementSheet from './ServiceAgreementSheet';
 import LanguageSheet from './LanguageSheet';
 import AppearanceSheet from './AppearanceSheet';
@@ -688,22 +688,22 @@ function TradeHistoryLog({
 
   return (
     <motion.div 
-      initial={{ opacity: 0, x: inSidebar ? "0" : "100%" }}
+      initial={{ opacity: 0, x: inSidebar ? 20 : "100%" }}
       animate={{ opacity: 1, x: 0 }}
-      exit={{ opacity: 0, x: inSidebar ? "0" : "100%" }}
+      exit={{ opacity: 0, x: inSidebar ? 20 : "100%" }}
       transition={{ type: "spring", damping: 25, stiffness: 200 }}
       className={cn(
-        inSidebar ? "h-full flex flex-col w-full bg-bg-primary" : "fixed inset-0 z-[60] bg-bg-primary flex flex-col"
+        inSidebar ? "absolute inset-0 z-[60] flex flex-col w-full bg-bg-primary" : "fixed inset-0 z-[60] bg-bg-primary flex flex-col"
       )}
     >
-      {!inSidebar && (
-        <div className="flex items-center justify-between p-4 border-b border-border-color">
-          <h2 className="text-xl font-bold text-text-primary">Trades</h2>
-          <button onClick={onClose} className="p-2 -mr-2 text-text-secondary hover:text-text-primary transition">
-            <X size={24} />
-          </button>
-        </div>
-      )}
+      <div className="flex items-center justify-between p-4 border-b border-border-color shrink-0">
+        <h2 className="text-xl font-bold text-text-primary">
+          {inSidebar && activeTab === 'CLOSED' ? "History" : activeTab === 'CLOSED' ? "Closed Trades" : "Pending Orders"}
+        </h2>
+        <button onClick={onClose} className="p-2 -mr-2 text-text-secondary hover:text-white transition-colors">
+          <ChevronDown className={cn("transition-transform", inSidebar && "rotate-90")} size={20} />
+        </button>
+      </div>
 
       {/* Tabs */}
       <div className="flex px-4 border-b border-border-color">
@@ -1018,6 +1018,7 @@ function SettingsPage({
 }
 
 function PersonalInformationPage({ onBack, user }: { onBack: () => void, user: any }) {
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [nickname, setNickname] = useState(() => localStorage.getItem('user-name') || user.displayName || '');
   const [dob, setDob] = useState(() => localStorage.getItem('user-dob') || '');
 
@@ -1418,7 +1419,6 @@ export default function TradingPlatform() {
 
   // State
   const [socket, setSocket] = useState<Socket | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [user, setUser] = useState<FirebaseUser | null>(null);
   const [chartType, setChartType] = useState(() => {
@@ -1498,6 +1498,64 @@ export default function TradingPlatform() {
   const [data, setData] = useState<OHLCData[]>([]);
   const [tickHistory, setTickHistory] = useState<Record<string, TickData[]>>({});
   const [currentPrice, setCurrentPrice] = useState<number>(51.677);
+  const targetPriceRef = useRef<number>(51.677);
+  const smoothedPriceRef = useRef<number>(51.677);
+  const isFirstTickAfterSwitchRef = useRef(false);
+  const smoothingEnabledRef = useRef<boolean>(true);
+
+  // Smooth Price Animation Loop
+  useEffect(() => {
+    let rafId: number;
+    let lastRenderTime = 0;
+
+    const smooth = (timestamp: number) => {
+      const diff = targetPriceRef.current - smoothedPriceRef.current;
+      const absDiff = Math.abs(diff);
+
+      if (smoothingEnabledRef.current && absDiff > 0.00000001) {
+        // Linear interpolation for smoothness - increased for professional snappiness
+        // Snappy exact match (speed=1.0) for real markets to follow request "same to same"
+        const speed = isRealMarketRef.current ? 1.0 : 0.45;
+        const step = diff * speed;
+        
+        smoothedPriceRef.current += step;
+        
+        // Threshold check to stop jitter
+        if (Math.abs(targetPriceRef.current - smoothedPriceRef.current) < 0.000000001) {
+            smoothedPriceRef.current = targetPriceRef.current;
+        }
+
+        // Throttled state updates to avoid overwhelming React (e.g. max ~30fps)
+        const timeSinceLastRender = timestamp - lastRenderTime;
+        if (timeSinceLastRender > 32) {
+            setCurrentPrice(smoothedPriceRef.current);
+            
+            setData(prev => {
+              if (prev.length === 0 || isLoadingRef.current) return prev;
+              
+              const last = prev[prev.length - 1];
+              const priceDiff = Math.abs(last.close - smoothedPriceRef.current);
+              if (priceDiff < 0.000000001) return prev;
+
+              const updated = {
+                ...last,
+                close: smoothedPriceRef.current,
+                high: Math.max(last.high, smoothedPriceRef.current),
+                low: Math.min(last.low, smoothedPriceRef.current)
+              };
+              
+              const next = [...prev.slice(0, -1), updated];
+              dataRef.current = next;
+              return next;
+            });
+            lastRenderTime = timestamp;
+        }
+      }
+      rafId = requestAnimationFrame(smooth);
+    };
+    rafId = requestAnimationFrame(smooth);
+    return () => cancelAnimationFrame(rafId);
+  }, []);
   const [activeAccount, setActiveAccount] = useState<string>('DEMO');
   const [chartTimeFrame, setChartTimeFrame] = useState(() => {
     return localStorage.getItem('chartTimeFrame') || '1m';
@@ -1578,6 +1636,15 @@ export default function TradingPlatform() {
     return () => clearInterval(timer);
   }, [clientAds]);
 
+  const handleAssetSelect = useCallback((asset: Asset) => {
+    console.log('Asset selected:', asset.shortName);
+    setIsLoading(true);
+    setData([]);
+    dataRef.current = [];
+    isFirstTickAfterSwitchRef.current = true;
+    setSelectedAsset(asset);
+  }, []);
+
   const [kycStatus, setKycStatus] = useState<'NOT_SUBMITTED' | 'PENDING' | 'APPROVED' | 'REJECTED'>('NOT_SUBMITTED');
   const [kycRejectionReason, setKycRejectionReason] = useState<string | null>(null);
   const [selectedAsset, setSelectedAsset] = useState<Asset>(() => {
@@ -1596,9 +1663,19 @@ export default function TradingPlatform() {
   useEffect(() => {
     localStorage.setItem('selectedAsset', safeStringify(selectedAsset));
   }, [selectedAsset]);
+
+  const isRealMarketRef = useRef<boolean>(false);
+
+  // Sync isRealMarketRef when selectedAsset changes
+  useEffect(() => {
+    if (selectedAsset) {
+      isRealMarketRef.current = !!selectedAsset.isRealMarket;
+    }
+  }, [selectedAsset]);
+
   const [marketAssets, setMarketAssets] = useState<Record<string, any>>({});
   const [isAssetSelectorOpen, setIsAssetSelectorOpen] = useState(false);
-  const [activeSidePanel, setActiveSidePanel] = useState<'TRADES' | 'MARKET' | 'HELP' | 'REWARDS' | 'INDICATORS' | null>(null);
+  const [activeSidePanel, setActiveSidePanel] = useState<'TRADES' | 'MARKET' | 'HELP' | 'REWARDS' | 'INDICATORS' | 'ACTIVITIES' | null>(null);
   const [isLoading, setIsLoadingState] = useState(false);
   const isLoadingRef = useRef(false);
   const loadingStartTimeRef = useRef(Date.now());
@@ -1684,6 +1761,8 @@ export default function TradingPlatform() {
   const [timerDuration, setTimerDuration] = useState<number>(60); // 1 min
 
   const [trades, setTrades] = useState<Trade[]>([]);
+  const [isTrading, setIsTrading] = useState(false);
+  const isTradingRef = useRef(false);
   const [timezoneOffset, setTimezoneOffset] = useState<number>(() => {
     const saved = localStorage.getItem('app-timezone-offset');
     if (saved !== null) return Number(saved);
@@ -2164,8 +2243,8 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
   const [paymentsInitialView, setPaymentsInitialView] = useState<'DEPOSIT' | 'WITHDRAW' | 'TRANSFER' | 'HISTORY' | null>(null);
 
   const handleOpenPayments = useCallback((view: 'DEPOSIT' | 'WITHDRAW' | 'TRANSFER' | 'HISTORY' | null = null) => {
-    setPaymentsInitialView(view);
-    setIsPaymentsOpen(true);
+    setPaymentsInitialView(prev => prev !== view ? view : prev);
+    setIsPaymentsOpen(prev => prev !== true ? true : prev);
   }, []);
 
   // Route Synchronization Effect
@@ -2173,74 +2252,70 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
     const path = location.pathname;
     
     // First, sync side sheets for pages that should display over TRADING
-    setIsActivitiesOpen(path === '/tournaments');
-    setIsWhatsNewOpen(path === '/whats-new');
-    setIsProfileOpen(path === '/profile-sheet'); // /profile is the full page
-    setIsTournamentsOpen(path === '/events');
-    setIsCalendarOpen(path === '/calendar-view');
+    const syncSheets = () => {
+        setIsActivitiesOpen(prev => prev !== (path === '/tournaments') ? path === '/tournaments' : prev);
+        setIsWhatsNewOpen(prev => prev !== (path === '/whats-new') ? path === '/whats-new' : prev);
+        setIsProfileOpen(prev => prev !== (path === '/profile-sheet') ? path === '/profile-sheet' : prev);
+        setIsTournamentsOpen(prev => prev !== (path === '/events') ? path === '/events' : prev);
+        setIsCalendarOpen(prev => prev !== (path === '/calendar-view') ? path === '/calendar-view' : prev);
+    };
+    syncSheets();
     
     // Define active side panels based on url (For desktop slide-overs)
-    let panel = null;
+    let panel: "INDICATORS" | "MARKET" | "TRADES" | "HELP" | "REWARDS" | null = null;
     if (path === '/indicators') panel = 'INDICATORS';
-    // If you want desktop to use sliding panels for these routes, you could do it here
-    // But currently /market, /trades, /help map to full pages via 'view'.
-    setActiveSidePanel(panel as any);
+    else if (path === '/market') panel = 'MARKET';
+    else if (path === '/trades') panel = 'TRADES';
+    else if (path === '/help' || path === '/support') panel = 'HELP';
+    else if (path === '/bonuses' || path === '/rewards') panel = 'REWARDS';
+    
+    setActiveSidePanel(prev => prev !== panel ? (panel as any) : prev);
 
     // Handle specific views
-    if (path === '/') setView('HOME');
-    else if (path === '/trade' || path === '/trade/live' || path === '/trading' || path === '/trading/live' || path === '/tournaments' || path === '/whats-new' || path === '/indicators') {
-      setView('TRADING');
+    if (path === '/') setView(prev => prev !== 'HOME' ? 'HOME' : prev);
+    else if (path === '/trade' || path === '/trade/live' || path === '/trading' || path === '/trading/live' || path === '/tournaments' || path === '/whats-new' || path === '/indicators' || path === '/market' || path === '/trades' || path === '/help' || path === '/support' || path === '/bonuses' || path === '/rewards') {
+      setView(prev => prev !== 'TRADING' ? 'TRADING' : prev);
       if (path === '/trade' || path === '/trade/live' || path === '/trading' || path === '/trading/live') {
-          setActiveAccount('REAL');
+          setActiveAccount(prev => prev !== 'REAL' ? 'REAL' : prev);
       }
     }
     else if (path === '/trade/demo' || path === '/trading/demo') {
-      setView('TRADING');
-      setActiveAccount('DEMO');
+      setView(prev => prev !== 'TRADING' ? 'TRADING' : prev);
+      setActiveAccount(prev => prev !== 'DEMO' ? 'DEMO' : prev);
     }
-    else if (path === '/profile') setView('PROFILE');
-    else if (path === '/market') setView('MARKET');
-    else if (path === '/rewards' || path === '/bonuses') setView('REWARDS');
-    else if (path === '/referral' || path === '/affiliate') setView('REFERRAL');
-    else if (path === '/support' || path === '/help') setView('HELP');
-    else if (path === '/trades') setView('TRADES');
-    else if (path === '/settings') setView('SETTINGS');
-    else if (path === '/admin') setView('ADMIN');
-    else if (path === '/leaderboard') setView('LEADERBOARD');
-    else if (path === '/calendar') setView('CALENDAR');
-    else if (path.startsWith('/pay/')) setView('PAY_ORDER');
+    else if (path === '/profile') setView(prev => prev !== 'PROFILE' ? 'PROFILE' : prev);
+    else if (path === '/referral' || path === '/affiliate') setView(prev => prev !== 'REFERRAL' ? 'REFERRAL' : prev);
+    else if (path === '/settings') setView(prev => prev !== 'SETTINGS' ? 'SETTINGS' : prev);
+    else if (path === '/admin') setView(prev => prev !== 'ADMIN' ? 'ADMIN' : prev);
+    else if (path === '/leaderboard') setView(prev => prev !== 'LEADERBOARD' ? 'LEADERBOARD' : prev);
+    else if (path === '/calendar') setView(prev => prev !== 'CALENDAR' ? 'CALENDAR' : prev);
+    else if (path.startsWith('/pay/')) setView(prev => prev !== 'PAY_ORDER' ? 'PAY_ORDER' : prev);
     else if (path.startsWith('/info/')) {
-      setView('INFO_PAGE');
+      setView(prev => prev !== 'INFO_PAGE' ? 'INFO_PAGE' : prev);
       const page = path.split('/').pop();
-      if (page === 'help') setInfoPageTitle('Help Center');
-      else if (page === 'education') setInfoPageTitle('Education Hub');
-      else if (page === 'tutorials') setInfoPageTitle('Trading Tutorials');
-      else if (page === 'assets') setInfoPageTitle('Assets Index');
-      else if (page === 'terms') setInfoPageTitle('Terms and Conditions');
-      else if (page === 'privacy') setInfoPageTitle('Privacy Policy');
-      else if (page === 'risk') setInfoPageTitle('Risk Disclosure');
+      setInfoPageTitle(prev => {
+          let next = prev;
+          if (page === 'help') next = 'Help Center';
+          else if (page === 'education') next = 'Education Hub';
+          else if (page === 'tutorials') next = 'Trading Tutorials';
+          else if (page === 'assets') next = 'Assets Index';
+          else if (page === 'terms') next = 'Terms and Conditions';
+          else if (page === 'privacy') next = 'Privacy Policy';
+          else if (page === 'risk') next = 'Risk Disclosure';
+          return next;
+      });
     }
 
     // Handle payment sheets
-    if (path === '/deposit') {
-      setView('TRADING');
-      handleOpenPayments('DEPOSIT');
-    } else if (path === '/withdraw') {
-      setView('TRADING');
-      handleOpenPayments('WITHDRAW');
-    } else if (path === '/transfer') {
-      setView('TRADING');
-      handleOpenPayments('TRANSFER');
-    } else if (path === '/history') {
-      setView('TRADING');
-      handleOpenPayments('HISTORY');
+    if (path === '/deposit' || path === '/withdraw' || path === '/transfer' || path === '/history') {
+      const paymentView = path.substring(1).toUpperCase() as any;
+      if (paymentsInitialView !== paymentView) setPaymentsInitialView(paymentView);
+      if (!isPaymentsOpen) setIsPaymentsOpen(true);
     } else {
-      setIsPaymentsOpen(false);
+      if (isPaymentsOpen) setIsPaymentsOpen(false);
     }
 
   }, [location.pathname, handleOpenPayments]);
-
-  // Auth Protection for secured routes
   useEffect(() => {
     const publicPaths = ['/', '/login', '/register', '/signup'];
     const isPublicPath = publicPaths.includes(location.pathname) || location.pathname.startsWith('/pay/');
@@ -2419,6 +2494,7 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
 
   // Initialize Data (Candlesticks)
   useEffect(() => {
+    console.log('Initializing data for:', selectedAsset?.shortName);
     if (!socket || !selectedAsset) return;
     
     const assetShortName = selectedAsset.shortName;
@@ -2434,15 +2510,14 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
     volatilityRef.current = 1.0;
 
     const handleHistory = (response: { asset: string, timeframe: string, data: any[], candles?: any[], isOlder?: boolean }) => {
-      console.log('Received history:', response);
-      if (response.asset !== assetShortName || response.timeframe !== chartTimeFrame) return;
-      
-      console.log(`Processing ${response.candles ? response.candles.length : (response.data ? response.data.length : 0)} items, isOlder: ${response.isOlder}`);
+      if (response.asset !== assetShortName) return;
       
       const tfMs = getTimeFrameInMs(chartTimeFrame);
-      
       let candles: OHLCData[] = [];
       let historyTicks: TickData[] = [];
+
+      setIsLoading(false); // Definitely stop loading when ANY response arrives
+      clearTimeout(timeout);
 
       if (response.candles && response.candles.length > 0) {
         candles = response.candles.map(c => ({
@@ -2481,13 +2556,13 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
       }
 
       // SYTHETIC FALLBACK - If we still don't have enough data
-      const isRealMarket = marketAssets[assetShortName]?.isRealMarket || selectedAssetRef.current?.isRealMarket;
+      const isRealMarket = marketAssets[assetShortName]?.isRealMarket || selectedAsset.isRealMarket;
       if (candles.length < 500 && !response.isOlder && !isRealMarket) {
           // synthesize base candles only if this is the initial load and no data found
-          const basePrice = selectedAssetRef.current?.basePrice || 100;
-          const volatility = selectedAssetRef.current?.volatility || 1;
+          const basePriceValue = selectedAsset.basePrice || 100;
+          const volatility = selectedAsset.volatility || 1;
           const startCandle = candles[0];
-          let lastPrice = startCandle ? startCandle.open : basePrice;
+          let lastPrice = startCandle ? startCandle.open : basePriceValue;
           const now = startCandle ? startCandle.time : Date.now();
         const needed = 500 - candles.length;
         
@@ -2569,6 +2644,8 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
         if (candles.length > 0) {
           const last = candles[candles.length - 1];
           lastCloseRef.current = last.close;
+          targetPriceRef.current = last.close;
+          smoothedPriceRef.current = last.close;
           setCurrentPrice(last.close);
         }
       }
@@ -2587,31 +2664,28 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
     if (selectedAsset.id !== lastAssetIdRef.current) {
         setData([]);
         dataRef.current = [];
+        isFirstTickAfterSwitchRef.current = true;
     }
     lastAssetIdRef.current = selectedAsset.id;
 
     setIsLoading(true);
 
-    // Add a small delay for the request to ensure the UI has cleared
-    const requestTimeout = setTimeout(() => {
-      if (socket.connected) {
-        socket.emit('request-history', { asset: assetShortName, timeframe: chartTimeFrame, limit: 500 });
-      } else {
-        socket.once('connect', () => {
-          socket.emit('request-history', { asset: assetShortName, timeframe: chartTimeFrame, limit: 500 });
-        });
-      }
-    }, 100);
-
-    // Fallback if history takes too long
+    // Initial timeout fallback - increased for heavy real market requests
     const timeout = setTimeout(() => {
       setIsLoading(false);
-    }, 5000);
+    }, 15000); 
+
+    if (socket.connected) {
+      socket.emit('request-history', { asset: assetShortName, timeframe: chartTimeFrame, limit: 500 });
+    } else {
+      socket.once('connect', () => {
+        socket.emit('request-history', { asset: assetShortName, timeframe: chartTimeFrame, limit: 500 });
+      });
+    }
 
     return () => {
       socket.off('asset-history', handleHistory);
       clearTimeout(timeout);
-      clearTimeout(requestTimeout);
     };
   }, [socket, selectedAsset.id, chartTimeFrame]);
 
@@ -2655,17 +2729,61 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
         return prev;
       });
       
-      const newPrice = tick.price;
+      const newPrice = Number(tick.price);
+      if (isNaN(newPrice) || newPrice <= 0) return; // Sanitize input
+      
+      if (isFirstTickAfterSwitchRef.current) {
+          // Professional alignment healing: Smoothly connect history to live price stream 
+          // by anchoring existing candles to the first incoming live point.
+          setData(prev => {
+              if (prev.length > 0) {
+                  const lastCandle = prev[prev.length - 1];
+                  const diff = newPrice - lastCandle.close;
+                  // If the gap is significant, shift the entire history to anchor at the live price
+                  if (Math.abs(diff) / newPrice > 0.00001) {
+                      console.log('[SYNC] First tick alignment healing:', diff);
+                      const healed = prev.map(c => ({
+                          ...c,
+                          open: c.open + diff,
+                          high: c.high + diff,
+                          low: c.low + diff,
+                          close: c.close + diff
+                      }));
+                      dataRef.current = healed;
+                      return healed;
+                  }
+              }
+              return prev;
+          });
 
-      // Sanity check: prevent unrealistic spikes (e.g., > 20% jump on one tick) - Increased for gaps
-      if (lastCloseRef.current !== null && Math.abs(newPrice - lastCloseRef.current) / lastCloseRef.current > 0.20) {
-          console.warn("Unrealistic price jump ignored:", newPrice, lastCloseRef.current);
-          return;
+          targetPriceRef.current = newPrice;
+          smoothedPriceRef.current = newPrice;
+          setCurrentPrice(newPrice);
+          lastCloseRef.current = newPrice;
+          isFirstTickAfterSwitchRef.current = false;
+      } else {
+          // Prevent massive jumps (e.g., > 10% change in one tick) not caused by pair switch
+          if (smoothedPriceRef.current > 0 && Math.abs(newPrice - smoothedPriceRef.current) / smoothedPriceRef.current > 0.1) {
+              console.warn('Ignored massive price spike:', newPrice, smoothedPriceRef.current);
+              return;
+          }
+
+          // Sanity check: prevent unrealistic spikes (e.g., > 20% jump on one tick)
+          if (lastCloseRef.current !== null && Math.abs(newPrice - lastCloseRef.current) / lastCloseRef.current > 0.20) {
+              console.warn("Unrealistic price jump ignored:", newPrice, lastCloseRef.current);
+              return;
+          }
+          
+          targetPriceRef.current = newPrice;
+          // Substantial gap (e.g. data interruption), jump immediately without smooth
+          if (Math.abs(smoothedPriceRef.current - newPrice) / smoothedPriceRef.current > 0.001) {
+              smoothedPriceRef.current = newPrice;
+              setCurrentPrice(newPrice);
+          }
       }
       
       const tfMs = getTimeFrameInMs(chartTimeFrameRef.current);
 
-      setCurrentPrice(newPrice);
       lastCloseRef.current = newPrice;
 
       // Update frozen status if it changed
@@ -2711,8 +2829,8 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
             const newCandle = {
                 time: currentTFStart,
                 open: useMinuteAcc ? tick.minuteOpen : newPrice,
-                high: useMinuteAcc ? tick.minuteHigh : Math.max(newPrice, tick.high || newPrice),
-                low: useMinuteAcc ? tick.minuteLow : Math.min(newPrice, tick.low || newPrice),
+                high: useMinuteAcc ? tick.minuteHigh : Math.max(newPrice, newPrice),
+                low: useMinuteAcc ? tick.minuteLow : Math.min(newPrice, newPrice),
                 close: newPrice,
                 volume: Math.floor(Math.random() * 100) + 10,
                 formattedTime: formatWithOffset(currentTFStart, 'HH:mm:ss', timezoneOffset),
@@ -2740,10 +2858,11 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
             // Update existing candle
             const updatedCandle = {
                 ...lastCandle,
+                // PROFESSIONAL SYNC: Adopt the server's minuteOpen even for existing candles to fix gaps
                 open: useMinuteAcc ? tick.minuteOpen : lastCandle.open,
                 close: newPrice,
-                high: useMinuteAcc ? tick.minuteHigh : Math.max(lastCandle.high, tick.high || newPrice),
-                low: useMinuteAcc ? tick.minuteLow : Math.min(lastCandle.low, tick.low || newPrice),
+                high: useMinuteAcc ? Math.max(lastCandle.high, tick.minuteHigh) : Math.max(lastCandle.high, newPrice),
+                low: useMinuteAcc ? Math.min(lastCandle.low, tick.minuteLow) : Math.min(lastCandle.low, newPrice),
                 volume: (lastCandle.volume || 0) + 1,
             };
             
@@ -2759,14 +2878,14 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
             const newCandle = {
                 time: currentTFStart,
                 open: useMinuteAcc ? tick.minuteOpen : lastCandle.close,
-                high: useMinuteAcc ? tick.minuteHigh : Math.max(lastCandle.close, tick.high || newPrice),
-                low: useMinuteAcc ? tick.minuteLow : Math.min(lastCandle.close, tick.low || newPrice),
+                high: useMinuteAcc ? tick.minuteHigh : Math.max(lastCandle.close, newPrice),
+                low: useMinuteAcc ? tick.minuteLow : Math.min(lastCandle.close, newPrice),
                 close: newPrice,
                 volume: Math.floor(Math.random() * 10) + 1,
                 formattedTime: formatWithOffset(currentTFStart, 'HH:mm:ss', timezoneOffset),
             };
             updatedData = [...prev, newCandle];
-            if (updatedData.length > 5000) updatedData.shift();
+            if (updatedData.length > 1000) updatedData.shift();
         }
         
         dataRef.current = updatedData;
@@ -2831,27 +2950,14 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
       // Update current price if it matches selected asset to prevent jumps
       if (selectedAsset && prices[selectedAsset.shortName]) {
         const initialPrice = Number(prices[selectedAsset.shortName]);
+        targetPriceRef.current = initialPrice;
+        smoothedPriceRef.current = initialPrice;
         setCurrentPrice(initialPrice);
         lastCloseRef.current = initialPrice;
       }
     });
 
-    socket.on('market-tick', (ticks: Record<string, any>) => {
-      handleTick(ticks);
-      
-      // Also update marketAssets so indicators/sidebars match
-      setMarketAssets(prev => {
-        let changed = false;
-        const next = { ...prev };
-        Object.entries(ticks).forEach(([symbol, tick]) => {
-          if (!next[symbol] || next[symbol].price !== tick.price) {
-            next[symbol] = { ...(next[symbol] || {}), price: tick.price };
-            changed = true;
-          }
-        });
-        return changed ? next : prev;
-      });
-    });
+    socket.on('market-tick', handleTick);
     socket.on('asset-payout-updated', handlePayoutUpdate);
     socket.on('market-assets-updated', (updatedAssets: Record<string, any>) => {
       setMarketAssets(prev => {
@@ -3135,12 +3241,27 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
   };
 
   const handleTrade = (type: 'UP' | 'DOWN') => {
-    if (selectedAsset.isFrozen) return showToast(t('trade.closed_assets'), "error");
+    if (isTrading || isTradingRef.current) return;
+    setIsTrading(true);
+    isTradingRef.current = true;
     
-    // Demo trade limit check
+    // Auto-reset isTrading in case of errors or very long processing
+    setTimeout(() => {
+        setIsTrading(false);
+        isTradingRef.current = false;
+    }, 2000);
+
+    if (selectedAsset.isFrozen) {
+      setIsTrading(false);
+      isTradingRef.current = false;
+      return showToast(t('trade.closed_assets'), "error");
+    }
+    
     if (activeAccount === 'DEMO') {
       const activeDemoTradesCount = trades.filter(t => t.status === 'ACTIVE' && t.accountType === 'DEMO').length;
       if (activeDemoTradesCount >= 10) {
+        setIsTrading(false);
+        isTradingRef.current = false;
         return showToast(t('trade.max_active_reached'), "error");
       }
     }
@@ -3174,6 +3295,8 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
     }
 
     if (totalAvailable < investmentInUSD - 0.00000001) {
+      setIsTrading(false);
+      isTradingRef.current = false;
       showToast(`${t('trade.insufficient_balance')}. You need ${displayCurrencySymbol}${(investmentInUSD * rate).toFixed(2)} but have ${displayCurrencySymbol}${(totalAvailable * rate).toFixed(2)}.`, "error");
       return;
     }
@@ -3187,6 +3310,8 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
       
       // Max Trade Amount Check
       if (rm.maxTradeAmount > 0 && investmentInDisplay > rm.maxTradeAmount) {
+        setIsTrading(false);
+        isTradingRef.current = false;
         return showToast(`Risk Management: Max trade amount is ${currentSymbol}${rm.maxTradeAmount}`, "error");
       }
 
@@ -3213,11 +3338,15 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
 
       // Daily Stop Loss Check
       if (rm.dailyStopLoss > 0 && dailyPnL <= -rm.dailyStopLoss) {
+        setIsTrading(false);
+        isTradingRef.current = false;
         return showToast(`Risk Management: Daily Stop Loss of ${currentSymbol}${rm.dailyStopLoss} reached.`, "error");
       }
 
       // Daily Take Profit Check
       if (rm.dailyTakeProfit > 0 && dailyPnL >= rm.dailyTakeProfit) {
+        setIsTrading(false);
+        isTradingRef.current = false;
         return showToast(`Risk Management: Daily Take Profit of ${currentSymbol}${rm.dailyTakeProfit} reached.`, "error");
       }
     }
@@ -3325,6 +3454,12 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
       setTrades(prev => [newTrade, ...prev]);
       playSound('trade');
     }
+    
+    // Unlock fast to allow Next click, but delay slightly to prevent UI double-fire
+    setTimeout(() => {
+        setIsTrading(false);
+        isTradingRef.current = false;
+    }, 1200);
   };
 
   const handlePlacePendingOrder = (order: { type: 'PRICE' | 'TIME', value: string, minProfitability: number, direction: 'UP' | 'DOWN' }) => {
@@ -4311,6 +4446,7 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
           isLeaderboardOpen={isLeaderboardOpen}
           isHelpOpen={isHelpOpen}
           isAssetSelectorOpen={isAssetSelectorOpen}
+          activeSidePanel={activeSidePanel}
           setActiveSidePanel={setActiveSidePanel}
           setIsProfileOpen={setIsProfileOpen}
           setIsPaymentsOpen={setIsPaymentsOpen}
@@ -4322,91 +4458,129 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
         <AnimatePresence>
           {activeSidePanel && (
             <motion.div 
-              initial={{ x: -350, opacity: 0 }}
+              initial={{ x: -400, opacity: 0 }}
               animate={{ x: 0, opacity: 1 }}
-              exit={{ x: -350, opacity: 0 }}
+              exit={{ x: -400, opacity: 0 }}
               transition={{ type: "spring", damping: 30, stiffness: 300 }}
-              className="absolute inset-y-0 left-0 w-full md:w-[350px] bg-bg-secondary border-r border-border-color z-40 flex flex-col shadow-2xl"
+              className="absolute inset-y-0 left-0 w-full md:w-[400px] bg-bg-primary border-r border-border-color z-40 flex flex-col shadow-2xl"
             >
-              <div className="p-4 flex justify-between items-center bg-bg-secondary border-b border-white/[0.03]">
-                <span className="font-black uppercase text-[10px] tracking-[0.2em] text-text-secondary/60 ml-2">{activeSidePanel}</span>
-                <button 
-                  onClick={() => setActiveSidePanel(null)}
-                  className="w-10 h-10 flex items-center justify-center text-text-secondary hover:text-white rounded-xl hover:bg-white/5 transition-all active:scale-95"
-                >
-                  <X size={20}/>
-                </button>
-              </div>
-              
-              <div className="flex-1 overflow-y-auto custom-scrollbar">
+              <div className="flex-1 overflow-hidden">
                 {activeSidePanel === 'TRADES' && (
-                  <TradeHistoryLog 
-                    trades={trades}
-                    pendingOrders={[]}
-                    onClose={() => setActiveSidePanel(null)}
-                    currencySymbol={currency.symbol}
-                    exchangeRate={exchangeRate}
-                    onSelectTrade={() => {}}
-                    onCancelPendingOrder={() => {}}
+                  <TradesPage 
+                    trades={trades.filter(t => t.accountType === activeAccount)} 
+                    pendingOrders={pendingOrders.filter(o => o.accountType === activeAccount)}
+                    tickHistory={tickHistory} 
+                    currentPrice={currentPrice} 
+                    currentTime={currentTime} 
+                    currentAssetShortName={selectedAsset.shortName}
+                    marketAssets={marketAssets}
+                    onViewAsset={() => { navigate(activeAccount === 'DEMO' ? '/trade/demo' : '/trade'); setIsAssetSelectorOpen(true); }} 
+                    currencySymbol={displayCurrencySymbol}
+                    exchangeRate={currentExchangeRate}
+                    onCancelPendingOrder={handleCancelPendingOrder}
                     timezoneOffset={timezoneOffset}
+                    onClose={() => setActiveSidePanel(null)}
                     inSidebar={true}
                   />
                 )}
                 {activeSidePanel === 'MARKET' && (
-                  <div className="h-full flex flex-col">
-                    <div className="p-6 pb-0">
-                      <h2 className="text-2xl font-black text-white mb-1">Market</h2>
-                      <p className="text-xs text-text-secondary uppercase font-bold tracking-widest mb-6">Professional Tools</p>
-                    </div>
-                    <MarketPage hideHeader={true} />
-                  </div>
+                  <MarketPage 
+                    hideHeader={false} 
+                    onClose={() => setActiveSidePanel(null)}
+                  />
                 )}
                 {activeSidePanel === 'HELP' && (
-                  <div className="h-full flex flex-col">
-                    <div className="p-6 pb-0">
-                      <h2 className="text-2xl font-black text-white mb-1">Support</h2>
-                      <p className="text-xs text-text-secondary uppercase font-bold tracking-widest mb-6">24/7 Assistance</p>
-                    </div>
-                    <HelpPage 
-                      supportSettings={supportSettings} 
-                      user={user} 
-                      socket={socket} 
-                      initialView="AUTO"
-                      hideHeader={true}
-                      onSupportClick={() => setIsChatOpen(true)}
-                      onHelpCenterClick={() => navigate('/info/help')}
-                      onEducationClick={() => navigate('/info/education')}
-                      onTradingTutorialsClick={() => navigate('/info/tutorials')}
-                      currencySymbol={currency.symbol}
-                      tutorials={tutorials}
-                    />
-                  </div>
+                  <HelpPage 
+                    supportSettings={supportSettings} 
+                    user={user} 
+                    socket={socket} 
+                    initialView="AUTO"
+                    hideHeader={false}
+                    onSupportClick={() => setIsChatOpen(true)}
+                    onHelpCenterClick={() => navigate('/info/help')}
+                    onEducationClick={() => navigate('/info/education')}
+                    onTradingTutorialsClick={() => navigate('/info/tutorials')}
+                    currencySymbol={currency.symbol}
+                    tutorials={tutorials}
+                    onClose={() => setActiveSidePanel(null)}
+                  />
                 )}
                 {activeSidePanel === 'REWARDS' && (
-                  <div className="h-full flex flex-col">
-                    <div className="p-6 pb-0">
-                      <h2 className="text-2xl font-black text-white mb-1">Rewards</h2>
-                      <p className="text-xs text-text-secondary uppercase font-bold tracking-widest mb-6">Tasks & Bonuses</p>
+                  <div className="h-full flex flex-col bg-bg-primary overflow-hidden">
+                    <div className="flex items-center justify-between px-6 py-5 border-b border-border-color shrink-0 bg-bg-secondary">
+                      <h2 className="text-2xl font-black text-white tracking-tight uppercase">Rewards</h2>
+                      <button onClick={() => setActiveSidePanel(null)} className="p-2 text-text-secondary/40 hover:text-white transition-colors">
+                        <X size={20} />
+                      </button>
                     </div>
-                    <RewardsPage 
-                      turnoverRequired={turnoverRequired}
-                      turnoverAchieved={turnoverAchieved}
-                      userBonuses={userBonuses}
-                      currencySymbol={displayCurrencySymbol} 
-                      rewards={rewards}
-                      balance={balance}
-                      trades={trades}
-                      hideHeader={true}
-                      onApplyReward={(code) => {
-                        setSelectedRewardCode(code);
-                        handleOpenPayments('DEPOSIT');
-                        setActiveSidePanel(null);
-                      }}
-                    />
+                    <div className="flex-1 overflow-y-auto custom-scrollbar">
+                      <RewardsPage 
+                        turnoverRequired={turnoverRequired}
+                        turnoverAchieved={turnoverAchieved}
+                        userBonuses={userBonuses}
+                        currencySymbol={displayCurrencySymbol} 
+                        rewards={rewards}
+                        balance={balance}
+                        trades={trades}
+                        hideHeader={true}
+                        onApplyReward={(code) => {
+                          setSelectedRewardCode(code);
+                          handleOpenPayments('DEPOSIT');
+                          setActiveSidePanel(null);
+                        }}
+                      />
+                    </div>
+                  </div>
+                )}
+                {activeSidePanel === 'ACTIVITIES' && (
+                  <div className="h-full flex flex-col bg-bg-primary overflow-hidden">
+                    <div className="flex items-center justify-between px-6 py-5 border-b border-border-color shrink-0 bg-bg-secondary">
+                      <h2 className="text-2xl font-black text-white tracking-tight uppercase">Activities</h2>
+                      <button onClick={() => setActiveSidePanel(null)} className="p-2 text-text-secondary/40 hover:text-white transition-colors">
+                        <X size={20} />
+                      </button>
+                    </div>
+                    <div className="flex-1 overflow-y-auto custom-scrollbar">
+                      <ActivitiesSheet 
+                        isOpen={activeSidePanel === 'ACTIVITIES'}
+                        onClose={() => setActiveSidePanel(null)}
+                        unreadAnnouncementsCount={unreadAnnouncementsCount}
+                        clientAds={clientAds}
+                        onOpenLeaderboard={() => {
+                          setActiveSidePanel(null);
+                          setIsLeaderboardOpen(true);
+                        }}
+                        onOpenRewards={() => {
+                          setActiveSidePanel('REWARDS');
+                        }}
+                        onOpenTournaments={() => {
+                          setActiveSidePanel(null);
+                          setIsTournamentsOpen(true);
+                        }}
+                        onOpenWhatsNew={() => {
+                          setActiveSidePanel(null);
+                          setIsWhatsNewOpen(true);
+                        }}
+                        onOpenReferral={() => {
+                          setActiveSidePanel(null);
+                          setView('REFERRAL');
+                        }}
+                        onOpenCalendar={() => {
+                          setActiveSidePanel(null);
+                          setIsCalendarOpen(true);
+                        }}
+                        inSidebar={true}
+                      />
+                    </div>
                   </div>
                 )}
                 {activeSidePanel === 'INDICATORS' && (
-                  <div className="p-4 text-text-secondary">Indicators panel content</div>
+                  <IndicatorSheetContent 
+                    onClose={() => setActiveSidePanel(null)}
+                    onSelectIndicator={handleSelectIndicator}
+                    activeIndicators={activeIndicators}
+                    initialTab="Indicators"
+                  />
                 )}
               </div>
             </motion.div>
@@ -4739,7 +4913,7 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
               {isAssetSelectorOpen && (
                 <AssetSidePanel 
                   onClose={() => setIsAssetSelectorOpen(false)} 
-                  onSelect={setSelectedAsset}
+                  onSelect={handleAssetSelect}
                   setIsLoading={setIsLoading}
                   currentAssetId={selectedAsset.id}
                   marketAssets={marketAssets}
@@ -4908,11 +5082,7 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
                activeIndicators={activeIndicators}
                initialTab={indicatorInitialTab}
                onSelectIndicator={(indicator) => {
-                 const isDrawingTool = DRAWING_TOOLS.includes(indicator.id);
                  handleSelectIndicator(indicator);
-                 if (isDrawingTool) {
-                   setIsIndicatorSheetOpen(false);
-                 }
                }}
              />
 
@@ -5001,12 +5171,12 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
 
                   <button 
                     onClick={() => {
-                      setIsIndicatorSheetOpen(!isIndicatorSheetOpen);
+                      setActiveSidePanel(activeSidePanel === 'INDICATORS' ? null : 'INDICATORS');
                       setActiveDesktopChartMenu(null);
                     }}
                     className={cn(
                       "h-11 flex items-center justify-center border-b border-border-color transition",
-                      isIndicatorSheetOpen ? "bg-bg-tertiary text-white" : "hover:bg-bg-tertiary text-text-secondary/70"
+                      activeSidePanel === 'INDICATORS' ? "bg-bg-tertiary text-white" : "hover:bg-bg-tertiary text-text-secondary/70"
                     )}
                   >
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="scale-x-[-1]">
@@ -5033,12 +5203,12 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
                   
                   <button 
                     onClick={() => {
-                      setIsIndicatorSheetOpen(true);
+                      setActiveSidePanel(activeSidePanel === 'INDICATORS' ? null : 'INDICATORS');
                       setIndicatorInitialTab('Drawing');
                     }}
                     className={cn(
                       "h-11 flex items-center justify-center transition rounded-b-[12px]",
-                      activeDesktopChartMenu === 'tools' ? "bg-bg-tertiary text-white" : "hover:bg-bg-tertiary text-text-secondary/70"
+                      activeSidePanel === 'INDICATORS' && indicatorInitialTab === 'Drawing' ? "bg-bg-tertiary text-white" : "hover:bg-bg-tertiary text-text-secondary/70"
                     )}
                   >
                     <PencilLine size={18} strokeWidth={2} />
@@ -5245,6 +5415,7 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
                   setIsAssetSelectorOpen={setIsAssetSelectorOpen}
                   closeAllPanels={closeAllPanels}
                   isTradingEnabled={platformSettings.isTradingEnabled !== false}
+                  serverTimeOffset={serverTimeOffset}
                 />
               </div>
             </>
@@ -5266,7 +5437,7 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
             timezoneOffset={timezoneOffset}
           />
         )}
-        {view === 'MARKET' && <MarketPage />}
+        {view === 'MARKET' && <MarketPage onClose={() => setView('TRADING')} />}
         {view === 'REWARDS' && (
           <RewardsPage 
             turnoverRequired={turnoverRequired}
@@ -5593,7 +5764,7 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
              <AssetSelector 
                 isOpen={isAssetSelectorOpen} 
                 onClose={() => setIsAssetSelectorOpen(false)} 
-                onSelect={setSelectedAsset}
+                onSelect={handleAssetSelect}
                 setIsLoading={setIsLoading}
                 currentAssetId={selectedAsset.id}
                 marketAssets={marketAssets}
@@ -5978,7 +6149,13 @@ function TradeDetailsSheet({ trade, onClose, tickHistory, currentTime, currencyS
 
   if (inSidebar) {
     return (
-      <div className="flex flex-col h-full bg-bg-primary">
+      <motion.div 
+        initial={{ opacity: 0, x: 20 }}
+        animate={{ opacity: 1, x: 0 }}
+        exit={{ opacity: 0, x: 20 }}
+        transition={{ type: "spring", damping: 25, stiffness: 200 }}
+        className="absolute inset-0 z-[60] flex flex-col bg-bg-primary"
+      >
         <TradeDetailsContent 
           trade={trade} 
           onClose={onClose} 
@@ -5994,7 +6171,7 @@ function TradeDetailsSheet({ trade, onClose, tickHistory, currentTime, currencyS
           getCoordY={getCoordY}
           isWin={isWin}
         />
-      </div>
+      </motion.div>
     );
   }
 
@@ -6259,27 +6436,26 @@ function TradesPage({
       </div>
       
       {/* Tabs */}
-      <div className="flex border-b border-border-color px-4 mb-4">
-        <button className="px-4 py-2 border-b-2 border-blue-500 font-bold text-sm text-text-primary">Fixed Time</button>
+      <div className="flex border-b border-[#2d2d35] px-4 font-sans">
+        <button className="px-3 py-3 border-b-2 border-white font-medium text-[15px] text-text-primary h-[46px]">Fixed Time</button>
+        <button className="px-3 py-3 text-text-secondary/60 font-medium text-[15px] h-[46px]">Forex</button>
+        <button className="px-3 py-3 text-text-secondary/60 font-medium text-[15px] h-[46px]">Stocks</button>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-4 pb-20">
+      <div className="flex-1 overflow-y-auto px-4 pb-20 mt-4">
         {/* Open Trades Section */}
         {activeTrades.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-8 text-center">
-             <div className="w-16 h-16 rounded-full bg-blue-500/10 flex items-center justify-center mb-4 text-blue-500">
-                 <History size={32} />
-             </div>
-            <p className="text-gray-400 text-sm mb-6 max-w-[200px]">No active Fixed Time trades or orders on this account</p>
+          <div className="flex flex-col items-center justify-center py-6 text-center">
+            <p className="text-text-secondary/70 text-[15px] font-medium mb-5 max-w-[220px] leading-tight">No active Fixed Time trades or orders on this account</p>
             <button 
               onClick={onViewAsset}
-              className="w-full bg-bg-secondary text-text-primary font-bold py-4 rounded-2xl border border-border-color hover:bg-bg-tertiary transition-colors"
+              className="w-full bg-[#32363b] text-text-primary font-bold py-3.5 rounded-xl transition-colors hover:bg-[#3c3f46]"
             >
               Explore Assets
             </button>
           </div>
         ) : (
-          <div className="space-y-3 mb-8">
+          <div className="space-y-2 mb-6">
              <h2 className="text-lg font-bold mb-3 flex items-center justify-between">
                 <span>{t('common.open_trades')}</span>
                 <span className="text-xs font-normal text-text-secondary">{activeTrades.length} {t('common.active')}</span>
@@ -6299,58 +6475,31 @@ function TradesPage({
         )}
 
         {/* Closed Trades Section */}
-        <div className="flex justify-between items-center mb-4 mt-8">
-          <h2 className="text-lg font-bold">{t('common.closed_trades')}</h2>
-          <button 
-            onClick={() => setShowHistory(true)}
-            className="text-xs text-text-secondary flex items-center gap-1 hover:text-text-primary transition-colors font-medium"
-          >
-            Show All <ChevronRight size={14}/>
-          </button>
-        </div>
-
-        <div className="space-y-3">
-          {totalToday === 0 ? (
-            <div className="bg-bg-secondary p-4 rounded-2xl border border-border-color flex items-center gap-4">
-                <div className="w-10 h-10 rounded-full border-2 border-blue-500/20 border-t-blue-500" />
-                <div>
-                   <div className="text-xs text-text-secondary font-medium">Today's success</div>
-                   <div className="text-sm font-bold">No trades closed today</div>
-                </div>
+        {closedTrades.length > 0 && (
+          <>
+            <div className="flex justify-between items-center mb-3 mt-6">
+              <h2 className="text-[19px] font-bold">History</h2>
+              <button 
+                onClick={() => setShowHistory(true)}
+                className="text-xs text-text-primary flex items-center gap-0.5 hover:text-white transition-colors"
+              >
+                Show All <ChevronRight size={16} className="text-text-secondary w-4 h-4" />
+              </button>
             </div>
-          ) : (
-             <>
-               {/* Daily Summary Box (Real logic for today)*/}
-               <div 
-                 onClick={() => setShowHistory(true)}
-                 className="bg-bg-secondary p-4 rounded-2xl border border-border-color flex items-center gap-4 mb-4 cursor-pointer hover:bg-bg-tertiary transition-colors group"
-               >
-                  <div 
-                    className="w-12 h-12 rounded-full flex items-center justify-center relative flex-shrink-0"
-                    style={{ 
-                      background: `conic-gradient(#22c55e ${winRate * 3.6}deg, rgba(255,255,255,0.08) 0deg)`
-                    }}
-                  >
-                    <div className="absolute inset-[3px] bg-bg-secondary rounded-full flex items-center justify-center">
-                       <span className="text-[10px] font-black text-[#22c55e]">{winRate}%</span>
-                    </div>
-                  </div>
-                  <div className="flex-1">
-                     <div className="text-[10px] text-text-secondary font-black uppercase tracking-widest mb-1">Today's success</div>
-                     <div className="text-sm font-bold flex flex-col">
-                       <span className="text-[#22c55e]">{winsToday} of {totalToday} trades successful</span>
-                       <span className="text-[10px] text-text-secondary font-normal">Success rate: {winRate}%</span>
-                     </div>
-                  </div>
-                  <ChevronRight size={18} className="text-text-secondary group-hover:text-text-primary transition-colors" />
-               </div>
-               
-               {closedTrades.slice(0, 5).map(trade => (
-                 <TradeItem key={trade.id} trade={trade} onClick={() => setSelectedTrade(trade)} currencySymbol={currencySymbol} exchangeRate={exchangeRate} />
-               ))}
-             </>
-          )}
-        </div>
+
+            <div className="space-y-2.5">
+              {closedTrades.slice(0, 10).map(trade => (
+                <TradeItem 
+                  key={trade.id} 
+                  trade={trade} 
+                  onClick={() => setSelectedTrade(trade)} 
+                  currencySymbol={currencySymbol} 
+                  exchangeRate={exchangeRate} 
+                />
+              ))}
+            </div>
+          </>
+        )}
       </div>
 
       {/* Trade Details Sheet Overlay */}
@@ -6364,6 +6513,7 @@ function TradesPage({
             currencySymbol={currencySymbol}
             exchangeRate={exchangeRate}
             timezoneOffset={timezoneOffset}
+            inSidebar={inSidebar}
           />
         )}
         {showHistory && (
@@ -6379,6 +6529,7 @@ function TradesPage({
             }}
             onCancelPendingOrder={onCancelPendingOrder}
             timezoneOffset={timezoneOffset}
+            inSidebar={inSidebar}
           />
         )}
       </AnimatePresence>
@@ -6392,6 +6543,7 @@ const TradeItem: React.FC<{ trade: Trade, onClick?: () => void, currentPrice?: n
   let profitString = '';
   let profitColor = 'text-text-secondary';
   let timeString = '';
+  const tradeSymbol = trade.currencySymbol || currencySymbol;
 
   if (isActive && currentPrice !== undefined && currentTime !== undefined) {
     // Active Trade Logic
@@ -6408,7 +6560,6 @@ const TradeItem: React.FC<{ trade: Trade, onClick?: () => void, currentPrice?: n
       ? currentPrice > trade.entryPrice 
       : currentPrice < trade.entryPrice;
     
-    const tradeSymbol = trade.currencySymbol || currencySymbol;
     const tradeRate = trade.exchangeRate || exchangeRate;
     const payout = trade.payout || 80;
 
@@ -6426,7 +6577,6 @@ const TradeItem: React.FC<{ trade: Trade, onClick?: () => void, currentPrice?: n
     // Closed Trade Logic
     const isWin = trade.status === 'WIN';
     const isLoss = trade.status === 'LOSS';
-    const tradeSymbol = trade.currencySymbol || currencySymbol;
     const tradeRate = trade.exchangeRate || exchangeRate;
 
     const profit = (trade.profit !== undefined ? trade.profit : (isWin ? trade.amount * (trade.payout / 100) : -trade.amount)) * tradeRate;
@@ -6448,41 +6598,34 @@ const TradeItem: React.FC<{ trade: Trade, onClick?: () => void, currentPrice?: n
   return (
     <div 
       onClick={onClick}
-      className="bg-bg-secondary p-4 rounded-xl border border-border-color flex items-center justify-between cursor-pointer active:scale-[0.98] transition hover:bg-bg-tertiary shadow-sm"
+      className="bg-[#24262b] p-3 rounded-2xl border border-transparent flex items-center gap-3 cursor-pointer active:scale-[0.98] transition shadow-sm"
     >
-      <div className="flex items-center gap-4">
-        <div className="relative">
-          <AssetIcon 
-            shortName={trade.assetShortName} 
-            category={trade.assetCategory} 
-            flag={trade.assetFlag} 
-            size="sm"
-          />
-          <div className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-bg-secondary flex items-center justify-center border border-[var(--color-bg-secondary)] z-30">
-             {trade.type === 'UP' 
-               ? <ArrowUp size={10} className="text-[#22c55e]" strokeWidth={3} /> 
-               : <ArrowDown size={10} className="text-[#ff4757]" strokeWidth={3} />
-             }
-          </div>
-        </div>
-        <div>
-          <div className="flex items-center gap-2">
-            <span className="text-text-primary font-black text-sm tracking-tight">{trade.assetShortName}</span>
-            <span className="text-[10px] font-bold text-text-secondary bg-bg-primary px-1.5 py-0.5 rounded-md">{trade.payout}%</span>
-          </div>
-          <div className="text-[11px] text-text-secondary font-medium tracking-wide">
-            {formatWithOffset(trade.startTime, 'HH:mm', 0)}
-          </div>
-        </div>
+      <div className="relative flex-shrink-0">
+        <AssetIcon 
+          shortName={trade.assetShortName} 
+          category={trade.assetCategory} 
+          flag={trade.assetFlag} 
+        />
       </div>
       
-      <div className="flex flex-col items-end">
-        <span className={cn("font-black text-sm", profitColor)}>
-          {profitString}
-        </span>
-        <span className={cn("text-[10px] font-bold mt-0.5", isActive ? "text-[#3b82f6]" : "text-text-secondary/50")}>
-            {isActive ? timeString : 'Closed'}
-        </span>
+      <div className="flex-1 flex justify-between items-center">
+        <div className="flex flex-col">
+          <span className="text-text-secondary/70 text-[13px] font-medium leading-tight mb-1">{trade.assetShortName} • {trade.payout}%</span>
+          <span className="text-text-primary text-[15px] font-bold flex items-center gap-1.5 leading-tight">
+            {tradeSymbol}{trade.amount.toFixed(2)}
+            {trade.type === 'UP' 
+              ? <ArrowUp size={14} strokeWidth={2.5} className="text-[#22c55e]" /> 
+              : <ArrowDown size={14} strokeWidth={2.5} className="text-[#ff4757]" />
+            }
+          </span>
+        </div>
+        
+        <div className="flex flex-col items-end">
+          <span className="text-text-secondary/70 text-[13px] font-medium leading-tight mb-1">{timeString}</span>
+          <span className={cn("text-[15px] font-bold leading-tight", profitColor)}>
+            {profitString}
+          </span>
+        </div>
       </div>
     </div>
   );
@@ -6661,75 +6804,129 @@ function ProfilePage({
   );
 }
 
-function MarketPage({ hideHeader = false }: { hideHeader?: boolean }) {
+function MarketPage({ hideHeader = false, onClose }: { hideHeader?: boolean, onClose?: () => void }) {
+  const [activeSlide, setActiveSlide] = useState(0);
+  const scrollRef = React.useRef<HTMLDivElement>(null);
+
+  const scroll = (direction: 'left' | 'right') => {
+    if (scrollRef.current) {
+      const scrollAmount = scrollRef.current.clientWidth * 0.9;
+      scrollRef.current.scrollBy({ left: direction === 'left' ? -scrollAmount : scrollAmount, behavior: 'smooth' });
+    }
+  };
+
   return (
-    <div className={cn("h-full overflow-y-auto pb-24 px-6 custom-scrollbar", hideHeader ? "" : "bg-bg-primary pt-10")}>
+    <div className={cn("h-full flex flex-col bg-bg-primary overflow-hidden", hideHeader ? "" : "pt-10")}>
+      {/* Header */}
       {!hideHeader && (
-        <div className="flex items-center gap-4 mb-8">
-          <h1 className="text-3xl font-black text-text-primary">Market</h1>
+        <div className="flex items-center justify-between px-6 py-5 border-b border-border-color shrink-0">
+          <div className="flex items-center gap-3">
+            <h1 className="text-2xl font-black text-white tracking-tight">Market</h1>
+            <div className="p-1 px-2 rounded-md bg-blue-500/10 text-blue-500 text-[9px] font-black uppercase tracking-widest border border-blue-500/20">Pro</div>
+          </div>
+          <div className="flex items-center gap-1">
+            <button className="p-2 text-text-secondary/40 hover:text-white transition-colors">
+              <Info size={20} />
+            </button>
+            {onClose && (
+              <button onClick={onClose} className="p-2 text-text-secondary/40 hover:text-white transition-colors">
+                <X size={20} />
+              </button>
+            )}
+          </div>
         </div>
       )}
-      
-      {/* My Purchases & Rewards */}
-      <button className="w-full bg-bg-secondary rounded-3xl p-6 flex items-center justify-between mb-10 active:scale-[0.98] transition border border-border-color group shadow-2xl">
-        <div className="flex items-center gap-5">
-           <div className="p-4 bg-bg-tertiary rounded-2xl">
-              <ShoppingBag size={28} className="text-blue-500" />
-           </div>
-           <div>
-             <span className="font-black text-text-primary text-xl tracking-tight block">My Purchases & Rewards</span>
-             <span className="text-text-secondary text-sm mt-0.5 block font-medium">Manage your active tools</span>
-           </div>
-        </div>
-        <ChevronRight size={28} className="text-text-secondary group-hover:text-text-primary" />
-      </button>
 
-      {/* Banners Carousel */}
-      <div className="flex gap-6 overflow-x-auto pb-8 mb-4 scrollbar-hide snap-x">
-        {/* Crypto Banner */}
-        <div className="min-w-[92%] md:min-w-[48%] bg-gradient-to-br from-blue-700 to-blue-900 rounded-3xl p-8 relative overflow-hidden h-56 flex flex-col justify-center snap-center shadow-2xl shadow-blue-900/40">
-          <h3 className="font-black text-4xl text-white z-10 mb-2">Crypto</h3>
-          <p className="text-base text-blue-100 z-10 max-w-[70%] leading-relaxed font-medium">Strategies, signals, and themes designed for trading on crypto assets</p>
-          <div className="absolute -right-6 -bottom-6 w-48 h-48 bg-white/10 rounded-full blur-3xl"></div>
-          <div className="absolute right-6 top-1/2 -translate-y-1/2 opacity-30">
-             <Bitcoin size={130} className="text-white" />
+      <div className="flex-1 overflow-y-auto custom-scrollbar p-6 space-y-8">
+        {/* My Purchases & Rewards */}
+        <button className="w-full bg-bg-secondary rounded-2xl p-4 flex items-center justify-between active:scale-[0.98] transition border border-border-color/50 group shadow-lg hover:border-blue-500/30">
+          <div className="flex items-center gap-4">
+             <div className="w-12 h-12 bg-bg-tertiary rounded-xl flex items-center justify-center shadow-inner">
+                <ShoppingBag size={20} className="text-blue-500" />
+             </div>
+             <div className="text-left">
+               <span className="font-black text-white text-sm tracking-tight block">My Purchases & Rewards</span>
+               <span className="text-text-secondary/60 text-[10px] uppercase font-bold tracking-widest">Manage active tools</span>
+             </div>
           </div>
-        </div>
+          <ChevronRight size={18} className="text-text-secondary/40 group-hover:text-blue-500 transition-colors" />
+        </button>
 
-        {/* Forex Banner */}
-        <div className="min-w-[92%] md:min-w-[48%] bg-gradient-to-br from-gray-800 to-gray-950 rounded-3xl p-8 relative overflow-hidden h-56 flex flex-col justify-center snap-center border border-white/[0.1] shadow-2xl">
-          <h3 className="font-black text-4xl text-white z-10 mb-2">Forex</h3>
-          <p className="text-base text-gray-300 z-10 max-w-[70%] leading-relaxed font-medium">Professional tools to help you predict market trends</p>
-          <div className="absolute right-6 top-1/2 -translate-y-1/2 opacity-20">
-             <TrendingUp size={130} className="text-white" />
-          </div>
-        </div>
-      </div>
-
-      {/* Pagination Dots */}
-      <div className="flex justify-center gap-3 mb-10">
-        <div className="w-3 h-3 rounded-full bg-blue-500"></div>
-        <div className="w-3 h-3 rounded-full bg-gray-700"></div>
-      </div>
-
-      {/* Grid of Tools */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pb-12">
-        {[
-          { icon: <BadgeCheck size={36} />, title: "Trading Conditions", desc: "Features that provide more beneficial trading conditions" },
-          { icon: <Target size={36} />, title: "Signals", desc: "Algorithm-based recommendations on when to open trades" },
-          { icon: <Shuffle size={36} />, title: "Strategies", desc: "Ready-to-use sets of tools that make it easier to spot entry and exit points" },
-          { icon: <Compass size={36} />, title: "Indicators", desc: "Tools that help analyze price movements and identify entry points" },
-        ].map((item, idx) => (
-          <div key={idx} className="bg-bg-secondary rounded-3xl p-8 flex gap-6 items-center border border-border-color hover:border-accent-color/40 transition-all shadow-lg hover:shadow-accent-color/10">
-            <div className="p-6 bg-bg-tertiary rounded-3xl text-accent-color">
-                {item.icon}
+        {/* Banners Carousel */}
+        <div className="relative group/carousel">
+          <div 
+            ref={scrollRef}
+            className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide snap-x"
+            onScroll={(e) => {
+              const target = e.target as HTMLDivElement;
+              const index = Math.round(target.scrollLeft / target.clientWidth);
+              setActiveSlide(index);
+            }}
+          >
+            {/* Forex Banner */}
+            <div className="min-w-full bg-gradient-to-br from-[#2c2d33] to-[#121214] rounded-3xl p-8 relative overflow-hidden h-52 flex flex-col justify-center snap-center border border-white/[0.05] shadow-xl">
+              <div className="absolute top-0 right-0 p-8 opacity-10">
+                <TrendingUp size={140} className="text-white" />
+              </div>
+              <div className="relative z-10">
+                <span className="text-[10px] font-black text-blue-500 uppercase tracking-[0.2em] mb-3 block">Market Analysis</span>
+                <h3 className="font-black text-3xl text-white mb-3">Forex</h3>
+                <p className="text-sm text-text-secondary max-w-[70%] leading-relaxed font-medium">Professional tools to help you predict market trends with high precision</p>
+              </div>
             </div>
-            <div>
-                <h4 className="font-black text-text-primary text-xl tracking-tight">{item.title}</h4>
-                <p className="text-text-secondary text-sm mt-2 leading-relaxed">{item.desc}</p>
+
+            {/* Crypto Banner */}
+            <div className="min-w-full bg-gradient-to-br from-[#1e293b] to-[#0f172a] rounded-3xl p-8 relative overflow-hidden h-52 flex flex-col justify-center snap-center border border-white/[0.05] shadow-xl">
+              <div className="absolute top-0 right-0 p-8 opacity-10">
+                <Bitcoin size={140} className="text-white" />
+              </div>
+              <div className="relative z-10">
+                <span className="text-[10px] font-black text-orange-500 uppercase tracking-[0.2em] mb-3 block">Modern Assets</span>
+                <h3 className="font-black text-3xl text-white mb-3">Crypto</h3>
+                <p className="text-sm text-text-secondary max-w-[70%] leading-relaxed font-medium">Strategies and signals specifically optimized for high volatility crypto assets</p>
+              </div>
             </div>
           </div>
-        ))}
+
+          {/* Navigation Arrows */}
+          <button 
+            onClick={() => scroll('left')}
+            className="absolute left-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/40 backdrop-blur-md text-white flex items-center justify-center opacity-0 group-hover/carousel:opacity-100 transition-opacity border border-white/10"
+          >
+            <ChevronLeft size={16} />
+          </button>
+          <button 
+            onClick={() => scroll('right')}
+            className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/40 backdrop-blur-md text-white flex items-center justify-center opacity-0 group-hover/carousel:opacity-100 transition-opacity border border-white/10"
+          >
+            <ChevronRight size={16} />
+          </button>
+
+          {/* Indicators */}
+          <div className="flex justify-center gap-2 mt-4">
+            {[0, 1].map((i) => (
+              <div key={i} className={cn("h-1.5 rounded-full transition-all duration-300", activeSlide === i ? "w-6 bg-blue-500" : "w-1.5 bg-white/10")} />
+            ))}
+          </div>
+        </div>
+
+        {/* Feature Cards */}
+        <div className="space-y-4 pb-12">
+          {[
+            { id: 'conditions', icon: <div className="space-y-1 flex flex-col items-center"><ChevronUp size={24} /><ChevronUp size={24} /></div>, title: "Trading Conditions", desc: "Features that provide more beneficial trading conditions", color: "text-[#22c55e]", bg: "bg-emerald-500/10" },
+            { id: 'signals', icon: <Target size={32} />, title: "Signals", desc: "Algorithm-based recommendations on when to open trades", color: "text-blue-500", bg: "bg-blue-500/10" },
+            { id: 'strategies', icon: <Shuffle size={32} />, title: "Strategies", desc: "Ready-to-use sets of tools that make it easier to spot entry points", color: "text-purple-500", bg: "bg-purple-500/10" },
+            { id: 'indicators', icon: <Compass size={32} />, title: "Indicators", desc: "Tools that help analyze price movements and identify entry points", color: "text-orange-500", bg: "bg-orange-500/10" },
+          ].map((item) => (
+            <div key={item.id} className="bg-bg-secondary rounded-3xl p-8 flex flex-col items-center text-center border border-border-color/50 hover:border-blue-500/20 transition-all shadow-lg group cursor-pointer active:scale-[0.98]">
+              <div className={cn("w-20 h-20 rounded-2xl flex items-center justify-center mb-6 transition-transform group-hover:scale-110 shadow-lg shadow-black/40", item.bg, item.color)}>
+                  {item.icon}
+              </div>
+              <h4 className="font-black text-white text-lg tracking-tight mb-2">{item.title}</h4>
+              <p className="text-text-secondary/60 text-xs leading-relaxed max-w-[200px]">{item.desc}</p>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -6960,6 +7157,7 @@ const DesktopSidebar = ({
   isLeaderboardOpen,
   isHelpOpen,
   isAssetSelectorOpen,
+  activeSidePanel,
   setActiveSidePanel,
   setIsProfileOpen,
   setIsPaymentsOpen,
@@ -6976,6 +7174,7 @@ const DesktopSidebar = ({
   isLeaderboardOpen: boolean,
   isHelpOpen: boolean,
   isAssetSelectorOpen: boolean,
+  activeSidePanel: string | null,
   setActiveSidePanel: (p: any) => void,
   setIsProfileOpen: (v: boolean) => void,
   setIsPaymentsOpen: (v: boolean) => void,
@@ -6986,11 +7185,12 @@ const DesktopSidebar = ({
   
   const handleNavClick = (panelKey: string) => {
     switch (panelKey) {
-      case 'TRADES': navigate('/trades'); break;
-      case 'MARKET': navigate('/market'); break;
-      case 'ACTIVITIES': navigate('/tournaments'); break;
-      case 'REWARDS': navigate('/rewards'); break;
-      case 'HELP': navigate('/help'); break;
+      case 'TRADES': setActiveSidePanel('TRADES'); break;
+      case 'MARKET': setActiveSidePanel('MARKET'); break;
+      case 'ACTIVITIES': setActiveSidePanel('ACTIVITIES'); break;
+      case 'REWARDS': setActiveSidePanel('REWARDS'); break;
+      case 'HELP': setActiveSidePanel('HELP'); break;
+      case 'INDICATORS': setActiveSidePanel('INDICATORS'); break;
       default: setActiveSidePanel(panelKey as any); break;
     }
   };
@@ -7015,32 +7215,38 @@ const DesktopSidebar = ({
         <SidebarNavButton 
           icon={<ArrowUpDown size={20} />} 
           label={t('nav.trades')} 
-          active={isHistoryOpen} 
+          active={activeSidePanel === 'TRADES'} 
           onClick={() => handleNavClick('TRADES')} 
           count={activeTradesCount} 
         />
         <SidebarNavButton 
           icon={<ShoppingBag size={20} />} 
           label="Market" 
-          active={isMarketOpen} 
+          active={activeSidePanel === 'MARKET'} 
           onClick={() => handleNavClick('MARKET')} 
+        />
+        <SidebarNavButton 
+          icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="scale-x-[-1]"><path d="m14.5 21-5-14" /><path d="M9.5 21 14 9" /><path d="M10.5 15h3.5" /><circle cx="12" cy="5" r="2" /><path d="M21 4 v4 M19 6 h4" /></svg>} 
+          label="Indicators" 
+          active={activeSidePanel === 'INDICATORS'} 
+          onClick={() => setActiveSidePanel(activeSidePanel === 'INDICATORS' ? null : 'INDICATORS')} 
         />
         <SidebarNavButton 
           icon={<Trophy size={20} />} 
           label="Tournaments" 
-          active={isActivitiesOpen} 
+          active={activeSidePanel === 'ACTIVITIES'} 
           onClick={() => handleNavClick('ACTIVITIES')} 
         />
         <SidebarNavButton 
           icon={<Gift size={20} />} 
           label="Rewards" 
-          active={isRewardsOpen} 
+          active={activeSidePanel === 'REWARDS'} 
           onClick={() => handleNavClick('REWARDS')} 
         />
         <SidebarNavButton 
           icon={<HelpCircle size={20} />} 
           label={t('nav.help')} 
-          active={isHelpOpen} 
+          active={activeSidePanel === 'HELP'} 
           onClick={() => handleNavClick('HELP')} 
         />
       </div>
@@ -7374,8 +7580,32 @@ const ProfileSidePanel = ({ user, balance, bonusBalance, currency, onSettings, o
 };
 
 const DesktopTradePanel = ({ 
-  investment, setInvestment, currency, tradeMode, setTradeMode, timerDuration, setTimerDuration, clockOffset, setClockOffset, getExpirationTime, timezoneOffset, handleTrade, potentialProfit, displayCurrencySymbol, setIsPendingOrderSheetOpen, selectedAsset, isFrozen, isAssetSelectorOpen, setIsAssetSelectorOpen, closeAllPanels, isTradingEnabled
+  investment, setInvestment, currency, tradeMode, setTradeMode, timerDuration, setTimerDuration, clockOffset, setClockOffset, getExpirationTime, timezoneOffset, handleTrade, potentialProfit, displayCurrencySymbol, setIsPendingOrderSheetOpen, selectedAsset, isFrozen, isAssetSelectorOpen, setIsAssetSelectorOpen, closeAllPanels, isTradingEnabled, serverTimeOffset
 }: any) => {
+  const [isDurationPopoverOpen, setIsDurationPopoverOpen] = useState(false);
+  const popoverRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (popoverRef.current && !popoverRef.current.contains(event.target as Node)) {
+        setIsDurationPopoverOpen(false);
+      }
+    };
+    if (isDurationPopoverOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [isDurationPopoverOpen]);
+
+  const durations = [
+    { label: '1m', value: 60 },
+    { label: '5m', value: 300 },
+    { label: '10m', value: 600 },
+    { label: '15m', value: 900 },
+    { label: '30m', value: 1800 },
+    { label: '23h', value: 82800 },
+  ];
+
   return (
     <aside className="hidden md:flex flex-col w-72 border-l border-border-color bg-bg-primary p-4 overflow-y-auto scrollbar-hide z-20 relative">
       {(!isTradingEnabled || isFrozen) && (
@@ -7447,8 +7677,11 @@ const DesktopTradePanel = ({
         </div>
 
         {/* Duration Section */}
-        <div className="space-y-2">
-           <div className="bg-bg-secondary rounded-lg p-3 cursor-pointer">
+        <div className="space-y-2 relative">
+           <div 
+             onClick={() => setIsDurationPopoverOpen(!isDurationPopoverOpen)}
+             className="bg-bg-secondary rounded-lg p-3 cursor-pointer hover:bg-bg-tertiary transition-colors border border-transparent active:border-border-color"
+           >
              <div className="text-[11px] text-gray-400 font-medium tracking-wide mb-1">Duration</div>
              <div className="flex items-baseline gap-3 text-text-primary">
                 <span className="font-bold text-lg whitespace-nowrap">
@@ -7459,6 +7692,94 @@ const DesktopTradePanel = ({
                 )}
              </div>
            </div>
+
+           <AnimatePresence>
+             {isDurationPopoverOpen && (
+               <motion.div 
+                 ref={popoverRef}
+                 initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                 animate={{ opacity: 1, y: 0, scale: 1 }}
+                 exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                 className="absolute bottom-full right-0 mb-2 w-[280px] bg-bg-secondary border border-border-color rounded-2xl shadow-2xl z-[60] overflow-hidden"
+               >
+                 <div className="p-4 border-b border-border-color/50">
+                   <h3 className="text-[14px] font-black text-white/90 mb-4 tracking-tight uppercase">Trade Duration</h3>
+                   <div className="flex p-1 bg-bg-primary rounded-xl border border-border-color/30">
+                     <button 
+                       onClick={() => setTradeMode('TIMER')}
+                       className={cn(
+                         "flex-1 py-2 text-[11px] font-black uppercase tracking-wider rounded-lg transition-all duration-300",
+                         tradeMode === 'TIMER' ? "bg-bg-tertiary text-white shadow-[0_0_15px_rgba(0,0,0,0.2)]" : "text-text-secondary hover:text-text-primary"
+                       )}
+                     >
+                       Timer
+                     </button>
+                     <button 
+                       onClick={() => setTradeMode('CLOCK')}
+                       className={cn(
+                         "flex-1 py-2 text-[11px] font-black uppercase tracking-wider rounded-lg transition-all duration-300",
+                         tradeMode === 'CLOCK' ? "bg-bg-tertiary text-white shadow-[0_0_15px_rgba(0,0,0,0.2)]" : "text-text-secondary hover:text-text-primary"
+                       )}
+                     >
+                       Clock
+                     </button>
+                   </div>
+                 </div>
+
+                 <div className="p-4">
+                   {tradeMode === 'TIMER' ? (
+                     <div className="grid grid-cols-2 gap-2">
+                       {durations.map((dur) => (
+                         <button 
+                           key={dur.value}
+                           onClick={() => {
+                             setTimerDuration(dur.value);
+                             setIsDurationPopoverOpen(false);
+                           }}
+                           className={cn(
+                             "h-12 rounded-xl font-black text-xs transition-all duration-200 border",
+                             timerDuration === dur.value 
+                               ? "bg-white/10 border-white/20 text-white shadow-inner" 
+                               : "bg-bg-primary border-border-color/30 text-text-secondary hover:border-white/20 hover:bg-bg-tertiary hover:text-white"
+                           )}
+                         >
+                           {dur.label}
+                         </button>
+                       ))}
+                     </div>
+                   ) : (
+                     <div className="space-y-1.5 max-h-[220px] overflow-y-auto custom-scrollbar pr-1 scroll-smooth">
+                       {[1, 2, 3, 4, 5, 10, 15, 30, 45, 60].map(offset => {
+                          const now = Date.now() + serverTimeOffset;
+                          const msToNextMinute = 60000 - (now % 60000);
+                          const nextClose = msToNextMinute < 30000 ? now + msToNextMinute + 60000 : now + msToNextMinute;
+                          const expTime = nextClose + (offset - 1) * 60000;
+                          return (
+                            <button 
+                              key={offset}
+                              onClick={() => {
+                                setClockOffset(offset);
+                                setIsDurationPopoverOpen(false);
+                              }}
+                              className={cn(
+                                "w-full h-11 px-4 rounded-xl font-bold flex items-center justify-between transition-all duration-200 border",
+                                clockOffset === offset 
+                                  ? "bg-white/10 border-white/20 text-white shadow-inner" 
+                                  : "bg-bg-primary border-border-color/30 text-text-secondary hover:border-white/20 hover:bg-bg-tertiary hover:text-white"
+                              )}
+                            >
+                              <span className="text-[13px] tracking-tight">{formatWithOffset(expTime, 'HH:mm', timezoneOffset)}</span>
+                              <span className="text-[9px] font-black uppercase tracking-widest opacity-40">{offset}m</span>
+                            </button>
+                          );
+                       })}
+                     </div>
+                   )}
+                 </div>
+               </motion.div>
+             )}
+           </AnimatePresence>
+
            <div className="flex items-center gap-2">
              <button 
                onClick={() => {

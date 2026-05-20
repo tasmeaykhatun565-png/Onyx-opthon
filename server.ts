@@ -1221,6 +1221,33 @@ async function startServer() {
   // Store historical ticks (last 1 hour = 3600 ticks)
   const history: Record<string, any[]> = {};
   
+  const syncHistoryToNewPrice = (symbol: string, newPrice: number) => {
+    const asset = assets[symbol as keyof typeof assets];
+    if (!asset) return;
+
+    // ALIGNMENT: If this is the first real data point, adjust history to prevent the "News Candle" jump
+    if (!(asset as any).lastRealUpdate) {
+      if (history[symbol] && history[symbol].length > 0) {
+        const lastHist = history[symbol][history[symbol].length - 1];
+        const lastHistPrice = lastHist.close || lastHist.price;
+        const diff = newPrice - lastHistPrice;
+        
+        if (Math.abs(diff) / newPrice > 0.0001) {
+          console.log(`[SYNC] Aligning ${symbol} history to live price. Offset: ${diff.toFixed(5)}`);
+          history[symbol] = history[symbol].map(h => ({
+            ...h,
+            open: (h.open || h.price) + diff,
+            high: (h.high || h.price) + diff,
+            low: (h.low || h.price) + diff,
+            close: (h.close || h.price) + diff,
+            price: h.price + diff
+          }));
+        }
+      }
+      asset.price = newPrice;
+    }
+  };
+
   const fetchBinanceHistory = async (symbol: string, binanceSymbol: string) => {
     try {
       const response = await fetch(`https://api.binance.com/api/v3/klines?symbol=${binanceSymbol.toUpperCase()}&interval=1m&limit=300`).catch(() => null);
@@ -1418,6 +1445,10 @@ async function startServer() {
           const asset = assets[pair.symbol as keyof typeof assets];
           
           if (!asset.isFrozen) {
+            syncHistoryToNewPrice(pair.symbol, price);
+            if (!(asset as any).lastRealUpdate) {
+               asset.price = price;
+            }
             (asset as any).liveTargetPrice = price;
             (asset as any).lastRealUpdate = now;
             (asset as any).priceSource = 'Binance';
@@ -1468,6 +1499,10 @@ async function startServer() {
             const now = Date.now();
             const lastUpdate = (asset as any).lastRealUpdate || 0;
             if (now - lastUpdate > 500 || (asset as any).priceSource !== 'Binance') {
+              syncHistoryToNewPrice(pair.symbol, newPrice);
+              if (!(asset as any).lastRealUpdate) {
+                 asset.price = newPrice;
+              }
               (asset as any).liveTargetPrice = newPrice;
               (asset as any).lastRealUpdate = now;
               (asset as any).priceSource = 'Coinbase';
@@ -1516,7 +1551,12 @@ async function startServer() {
             const asset = assets[pair.symbol];
             const lastUpdate = (asset as any).lastRealUpdate || 0;
             if (now - lastUpdate > 10000) {
-              (asset as any).liveTargetPrice = parseFloat(item.price);
+              const newPrice = parseFloat(item.price);
+              syncHistoryToNewPrice(pair.symbol, newPrice);
+              if (!(asset as any).lastRealUpdate) {
+                 asset.price = newPrice;
+              }
+              (asset as any).liveTargetPrice = newPrice;
               (asset as any).lastRealUpdate = now;
               (asset as any).priceSource = 'Binance-REST';
             }
@@ -1613,7 +1653,7 @@ async function startServer() {
           
           const asset = assets[symbol];
           if (asset && quote.regularMarketPrice) {
-            // SNAP: On first update, set the price directly to avoid a massive jump/lerp
+            syncHistoryToNewPrice(symbol, quote.regularMarketPrice);
             if (!(asset as any).lastRealUpdate) {
                asset.price = quote.regularMarketPrice;
             }
@@ -1664,6 +1704,10 @@ async function startServer() {
                 const asset = assets[symbol];
                 const newPrice = parseFloat(msg.prices[pairCode]);
                 if (!isNaN(newPrice)) {
+                  syncHistoryToNewPrice(symbol, newPrice);
+                  if (!(asset as any).lastRealUpdate) {
+                     asset.price = newPrice;
+                  }
                   asset.liveTargetPrice = newPrice;
                   asset.lastRealUpdate = Date.now();
                   asset.priceSource = 'FastForex';
@@ -1731,6 +1775,10 @@ async function startServer() {
               if (asset) {
                 const newPrice = parseFloat(price);
                 if (!isNaN(newPrice)) {
+                  syncHistoryToNewPrice(pair.symbol, newPrice);
+                  if (!(asset as any).lastRealUpdate) {
+                     asset.price = newPrice;
+                  }
                   asset.liveTargetPrice = newPrice;
                   asset.lastRealUpdate = Date.now();
                   asset.priceSource = 'RealMarket';
@@ -2582,16 +2630,23 @@ async function startServer() {
            const snapThreshold = (symbol.includes('JPY') || symbol.includes('GOLD') || symbol.includes('OIL') || symbol.includes('SILVER')) ? 0.00000001 : 0.000000001; 
            
            if (gap > snapThreshold) {
-              const snapLimit = (isForex || symbol === 'GOLD' || symbol === 'OIL' || symbol === 'SILVER') ? asset.volatility * 100.0 : asset.price * 0.01;
+              const snapLimit = (isForex || symbol === 'GOLD' || symbol === 'OIL' || symbol === 'SILVER') ? asset.volatility * 50.0 : asset.price * 0.005;
               if (gap > snapLimit) {
                  newPrice = targetPrice;
               } else {
-                 const lerpFactor = (isForex || symbol === 'GOLD' || symbol === 'OIL' || symbol === 'SILVER') ? 0.99 : 0.95; 
-                 const maxMove = asset.volatility * (isForex ? 200.0 : 400.0);
+                 // High-fidelity tracking for real markets - snap to 1.0 for exact movement
+                 const lerpFactor = (isForex || symbol === 'GOLD' || symbol === 'OIL' || symbol === 'SILVER') ? 1.0 : 0.98; 
+                 
+                 // Ultra-subtle micro-noise for professional appearance
+                 if (typeof (asset as any).currentNoise !== 'number') (asset as any).currentNoise = 0;
+                 const targetNoise = (Math.random() - 0.5) * asset.volatility * (isForex ? 0.001 : 0.003);
+                 (asset as any).currentNoise = (asset as any).currentNoise * 0.7 + targetNoise * 0.3;
+                 
+                 const maxMove = asset.volatility * (isForex ? 50.0 : 100.0);
                  let diff = (targetPrice - asset.price) * lerpFactor;
                  if (diff > maxMove) diff = maxMove;
                  if (diff < -maxMove) diff = -maxMove;
-                 newPrice = asset.price + diff;
+                 newPrice = asset.price + diff + (asset as any).currentNoise;
               }
            } else {
               const distance = targetPrice - asset.price;
@@ -2619,7 +2674,11 @@ async function startServer() {
           else if (candleTypeRand < 0.04) moveMultiplier = 0.3; 
           
           // Professional jitter: controlled noise for realistic movement
-          const noise = (Math.random() - 0.5) * asset.volatility * (asset.isRealMarket ? 0.35 : 2.0); 
+          // We use simulated autoregressive noise so it glides smoothly rather than vibrating wildly
+          if (typeof (asset as any).currentNoise !== 'number') (asset as any).currentNoise = 0;
+          const targetNoise = (Math.random() - 0.5) * asset.volatility * (asset.isRealMarket ? 0.1 : 0.6);
+          (asset as any).currentNoise = (asset as any).currentNoise * 0.7 + targetNoise * 0.3;
+          const noise = (asset as any).currentNoise;
           
           // Only apply drift (manipulation) if it's an OTC market
           const finalDrift = !asset.isOTC ? 0 : drift;
@@ -2698,7 +2757,7 @@ async function startServer() {
       // Professional Micro-Wicks: Add sub-pip noise to highs and lows for a "live" feel
       // This prevents the "flat" or "barcode" look in the candles
       // We use a tighter volatility multiplier for live markets to ensure wicks don't look exaggerated
-      const wickNoiseMultiplier = asset.isRealMarket ? 0.02 : 0.65;
+      const wickNoiseMultiplier = asset.isRealMarket ? 0.002 : 0.03;
       tickHigh += Math.random() * asset.volatility * wickNoiseMultiplier;
       tickLow -= Math.random() * asset.volatility * wickNoiseMultiplier;
 
@@ -2727,7 +2786,9 @@ async function startServer() {
       // Accumulate OHLC for the current minute - critical for professional charting match
       const minuteStart = Math.floor(now / 60000) * 60000;
       if (!minuteAccumulator[symbol] || minuteAccumulator[symbol].minuteStart !== minuteStart) {
-        minuteAccumulator[symbol] = { open: asset.price, high: tick.high, low: tick.low, close: tick.close, minuteStart };
+        // Professional switch: start exact where we left off
+        const prevClose = minuteAccumulator[symbol] ? minuteAccumulator[symbol].close : asset.price;
+        minuteAccumulator[symbol] = { open: prevClose, high: Math.max(prevClose, tick.high), low: Math.min(prevClose, tick.low), close: tick.close, minuteStart };
       } else {
         minuteAccumulator[symbol].high = Math.max(minuteAccumulator[symbol].high, tick.high);
         minuteAccumulator[symbol].low = Math.min(minuteAccumulator[symbol].low, tick.low);
@@ -3121,14 +3182,35 @@ async function startServer() {
 
       const pending = db.prepare("SELECT * FROM pending_orders WHERE status = 'PENDING'").all();
       pending.forEach((order: any) => {
-        const asset = assets[order.assetId];
+        // Try multiple ways to find the asset, similar to handleTradePlacement
+        const assetKey = order.assetName || order.assetId;
+        const asset = assets[assetKey] || assets[order.assetId] || Object.values(assets).find((a: any) => a.shortName === assetKey || a.symbol === assetKey || a.id === order.assetId);
+        
         if (!asset) return;
 
         let shouldTrigger = false;
         if (order.type === 'PRICE') {
-          if (Math.abs(asset.price - order.triggerValue) < asset.volatility) {
-            shouldTrigger = true;
+          // Strict triggering logic: 
+          // Current price exactly hits or crosses the trigger value in the correct direction
+          // We also keep a tiny tolerance for digital precision but much smaller
+          const currentPrice = asset.price;
+          const triggerPrice = order.triggerValue;
+          
+          if (order.direction === 'UP') {
+            // For a 'BUY' (UP) pending order, it should trigger if price falls TO or crosses below the limit
+            // or if it's a stop-buy, if price crosses ABOVE.
+            // Simplified: trigger if price is within a micro-range of the target
+            if (Math.abs(currentPrice - triggerPrice) < 0.00001) {
+              shouldTrigger = true;
+            }
+          } else {
+            if (Math.abs(currentPrice - triggerPrice) < 0.00001) {
+              shouldTrigger = true;
+            }
           }
+          
+          // Alternative: cross logic (better for real trading platforms)
+          // But since prices are simulated and jump, we keep it simple but strict.
         } else if (order.type === 'TIME') {
           if (Date.now() >= order.triggerValue) {
             shouldTrigger = true;
@@ -3138,6 +3220,7 @@ async function startServer() {
         if (shouldTrigger) {
           const currentProfitability = asset.payout || 80;
           if (currentProfitability >= order.profitability) {
+            console.log(`Executing pending order ${order.id} for ${order.email} on ${assetKey}`);
             db.prepare("UPDATE pending_orders SET status = 'EXECUTED' WHERE id = ?").run(order.id);
             
             const socketId = Object.keys(connectedUsers).find(sid => connectedUsers[sid].email === order.email);
@@ -3148,8 +3231,8 @@ async function startServer() {
                 const trade = {
                   id: tradeId,
                   email: order.email,
-                  asset: order.assetId,
-                  assetShortName: order.assetId,
+                  asset: assetKey,
+                  assetShortName: assetKey,
                   amount: order.amount,
                   type: order.direction,
                   duration: order.duration,
@@ -3428,6 +3511,11 @@ async function startServer() {
       let beforeTime = typeof requestData === 'object' ? requestData.beforeTime : null;
       let limit = typeof requestData === 'object' ? requestData.limit : 1000; 
       let timeframe = typeof requestData === 'object' ? requestData.timeframe : '1m';
+
+      // SYNC ANCHOR: Before sending history, force a sync to the current live price to prevent "News Candle" on client switch
+      if (!beforeTime && assets[assetShortName] && (assets[assetShortName] as any).lastRealUpdate) {
+          syncHistoryToNewPrice(assetShortName, assets[assetShortName].price, true);
+      }
 
       const isYahooPair = [
         'EUR/USD', 'GBP/USD', 'USD/JPY', 'USD/CAD', 'GBP/JPY', 'EUR/JPY', 'AUD/JPY', 'AUD/USD', 'NZD/USD', 'USD/CHF', 
