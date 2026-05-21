@@ -3101,22 +3101,10 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
     };
   }, [socket]);
 
-  // Re-send active trades to server on connection
+  // Trades state management is authoritative on server and synced to client
   const sentTradesRef = useRef<Set<string>>(new Set());
   const activeTradesCount = useMemo(() => trades.filter(t => t.status === 'ACTIVE').length, [trades]);
   
-  useEffect(() => {
-    if (!socket || !user) return;
-    
-    const activeTrades = trades.filter(t => t.status === 'ACTIVE');
-    activeTrades.forEach(trade => {
-      if (!sentTradesRef.current.has(trade.id)) {
-        sentTradesRef.current.add(trade.id);
-        socket.emit('place-trade', trade);
-      }
-    });
-  }, [socket, user?.uid, activeTradesCount]);
-
   // Handle Trade Results from Server
   useEffect(() => {
     if (!socket) return;
@@ -3416,29 +3404,10 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
       userId: user?.uid
     };
 
-        // Professional Firestore Update
+        // Professional Firestore Sync
         if (user) {
           try {
-            // We use local state updates for immediate feedback
-            if (activeAccount === 'DEMO') {
-              setDemoBalance(prev => prev - investmentInUSD);
-            } else if (activeAccount === 'REAL') {
-              let remaining = investmentInUSD;
-              let newRealBalance = balance;
-              let newBonusBalance = bonusBalance;
-              
-              if (newRealBalance >= remaining) {
-                newRealBalance -= remaining;
-                remaining = 0;
-              } else {
-                remaining -= newRealBalance;
-                newRealBalance = 0;
-                newBonusBalance = Math.max(0, newBonusBalance - remaining);
-              }
-              setBalance(newRealBalance);
-              setBonusBalance(newBonusBalance);
-            }
-    
+            // Balance already deducted above
             // Add trade to subcollection
             setDoc(doc(db, 'users', user.uid, 'trades', tradeId), newTrade).catch(error => {
               handleFirestoreError(error, OperationType.CREATE, `users/${user.uid}/trades/${tradeId}`);
@@ -5415,6 +5384,8 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
                   setIsAssetSelectorOpen={setIsAssetSelectorOpen}
                   closeAllPanels={closeAllPanels}
                   isTradingEnabled={platformSettings.isTradingEnabled !== false}
+                  isTrading={isTrading}
+                  isTradingRef={isTradingRef}
                   serverTimeOffset={serverTimeOffset}
                 />
               </div>
@@ -5656,8 +5627,9 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
               {/* Trade Actions */}
               <div className="flex items-center gap-2.5">
                  <button 
+                   disabled={isTrading || isTradingRef.current}
                    onClick={() => handleTrade('DOWN')}
-                   className="flex-1 h-[50px] bg-[#ff4d4d] rounded-xl flex flex-col items-center justify-center gap-0 active:scale-[0.98] transition shadow-lg shadow-red-500/10"
+                   className={`flex-1 h-[50px] bg-[#ff4d4d] rounded-xl flex flex-col items-center justify-center gap-0 active:scale-[0.98] transition shadow-lg shadow-red-500/10 ${(isTrading || isTradingRef.current) ? 'opacity-50 cursor-not-allowed' : ''}`}
                  >
                     
                     <ArrowDown size={18} strokeWidth={3} className="text-text-primary" />
@@ -5671,8 +5643,9 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
                  </button>
 
                  <button 
+                   disabled={isTrading || isTradingRef.current}
                    onClick={() => handleTrade('UP')}
-                   className="flex-1 h-[50px] bg-[#22c55e] rounded-xl flex flex-col items-center justify-center gap-0 active:scale-[0.98] transition shadow-lg shadow-emerald-500/10"
+                   className={`flex-1 h-[50px] bg-[#22c55e] rounded-xl flex flex-col items-center justify-center gap-0 active:scale-[0.98] transition shadow-lg shadow-emerald-500/10 ${(isTrading || isTradingRef.current) ? 'opacity-50 cursor-not-allowed' : ''}`}
                  >
                     
                     <ArrowUp size={18} strokeWidth={3} className="text-text-primary" />
@@ -6598,7 +6571,7 @@ const TradeItem: React.FC<{ trade: Trade, onClick?: () => void, currentPrice?: n
   return (
     <div 
       onClick={onClick}
-      className="bg-[#24262b] p-3 rounded-2xl border border-transparent flex items-center gap-3 cursor-pointer active:scale-[0.98] transition shadow-sm"
+      className="bg-bg-secondary p-3 rounded-2xl border border-border-color flex items-center gap-3 cursor-pointer active:scale-[0.98] transition shadow-sm"
     >
       <div className="relative flex-shrink-0">
         <AssetIcon 
@@ -7580,7 +7553,7 @@ const ProfileSidePanel = ({ user, balance, bonusBalance, currency, onSettings, o
 };
 
 const DesktopTradePanel = ({ 
-  investment, setInvestment, currency, tradeMode, setTradeMode, timerDuration, setTimerDuration, clockOffset, setClockOffset, getExpirationTime, timezoneOffset, handleTrade, potentialProfit, displayCurrencySymbol, setIsPendingOrderSheetOpen, selectedAsset, isFrozen, isAssetSelectorOpen, setIsAssetSelectorOpen, closeAllPanels, isTradingEnabled, serverTimeOffset
+  investment, setInvestment, currency, tradeMode, setTradeMode, timerDuration, setTimerDuration, clockOffset, setClockOffset, getExpirationTime, timezoneOffset, handleTrade, potentialProfit, displayCurrencySymbol, setIsPendingOrderSheetOpen, selectedAsset, isFrozen, isAssetSelectorOpen, setIsAssetSelectorOpen, closeAllPanels, isTradingEnabled, isTrading, isTradingRef, serverTimeOffset
 }: any) => {
   const [isDurationPopoverOpen, setIsDurationPopoverOpen] = useState(false);
   const popoverRef = useRef<HTMLDivElement>(null);
@@ -7823,7 +7796,7 @@ const DesktopTradePanel = ({
 
         <div className="flex flex-col gap-1 pt-1">
            <button 
-             disabled={isFrozen}
+             disabled={isFrozen || isTrading || isTradingRef.current}
              onClick={() => handleTrade('UP')}
              className="w-full h-12 bg-[#2ebd85] hover:bg-[#2ebd85]/90 active:scale-[0.98] disabled:opacity-50 disabled:grayscale transition rounded-lg flex items-center justify-between px-4 text-[#121212]"
            >
@@ -7832,7 +7805,7 @@ const DesktopTradePanel = ({
            </button>
 
            <button 
-             disabled={isFrozen}
+             disabled={isFrozen || isTrading || isTradingRef.current}
              onClick={() => handleTrade('DOWN')}
              className="w-full h-12 bg-[#ff5e5e] hover:bg-[#ff5e5e]/90 active:scale-[0.98] disabled:opacity-50 disabled:grayscale transition rounded-lg flex items-center justify-between px-4 text-[#121212]"
            >

@@ -2988,28 +2988,15 @@ async function startServer() {
       return;
     }
 
-    // Check if trade already exists to prevent duplicate processing on reconnect
-    let userTrades = [];
-    try {
-      userTrades = typeof userFromDb.trades === 'string' ? JSON.parse(userFromDb.trades) : (userFromDb.trades || []);
-    } catch (e) {
-      userTrades = [];
-    }
-    const existingTrade = userTrades.find((t: any) => t.id === trade.id);
-    if (existingTrade) {
+    const userTrades = typeof userFromDb.trades === 'string' ? JSON.parse(userFromDb.trades) : (userFromDb.trades || []);
+    const existingInDb = userTrades.find((t: any) => t.id === trade.id);
+    const existingInMemory = activeTrades[trade.id];
+
+    if (existingInDb || existingInMemory) {
       console.log(`Trade ${trade.id} already exists, skipping duplicate processing.`);
-      if (existingTrade.status === 'ACTIVE') {
-        if (activeTrades[trade.id]) {
-          activeTrades[trade.id].socketId = socket.id;
-        } else {
-          // RESTORE to active trades in memory if it was missing (e.g. after server restart)
-          activeTrades[trade.id] = { 
-            ...existingTrade, 
-            socketId: socket.id,
-            accountType: trade.accountType // sync account type just in case
-          };
-          console.log(`Restored lost active trade ${trade.id} to memory.`);
-        }
+      const tradeToSync = existingInMemory || existingInDb;
+      if (tradeToSync.status === 'ACTIVE') {
+          activeTrades[trade.id] = { ...tradeToSync, socketId: socket.id };
       }
       return;
     }
@@ -3514,7 +3501,7 @@ async function startServer() {
 
       // SYNC ANCHOR: Before sending history, force a sync to the current live price to prevent "News Candle" on client switch
       if (!beforeTime && assets[assetShortName] && (assets[assetShortName] as any).lastRealUpdate) {
-          syncHistoryToNewPrice(assetShortName, assets[assetShortName].price, true);
+          syncHistoryToNewPrice(assetShortName, assets[assetShortName].price);
       }
 
       const isYahooPair = [
