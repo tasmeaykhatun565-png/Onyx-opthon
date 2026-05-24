@@ -573,6 +573,64 @@ async function startServer() {
               email
             );
         }
+
+        // Synchronize referred users and commission records from Firestore into SQLite
+        try {
+          const userObj = db.prepare('SELECT * FROM users WHERE email = ?').get(email) as any;
+          if (userObj && userObj.referralCode) {
+            // 1. Restore referred users from Firestore
+            const snaps = await firestore.collection('users').where('referredBy', '==', userObj.referralCode).get();
+            snaps.forEach((docRef: any) => {
+              const refData = docRef.data();
+              const refEmail = refData.email;
+              if (refEmail) {
+                const refUserInSql = db.prepare('SELECT id FROM users WHERE email = ?').get(refEmail);
+                if (!refUserInSql) {
+                  db.prepare('INSERT INTO users (email, name, photoURL, uid, balance, demoBalance, createdAt, status, kycStatus, referredBy, referralCode, referralCount) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)')
+                    .run(
+                      refEmail,
+                      refData.name || '',
+                      refData.photoURL || '',
+                      docRef.id,
+                      refData.balance !== undefined ? refData.balance : 0,
+                      refData.demoBalance !== undefined ? refData.demoBalance : 10000,
+                      refData.createdAt || Date.now(),
+                      refData.status || 'ACTIVE',
+                      refData.kycStatus || 'NONE',
+                      userObj.referralCode,
+                      refData.referralCode || Math.floor(1000000 + Math.random() * 9000000).toString()
+                    );
+                } else {
+                  db.prepare('UPDATE users SET status = ?, kycStatus = ?, name = ? WHERE email = ?')
+                    .run(refData.status || 'ACTIVE', refData.kycStatus || 'NONE', refData.name || '', refEmail);
+                }
+              }
+            });
+          }
+
+          // 2. Restore commission records from Firestore
+          const commSnaps = await firestore.collection('referral_commissions').where('referrerUid', '==', uid).get();
+          commSnaps.forEach((docRef: any) => {
+            const commData = docRef.data();
+            const check = db.prepare('SELECT id FROM referrals WHERE referredUid = ? AND timestamp = ?').get(commData.referredUid, commData.timestamp);
+            if (!check) {
+              db.prepare(`
+                INSERT INTO referrals (referrerUid, referredUid, referredEmail, amount, type, timestamp)
+                VALUES (?, ?, ?, ?, ?, ?)
+              `).run(
+                commData.referrerUid || uid,
+                commData.referredUid,
+                commData.referredEmail,
+                commData.amount,
+                commData.type,
+                commData.timestamp
+              );
+            }
+          });
+        } catch (e) {
+          console.error('Error restoring referrals and commissions from Firestore:', e);
+        }
+
         return db.prepare('SELECT * FROM users WHERE email = ?').get(email);
       }
     } catch (error: any) {
@@ -1348,52 +1406,56 @@ async function startServer() {
 
     // Load history in chunks to prevent blocking
     const chunkHistory = async (assetList: string[]) => {
-      for (const symbol of assetList) {
-        const binancePair = binanceCryptoPairs.find(p => p.symbol === symbol) || binanceForexPairs.find(p => p.symbol === symbol);
-        let realHistory = null;
-        
-        if (binancePair) {
-          realHistory = await fetchBinanceHistory(symbol, binancePair.binanceSymbol);
-        }
-        
-        if (!realHistory || realHistory.length === 0) {
-           const isForex = symbol.includes('/') || ['GOLD', 'SILVER'].includes(symbol);
-           if (isForex) {
-             realHistory = await fetchYahooHistory(symbol);
-           }
-        }
-        
-        if (realHistory && realHistory.length > 0) {
-          history[symbol] = realHistory;
-          assets[symbol].price = realHistory[realHistory.length - 1].price;
-          console.log(`Loaded ${realHistory.length} real points for ${symbol}`);
+      const concurrency = 5;
+      for (let i = 0; i < assetList.length; i += concurrency) {
+        const chunk = assetList.slice(i, i + concurrency);
+        await Promise.all(chunk.map(async (symbol) => {
+          const binancePair = binanceCryptoPairs.find(p => p.symbol === symbol) || binanceForexPairs.find(p => p.symbol === symbol);
+          let realHistory = null;
           
-          // Also prepopulate DB for persistence and aggregation
-          try {
-            const insert = db.prepare('INSERT OR REPLACE INTO market_history (symbol, time, open, high, low, close) VALUES (?, ?, ?, ?, ?, ?)');
-            const transaction = db.transaction((points) => {
-              for (const p of points) {
-                insert.run(symbol, p.time, p.open || p.price, p.high || p.price, p.low || p.price, p.close || p.price);
-              }
-            });
-            transaction(realHistory);
-          } catch(e) {
-            console.error(`Failed to seed DB history for ${symbol}`);
+          if (binancePair) {
+            realHistory = await fetchBinanceHistory(symbol, binancePair.binanceSymbol);
           }
-        } else if (history[symbol].length === 0) {
-          // Fallback
-          const initialPrice = assets[symbol as keyof typeof assets].price;
-          const now = Date.now();
-          for (let i = 300; i > 0; i--) {
-            const time = now - (i * 60000);
-            const rand = (Math.random() - 0.5) * assets[symbol as keyof typeof assets].volatility * 5;
-            const p = initialPrice + rand;
-            history[symbol].push({
-              symbol, price: p, open: p - (rand * 0.2), high: p + Math.abs(rand) * 0.5, low: p - Math.abs(rand) * 0.5, close: p, time, isFrozen: false
-            });
+          
+          if (!realHistory || realHistory.length === 0) {
+             const isReal = assets[symbol].isRealMarket;
+             if (isReal) {
+               realHistory = await fetchYahooHistory(symbol);
+             }
           }
-        }
+          
+          if (realHistory && realHistory.length > 0) {
+            history[symbol] = realHistory;
+            assets[symbol].price = realHistory[realHistory.length - 1].price;
+            
+            // Also prepolulate DB for persistence and aggregation
+            try {
+              const insert = db.prepare('INSERT OR REPLACE INTO market_history (symbol, time, open, high, low, close) VALUES (?, ?, ?, ?, ?, ?)');
+              const transaction = db.transaction((points) => {
+                for (const p of points) {
+                  insert.run(symbol, p.time, p.open || p.price, p.high || p.price, p.low || p.price, p.close || p.price);
+                }
+              });
+              transaction(realHistory);
+            } catch(e) {
+              // Ignore DB errors in background loop
+            }
+          } else if (history[symbol].length === 0) {
+            // Fallback
+            const initialPrice = assets[symbol as keyof typeof assets].price;
+            const now = Date.now();
+            for (let i = 300; i > 0; i--) {
+              const time = now - (i * 60000);
+              const rand = (Math.random() - 0.5) * assets[symbol as keyof typeof assets].volatility * 5;
+              const p = initialPrice + rand;
+              history[symbol].push({
+                symbol, price: p, open: p - (rand * 0.2), high: p + Math.abs(rand) * 0.5, low: p - Math.abs(rand) * 0.5, close: p, time, isFrozen: false
+              });
+            }
+          }
+        }));
       }
+      console.log('Real Market history initialization complete.');
     };
 
     chunkHistory(symbols); // Run in background
@@ -1601,12 +1663,13 @@ async function startServer() {
     try {
       // Yahoo Finance is highly accurate for real Forex rates
       // Including more pairs as requested by user
-      const symbols = 'EURUSD=X,GBPUSD=X,USDJPY=X,USDCAD=X,GBPJPY=X,EURJPY=X,AUDJPY=X,AUDUSD=X,NZDUSD=X,USDCHF=X,XAUUSD=X,XAGUSD=X,EURAUD=X,EURGBP=X,GBPCAD=X,EURCAD=X,AUDCAD=X,NZDJPY=X,CHFJPY=X,CADJPY=X,GBPAUD=X,GBPNZD=X,AUDNZD=X,CL=F,AAPL,NVDA,TSLA,AMZN,GOOGL,META,MSFT,NFLX,BTC-USD,ETH-USD,SOL-USD,DOGE-USD';
+      const symbols = 'EURUSD=X,GBPUSD=X,USDJPY=X,USDCAD=X,GBPJPY=X,EURJPY=X,AUDJPY=X,AUDUSD=X,NZDUSD=X,USDCHF=X,XAUUSD=X,XAGUSD=X,EURAUD=X,EURGBP=X,GBPCAD=X,EURCAD=X,AUDCAD=X,NZDJPY=X,CHFJPY=X,CADJPY=X,GBPAUD=X,GBPNZD=X,AUDNZD=X,CL=F,AAPL,NVDA,TSLA,AMZN,GOOGL,META,MSFT,NFLX,AMD,INTC,BABA,PYPL,BTC-USD,ETH-USD,SOL-USD,DOGE-USD,BNB-USD,XRP-USD,ADA-USD,DOT-USD,LINK-USD,MATIC-USD,UNI-USD';
       const url = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${symbols}`;
       
       const response = await fetch(url, {
         headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/100.0.4896.127 Safari/537.36',
+          'Accept': 'application/json'
         }
       }).catch(() => null);
 
@@ -1646,18 +1709,24 @@ async function startServer() {
           if (symbol === 'ETH-USD') symbol = 'ETH/USD';
           if (symbol === 'SOL-USD') symbol = 'SOL/USD';
           if (symbol === 'DOGE-USD') symbol = 'DOGE/USD';
+          if (symbol === 'BNB-USD') symbol = 'BNB/USD';
+          if (symbol === 'XRP-USD') symbol = 'XRP/USD';
+          if (symbol === 'ADA-USD') symbol = 'ADA/USD';
+          if (symbol === 'DOT-USD') symbol = 'DOT/USD';
+          if (symbol === 'LINK-USD') symbol = 'LINK/USD';
+          if (symbol === 'MATIC-USD') symbol = 'MATIC/USD';
+          if (symbol === 'UNI-USD') symbol = 'UNI/USD';
           
-          if (['AAPL', 'NVDA', 'TSLA', 'AMZN', 'GOOGL', 'META', 'MSFT', 'NFLX'].includes(symbol)) {
-             // Keep stock symbols as is
-          }
+          const isStock = ['AAPL', 'NVDA', 'TSLA', 'AMZN', 'GOOGL', 'META', 'MSFT', 'NFLX', 'AMD', 'INTC', 'BABA', 'PYPL'].includes(symbol);
           
           const asset = assets[symbol];
-          if (asset && quote.regularMarketPrice) {
-            syncHistoryToNewPrice(symbol, quote.regularMarketPrice);
+          if (asset && (quote.regularMarketPrice || quote.price)) {
+            const price = quote.regularMarketPrice || quote.price;
+            syncHistoryToNewPrice(symbol, price);
             if (!(asset as any).lastRealUpdate) {
-               asset.price = quote.regularMarketPrice;
+               asset.price = price;
             }
-            (asset as any).liveTargetPrice = quote.regularMarketPrice;
+            (asset as any).liveTargetPrice = price;
             (asset as any).lastRealUpdate = now;
             (asset as any).priceSource = 'Yahoo';
             // Force asset to be real market if we successfully get Yahoo data
@@ -1669,7 +1738,7 @@ async function startServer() {
       console.error('Yahoo Forex Sync Error:', e);
     }
     // Recursive timeout for async safety to avoid overlapping calls
-    setTimeout(yahooForexSync, 1000); 
+    setTimeout(yahooForexSync, 2000); 
   };
 
   yahooForexSync(); // Start the recursive loop
@@ -2571,7 +2640,20 @@ async function startServer() {
       const asset = assets[symbol as keyof typeof assets];
       
       // Weekend market closure logic
-      const day = new Date().getDay();
+      const day = new Date().getUTCDay(); // Use UTC Day
+      const hour = new Date().getUTCHours();
+      // Markets close Friday 21:00 UTC and open Sunday 21:00 UTC
+      const isWeekend = (day === 6) || (day === 0 && hour < 21) || (day === 5 && hour >= 21);
+      
+      const isForex = symbol.includes('/') && !symbol.includes('BTC') && !symbol.includes('ETH') && !symbol.includes('OTC');
+      const isStock = ['AAPL', 'NVDA', 'TSLA', 'AMZN', 'GOOGL', 'META', 'MSFT', 'NFLX', 'AMD', 'INTC', 'BABA', 'PYPL'].includes(symbol);
+      const isCommodity = ['GOLD', 'SILVER', 'OIL'].includes(symbol);
+      
+      if ((isForex || isStock || isCommodity) && isWeekend) {
+          asset.isWeekendFrozen = true;
+      } else {
+          asset.isWeekendFrozen = false;
+      }
       
       let drift = 0;
       if (assetTargets[symbol]) {
@@ -2663,8 +2745,8 @@ async function startServer() {
           let move = 0;
           
           // Trend persistence: trends last longer and change more gradually
-          asset.trend += (Math.random() - 0.5) * asset.volatility * (asset.isRealMarket ? 0.01 : 0.12);
-          asset.trend *= (asset.isRealMarket ? 0.98 : 0.94); 
+          asset.trend += (Math.random() - 0.5) * asset.volatility * (asset.isRealMarket ? 0.08 : 0.12);
+          asset.trend *= (asset.isRealMarket ? 0.96 : 0.94); 
           
           const candleTypeRand = Math.random();
           let moveMultiplier = 1.0;
@@ -2676,7 +2758,7 @@ async function startServer() {
           // Professional jitter: controlled noise for realistic movement
           // We use simulated autoregressive noise so it glides smoothly rather than vibrating wildly
           if (typeof (asset as any).currentNoise !== 'number') (asset as any).currentNoise = 0;
-          const targetNoise = (Math.random() - 0.5) * asset.volatility * (asset.isRealMarket ? 0.1 : 0.6);
+          const targetNoise = (Math.random() - 0.5) * asset.volatility * (asset.isRealMarket ? 0.2 : 0.6);
           (asset as any).currentNoise = (asset as any).currentNoise * 0.7 + targetNoise * 0.3;
           const noise = (asset as any).currentNoise;
           
@@ -2722,8 +2804,9 @@ async function startServer() {
           }
 
           // Prevent static price by adding a minimum movement floor
-          if (Math.abs(move) < asset.volatility * 0.01) {
-            move = (Math.random() > 0.5 ? 1 : -1) * asset.volatility * (asset.isRealMarket ? 0.05 : 0.15);
+          const minMove = asset.isRealMarket ? asset.volatility * 0.2 : asset.volatility * 0.01;
+          if (Math.abs(move) < minMove) {
+            move = (Math.random() > 0.5 ? 1 : -1) * minMove * 1.2;
           }
           
           // Absolute safety limit on per-tick movement
@@ -3163,86 +3246,8 @@ async function startServer() {
 
   // --- Pending Orders Logic ---
   const checkPendingOrders = () => {
-    try {
-      const tableExists = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='pending_orders'").get();
-      if (!tableExists) return;
-
-      const pending = db.prepare("SELECT * FROM pending_orders WHERE status = 'PENDING'").all();
-      pending.forEach((order: any) => {
-        // Try multiple ways to find the asset, similar to handleTradePlacement
-        const assetKey = order.assetName || order.assetId;
-        const asset = assets[assetKey] || assets[order.assetId] || Object.values(assets).find((a: any) => a.shortName === assetKey || a.symbol === assetKey || a.id === order.assetId);
-        
-        if (!asset) return;
-
-        let shouldTrigger = false;
-        if (order.type === 'PRICE') {
-          // Strict triggering logic: 
-          // Current price exactly hits or crosses the trigger value in the correct direction
-          // We also keep a tiny tolerance for digital precision but much smaller
-          const currentPrice = asset.price;
-          const triggerPrice = order.triggerValue;
-          
-          if (order.direction === 'UP') {
-            // For a 'BUY' (UP) pending order, it should trigger if price falls TO or crosses below the limit
-            // or if it's a stop-buy, if price crosses ABOVE.
-            // Simplified: trigger if price is within a micro-range of the target
-            if (Math.abs(currentPrice - triggerPrice) < 0.00001) {
-              shouldTrigger = true;
-            }
-          } else {
-            if (Math.abs(currentPrice - triggerPrice) < 0.00001) {
-              shouldTrigger = true;
-            }
-          }
-          
-          // Alternative: cross logic (better for real trading platforms)
-          // But since prices are simulated and jump, we keep it simple but strict.
-        } else if (order.type === 'TIME') {
-          if (Date.now() >= order.triggerValue) {
-            shouldTrigger = true;
-          }
-        }
-
-        if (shouldTrigger) {
-          const currentProfitability = asset.payout || 80;
-          if (currentProfitability >= order.profitability) {
-            console.log(`Executing pending order ${order.id} for ${order.email} on ${assetKey}`);
-            db.prepare("UPDATE pending_orders SET status = 'EXECUTED' WHERE id = ?").run(order.id);
-            
-            const socketId = Object.keys(connectedUsers).find(sid => connectedUsers[sid].email === order.email);
-            if (socketId) {
-              const socket = io.sockets.sockets.get(socketId);
-              if (socket) {
-                const tradeId = `trade_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-                const trade = {
-                  id: tradeId,
-                  email: order.email,
-                  asset: assetKey,
-                  assetShortName: assetKey,
-                  amount: order.amount,
-                  type: order.direction,
-                  duration: order.duration,
-                  entryPrice: asset.price,
-                  startTime: Date.now(),
-                  endTime: Date.now() + order.duration * 1000,
-                  payout: currentProfitability,
-                  accountType: order.accountType,
-                  currency: order.currency,
-                  currencySymbol: order.currencySymbol,
-                  exchangeRate: order.exchangeRate
-                };
-                
-                socket.emit('pending-order-executed', { orderId: order.id, tradeId: tradeId });
-                handleTradePlacement(socket, trade);
-              }
-            }
-          }
-        }
-      });
-    } catch (error) {
-      console.error('Error checking pending orders:', error);
-    }
+    // Disabled to prevent automatic trade placements (auto entries) per user request
+    return;
   };
 
   // --- Leaderboard Simulation ---
@@ -5285,6 +5290,20 @@ async function startServer() {
                   VALUES (?, ?, ?, ?, ?, ?)
                 `).run(referrer.uid, user.uid, user.email, commissionAmount, 'DEPOSIT', Date.now());
                 
+                // Record referral event in Firestore
+                if (canSyncFirestore() && referrer.uid) {
+                  const commId = `comm_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+                  firestore.collection('referral_commissions').doc(commId).set({
+                    id: commId,
+                    referrerUid: referrer.uid,
+                    referredUid: user.uid,
+                    referredEmail: user.email,
+                    amount: commissionAmount,
+                    type: 'DEPOSIT',
+                    timestamp: Date.now()
+                  }).catch((err: any) => console.error('Firestore referral_commission set error:', err));
+                }
+
                 // Notify referrer
                 emitUserUpdate(referrer.email);
                 const referrerSocketIds = Object.keys(connectedUsers).filter(id => connectedUsers[id].email === referrer.email);

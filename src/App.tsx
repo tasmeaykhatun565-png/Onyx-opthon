@@ -2690,8 +2690,10 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
   }, [socket, selectedAsset.id, chartTimeFrame]);
 
   const handleLoadMoreHistory = useCallback(() => {
-    if (!socket || !selectedAsset || dataRef.current.length === 0) return;
+    if (!socket || !selectedAsset || dataRef.current.length === 0 || isLoadingRef.current) return;
     const oldestTime = dataRef.current[0].time;
+    isLoadingRef.current = true;
+    setIsLoading(true);
     // Request older history
     socket.emit('request-history', {
       asset: selectedAsset.shortName,
@@ -3183,8 +3185,8 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
         }
       }
 
-      // Add to results toast
-      setTradeResults(r => [...r, { id: result.id, profit: profit, isWin }]);
+      // Disabled unrequested notifications as requested
+      // setTradeResults(r => [...r, { id: result.id, profit: profit, isWin }]);
     };
 
     socket.on('trade-result', handleTradeResult);
@@ -3285,7 +3287,7 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
     if (totalAvailable < investmentInUSD - 0.00000001) {
       setIsTrading(false);
       isTradingRef.current = false;
-      showToast(`${t('trade.insufficient_balance')}. You need ${displayCurrencySymbol}${(investmentInUSD * rate).toFixed(2)} but have ${displayCurrencySymbol}${(totalAvailable * rate).toFixed(2)}.`, "error");
+      showToast(`${t('trade.insufficient_balance')}`, "warning");
       return;
     }
 

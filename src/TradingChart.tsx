@@ -1075,7 +1075,7 @@ export const TradingChart = React.memo(({
       chart.priceScale('right').applyOptions({
         scaleMargins: {
           top: 0.1,
-          bottom: 0.3,
+          bottom: 0.1,
         },
       });
 
@@ -2084,9 +2084,6 @@ export const TradingChart = React.memo(({
                 <div className="absolute inset-0 pointer-events-none z-[45] shadow-[inset_0_0_80px_rgba(0,0,0,0.25)]" />
             </>
         )}
-        <div className="absolute top-0 left-0 right-0 h-[1px] bg-bg-secondary z-[45] pointer-events-none" />
-        <div className="absolute bottom-0 left-0 right-0 h-[1px] bg-bg-secondary z-[45] pointer-events-none" />
-        
         {/* Subtitle Scanline Effect Removed */}
 
         <style>
