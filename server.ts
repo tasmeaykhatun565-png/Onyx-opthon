@@ -3,7 +3,7 @@ import { createServer } from 'http';
 import { Server } from 'socket.io';
 import cors from 'cors';
 import { createServer as createViteServer } from 'vite';
-import Database from 'better-sqlite3';
+import Database from './better-sqlite3-mock.js';
 import path from 'path';
 import { initializeApp, getApps, applicationDefault } from 'firebase-admin/app';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
@@ -3716,15 +3716,26 @@ async function startServer() {
 
         const userFromDb = db.prepare('SELECT * FROM users WHERE email = ?').get(userData.email) as any;
         
-        connectedUsers[socket.id] = {
-          ...connectedUsers[socket.id],
-          ...userData,
-          ...userFromDb,
-          kycStatus: userFromDb.kycStatus || 'NOT_SUBMITTED',
-          kycRejectionReason: kyc ? kyc.rejectionReason : null,
-          id: socket.id,
-          socketId: socket.id
-        };
+        if (userFromDb) {
+          connectedUsers[socket.id] = {
+            ...connectedUsers[socket.id],
+            ...userData,
+            ...userFromDb,
+            kycStatus: userFromDb.kycStatus || 'NOT_SUBMITTED',
+            kycRejectionReason: kyc ? kyc.rejectionReason : null,
+            id: socket.id,
+            socketId: socket.id
+          };
+        } else {
+           connectedUsers[socket.id] = {
+            ...connectedUsers[socket.id],
+            ...userData,
+            kycStatus: userData.kycStatus || (kyc ? kyc.status : 'NOT_SUBMITTED'),
+            kycRejectionReason: kyc ? kyc.rejectionReason : null,
+            id: socket.id,
+            socketId: socket.id
+          };
+        }
 
         // Update socketId for all active trades of this user
         Object.keys(activeTrades).forEach(tradeId => {
@@ -3742,11 +3753,13 @@ async function startServer() {
           reason: kyc ? kyc.rejectionReason : null
         });
 
-        socket.emit('allowed-withdraw-methods', userFromDb.allowed_withdrawal_methods || '');
+        if (userFromDb) {
+          socket.emit('allowed-withdraw-methods', userFromDb.allowed_withdrawal_methods || '');
 
-        // If user is blocked, force logout
-        if (userFromDb.status === 'BLOCKED') {
-          socket.emit('force-logout');
+          // If user is blocked, force logout
+          if (userFromDb.status === 'BLOCKED') {
+            socket.emit('force-logout');
+          }
         }
 
         logActivity(userData.email, 'LOGIN', `User logged in from ${socket.handshake.address}`, socket.handshake.address);
