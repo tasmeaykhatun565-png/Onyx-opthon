@@ -35,7 +35,7 @@ process.on('unhandledRejection', (reason: any, promise) => {
 });
 
 const canSyncFirestore = () => {
-  return firestore !== null && !firestoreDisabledDueToError;
+  return firestore !== null; // Always allow sync if initialized, ignore firestoreDisabledDueToError
 };
 
 const handleFirestoreError = (e: any, context: string) => {
@@ -650,6 +650,12 @@ async function startServer() {
       db.prepare('INSERT INTO payment_orders (id, email, amount, currency, methodId, methodName, timestamp, details) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
         .run(id, email, amount, currency, methodId, methodName, timestamp, JSON.stringify(details || {}));
       
+      if (canSyncFirestore()) {
+        firestore.collection('payment_orders').doc(id.toString()).set({
+          id, email, amount, currency, methodId, methodName, timestamp, details, status: 'PENDING'
+        }).catch((e: any) => console.error('Error saving payment_order to firestore:', e));
+      }
+
       res.json({ id, url: `${req.protocol}://${req.get('host')}/pay/${id}` });
     } catch (e) {
       console.error('Error creating payment order:', e);
@@ -693,9 +699,20 @@ async function startServer() {
       // Update order status
       db.prepare('UPDATE payment_orders SET status = "SUBMITTED" WHERE id = ?').run(id);
 
+      if (canSyncFirestore()) {
+        firestore.collection('payment_orders').doc(id.toString()).set({ status: 'SUBMITTED' }, { merge: true });
+      }
+
       // Create a deposit record
-      db.prepare('INSERT INTO deposits (email, amount, currency, method, transactionId, status, submittedAt, updatedAt, screenshot) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
+      const info = db.prepare('INSERT INTO deposits (email, amount, currency, method, transactionId, status, submittedAt, updatedAt, screenshot) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
         .run(order.email, order.amount, order.currency, order.methodName, transactionId, 'PENDING', now, now, screenshot);
+      
+      const depositId = info.lastInsertRowid.toString();
+      if (canSyncFirestore()) {
+        firestore.collection('deposits').doc(depositId).set({
+          id: depositId, email: order.email, amount: order.amount, currency: order.currency, method: order.methodName, transactionId, status: 'PENDING', submittedAt: now, updatedAt: now, screenshot
+        });
+      }
 
       // Add notification for user
       const notifId = Math.random().toString(36).substring(2, 11);
@@ -1999,8 +2016,255 @@ async function startServer() {
     globalReferralSettings = { ...globalReferralSettings, ...JSON.parse(savedReferralSettings.value) };
   }
 
+  const syncSettingsFromFirestore = async () => {
+    if (!canSyncFirestore()) return;
+    try {
+      const snap = await firestore.collection('settings').get();
+      snap.forEach(doc => {
+        const key = doc.id;
+        const value = doc.data().value;
+        db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run(key, JSON.stringify(value));
+        
+        switch (key) {
+          case 'trade_settings':
+            globalTradeSettings = { ...globalTradeSettings, ...value };
+            break;
+          case 'asset_settings':
+            Object.keys(value).forEach(symbol => {
+              if (assets[symbol]) {
+                assets[symbol] = { ...assets[symbol], ...value[symbol] };
+              }
+            });
+            break;
+          case 'deposit_settings':
+            globalDepositSettings = { ...globalDepositSettings, ...value };
+            break;
+          case 'platform_settings':
+            globalPlatformSettings = { ...globalPlatformSettings, ...value };
+            break;
+          case 'referral_settings':
+            globalReferralSettings = { ...globalReferralSettings, ...value };
+            break;
+        }
+      });
+      console.log('Settings successfully synced from Firestore');
+    } catch (e) {
+      console.error('Error syncing settings from Firestore:', e);
+    }
+  };
+
+  const syncGlobalCollectionsFromFirestore = async () => {
+    if (!canSyncFirestore()) return;
+    try {
+      console.log('Syncing global collections from Firestore (Deposits, Withdrawals, Support Chat, Activity)...');
+      
+      // Sync Deposits
+      const depositsSnap = await firestore.collection('deposits').get();
+      depositsSnap.forEach(doc => {
+        const data = doc.data();
+        const exists = db.prepare('SELECT id FROM deposits WHERE id = ?').get(doc.id);
+        if (!exists) {
+          db.prepare(`INSERT INTO deposits (id, email, amount, currency, method, transactionId, status, submittedAt, updatedAt, promoCode, bonusAmount, turnoverRequired, screenshot) 
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+            .run(doc.id, data.email, data.amount, data.currency, data.method, data.transactionId, data.status, data.submittedAt, data.updatedAt, data.promoCode, data.bonusAmount, data.turnoverRequired, data.screenshot);
+        } else {
+          db.prepare('UPDATE deposits SET status = ?, updatedAt = ? WHERE id = ?').run(data.status, data.updatedAt, doc.id);
+        }
+      });
+
+      // Sync Withdrawals
+      const withdrawalsSnap = await firestore.collection('withdrawals').get();
+      withdrawalsSnap.forEach(doc => {
+        const data = doc.data();
+        const exists = db.prepare('SELECT id FROM withdrawals WHERE id = ?').get(doc.id);
+        if (!exists) {
+          db.prepare(`INSERT INTO withdrawals (id, email, amount, currency, method, accountDetails, status, submittedAt, updatedAt, realAmount, bonusAmount, rejectionReason)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+            .run(doc.id, data.email, data.amount, data.currency, data.method, data.accountDetails, data.status, data.submittedAt, data.updatedAt, data.realAmount, data.bonusAmount, data.rejectionReason);
+        } else {
+          db.prepare('UPDATE withdrawals SET status = ?, updatedAt = ? WHERE id = ?').run(data.status, data.updatedAt, doc.id);
+        }
+      });
+
+      // Sync Payment Orders
+      const orderSnap = await firestore.collection('payment_orders').get();
+      orderSnap.forEach(doc => {
+        const data = doc.data();
+        const exists = db.prepare('SELECT id FROM payment_orders WHERE id = ?').get(doc.id);
+        if (!exists) {
+           db.prepare(`INSERT INTO payment_orders (id, email, amount, currency, methodId, methodName, status, timestamp, details) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+             .run(doc.id, data.email, data.amount, data.currency, data.methodId, data.methodName, data.status, data.timestamp, typeof data.details === 'string' ? data.details : JSON.stringify(data.details));
+        }
+      });
+
+      // Sync Activity Logs
+      const activitySnap = await firestore.collection('activity_logs').get();
+      activitySnap.forEach(doc => {
+        const data = doc.data();
+        const exists = db.prepare('SELECT id FROM activity_logs WHERE id = ?').get(doc.id);
+        if (!exists) {
+          try {
+            db.prepare('INSERT INTO activity_logs (id, email, action, details, timestamp, ip) VALUES (?, ?, ?, ?, ?, ?)')
+              .run(doc.id, data.email, data.action, data.details, data.timestamp, data.ip);
+          } catch(e) {}
+        }
+      });
+
+      // Sync Support Chats
+      const chatSessionsSnap = await firestore.collection('support_chats').get();
+      for (const objDoc of chatSessionsSnap.docs) {
+        const chatData = objDoc.data();
+        const email = chatData.email;
+        if (!email) continue;
+        
+        const existingSession = db.prepare('SELECT id FROM chat_sessions WHERE email = ?').get(email);
+        if (!existingSession) {
+          db.prepare('INSERT INTO chat_sessions (email, status, lastUpdated) VALUES (?, ?, ?)').run(email, 'active', chatData.lastUpdated || Date.now());
+        }
+
+        const messagesSnap = await firestore.collection('support_chats').doc(email).collection('messages').get();
+        messagesSnap.forEach(msgDoc => {
+          const m = msgDoc.data();
+          try {
+            const existsMsg = db.prepare('SELECT id FROM support_chat WHERE id = ?').get(m.id);
+            if (!existsMsg) {
+              db.prepare('INSERT INTO support_chat (id, email, text, sender, timestamp, imageUrl) VALUES (?, ?, ?, ?, ?, ?)')
+                .run(m.id, m.email || email, m.text, m.sender, m.timestamp, m.imageUrl || null);
+            }
+          } catch(e) {}
+        });
+      }
+
+      // Sync Notifications
+      const notifsSnap = await firestore.collection('notifications').get();
+      notifsSnap.forEach(doc => {
+        const data = doc.data();
+        const exists = db.prepare('SELECT id FROM notifications WHERE id = ?').get(doc.id);
+        if (!exists) {
+          try {
+            db.prepare('INSERT INTO notifications (id, email, title, message, type, timestamp, isRead) VALUES (?, ?, ?, ?, ?, ?, ?)')
+              .run(doc.id, data.email, data.title, data.message, data.type, data.timestamp, data.isRead ? 1 : 0);
+          } catch(e) {}
+        }
+      });
+
+      // Sync KYC Submissions
+      const kycSnap = await firestore.collection('kyc_submissions').get();
+      kycSnap.forEach(doc => {
+        const data = doc.data();
+        const exists = db.prepare('SELECT id FROM kyc_submissions WHERE id = ?').get(doc.id);
+        if (!exists) {
+          try {
+            db.prepare(`INSERT INTO kyc_submissions (id, email, documentType, documentNumber, fullName, dateOfBirth, gender, frontImage, backImage, selfieImage, status, rejectionReason, submittedAt, updatedAt)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+              .run(doc.id, data.email, data.documentType, data.documentNumber, data.fullName, data.dateOfBirth, data.gender, data.frontImage, data.backImage, data.selfieImage, data.status, data.rejectionReason, data.submittedAt, data.updatedAt);
+          } catch(e) {}
+        } else {
+          db.prepare('UPDATE kyc_submissions SET status = ?, rejectionReason = ?, updatedAt = ? WHERE id = ?').run(data.status, data.rejectionReason, data.updatedAt, doc.id);
+        }
+      });
+
+      // Sync Promo Codes
+      const promoSnap = await firestore.collection('promotions').get();
+      promoSnap.forEach(doc => {
+        const data = doc.data();
+        const exists = db.prepare('SELECT id FROM promo_codes WHERE code = ?').get(data.code);
+        if (!exists && data.code) {
+          try {
+            db.prepare(`INSERT INTO promo_codes (code, description, bonusPercentage, minDeposit, turnoverMultiplier, expiresAt, title, icon)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
+              .run(data.code, data.description, data.bonusPercentage, data.minDeposit, data.turnoverMultiplier, data.expiresAt, data.title, data.icon);
+          } catch(e) {}
+        }
+      });
+      
+      // Sync Tournaments
+      const tournSnap = await firestore.collection('tournaments').get();
+      tournSnap.forEach(doc => {
+        const data = doc.data();
+        const exists = db.prepare('SELECT id FROM tournaments WHERE id = ?').get(doc.id);
+        if (!exists) {
+          try {
+            db.prepare(`INSERT INTO tournaments (id, title, description, prizeFund, startTime, endTime, imageUrl, status, isLocked, rules, participants, createdAt)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+              .run(doc.id, data.title, data.description, data.prizeFund, data.startTime, data.endTime, data.imageUrl, data.status, data.isLocked ? 1 : 0, data.rules || '[]', typeof data.participants === 'string' ? data.participants : JSON.stringify(data.participants || []), data.createdAt);
+          } catch(e) {}
+        }
+      });
+
+      // Sync Ads
+      const adsSnap = await firestore.collection('ads').get();
+      adsSnap.forEach(doc => {
+        const data = doc.data();
+        const exists = db.prepare('SELECT id FROM ads WHERE id = ?').get(doc.id);
+        if (!exists) {
+          try {
+            db.prepare(`INSERT INTO ads (id, title, imageUrl, linkUrl, displayOrder, status, createdAt)
+              VALUES (?, ?, ?, ?, ?, ?, ?)`)
+              .run(doc.id, data.title, data.imageUrl, data.linkUrl, data.displayOrder, data.status, data.createdAt);
+          } catch(e) {}
+        }
+      });
+
+      // Sync Announcements
+      const annSnap = await firestore.collection('announcements').get();
+      annSnap.forEach(doc => {
+        const data = doc.data();
+        const exists = db.prepare('SELECT id FROM announcements WHERE id = ?').get(doc.id);
+        if (!exists) {
+           try {
+             db.prepare(`INSERT INTO announcements (id, title, message, imageUrl, linkUrl, createdAt)
+               VALUES (?, ?, ?, ?, ?, ?)`)
+               .run(doc.id, data.title, data.message, data.imageUrl, data.linkUrl, data.createdAt);
+           } catch(e) {}
+        }
+      });
+      
+      // Sync Users
+      const usersSnap = await firestore.collection('users').get();
+      for (const doc of usersSnap.docs) {
+        const data = doc.data();
+        if (!data.email) continue;
+        const exists = db.prepare('SELECT id FROM users WHERE email = ?').get(data.email);
+        if (!exists) {
+          try {
+            db.prepare('INSERT INTO users (email, name, photoURL, uid, balance, demoBalance, createdAt, lastLogin, status, kycStatus, turnover_achieved, turnover_required, bonus_balance, referralBalance, totalReferralEarnings, allowed_withdrawal_methods, trades, language, currency, currencySymbol, currencyName, currencyFlag, timeframe, chartType, referredBy, referralCode, referralCount, extraAccounts) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+              .run(
+                data.email, data.name || '', data.photoURL || '', doc.id,
+                data.balance || 0, data.demoBalance || 10000, data.createdAt || Date.now(),
+                data.lastLogin || Date.now(), data.status || 'ACTIVE', data.kycStatus || 'NONE',
+                data.turnover_achieved || 0, data.turnover_required || 0, data.bonus_balance || 0,
+                data.referralBalance || 0, data.totalReferralEarnings || 0,
+                data.allowed_withdrawal_methods || '[]',
+                typeof data.trades === 'string' ? data.trades : JSON.stringify(data.trades || []),
+                data.language || 'en', data.currency || 'USD', data.currencySymbol || '$',
+                data.currencyName || 'US Dollar', data.currencyFlag || 'US',
+                data.timeframe || '1m', data.chartType || 'candlestick',
+                data.referredBy || null,
+                data.referralCode || Math.floor(1000000 + Math.random() * 9000000).toString(),
+                data.referralCount || 0,
+                typeof data.extraAccounts === 'string' ? data.extraAccounts : JSON.stringify(data.extraAccounts || [])
+              );
+          } catch(e) {}
+        }
+      }
+
+      console.log('Global collections successfully synced from Firestore');
+    } catch (e) {
+      console.error('Error syncing global collections from Firestore:', e);
+    }
+  };
+
+  // Sync settings when the server starts
+  if (canSyncFirestore()) {
+    console.log('Awaiting initial Firestore sync...');
+    await syncSettingsFromFirestore();
+    await syncGlobalCollectionsFromFirestore();
+  }
+
   const saveTradeSettings = (settings: any) => {
     db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run('trade_settings', JSON.stringify(settings));
+    if (canSyncFirestore()) firestore.collection('settings').doc('trade_settings').set({ value: settings });
   };
 
   const saveAssetSettings = () => {
@@ -2016,18 +2280,22 @@ async function startServer() {
       };
     });
     db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run('asset_settings', JSON.stringify(toSave));
+    if (canSyncFirestore()) firestore.collection('settings').doc('asset_settings').set({ value: toSave });
   };
 
   const saveDepositSettings = (settings: any) => {
     db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run('deposit_settings', JSON.stringify(settings));
+    if (canSyncFirestore()) firestore.collection('settings').doc('deposit_settings').set({ value: settings });
   };
 
   const savePlatformSettings = (settings: any) => {
     db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run('platform_settings', JSON.stringify(settings));
+    if (canSyncFirestore()) firestore.collection('settings').doc('platform_settings').set({ value: settings });
   };
 
   const saveReferralSettings = (settings: any) => {
     db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run('referral_settings', JSON.stringify(settings));
+    if (canSyncFirestore()) firestore.collection('settings').doc('referral_settings').set({ value: settings });
   };
 
   const logActivity = (email: string, action: string, details: string = '', ip: string = '') => {
@@ -2035,8 +2303,16 @@ async function startServer() {
       const tableExists = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='activity_logs'").get();
       if (!tableExists) return;
 
-      db.prepare('INSERT INTO activity_logs (email, action, details, timestamp, ip) VALUES (?, ?, ?, ?, ?)')
-        .run(email, action, details, Date.now(), ip);
+      const now = Date.now();
+      const info = db.prepare('INSERT INTO activity_logs (email, action, details, timestamp, ip) VALUES (?, ?, ?, ?, ?)')
+        .run(email, action, details, now, ip);
+      
+      const id = info.lastInsertRowid.toString();
+      if (canSyncFirestore()) {
+         firestore.collection('activity_logs').doc(id).set({
+           id, email, action, details, timestamp: now, ip
+         }).catch(() => {});
+      }
     } catch (error) {
       console.error('Activity Logging Error:', error);
     }
@@ -5177,8 +5453,15 @@ async function startServer() {
         `);
         
         const now = Date.now();
-        stmt.run(email, amount, currency, method, transactionId, now, now, promoCode || null, bonusAmount, turnoverRequired, screenshot || null);
-        
+        const info = stmt.run(email, amount, currency, method, transactionId, now, now, promoCode || null, bonusAmount, turnoverRequired, screenshot || null);
+        const depositId = info.lastInsertRowid.toString();
+
+        if (canSyncFirestore()) {
+           firestore.collection('deposits').doc(depositId).set({
+             id: depositId, email, amount, currency, method, transactionId, status: 'PENDING', submittedAt: now, updatedAt: now, promoCode: promoCode || null, bonusAmount, turnoverRequired, screenshot: screenshot || null
+           }).catch((e: any) => console.error('Error saving deposit to firestore:', e));
+        }
+
         socket.emit('deposit-submitted', { status: 'PENDING', bonusAmount });
         
         logActivity(email, 'DEPOSIT_SUBMIT', `Method: ${method}, Amount: ${amount} ${currency}, ID: ${transactionId}`);
@@ -5209,6 +5492,9 @@ async function startServer() {
         if (oldStatus === status) return;
 
         db.prepare('UPDATE deposits SET status = ?, updatedAt = ? WHERE id = ?').run(status, Date.now(), id);
+        if (canSyncFirestore()) {
+          firestore.collection('deposits').doc(id.toString()).set({ status, updatedAt: Date.now() }, { merge: true });
+        }
 
         // If approved, add funds to user balance
         if (status === 'APPROVED' && oldStatus === 'PENDING') {
@@ -5494,8 +5780,14 @@ async function startServer() {
         
         const now = Date.now();
         const info = stmt.run(email, amount, currency, method, accountDetails, now, now, newBalance === 0 ? user.balance : amountUSD, newBalance === 0 ? amountUSD - user.balance : 0);
-        const withdrawalId = info.lastInsertRowid;
-        
+        const withdrawalId = info.lastInsertRowid.toString();
+
+        if (canSyncFirestore()) {
+           firestore.collection('withdrawals').doc(withdrawalId).set({
+             id: withdrawalId, email, amount, currency, method, accountDetails, status: 'PENDING', submittedAt: now, updatedAt: now, realAmount: newBalance === 0 ? user.balance : amountUSD, bonusAmount: newBalance === 0 ? amountUSD - user.balance : 0
+           }).catch((e: any) => console.error('Error saving withdrawal to firestore:', e));
+        }
+
         // Update connected user balance
         emitUserUpdate(email);
         emitToUser(email, 'balance-updated', { balance: newBalance, type: 'REAL' });
@@ -5534,6 +5826,9 @@ async function startServer() {
         const status = 'CANCELLED';
 
         db.prepare('UPDATE withdrawals SET status = ?, updatedAt = ? WHERE id = ?').run(status, Date.now(), id);
+        if (canSyncFirestore()) {
+           firestore.collection('withdrawals').doc(id.toString()).set({ status, updatedAt: Date.now() }, { merge: true });
+        }
         console.log('Withdrawal cancelled by user in SQLite');
 
         // Return funds to user balance
@@ -5589,6 +5884,9 @@ async function startServer() {
         if (oldStatus === status) return;
 
         db.prepare('UPDATE withdrawals SET status = ?, updatedAt = ?, rejectionReason = ? WHERE id = ?').run(status, Date.now(), reason || null, id);
+        if (canSyncFirestore()) {
+           firestore.collection('withdrawals').doc(id.toString()).set({ status, updatedAt: Date.now(), rejectionReason: reason || null }, { merge: true });
+        }
         console.log('Withdrawal status updated in SQLite');
 
         // If cancelled or rejected, return funds to user balance

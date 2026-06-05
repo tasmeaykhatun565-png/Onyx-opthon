@@ -132,11 +132,75 @@ service cloud.firestore {
       allow read: if true;
       allow write: if isAdmin();
     }
+    
+    // Platform Settings
+    match /settings/{docId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
 
     // Promotions (Stories)
     match /promotions/{promoId} {
       allow read: if true;
       allow write: if isAdmin();
+    }
+
+    // Deposits
+    match /deposits/{depositId} {
+      allow read: if isSignedIn() && (resource.data.email == request.auth.token.email || isAdmin());
+      allow create: if isSignedIn() && incoming().email == request.auth.token.email;
+      allow update: if isAdmin();
+    }
+
+    // Withdrawals 
+    match /withdrawals/{withdrawalId} {
+      allow read: if isSignedIn() && (resource.data.email == request.auth.token.email || isAdmin());
+      allow create: if isSignedIn() && incoming().email == request.auth.token.email;
+      allow update: if isAdmin();
+    }
+
+    // Payment Orders
+    match /payment_orders/{orderId} {
+      allow read: if isSignedIn() && (resource.data.email == request.auth.token.email || isAdmin());
+      allow create: if isSignedIn() && incoming().email == request.auth.token.email;
+      allow update: if isAdmin() || (isSignedIn() && existing().email == request.auth.token.email);
+    }
+
+    // KYC Submissions
+    match /kyc_submissions/{kycId} {
+      allow read: if isSignedIn() && (resource.data.email == request.auth.token.email || isAdmin());
+      allow create: if isSignedIn() && incoming().email == request.auth.token.email;
+      allow update: if isAdmin();
+    }
+
+    // Activity Logs
+    match /activity_logs/{logId} {
+      allow read: if isSignedIn() && (resource.data.email == request.auth.token.email || isAdmin());
+      allow create: if isSignedIn() && incoming().email == request.auth.token.email;
+      allow update: if isAdmin();
+    }
+
+    // Support Chats
+    match /support_chats/{userEmail} {
+      allow read: if isSignedIn() && (userEmail == request.auth.token.email || isAdmin());
+      allow write: if isSignedIn() && (userEmail == request.auth.token.email || isAdmin());
+      
+      match /messages/{messageId} {
+        allow read: if isSignedIn() && (userEmail == request.auth.token.email || isAdmin());
+        allow write: if isSignedIn() && (userEmail == request.auth.token.email || isAdmin());
+        allow delete: if isAdmin();
+      }
+    }
+
+    // Referral Commissions
+    match /referral_commissions/{commId} {
+      allow read: if isSignedIn() && (
+        resource.data.referrerUid == request.auth.uid || 
+        resource.data.referredEmail == request.auth.token.email || 
+        isAdmin()
+      );
+      allow create: if isSignedIn();
+      allow update: if isAdmin();
     }
   }
 }
