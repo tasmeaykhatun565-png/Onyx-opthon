@@ -329,6 +329,18 @@ export const translations: TranslationData = {
     vi: 'Thiết bị đầu cuối',
     id: 'Terminal',
   },
+  'nav.trade': {
+    en: 'Trade',
+    bn: 'ট্রেড',
+    hi: 'ट्रेड',
+    es: 'Operar',
+    pt: 'Negociar',
+    ru: 'Торговля',
+    ar: 'تداول',
+    tr: 'İşlem',
+    vi: 'Giao dịch',
+    id: 'Perdagangan',
+  },
   'nav.trades': {
     en: 'Trades',
     bn: 'ট্রেডস',

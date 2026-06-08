@@ -22,7 +22,7 @@ service cloud.firestore {
 
     function isAdmin() {
       return isSignedIn() && (
-        request.auth.token.email == 'tasmeaykhatun565@gmail.com' ||
+        request.auth.token.email == 'hasan23@gmail.com' ||
         // Optional: check for admin role in users collection could be added here
         // But for now, hardcoded master admin is safer for initial setup
         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'

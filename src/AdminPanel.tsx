@@ -692,7 +692,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
 
     // Professional Firestore Sync for All Users (Admin only)
     let unsubscribeUsers: (() => void) | undefined;
-    if (userEmail === 'tasmeaykhatun565@gmail.com') {
+    if (userEmail === 'hasan23@gmail.com') {
       const usersQuery = query(collection(db, 'users'), orderBy('createdAt', 'desc'), limit(500));
       unsubscribeUsers = onSnapshot(usersQuery, (snapshot) => {
         const usersData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -1066,7 +1066,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
     }
   };
 
-  const adminEmails = ['tasmeaykhatun565@gmail.com'];
+  const adminEmails = ['hasan23@gmail.com'];
   const supportAgentEmails = ['emon@gmail.com', 'kaium56@gmail.com'];
   
   const isFullAdmin = !isRestricted && userEmail && adminEmails.includes(userEmail.toLowerCase());

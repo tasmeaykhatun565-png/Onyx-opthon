@@ -292,11 +292,7 @@ export const TradingChart = React.memo(({
           // Initial load OR asset switch: focus on the end of the chart
           if (!isSameAsset || lastDataLengthRef.current === 0) {
             // Force scroll to end to ensure multiple candles are visible
-            const dl = formattedData.length;
-            timeScale?.setVisibleLogicalRange({
-              from: Math.max(0, dl - 60),
-              to: dl + 10
-            });
+            timeScale?.scrollToRealTime();
           }
           // Restore logical range shifted by the number of prepended items, 
           // but ONLY if the user was not already at the end of the chart.
@@ -1112,11 +1108,7 @@ export const TradingChart = React.memo(({
       // Initial data paint if already available
       if (dataRef.current.length > 0) {
           updateChartData(series, dataRef.current, chartType);
-          const dl = dataRef.current.length;
-          chart.timeScale().setVisibleLogicalRange({
-            from: Math.max(0, dl - 60),
-            to: dl + 10
-          });
+          chart.timeScale().scrollToRealTime();
       }
 
       return () => {
@@ -1150,11 +1142,7 @@ export const TradingChart = React.memo(({
       if (timeScale && data.length > 0) {
         // Force scroll to real-time on major changes or first data population
         setTimeout(() => {
-          const dl = data.length;
-          timeScale.setVisibleLogicalRange({
-            from: Math.max(0, dl - 60),
-            to: dl + 10
-          });
+          timeScale.scrollToRealTime();
         }, 100);
       }
       lastAssetRef.current = assetName;
@@ -2101,15 +2089,32 @@ export const TradingChart = React.memo(({
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
-                    className="absolute inset-0 z-50 bg-bg-primary/50 backdrop-blur-sm flex items-center justify-center pointer-events-none"
+                    className="absolute inset-0 z-50 bg-bg-primary backdrop-blur-md flex flex-col items-center justify-center pointer-events-none"
                 >
-                    <div className="relative w-8 h-8">
+                    <div className="relative w-12 h-12 mb-4">
                         <motion.div
                             animate={{ rotate: 360 }}
                             transition={{ duration: 1.5, repeat: Infinity, ease: "linear" }}
-                            className="w-8 h-8 rounded-full border-2 border-border-color border-t-[var(--color-accent-color)]"
+                            className="absolute inset-0 rounded-full border-2 border-text-primary/10 border-t-[var(--color-accent-color)]"
+                        />
+                        <motion.div
+                            animate={{ rotate: -360 }}
+                            transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
+                            className="absolute inset-2 rounded-full border-2 border-text-primary/5 border-b-[var(--color-accent-color)] opacity-70"
+                        />
+                        <motion.div
+                            animate={{ scale: [0.8, 1.2, 0.8], opacity: [0.5, 1, 0.5] }}
+                            transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+                            className="absolute inset-4 rounded-full bg-[var(--color-accent-color)] shadow-[0_0_15px_var(--color-accent-color)]"
                         />
                     </div>
+                    <motion.div 
+                        animate={{ opacity: [0.5, 1, 0.5] }}
+                        transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
+                        className="text-xs font-medium text-text-primary/70 tracking-[0.2em] font-mono"
+                    >
+                        INITIALIZING CHART...
+                    </motion.div>
                 </motion.div>
             )}
         </AnimatePresence>

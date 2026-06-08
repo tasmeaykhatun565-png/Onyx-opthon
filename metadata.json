@@ -1,5 +1,12 @@
 {
   "name": "Onyx Elite Terminal",
   "description": "Premium trading ecosystem providing access to digital assets.",
-  "requestFramePermissions": []
+  "requestFramePermissions": [
+    "camera",
+    "microphone",
+    "geolocation"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
 }

@@ -1247,7 +1247,7 @@ function ConfirmEmailOverlay({ user, onBack }: { user: any, onBack: () => void }
       <div className="px-6 flex flex-col h-full">
         <h1 className="text-3xl font-bold tracking-tight mb-4">Confirm Email</h1>
         <p className="text-lg text-text-primary/90 leading-tight mb-8">
-          Let's make sure we can contact you at {user.email || 'tasmeaykhatun565@gmail.com'}.
+          Let's make sure we can contact you at {user.email || 'hasan23@gmail.com'}.
         </p>
         <p className="text-base text-text-secondary/50 leading-snug mb-10">
           Confirming your email address helps us keep your profile safe and ensures that you'll never miss important updates about your money.
@@ -1637,6 +1637,7 @@ export default function TradingPlatform() {
   }, [clientAds]);
 
   const handleAssetSelect = useCallback((asset: Asset) => {
+    selectedAssetRef.current = asset;
     console.log('Asset selected:', asset.shortName);
     setIsLoading(true);
     setData([]);
@@ -2662,6 +2663,7 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
     
     // Clear data only if the asset ID changed (not just the timeframe)
     if (selectedAsset.id !== lastAssetIdRef.current) {
+        selectedAssetRef.current = selectedAsset;
         setData([]);
         dataRef.current = [];
         isFirstTickAfterSwitchRef.current = true;
@@ -2825,14 +2827,11 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
             // Creating a 1-length array here causes the "single candle glitch"
             if (isLoadingRef.current) return prev;
 
-            const isMinuteTf = chartTimeFrameRef.current === '1m';
-            const useMinuteAcc = isMinuteTf && tick.minuteOpen !== undefined;
-
             const newCandle = {
                 time: currentTFStart,
-                open: useMinuteAcc ? tick.minuteOpen : newPrice,
-                high: useMinuteAcc ? tick.minuteHigh : Math.max(newPrice, newPrice),
-                low: useMinuteAcc ? tick.minuteLow : Math.min(newPrice, newPrice),
+                open: newPrice,
+                high: newPrice,
+                low: newPrice,
                 close: newPrice,
                 volume: Math.floor(Math.random() * 100) + 10,
                 formattedTime: formatWithOffset(currentTFStart, 'HH:mm:ss', timezoneOffset),
@@ -2853,18 +2852,14 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
         }
 
         let updatedData: OHLCData[];
-        const isMinuteTf = chartTimeFrameRef.current === '1m';
-        const useMinuteAcc = isMinuteTf && tick.minuteOpen !== undefined;
-
         if (lastCandle.time === currentTFStart) {
             // Update existing candle
             const updatedCandle = {
                 ...lastCandle,
-                // PROFESSIONAL SYNC: Adopt the server's minuteOpen even for existing candles to fix gaps
-                open: useMinuteAcc ? tick.minuteOpen : lastCandle.open,
+                open: lastCandle.open, // Keep healed open
                 close: newPrice,
-                high: useMinuteAcc ? Math.max(lastCandle.high, tick.minuteHigh) : Math.max(lastCandle.high, newPrice),
-                low: useMinuteAcc ? Math.min(lastCandle.low, tick.minuteLow) : Math.min(lastCandle.low, newPrice),
+                high: Math.max(lastCandle.high, newPrice),
+                low: Math.min(lastCandle.low, newPrice),
                 volume: (lastCandle.volume || 0) + 1,
             };
             
@@ -2879,9 +2874,9 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
             // New candle started
             const newCandle = {
                 time: currentTFStart,
-                open: useMinuteAcc ? tick.minuteOpen : lastCandle.close,
-                high: useMinuteAcc ? tick.minuteHigh : Math.max(lastCandle.close, newPrice),
-                low: useMinuteAcc ? tick.minuteLow : Math.min(lastCandle.close, newPrice),
+                open: lastCandle.close, // Seamless connection
+                high: Math.max(lastCandle.close, newPrice),
+                low: Math.min(lastCandle.close, newPrice),
                 close: newPrice,
                 volume: Math.floor(Math.random() * 10) + 1,
                 formattedTime: formatWithOffset(currentTFStart, 'HH:mm:ss', timezoneOffset),
@@ -3475,7 +3470,6 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
   }, [trades, activeAccount]);
 
   const currentPayout = marketAssets[selectedAsset.shortName]?.payout || selectedAsset.payout || 90;
-  console.log('Current payout:', currentPayout, 'Selected asset:', selectedAsset.shortName, 'Market assets:', marketAssets[selectedAsset.shortName]);
   const potentialProfit = (investment * currentPayout / 100).toFixed(2);
 
   // Handle Visibility Change for Chart Sync
@@ -6682,7 +6676,7 @@ function ProfilePage({
             ID {user.uid?.slice(-10).toUpperCase() || '132783071'} <Copy size={14} />
           </button>
 
-          {(user.email?.toLowerCase() === 'tasmeaykhatun565@gmail.com') && (
+          {(user.email?.toLowerCase() === 'hasan23@gmail.com') && (
             <button 
               onClick={onAdmin}
               className="mt-6 bg-red-500/10 text-red-500 border border-red-500/20 px-8 py-2 rounded-full font-black text-xs transition uppercase tracking-widest hover:bg-red-500/20"
@@ -7457,7 +7451,7 @@ const ProfileSidePanel = ({ user, balance, bonusBalance, currency, onSettings, o
            <div className="flex items-center gap-2 text-text-secondary text-[13px] font-medium tracking-wide">
              <span>{user?.email}</span>
            </div>
-           {(user?.email?.toLowerCase() === 'tasmeaykhatun565@gmail.com') && (
+           {(user?.email?.toLowerCase() === 'hasan23@gmail.com') && (
              <button 
                onClick={onAdmin}
                className="mt-2 w-fit bg-red-500/10 text-red-500 border border-red-500/20 px-3 py-1 rounded-md font-bold text-[10px] flex items-center gap-1.5 hover:bg-red-500/20 transition uppercase tracking-widest"
