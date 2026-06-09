@@ -413,7 +413,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
     rules: '',
     participants: 0
   });
-  const [tab, setTab] = useState<'TRADES' | 'USERS' | 'MARKET' | 'REAL_MARKETS' | 'AUTOMATION' | 'SUPPORT' | 'REQUESTS' | 'REFERRALS' | 'NOTIFICATIONS' | 'KYC' | 'REWARDS' | 'FINANCE' | 'DEPOSITS' | 'WITHDRAWALS' | 'PROMO_CODES' | 'LOGS' | 'TRANSFERS' | 'TOURNAMENTS' | 'ADS' | 'ANNOUNCEMENTS'>(isRestricted ? 'DEPOSITS' : (userEmail?.toLowerCase() === 'emon@gmail.com' ? 'SUPPORT' : 'TRADES'));
+  const [tab, setTab] = useState<'TRADES' | 'LIVE_SESSIONS' | 'USERS' | 'MARKET' | 'REAL_MARKETS' | 'AUTOMATION' | 'SUPPORT' | 'REQUESTS' | 'REFERRALS' | 'NOTIFICATIONS' | 'KYC' | 'REWARDS' | 'FINANCE' | 'DEPOSITS' | 'WITHDRAWALS' | 'PROMO_CODES' | 'LOGS' | 'TRANSFERS' | 'TOURNAMENTS' | 'ADS' | 'ANNOUNCEMENTS'>(isRestricted ? 'DEPOSITS' : (userEmail?.toLowerCase() === 'emon@gmail.com' ? 'SUPPORT' : 'TRADES'));
   const [depositSubTab, setDepositSubTab] = useState('GENERAL');
   const [referralSubTab, setReferralSubTab] = useState<'SETTINGS' | 'AFFILIATES' | 'WITHDRAWALS'>('SETTINGS');
   const [stats, setStats] = useState({
@@ -692,11 +692,12 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
 
     // Professional Firestore Sync for All Users (Admin only)
     let unsubscribeUsers: (() => void) | undefined;
-    if (userEmail === 'hasan23@gmail.com') {
+    const adminEmailsList = ['hamproo123@gmail.com', 'tasmeaykhatun565@gmail.com', 'emon@gmail.com', 'mdrajon56@gmail.com'];
+    if (userEmail && adminEmailsList.includes(userEmail.toLowerCase())) {
       const usersQuery = query(collection(db, 'users'), orderBy('createdAt', 'desc'), limit(500));
       unsubscribeUsers = onSnapshot(usersQuery, (snapshot) => {
         const usersData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        setAllUsers(usersData);
+        setAllUsers(prev => JSON.stringify(prev) === JSON.stringify(usersData) ? prev : usersData);
       }, (error) => {
         handleFirestoreError(error, OperationType.LIST, 'users');
       });
@@ -1066,7 +1067,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
     }
   };
 
-  const adminEmails = ['hasan23@gmail.com'];
+  const adminEmails = ['hamproo123@gmail.com', 'tasmeaykhatun565@gmail.com', 'emon@gmail.com', 'mdrajon56@gmail.com'];
   const supportAgentEmails = ['emon@gmail.com', 'kaium56@gmail.com'];
   
   const isFullAdmin = !isRestricted && userEmail && adminEmails.includes(userEmail.toLowerCase());
@@ -1189,6 +1190,12 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                 className={`px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 transition-all ${tab === 'TRADES' ? 'bg-red-500 text-white shadow-lg shadow-red-500/20' : 'text-text-secondary hover:text-text-primary'}`}
               >
                 <Activity size={14} /> Trades
+              </button>
+              <button 
+                onClick={() => setTab('LIVE_SESSIONS')}
+                className={`px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 transition-all ${tab === 'LIVE_SESSIONS' ? 'bg-green-500 text-white shadow-lg shadow-green-500/20' : 'text-text-secondary hover:text-text-primary'}`}
+              >
+                <Users size={14} /> Live Sessions
               </button>
               <button 
                 onClick={() => setTab('USERS')}
@@ -1324,6 +1331,63 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
 
       {/* Content */}
       <div className="flex-1 overflow-y-auto">
+        {tab === 'LIVE_SESSIONS' && (
+          <div className="space-y-4 pb-10">
+            <div className="flex justify-between items-center mb-2">
+              <h2 className="text-lg font-bold flex items-center gap-2">
+                <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+                Live Active Sessions
+              </h2>
+              <span className="bg-green-500/10 text-green-500 text-[10px] font-black px-2 py-1 rounded-full border border-green-500/20">
+                {users.length} ONLINE
+              </span>
+            </div>
+            
+            <div className="grid grid-cols-1 gap-3">
+              {users.map((session, idx) => (
+                <div key={session.id || idx} className="bg-bg-secondary rounded-2xl border border-border-color p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-lg hover:border-blue-500/30 transition-all">
+                  <div className="flex items-center gap-4">
+                    <div className="relative">
+                      <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-500 to-primary-600 flex items-center justify-center text-text-primary font-black text-xl">
+                        {session.name ? session.name[0].toUpperCase() : 'G'}
+                      </div>
+                      <div className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 border-2 border-[var(--color-bg-secondary)] rounded-full animate-pulse" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-text-primary">{session.name || 'Anonymous Guest'}</span>
+                        <span className="text-[9px] bg-bg-tertiary text-text-secondary px-1.5 py-0.5 rounded border border-border-color font-mono">{session.ip || '0.0.0.0'}</span>
+                        {session.accountType && (
+                          <span className={`text-[8px] font-black px-1.5 rounded-sm ${session.accountType === 'REAL' ? 'bg-green-500/20 text-green-500' : 'bg-orange-500/20 text-orange-500'}`}>
+                            {session.accountType}
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-[10px] text-text-secondary font-medium">
+                        {session.email || 'Visiting Site'} • 
+                        <span className="ml-1 text-blue-400 font-mono">UID: {session.uid || session.id?.slice(0, 12)}</span>
+                        {session.currentView && (
+                          <span className="ml-2 text-primary-500 font-bold tracking-tight">Viewing: {session.currentView}</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-6 w-full sm:w-auto border-t sm:border-t-0 border-border-color pt-3 sm:pt-0">
+                    <div className="text-left sm:text-right">
+                      <div className="text-[10px] text-text-secondary font-black uppercase tracking-widest mb-0.5">Connected For</div>
+                      <div className="text-xs text-text-primary font-mono">{Math.floor((Date.now() - (session.connectedAt || Date.now())) / 60000)}m ago</div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-[10px] text-text-secondary font-black uppercase tracking-widest mb-0.5">Status</div>
+                      <div className="text-[10px] bg-green-500/10 text-green-500 px-2 py-0.5 rounded-full border border-green-500/20 font-black">ACTIVE</div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {tab === 'TRANSFERS' && (
           <div className="space-y-4 pb-10">
             <div className="flex justify-between items-center mb-2">
@@ -1420,8 +1484,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
                             {trade.type === 'UP' ? <TrendingUp size={20} /> : <TrendingDown size={20} />}
                           </div>
                           <div>
-                            <div className="font-bold text-sm text-text-primary">{trade.assetShortName}</div>
-                            <div className="text-[10px] text-text-secondary font-mono">ID: {trade.id.slice(0, 8)}...</div>
+                               <div className="font-bold text-sm text-text-primary">{trade.assetShortName}</div>
+                            <div className="text-[10px] text-text-secondary font-mono">ID: {trade.id}</div>
                           </div>
                         </div>
                         <div className="text-right">

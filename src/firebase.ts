@@ -82,9 +82,14 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
   
   // Do not throw for non-critical errors to prevent app crashes
   // Quota exceeded is a common issue with free tier
-  if (errorMessage.includes('Quota exceeded')) {
-     console.warn('Firestore Quota Exceeded - App will continue in degraded/SQL-only mode where possible.');
+  if (errorMessage.includes('Quota exceeded') || errorMessage.includes('PERMISSION_DENIED') || errorMessage.includes('Missing or insufficient permissions')) {
+     console.warn('Firestore Sync Degradation: Using local SQLite fallback (Permission or Quota issue).');
      return;
+  }
+
+  // Also ignore NOT_FOUND errors
+  if (errorMessage.includes('NOT_FOUND') || (error instanceof Error && error.message.includes('NOT_FOUND'))) {
+    return;
   }
 
   console.error('Firestore Error: ', errorMessage);

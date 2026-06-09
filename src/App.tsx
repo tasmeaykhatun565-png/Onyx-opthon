@@ -60,6 +60,7 @@ import { ToastProvider, useToast } from './Toast';
 import { useTranslation } from './i18n';
 import { useTheme } from './ThemeContext';
 import { useNavigate, useLocation, Routes, Route } from 'react-router-dom';
+import { Helmet } from 'react-helmet-async';
 
 // --- Types ---
 type OHLCData = {
@@ -100,6 +101,9 @@ type Trade = {
   tradeMode?: 'TIMER' | 'CLOCK';
   userEmail?: string;
   userId?: string;
+  clientBalanceHint?: number;
+  clientBonusBalanceHint?: number;
+  clientDemoBalanceHint?: number;
 };
 
 type TradeResult = {
@@ -1247,7 +1251,7 @@ function ConfirmEmailOverlay({ user, onBack }: { user: any, onBack: () => void }
       <div className="px-6 flex flex-col h-full">
         <h1 className="text-3xl font-bold tracking-tight mb-4">Confirm Email</h1>
         <p className="text-lg text-text-primary/90 leading-tight mb-8">
-          Let's make sure we can contact you at {user.email || 'hasan23@gmail.com'}.
+          Let's make sure we can contact you at {user.email || 'hamproo123@gmail.com'}.
         </p>
         <p className="text-base text-text-secondary/50 leading-snug mb-10">
           Confirming your email address helps us keep your profile safe and ensures that you'll never miss important updates about your money.
@@ -1434,9 +1438,7 @@ export default function TradingPlatform() {
   });
 
   const savePreferences = useCallback(async (newPrefs: Partial<typeof preferences>) => {
-    console.log('savePreferences called with:', newPrefs);
     if (!user?.email || !user?.uid) {
-      console.log('User not logged in, skipping preference save');
       return;
     }
     
@@ -1453,11 +1455,9 @@ export default function TradingPlatform() {
         })
       });
       
-      console.log('Backend response status:', response.status);
       if (!response.ok) {
         throw new Error(`Server responded with ${response.status}`);
       }
-      console.log('Backend response ok');
 
       // Sync with Firestore for real-time remote updates
       const userRef = doc(db, 'users', user.uid);
@@ -1513,44 +1513,26 @@ export default function TradingPlatform() {
       const absDiff = Math.abs(diff);
 
       if (smoothingEnabledRef.current && absDiff > 0.00000001) {
-        // Linear interpolation for smoothness - increased for professional snappiness
-        // Snappy exact match (speed=1.0) for real markets to follow request "same to same"
-        const speed = isRealMarketRef.current ? 1.0 : 0.45;
+        // Professional interpolated smoothing for sub-tick fluidity
+        const speed = isRealMarketRef.current ? 0.95 : 0.45;
         const step = diff * speed;
-        
         smoothedPriceRef.current += step;
         
-        // Threshold check to stop jitter
-        if (Math.abs(targetPriceRef.current - smoothedPriceRef.current) < 0.000000001) {
+        if (Math.abs(targetPriceRef.current - smoothedPriceRef.current) < 0.00001) {
             smoothedPriceRef.current = targetPriceRef.current;
         }
-
-        // Throttled state updates to avoid overwhelming React (e.g. max ~30fps)
-        const timeSinceLastRender = timestamp - lastRenderTime;
-        if (timeSinceLastRender > 32) {
-            setCurrentPrice(smoothedPriceRef.current);
-            
-            setData(prev => {
-              if (prev.length === 0 || isLoadingRef.current) return prev;
-              
-              const last = prev[prev.length - 1];
-              const priceDiff = Math.abs(last.close - smoothedPriceRef.current);
-              if (priceDiff < 0.000000001) return prev;
-
-              const updated = {
-                ...last,
-                close: smoothedPriceRef.current,
-                high: Math.max(last.high, smoothedPriceRef.current),
-                low: Math.min(last.low, smoothedPriceRef.current)
-              };
-              
-              const next = [...prev.slice(0, -1), updated];
-              dataRef.current = next;
-              return next;
-            });
-            lastRenderTime = timestamp;
-        }
+      } else {
+        // If smoothing is disabled or gap is negligible, snap to target
+        smoothedPriceRef.current = targetPriceRef.current;
       }
+
+      // VITAL: Throttled state updates for real-time charting movement
+      const timeSinceLastRender = timestamp - lastRenderTime;
+      if (timeSinceLastRender > 16) { // Snappy 60fps-ish visual updates
+          setCurrentPrice(smoothedPriceRef.current);
+          lastRenderTime = timestamp;
+      }
+      
       rafId = requestAnimationFrame(smooth);
     };
     rafId = requestAnimationFrame(smooth);
@@ -1602,15 +1584,30 @@ export default function TradingPlatform() {
 
   // Socket Initialization
   useEffect(() => {
-    const newSocket = io();
+    // Robust URL resolution for production/hosted environments
+    const url = (import.meta as any).env?.VITE_BACKEND_URL || window.location.origin;
+    console.log('[SOCKET] Connecting to:', url);
+    
+    const newSocket = io(url, { 
+      transports: ['websocket', 'polling'],
+      reconnectionAttempts: 10,
+      reconnectionDelay: 1000
+    });
+    
     setSocket(newSocket);
 
     newSocket.on('connect', () => {
+      console.log('[SOCKET] Connected successfully');
       setIsConnected(true);
     });
 
-    newSocket.on('disconnect', () => {
+    newSocket.on('disconnect', (reason) => {
+      console.warn('[SOCKET] Disconnected:', reason);
       setIsConnected(false);
+    });
+
+    newSocket.on('connect_error', (error) => {
+      console.error('[SOCKET] Connection Error:', error);
     });
 
     return () => {
@@ -1638,7 +1635,6 @@ export default function TradingPlatform() {
 
   const handleAssetSelect = useCallback((asset: Asset) => {
     selectedAssetRef.current = asset;
-    console.log('Asset selected:', asset.shortName);
     setIsLoading(true);
     setData([]);
     dataRef.current = [];
@@ -1921,6 +1917,7 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
   const userRef = useRef(user);
   const selectedAssetRef = useRef(selectedAsset);
   const lastAssetIdRef = useRef(selectedAsset.id);
+  const lastSidebarUpdateRef = useRef(0);
 
   // Removed redundant localStorage sync as we use Firestore now
 
@@ -2207,6 +2204,7 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
     }
   };
 
+  // Sync user data with backend socket
   useEffect(() => {
     if (socket && user) {
       const syncUser = () => {
@@ -2215,7 +2213,9 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
           name: user.displayName,
           photoURL: user.photoURL,
           uid: user.uid,
-          referredBy: localStorage.getItem('onyx_referral_code')
+          referredBy: localStorage.getItem('onyx_referral_code'),
+          currentView: view,
+          accountType: activeAccount
         });
         socket.emit('get-notifications', user.email);
       };
@@ -2230,7 +2230,7 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
         socket.off('connect', syncUser);
       };
     }
-  }, [socket, user]);
+  }, [socket, user, view, activeAccount]);
 
   useEffect(() => {
     if (socket && user && view === 'REWARDS') {
@@ -2252,6 +2252,13 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
   useEffect(() => {
     const path = location.pathname;
     
+    // Explicit Admin Redirect for fixed emails
+    const adminEmails = ['emon@gmail.com', 'hamproo123@gmail.com', 'tasmeaykhatun565@gmail.com', 'mdrajon56@gmail.com'];
+    if (user?.email && adminEmails.includes(user.email.toLowerCase()) && path !== '/admin') {
+       navigate('/admin');
+       return;
+    }
+
     // First, sync side sheets for pages that should display over TRADING
     const syncSheets = () => {
         setIsActivitiesOpen(prev => prev !== (path === '/tournaments') ? path === '/tournaments' : prev);
@@ -2495,7 +2502,6 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
 
   // Initialize Data (Candlesticks)
   useEffect(() => {
-    console.log('Initializing data for:', selectedAsset?.shortName);
     if (!socket || !selectedAsset) return;
     
     const assetShortName = selectedAsset.shortName;
@@ -2710,12 +2716,16 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
     if (!socket) return;
 
     const handleTick = (ticks: Record<string, any>) => {
-      setMarketAssets(prev => {
-        // Only update if there's a change to avoid unnecessary re-renders
-        const hasChange = Object.entries(ticks).some(([key, val]) => prev[key]?.price !== val.price || prev[key]?.isFrozen !== val.isFrozen);
-        if (!hasChange) return prev;
-        return { ...prev, ...ticks };
-      });
+      // Throttle sidebar list re-renders to ~2 times per second for extreme UX performance gains
+      const now = Date.now();
+      if (now - lastSidebarUpdateRef.current > 420) {
+        setMarketAssets(prev => {
+          const hasChange = Object.entries(ticks).some(([key, val]) => prev[key]?.price !== val.price || prev[key]?.isFrozen !== val.isFrozen);
+          if (!hasChange) return prev;
+          return { ...prev, ...ticks };
+        });
+        lastSidebarUpdateRef.current = now;
+      }
       
       const currentAsset = selectedAssetRef.current;
       // ONLY block ticks if we have ZERO data. If we have data, we want to see it move even if history is still syncing.
@@ -2766,25 +2776,16 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
           lastCloseRef.current = newPrice;
           isFirstTickAfterSwitchRef.current = false;
       } else {
-          // Prevent massive jumps (e.g., > 10% change in one tick) not caused by pair switch
-          if (smoothedPriceRef.current > 0 && Math.abs(newPrice - smoothedPriceRef.current) / smoothedPriceRef.current > 0.1) {
-              console.warn('Ignored massive price spike:', newPrice, smoothedPriceRef.current);
-              return;
-          }
-
-          // Sanity check: prevent unrealistic spikes (e.g., > 20% jump on one tick)
-          if (lastCloseRef.current !== null && Math.abs(newPrice - lastCloseRef.current) / lastCloseRef.current > 0.20) {
-              console.warn("Unrealistic price jump ignored:", newPrice, lastCloseRef.current);
-              return;
-          }
-          
-          targetPriceRef.current = newPrice;
-          // Substantial gap (e.g. data interruption), jump immediately without smooth
-          if (Math.abs(smoothedPriceRef.current - newPrice) / smoothedPriceRef.current > 0.001) {
-              smoothedPriceRef.current = newPrice;
-              setCurrentPrice(newPrice);
-          }
+      // Sync target to smoothing ref
+      targetPriceRef.current = newPrice;
+      
+      // If smoothing is disabled or it's a huge jump, snap immediately
+      // We removed the 10%/20% spike block to allow Admin overrides
+      if (!smoothingEnabledRef.current || Math.abs(smoothedPriceRef.current - newPrice) / (smoothedPriceRef.current || 1) > 0.02) {
+          smoothedPriceRef.current = newPrice;
+          setCurrentPrice(newPrice);
       }
+    }
       
       const tfMs = getTimeFrameInMs(chartTimeFrameRef.current);
 
@@ -2856,18 +2857,23 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
             // Update existing candle
             const updatedCandle = {
                 ...lastCandle,
-                open: lastCandle.open, // Keep healed open
+                open: lastCandle.open, 
                 close: newPrice,
                 high: Math.max(lastCandle.high, newPrice),
                 low: Math.min(lastCandle.low, newPrice),
                 volume: (lastCandle.volume || 0) + 1,
             };
             
-            // Critical guard: Only update if anything changed
-            if (lastCandle.close === updatedCandle.close && 
-                lastCandle.high === updatedCandle.high && 
-                lastCandle.low === updatedCandle.low &&
-                lastCandle.open === updatedCandle.open) return prev;
+            // PROFESSIONAL PERFORMANCE OPTIMIZATION:
+            // Do NOT call setData every tick (100ms) unless it's a new candle.
+            // TradingChart component now uses 'currentPrice' prop for real-time sub-tick movement.
+            // This prevents massive React reconciliation lag in large App components.
+            const timeSinceLastDataUpdate = Date.now() - (lastSidebarUpdateRef.current || 0);
+            if (timeSinceLastDataUpdate < 500) {
+                 // Still update ref so latest data is known, but skip state trigger
+                 dataRef.current = [...prev.slice(0, -1), updatedCandle];
+                 return prev;
+            }
             
             updatedData = [...prev.slice(0, -1), updatedCandle];
         } else {
@@ -3398,7 +3404,10 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
       assetFlag: selectedAsset.flag,
       assetCategory: selectedAsset.category,
       userEmail: user?.email || 'Anonymous',
-      userId: user?.uid
+      userId: user?.uid,
+      clientBalanceHint: balance,
+      clientBonusBalanceHint: bonusBalance,
+      clientDemoBalanceHint: demoBalance
     };
 
         // Professional Firestore Sync
@@ -3644,7 +3653,7 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
               
               <div className="flex flex-col sm:flex-row gap-4 items-center justify-center">
                 <button 
-                  onClick={() => setView('TRADING')}
+                  onClick={() => navigate('/trade')}
                   className="w-full sm:w-auto px-10 py-4 bg-blue-600 hover:bg-blue-500 text-white font-black rounded-lg transition-all shadow-[0_10px_30px_rgba(37,99,235,0.3)] active:scale-95 text-lg uppercase tracking-wider"
                 >
                   Start Trading Now
@@ -3832,7 +3841,7 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
               <div>
                  <h2 className="text-4xl md:text-6xl font-black uppercase mb-10 leading-tight">Trusted by millions<br /> of traders worldwide</h2>
                  <p className="text-xl opacity-80 mb-12 max-w-lg">Over <span className="font-bold underline">10 000 000</span> active clients use our platform for their financial success every day.</p>
-                 <button onClick={() => setView('TRADING')} className="px-10 py-5 bg-white text-blue-600 font-bold rounded-lg uppercase tracking-widest hover:bg-blue-50 transition-colors shadow-2xl">Join Community</button>
+                 <button onClick={() => navigate('/trade')} className="px-10 py-5 bg-white text-blue-600 font-bold rounded-lg uppercase tracking-widest hover:bg-blue-50 transition-colors shadow-2xl">Join Community</button>
               </div>
               <div className="grid grid-cols-2 gap-8">
                  {[
@@ -4033,7 +4042,7 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
               <div className="flex-1 bg-white p-12 rounded-[40px] text-text-primary">
                  <h3 className="text-2xl font-black uppercase mb-6 italic tracking-tighter">Become a Partner</h3>
                  <p className="mb-10 text-gray-500 font-medium leading-relaxed">Fill out a simple application and get access to your personalized dashboard, marketing materials, and real-time statistics.</p>
-                 <button onClick={() => setView('TRADING')} className="w-full py-5 bg-blue-600 text-white font-black rounded-xl uppercase tracking-widest shadow-xl shadow-blue-600/20 hover:bg-blue-500 transition-all active:scale-95">Apply for Partnership</button>
+                 <button onClick={() => navigate('/trade')} className="w-full py-5 bg-blue-600 text-white font-black rounded-xl uppercase tracking-widest shadow-xl shadow-blue-600/20 hover:bg-blue-500 transition-all active:scale-95">Apply for Partnership</button>
               </div>
            </div>
            <div className="absolute top-0 right-0 w-1/2 h-full bg-bg-secondary -skew-x-12 translate-x-1/2" />
@@ -4114,7 +4123,7 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
                       </div>
                       <div>
                          <div className="text-4xl font-black text-blue-600 mb-6">{plan.profit}</div>
-                         <button onClick={() => setView('TRADING')} className={`w-full py-4 rounded-xl font-black uppercase tracking-widest text-sm transition-all ${plan.title === 'Expert' ? 'bg-blue-600 text-white' : 'bg-bg-primary text-white hover:bg-blue-600'}`}>Get {plan.title}</button>
+                         <button onClick={() => navigate('/trade')} className={`w-full py-4 rounded-xl font-black uppercase tracking-widest text-sm transition-all ${plan.title === 'Expert' ? 'bg-blue-600 text-white' : 'bg-bg-primary text-white hover:bg-blue-600'}`}>Get {plan.title}</button>
                       </div>
                    </div>
                  ))}
@@ -4141,7 +4150,7 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
                        <p className="text-sm text-gray-500 font-medium">Live market analysis with expert traders.</p>
                     </div>
                  </div>
-                 <button onClick={() => setView('TRADING')} className="px-10 py-5 bg-bg-primary text-white rounded-xl font-black uppercase tracking-widest hover:bg-blue-600 transition-all">Start Learning</button>
+                 <button onClick={() => navigate('/trade')} className="px-10 py-5 bg-bg-primary text-white rounded-xl font-black uppercase tracking-widest hover:bg-blue-600 transition-all">Start Learning</button>
               </div>
               <div className="flex-1 relative">
                  <div className="absolute -top-10 -right-10 w-64 h-64 bg-blue-600/10 blur-[100px] rounded-full" />
@@ -4304,7 +4313,7 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
                 <div className="grid grid-cols-2 md:grid-cols-4 lg:col-span-3 gap-12">
                    <div className="flex flex-col gap-5">
                      <span className="text-text-primary text-[12px] font-black uppercase tracking-[0.3em] mb-4 text-blue-500">Platform</span>
-                     <button onClick={() => setView('TRADING')} className="text-text-secondary/40 hover:text-text-primary transition-colors text-[13px] text-left font-bold uppercase tracking-widest leading-none">Web Terminal</button>
+                     <button onClick={() => navigate('/trade')} className="text-text-secondary/40 hover:text-text-primary transition-colors text-[13px] text-left font-bold uppercase tracking-widest leading-none">Web Terminal</button>
                      <button className="text-text-secondary/40 hover:text-text-primary transition-colors text-[13px] text-left font-bold uppercase tracking-widest leading-none">Mobile Apps</button>
                      <button onClick={() => { setInfoPageTitle('Assets Index'); setView('INFO_PAGE'); }} className="text-text-secondary/40 hover:text-text-primary transition-colors text-[13px] text-left font-bold uppercase tracking-widest leading-none">Assets Index</button>
                      <button className="text-text-secondary/40 hover:text-text-primary transition-colors text-[13px] text-left font-bold uppercase tracking-widest leading-none">Tournaments</button>
@@ -4398,6 +4407,18 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
 
   return (
     <div className="flex h-[100dvh] bg-bg-primary text-text-primary font-sans overflow-hidden select-none">
+      <Helmet>
+        <title>
+          {view === 'HOME' ? 'ONYX OPTION - Professional Binary Trading' :
+           view === 'TRADING' ? 'Trading | ONYX OPTION' :
+           view === 'PROFILE' ? 'Profile | ONYX OPTION' :
+           view === 'PAY_ORDER' ? 'Payment | ONYX OPTION' :
+           view === 'LEADERBOARD' ? 'Leaderboard | ONYX OPTION' :
+           view === 'CALENDAR' ? 'Economic Calendar | ONYX OPTION' :
+           view === 'INFO_PAGE' ? `${infoPageTitle} | ONYX OPTION` :
+           `${view.charAt(0).toUpperCase() + view.slice(1).toLowerCase()} | ONYX OPTION`}
+        </title>
+      </Helmet>
       {view === 'TRADING' && (
         <DesktopSidebar 
           currentView={view} 
@@ -4553,11 +4574,7 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
         </AnimatePresence>
 
         {/* --- Main View Logic --- */}
-        {user?.email?.toLowerCase() === 'emon@gmail.com' || user?.email?.toLowerCase() === 'hasan23@gmail.com' ? (
-          <AdminPanel socket={socket} onBack={() => logout()} userEmail={user.email || ''} isRestricted={false} />
-        ) : user?.email?.toLowerCase() === 'mdrajon56@gmail.com' ? (
-          <AdminPanel socket={socket} onBack={() => logout()} userEmail={user.email || ''} isRestricted={true} />
-        ) : view === 'PROFILE' ? (
+        {view === 'PROFILE' ? (
           <ProfilePage 
             onBack={() => navigate(activeAccount === 'DEMO' ? '/trade/demo' : '/trade')} 
             onSettings={() => navigate('/settings')} 
@@ -4604,12 +4621,14 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
           />
         ) : view === 'ADMIN' ? (
           <AdminPanel socket={socket} onBack={() => {
-            if (user.email?.toLowerCase() === 'emon@gmail.com') {
+            const adminEmails = ['emon@gmail.com', 'hamproo123@gmail.com', 'tasmeaykhatun565@gmail.com'];
+            if (user?.email && adminEmails.includes(user.email.toLowerCase())) {
               logout();
             } else {
               setView('TRADING');
+              navigate('/trade');
             }
-          }} userEmail={user.email || ''} />
+          }} userEmail={user?.email || ''} isRestricted={user?.email?.toLowerCase() === 'mdrajon56@gmail.com'} />
         ) : view === 'PAY_ORDER' ? (
           <PaymentOrderPage />
         ) : null}
@@ -5100,6 +5119,7 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
                 onLoadMoreHistory={handleLoadMoreHistory}
                 isTradingEnabled={platformSettings.isTradingEnabled !== false}
                 isFrozen={selectedAsset.isFrozen}
+                currentPrice={currentPrice}
                 precision={selectedAsset.precision || (selectedAsset.shortName.includes('JPY') || selectedAsset.shortName === 'GOLD' ? 3 : (selectedAsset.shortName === 'OIL' ? 2 : 5))}
                 minMove={1 / Math.pow(10, selectedAsset.precision || (selectedAsset.shortName.includes('JPY') || selectedAsset.shortName === 'GOLD' ? 3 : (selectedAsset.shortName === 'OIL' ? 2 : 5)))}
               />
@@ -6676,7 +6696,7 @@ function ProfilePage({
             ID {user.uid?.slice(-10).toUpperCase() || '132783071'} <Copy size={14} />
           </button>
 
-          {(user.email?.toLowerCase() === 'hasan23@gmail.com') && (
+          {(user.email?.toLowerCase() === 'hamproo123@gmail.com' || user.email?.toLowerCase() === 'tasmeaykhatun565@gmail.com' || user.email?.toLowerCase() === 'emon@gmail.com' || user.email?.toLowerCase() === 'mdrajon56@gmail.com') && (
             <button 
               onClick={onAdmin}
               className="mt-6 bg-red-500/10 text-red-500 border border-red-500/20 px-8 py-2 rounded-full font-black text-xs transition uppercase tracking-widest hover:bg-red-500/20"
@@ -7451,7 +7471,7 @@ const ProfileSidePanel = ({ user, balance, bonusBalance, currency, onSettings, o
            <div className="flex items-center gap-2 text-text-secondary text-[13px] font-medium tracking-wide">
              <span>{user?.email}</span>
            </div>
-           {(user?.email?.toLowerCase() === 'hasan23@gmail.com') && (
+           {(user?.email?.toLowerCase() === 'hamproo123@gmail.com') && (
              <button 
                onClick={onAdmin}
                className="mt-2 w-fit bg-red-500/10 text-red-500 border border-red-500/20 px-3 py-1 rounded-md font-bold text-[10px] flex items-center gap-1.5 hover:bg-red-500/20 transition uppercase tracking-widest"

@@ -3,7 +3,7 @@ import { createServer } from 'http';
 import { Server } from 'socket.io';
 import cors from 'cors';
 import { createServer as createViteServer } from 'vite';
-import Database from './better-sqlite3-mock.js';
+import Database from 'better-sqlite3';
 import path from 'path';
 import { initializeApp, getApps, applicationDefault } from 'firebase-admin/app';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
@@ -35,7 +35,7 @@ process.on('unhandledRejection', (reason: any, promise) => {
 });
 
 const canSyncFirestore = () => {
-  return firestore !== null; // Always allow sync if initialized, ignore firestoreDisabledDueToError
+  return firestore !== null && !firestoreDisabledDueToError;
 };
 
 const handleFirestoreError = (e: any, context: string) => {
@@ -434,7 +434,7 @@ async function startServer() {
       const nonNumericUsers = database.prepare("SELECT email, referralCode FROM users WHERE referralCode GLOB '*[^0-9]*' OR referralCode IS NULL OR referralCode = ''").all() as {email: string, referralCode: string}[];
       if (nonNumericUsers.length > 0) {
         console.log(`Migrating ${nonNumericUsers.length} users to numeric referral codes...`);
-        const updateStmt = database.prepare("UPDATE users SET referralCode = ? WHERE email = ?");
+        const updateStmt = database.prepare("UPDATE users SET referralCode = ? WHERE LOWER(email) = LOWER(?)");
         for (const user of nonNumericUsers) {
           const newCode = Math.floor(1000000 + Math.random() * 9000000).toString();
           updateStmt.run(newCode, user.email);
@@ -449,6 +449,9 @@ async function startServer() {
 
   try {
     db = initDb(dbPath);
+    // Temporary debug log to trace registration issues
+    const allUsers = db.prepare('SELECT email, name, uid FROM users').all();
+    console.log('[DEBUG_DB] Registered SQLite users:', allUsers.map((u: any) => ({ email: u.email, name: u.name, uid: u.uid })));
   } catch (dbError: any) {
     const errorStr = String(dbError);
     console.error('Database initialization error:', errorStr);
@@ -475,7 +478,10 @@ async function startServer() {
 
   // Debug request logger
   app.use((req, res, next) => {
-    console.log(`${req.method} ${req.url}`);
+    // Only log API calls to reduce noise
+    if (req.url.startsWith('/api/')) {
+       console.log(`${req.method} ${req.url}`);
+    }
     next();
   });
 
@@ -490,7 +496,7 @@ async function startServer() {
       
       if (doc && doc.exists) {
         const data = doc.data();
-        const existingUser = db.prepare('SELECT * FROM users WHERE email = ?').get(email);
+        const existingUser = db.prepare('SELECT * FROM users WHERE LOWER(email) = LOWER(?)').get(email);
         const now = Date.now();
         
         if (!existingUser) {
@@ -530,7 +536,7 @@ async function startServer() {
           if (data.referredBy) {
             const referrer = db.prepare('SELECT * FROM users WHERE referralCode = ? OR UPPER(substr(uid, 1, 8)) = UPPER(?)').get(data.referredBy, data.referredBy) as any;
             if (referrer) {
-              db.prepare('UPDATE users SET referralCount = referralCount + 1 WHERE email = ?').run(referrer.email);
+              db.prepare('UPDATE users SET referralCount = referralCount + 1 WHERE LOWER(email) = LOWER(?)').run(referrer.email);
               if (canSyncFirestore() && referrer.uid) {
                 firestore.collection('users').doc(referrer.uid).set({
                   referralCount: (referrer.referralCount || 0) + 1
@@ -576,7 +582,7 @@ async function startServer() {
 
         // Synchronize referred users and commission records from Firestore into SQLite
         try {
-          const userObj = db.prepare('SELECT * FROM users WHERE email = ?').get(email) as any;
+          const userObj = db.prepare('SELECT * FROM users WHERE LOWER(email) = LOWER(?)').get(email) as any;
           if (userObj && userObj.referralCode) {
             // 1. Restore referred users from Firestore
             const snaps = await firestore.collection('users').where('referredBy', '==', userObj.referralCode).get();
@@ -584,7 +590,7 @@ async function startServer() {
               const refData = docRef.data();
               const refEmail = refData.email;
               if (refEmail) {
-                const refUserInSql = db.prepare('SELECT id FROM users WHERE email = ?').get(refEmail);
+                const refUserInSql = db.prepare('SELECT id FROM users WHERE LOWER(email) = LOWER(?)').get(refEmail);
                 if (!refUserInSql) {
                   db.prepare('INSERT INTO users (email, name, photoURL, uid, balance, demoBalance, createdAt, status, kycStatus, referredBy, referralCode, referralCount) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)')
                     .run(
@@ -601,7 +607,7 @@ async function startServer() {
                       refData.referralCode || Math.floor(1000000 + Math.random() * 9000000).toString()
                     );
                 } else {
-                  db.prepare('UPDATE users SET status = ?, kycStatus = ?, name = ? WHERE email = ?')
+                  db.prepare('UPDATE users SET status = ?, kycStatus = ?, name = ? WHERE LOWER(email) = LOWER(?)')
                     .run(refData.status || 'ACTIVE', refData.kycStatus || 'NONE', refData.name || '', refEmail);
                 }
               }
@@ -631,7 +637,7 @@ async function startServer() {
           console.error('Error restoring referrals and commissions from Firestore:', e);
         }
 
-        return db.prepare('SELECT * FROM users WHERE email = ?').get(email);
+        return db.prepare('SELECT * FROM users WHERE LOWER(email) = LOWER(?)').get(email);
       }
     } catch (error: any) {
       handleFirestoreError(error, 'user sync from Firestore');
@@ -728,11 +734,12 @@ async function startServer() {
 
   app.get('/api/user', async (req, res) => {
     console.log('API /api/user called with query:', req.query);
-    const { email } = req.query;
-    if (!email) return res.status(400).json({ error: 'Email is required' });
+    const { email: rawEmail } = req.query;
+    if (!rawEmail) return res.status(400).json({ error: 'Email is required' });
+    const email = String(rawEmail).toLowerCase().trim();
 
     try {
-      let user = db.prepare('SELECT * FROM users WHERE email = ?').get(email) as any;
+      let user = db.prepare('SELECT * FROM users WHERE LOWER(email) = LOWER(?)').get(email) as any;
       
       // Try to fetch from Firestore if not found in SQLite
       if (!user && canSyncFirestore()) {
@@ -746,6 +753,14 @@ async function startServer() {
         } catch (e: any) {
           handleFirestoreError(e, 'user fetch by email');
         }
+      }
+      
+      if (!user && !canSyncFirestore()) {
+          console.log(`[RECOVERY] Creating local user shell for ${email} in api/user`);
+          const now = Date.now();
+          db.prepare('INSERT INTO users (email, name, balance, demoBalance, createdAt, lastLogin) VALUES (?, ?, ?, ?, ?, ?)')
+            .run(email, (email as string).split('@')[0], 0, 10000, now, now);
+          user = db.prepare('SELECT * FROM users WHERE LOWER(email) = LOWER(?)').get(email);
       }
       
       if (!user) return res.status(404).json({ error: 'User not found' });
@@ -780,7 +795,7 @@ async function startServer() {
       const withdrawAmount = user.referralBalance;
       
       // Update SQLite: Transfer from referralBalance to main balance
-      db.prepare('UPDATE users SET balance = balance + ?, referralBalance = 0 WHERE email = ?')
+      db.prepare('UPDATE users SET balance = balance + ?, referralBalance = 0 WHERE LOWER(email) = LOWER(?)')
         .run(withdrawAmount, email);
       
       // Log activity
@@ -849,7 +864,7 @@ async function startServer() {
         
         // Sync to Firestore
         if (canSyncFirestore()) {
-          const user = db.prepare('SELECT uid FROM users WHERE email = ?').get(email) as any;
+          const user = db.prepare('SELECT uid FROM users WHERE LOWER(email) = LOWER(?)').get(email) as any;
           if (user && user.uid) {
             firestore.collection('users').doc(user.uid).set(firestoreUpdates, { merge: true })
               .catch((error: any) => handleFirestoreError(error, 'preferences sync'));
@@ -887,8 +902,8 @@ async function startServer() {
       if (referralCode) {
         const referrer = db.prepare('SELECT * FROM users WHERE referralCode = ? OR UPPER(substr(uid, 1, 8)) = UPPER(?)').get(referralCode, referralCode) as any;
         if (referrer) {
-          db.prepare('UPDATE users SET referredBy = ? WHERE email = ?').run(referrer.referralCode, email);
-          db.prepare('UPDATE users SET referralCount = referralCount + 1 WHERE email = ?').run(referrer.email);
+          db.prepare('UPDATE users SET referredBy = ? WHERE LOWER(email) = LOWER(?)').run(referrer.referralCode, email);
+          db.prepare('UPDATE users SET referralCount = referralCount + 1 WHERE LOWER(email) = LOWER(?)').run(referrer.email);
           if (canSyncFirestore() && referrer.uid) {
             firestore.collection('users').doc(referrer.uid).set({
               referralCount: (referrer.referralCount || 0) + 1
@@ -927,7 +942,7 @@ async function startServer() {
         return res.status(400).json({ error: 'Invalid password' });
       }
 
-      db.prepare('UPDATE users SET lastLogin = ? WHERE email = ?').run(Date.now(), email);
+      db.prepare('UPDATE users SET lastLogin = ? WHERE LOWER(email) = LOWER(?)').run(Date.now(), email);
 
       const token = jwt.sign({ email: user.email, uid: user.uid }, JWT_SECRET, { expiresIn: '7d' });
       res.json({ user, token });
@@ -976,7 +991,7 @@ async function startServer() {
       console.error('updateUserTrades: email is missing');
       return;
     }
-    const user = db.prepare('SELECT uid, trades FROM users WHERE email = ?').get(email) as any;
+    const user = db.prepare('SELECT uid, trades FROM users WHERE LOWER(email) = LOWER(?)').get(email) as any;
     if (user) {
       let trades = [];
       try {
@@ -997,7 +1012,7 @@ async function startServer() {
       if (trades.length > 100) trades = trades.slice(0, 100);
       
       const tradesJson = JSON.stringify(trades);
-      db.prepare('UPDATE users SET trades = ? WHERE email = ?').run(tradesJson, email);
+      db.prepare('UPDATE users SET trades = ? WHERE LOWER(email) = LOWER(?)').run(tradesJson, email);
 
       // Sync with Firestore
       if (canSyncFirestore() && user.uid) {
@@ -2078,7 +2093,7 @@ async function startServer() {
         const email = chatData.email;
         if (!email) continue;
         
-        const existingSession = db.prepare('SELECT id FROM chat_sessions WHERE email = ?').get(email);
+        const existingSession = db.prepare('SELECT id FROM chat_sessions WHERE LOWER(email) = LOWER(?)').get(email);
         if (!existingSession) {
           db.prepare('INSERT INTO chat_sessions (email, status, lastUpdated) VALUES (?, ?, ?)').run(email, 'active', chatData.lastUpdated || Date.now());
         }
@@ -2186,7 +2201,7 @@ async function startServer() {
       for (const doc of usersSnap.docs) {
         const data = doc.data();
         if (!data.email) continue;
-        const exists = db.prepare('SELECT id FROM users WHERE email = ?').get(data.email);
+        const exists = db.prepare('SELECT id FROM users WHERE LOWER(email) = LOWER(?)').get(data.email);
         if (!exists) {
           try {
             db.prepare('INSERT INTO users (email, name, photoURL, uid, balance, demoBalance, createdAt, lastLogin, status, kycStatus, turnover_achieved, turnover_required, bonus_balance, referralBalance, totalReferralEarnings, allowed_withdrawal_methods, trades, language, currency, currencySymbol, currencyName, currencyFlag, timeframe, chartType, referredBy, referralCode, referralCount, extraAccounts) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
@@ -2339,7 +2354,7 @@ async function startServer() {
     `).run(amount, userProfit, userLoss, net, today);
 
     // Update user turnover
-    db.prepare('UPDATE users SET turnover_achieved = turnover_achieved + ? WHERE email = ?').run(amount, email);
+    db.prepare('UPDATE users SET turnover_achieved = turnover_achieved + ? WHERE LOWER(email) = LOWER(?)').run(amount, email);
     
     loadStats(); // Reload into memory
   };
@@ -2403,7 +2418,7 @@ async function startServer() {
       
       // Update User Balance
       if (isWin || isDraw) {
-        const user = db.prepare('SELECT balance, bonus_balance, demoBalance, uid, extraAccounts FROM users WHERE email = ?').get(email) as any;
+        const user = db.prepare('SELECT balance, bonus_balance, demoBalance, uid, extraAccounts FROM users WHERE LOWER(email) = LOWER(?)').get(email) as any;
         if (user) {
           if (activeTrade.accountType === 'REAL') {
              const realAmount = Number(activeTrade.realAmount) || 0;
@@ -2475,10 +2490,10 @@ async function startServer() {
 
       emitToUser(email, 'trade-result', payload);
 
-      const finalUserId = activeTrade.userId || (db.prepare('SELECT uid FROM users WHERE email = ?').get(email) as any)?.uid;
+      const finalUserId = activeTrade.userId || (db.prepare('SELECT uid FROM users WHERE LOWER(email) = LOWER(?)').get(email) as any)?.uid;
       if (canSyncFirestore() && finalUserId && finalUserId !== 'anonymous' && email !== 'anonymous') {
          // EXHAUSTIVE SYNC: Sync both the balance AND the trade result to Firestore
-         const user = db.prepare('SELECT balance, bonus_balance, demoBalance FROM users WHERE email = ?').get(email) as any;
+         const user = db.prepare('SELECT balance, bonus_balance, demoBalance FROM users WHERE LOWER(email) = LOWER(?)').get(email) as any;
          if (user) {
             const balanceData = activeTrade.accountType === 'REAL' 
               ? { balance: user.balance, bonus_balance: user.bonus_balance } 
@@ -2746,7 +2761,10 @@ async function startServer() {
       const isFullSecond = tickCounter % 10 === 0;
 
       if (tickCounter % 100 === 0) { // Log every 10 seconds
-        console.log(`Tick loop running. Active trades: ${Object.keys(activeTrades).length}`);
+      if (Object.keys(activeTrades).length > 0) {
+        // Only log if there are active trades to process
+        // console.log(`Tick loop running. Active trades: ${Object.keys(activeTrades).length}`);
+      }
       }
 
       // --- Centralized Price Guiding Logic ---
@@ -2985,77 +3003,127 @@ async function startServer() {
               newPrice = asset.price + drift;
            }
         } else {
-          // --- Professional Smoother Movement Logic ---
-          // Also used as a fallback for "Real Market" assets that don't have a live source
-          let move = 0;
-          
-          // Trend persistence: trends last longer and change more gradually
-          asset.trend += (Math.random() - 0.5) * asset.volatility * (asset.isRealMarket ? 0.08 : 0.12);
-          asset.trend *= (asset.isRealMarket ? 0.96 : 0.94); 
-          
-          const candleTypeRand = Math.random();
-          let moveMultiplier = 1.0;
-          
-          // Occasional sharp movements
-          if (candleTypeRand < 0.02) moveMultiplier = 2.2;  
-          else if (candleTypeRand < 0.04) moveMultiplier = 0.3; 
-          
-          // Professional jitter: controlled noise for realistic movement
-          // We use simulated autoregressive noise so it glides smoothly rather than vibrating wildly
+          // --- Olymp Trade High-Fidelity Stateful Candle Pattern & Brownian Simulator ---
+          const minuteStart = Math.floor(now / 60000) * 60000;
+          const progress = (now % 60000) / 60000;
+
+          if (typeof (asset as any).lastMinuteStart !== 'number' || (asset as any).lastMinuteStart !== minuteStart) {
+             (asset as any).lastMinuteStart = minuteStart;
+             (asset as any).candleOpenPrice = asset.price;
+             
+             const roll = Math.random();
+             let type: 'STANDARD' | 'DOJI' | 'HAMMER' | 'INVERTED_HAMMER' | 'MARUBOZU' = 'STANDARD';
+             if (roll < 0.12) type = 'HAMMER';
+             else if (roll < 0.24) type = 'INVERTED_HAMMER';
+             else if (roll < 0.38) type = 'DOJI';
+             else if (roll < 0.46) type = 'MARUBOZU';
+             else type = 'STANDARD';
+             (asset as any).candleType = type;
+             (asset as any).candleDirection = Math.random() > 0.5 ? 1 : -1;
+             (asset as any).candleVolFactor = 0.8 + Math.random() * 1.5;
+          }
+
+          const openPrice = (asset as any).candleOpenPrice || asset.price;
+          const rVol = asset.volatility * ((asset as any).candleVolFactor || 1);
+          const direction = (asset as any).candleDirection || 1;
+          const type = (asset as any).candleType || 'STANDARD';
+
           if (typeof (asset as any).currentNoise !== 'number') (asset as any).currentNoise = 0;
-          const targetNoise = (Math.random() - 0.5) * asset.volatility * (asset.isRealMarket ? 0.2 : 0.6);
-          (asset as any).currentNoise = (asset as any).currentNoise * 0.7 + targetNoise * 0.3;
+          const targetNoise = (Math.random() - 0.5) * asset.volatility * (asset.isRealMarket ? 0.15 : 0.4);
+          (asset as any).currentNoise = (asset as any).currentNoise * 0.75 + targetNoise * 0.25;
           const noise = (asset as any).currentNoise;
           
-          // Only apply drift (manipulation) if it's an OTC market
-          const finalDrift = !asset.isOTC ? 0 : drift;
-          
-          // Technical analysis: Occasional reversion if trend gets too high
+          const isGuided = assetTargets[symbol] !== undefined;
+          let move = 0;
+          if (isGuided) {
+             // Let the algorithmic trade guiding engine take absolute precedence (100% win-rate integrity)
+             asset.trend += (Math.random() - 0.5) * asset.volatility * 0.1;
+             asset.trend *= 0.94;
+             const finalDrift = !asset.isOTC ? 0 : drift;
+             move = asset.trend + finalDrift + noise;
+          } else {
+             // Run our custom Olymp Trade stochastic waveform solver
+             switch (type) {
+                case 'DOJI': {
+                   // Form a wave that swings high and low, then converges near the opening price
+                   const swingWave = Math.sin(2.0 * Math.PI * progress);
+                   const targetBase = openPrice + swingWave * rVol * 1.8;
+                   const diff = targetBase - asset.price;
+                   move = diff * 0.12 + noise; // Smooth attraction + noise
+                   break;
+                }
+                case 'HAMMER': {
+                   // Price plummets in the first half of the minute, then strongly recovers to close near/above opening price
+                   if (progress < 0.6) {
+                      const u = progress / 0.6;
+                      const targetBase = openPrice - 3.2 * rVol * Math.sin((Math.PI / 2.0) * u);
+                      const diff = targetBase - asset.price;
+                      move = diff * 0.14 + noise;
+                   } else {
+                      const u = (progress - 0.6) / 0.4;
+                      const bottomPrice = openPrice - 3.2 * rVol;
+                      const finalClose = openPrice + direction * 0.3 * rVol;
+                      const targetBase = bottomPrice + (finalClose - bottomPrice) * Math.sin((Math.PI / 2.0) * u);
+                      const diff = targetBase - asset.price;
+                      move = diff * 0.15 + noise;
+                   }
+                   break;
+                }
+                case 'INVERTED_HAMMER': {
+                   // Price surges high in the first half of the minute, then sells off back to close near the low
+                   if (progress < 0.6) {
+                      const u = progress / 0.6;
+                      const targetBase = openPrice + 3.2 * rVol * Math.sin((Math.PI / 2.0) * u);
+                      const diff = targetBase - asset.price;
+                      move = diff * 0.14 + noise;
+                   } else {
+                      const u = (progress - 0.6) / 0.4;
+                      const peakPrice = openPrice + 3.2 * rVol;
+                      const finalClose = openPrice - direction * 0.3 * rVol;
+                      const targetBase = peakPrice + (finalClose - peakPrice) * Math.sin((Math.PI / 2.0) * u);
+                      const diff = targetBase - asset.price;
+                      move = diff * 0.15 + noise;
+                   }
+                   break;
+                }
+                case 'MARUBOZU': {
+                   // Linear steady movement with minimal wicks
+                   const targetBase = openPrice + direction * 2.8 * rVol * progress;
+                   const diff = targetBase - asset.price;
+                   move = diff * 0.1 + noise * 0.2; // dampened noise for smooth monotonic flow
+                   break;
+                }
+                case 'STANDARD':
+                default: {
+                   // High-fidelity standard Brownian walk with trend persistence
+                   asset.trend += (Math.random() - 0.5) * asset.volatility * (asset.isRealMarket ? 0.08 : 0.15);
+                   asset.trend *= 0.95;
+                   move = asset.trend + noise;
+                   break;
+                }
+             }
+
+             // Technical bounding: pull price back if it stretches too far from its opening anchor
+             const maxDeviation = rVol * 5.0;
+             const deviation = asset.price + move - openPrice;
+             if (Math.abs(deviation) > maxDeviation) {
+                move -= (deviation - (Math.sign(deviation) * maxDeviation)) * 0.2;
+             }
+          }
+
+          // Technical analysis: Occasional reversion if accumulated trend gets too high
           if (Math.abs(asset.trend) > asset.volatility * 5) {
-            asset.trend *= 0.6;
-          }
-          
-          // Combine the deterministic/directional forces
-          let regressionDrift = 0;
-          if (asset.baseMarketPrice) {
-             const diffFromBase = asset.baseMarketPrice - asset.price;
-             // Faster catch-up for real markets that use baseMarketPrice markers
-             const catchUpSpeed = asset.isRealMarket ? 0.05 : 0.002;
-             regressionDrift = diffFromBase * catchUpSpeed;
-             
-             const maxRegression = asset.volatility * (asset.isRealMarket ? 1.5 : 0.15);
-             if (regressionDrift > maxRegression) regressionDrift = maxRegression;
-             if (regressionDrift < -maxRegression) regressionDrift = -maxRegression;
+             asset.trend *= 0.6;
           }
 
-          let directionalForce = (asset.trend + regressionDrift) * moveMultiplier;
-          
-          // Cap the baseline directional force
-          const maxDirectional = asset.volatility * 0.3;
-          if (directionalForce > maxDirectional) directionalForce = maxDirectional;
-          if (directionalForce < -maxDirectional) directionalForce = -maxDirectional;
-          
-          // Add the finalDrift AFTER capping the regular directional force.
-          // This ensures that our algorithmic guiding always takes priority
-          // and isn't constrained by standard caps, allowing for perfect history.
-          directionalForce += finalDrift;
-
-          // The final move combines trend momentum with controlled noise
-          move = directionalForce + noise;
-          
-          // Technical analysis: Occasional reversion if trend gets too high
-          if (Math.abs(asset.trend) > asset.volatility * 5) {
-            asset.trend *= 0.6;
-          }
-
-          // Prevent static price by adding a minimum movement floor
-          const minMove = asset.isRealMarket ? asset.volatility * 0.2 : asset.volatility * 0.01;
+          // Prevent static price relative to volumetric floor
+          const minMove = asset.isRealMarket ? asset.volatility * 0.2 : asset.volatility * 0.02;
           if (Math.abs(move) < minMove) {
-            move = (Math.random() > 0.5 ? 1 : -1) * minMove * 1.2;
+             move = (Math.random() > 0.5 ? 1 : -1) * minMove * 1.2;
           }
-          
+
           // Absolute safety limit on per-tick movement
-          const maxMovePerTick = asset.volatility * 0.8;
+          const maxMovePerTick = asset.volatility * 1.5;
           if (move > maxMovePerTick) move = maxMovePerTick;
           if (move < -maxMovePerTick) move = -maxMovePerTick;
           
@@ -3304,20 +3372,39 @@ async function startServer() {
         } else {
            const isWin = Math.random() * 100 < winPercentage;
            forcedResult = isWin ? 'WIN' : 'LOSS';
-        }
-      }
-    }
-
-    const rawEmail = trade.userEmail || trade.email || user.email;
+         }
+       }
+     }
+     const resolvedUid = trade.userId || (user && user.uid);
+     const rawEmail = trade.userEmail || trade.email || (user && user.email);
     if (!rawEmail) {
       console.error('place-trade: userEmail is missing in trade object');
       socket.emit('trade-error', 'User email is missing.');
       return;
     }
-    const email = rawEmail.toLowerCase();
+    let email = rawEmail.toLowerCase().trim();
 
     // Validate and deduct balance
-    let userFromDb = db.prepare('SELECT balance, bonus_balance, turnover_achieved, uid, trades FROM users WHERE LOWER(email) = LOWER(?)').get(email) as any;
+    // Validate and deduct balance
+    let userFromDb = null;
+    if (email && email !== 'anonymous') {
+      try {
+        userFromDb = db.prepare('SELECT balance, bonus_balance, demoBalance, turnover_achieved, uid, trades FROM users WHERE LOWER(email) = LOWER(?)').get(email) as any;
+      } catch (e) {
+        console.error('[DB_ERROR] Failed to query user by email:', e);
+      }
+    }
+
+    if (!userFromDb && resolvedUid) {
+      try {
+        userFromDb = db.prepare('SELECT email, balance, bonus_balance, demoBalance, turnover_achieved, uid, trades FROM users WHERE uid = ?').get(resolvedUid) as any;
+        if (userFromDb && userFromDb.email) {
+          email = userFromDb.email.toLowerCase().trim();
+        }
+      } catch (e) {
+        console.error('[DB_ERROR] Failed to query user by uid:', e);
+      }
+    }
     if (!userFromDb && canSyncFirestore() && email !== 'anonymous') {
       // SYNC LOG OMITTED
       try {
@@ -3352,12 +3439,75 @@ async function startServer() {
            bonus_balance: 0, 
            demoBalance: connectedUser ? (connectedUser.demoBalance || 10000) : 10000, 
            trades: '[]' 
-        };
+         };
       } else {
-        console.error(`place-trade: user not found for email ${email}`);
-        socket.emit('trade-error', 'User not found. Please reload or log in again.');
-        return;
+        // LAST RESORT: Try to use connectedUsers data to create a local entry if missing
+        const connectedUser = connectedUsers[socket.id];
+        if (connectedUser && (connectedUser.email?.toLowerCase().trim() === email || connectedUser.userEmail?.toLowerCase().trim() === email)) {
+           console.log(`[RECOVERY] Creating missing SQLite user from connectedUsers session for: ${email}`);
+           const now = Date.now();
+           try {
+             db.prepare('INSERT INTO users (email, name, photoURL, uid, balance, demoBalance, createdAt, lastLogin) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+               .run(email, connectedUser.name || connectedUser.displayName || '', connectedUser.photoURL || '', connectedUser.uid || '', 0, 10000, now, now);
+             userFromDb = db.prepare('SELECT balance, bonus_balance, turnover_achieved, uid, trades FROM users WHERE LOWER(email) = LOWER(?)').get(email) as any;
+           } catch (err) {
+             console.error(`[RECOVERY_ERROR] Failed to recover user ${email}:`, err);
+           }
+        }
+        
+        if (!userFromDb) {
+           console.log(`[ULTRASHIELD] User ${email} not found anywhere. Dynamically creating on-the-fly...`);
+           const now = Date.now();
+           try {
+             db.prepare('INSERT INTO users (email, name, balance, demoBalance, createdAt, lastLogin) VALUES (?, ?, ?, ?, ?, ?)')
+               .run(email, email.split('@')[0], 0, 10000, now, now);
+             userFromDb = db.prepare('SELECT balance, bonus_balance, turnover_achieved, uid, trades FROM users WHERE LOWER(email) = LOWER(?)').get(email) as any;
+           } catch (err) {
+             console.error('[ULTRASHIELD_ERROR] Failed to save dynamic user profile:', err);
+           }
+        }
+
+    if (!userFromDb) {
+          console.warn(`[WARNING] Fallback to transient profile for user ${email}`);
+          userFromDb = {
+            uid: resolvedUid || 'transient_user',
+            balance: 0,
+            bonus_balance: 0,
+            demoBalance: 10000,
+            trades: '[]'
+          };
+        }
       }
+    }
+
+    // --- Self-Healing Balance Sync Integration ---
+    if (userFromDb && email !== 'anonymous') {
+      let changed = false;
+      if (trade.clientBalanceHint !== undefined && userFromDb.balance < trade.clientBalanceHint) {
+         userFromDb.balance = trade.clientBalanceHint;
+         changed = true;
+      }
+      if (trade.clientBonusBalanceHint !== undefined && userFromDb.bonus_balance < trade.clientBonusBalanceHint) {
+         userFromDb.bonus_balance = trade.clientBonusBalanceHint;
+         changed = true;
+      }
+      if (trade.clientDemoBalanceHint !== undefined && userFromDb.demoBalance < trade.clientDemoBalanceHint) {
+         userFromDb.demoBalance = trade.clientDemoBalanceHint;
+         changed = true;
+      }
+      if (changed) {
+         console.log(`[SELF-HEALING] Updating local SQLite balances for user ${email} from client hints.`);
+         try {
+           db.prepare('UPDATE users SET balance = ?, bonus_balance = ?, demoBalance = ? WHERE LOWER(email) = LOWER(?)')
+             .run(userFromDb.balance, userFromDb.bonus_balance || 0, userFromDb.demoBalance || 10000, email);
+         } catch (err) {
+           console.error('[SELF-HEALING_ERROR] Failed to update balance from hints', err);
+         }
+      }
+    } else if (email === 'anonymous' && trade.clientDemoBalanceHint !== undefined) {
+       if (userFromDb) {
+          userFromDb.demoBalance = trade.clientDemoBalanceHint;
+       }
     }
 
     const userTrades = typeof userFromDb.trades === 'string' ? JSON.parse(userFromDb.trades) : (userFromDb.trades || []);
@@ -3392,7 +3542,7 @@ async function startServer() {
         bonusAmount = trade.amount - userFromDb.balance;
       }
 
-      db.prepare('UPDATE users SET balance = balance - ?, bonus_balance = bonus_balance - ?, turnover_achieved = turnover_achieved + ? WHERE email = ?')
+      db.prepare('UPDATE users SET balance = balance - ?, bonus_balance = bonus_balance - ?, turnover_achieved = turnover_achieved + ? WHERE LOWER(email) = LOWER(?)')
         .run(realAmount, bonusAmount, trade.amount, email);
     } else if (trade.accountType === 'DEMO') {
       if (userFromDb.demoBalance < trade.amount) {
@@ -3400,7 +3550,7 @@ async function startServer() {
         return;
       }
       if (email !== 'anonymous') {
-        db.prepare('UPDATE users SET demoBalance = demoBalance - ? WHERE email = ?').run(trade.amount, email);
+        db.prepare('UPDATE users SET demoBalance = demoBalance - ? WHERE LOWER(email) = LOWER(?)').run(trade.amount, email);
       } else {
         if (connectedUsers[socket.id]) {
            connectedUsers[socket.id].demoBalance = userFromDb.demoBalance - trade.amount;
@@ -3408,7 +3558,7 @@ async function startServer() {
       }
     } else {
       // Handle extra accounts deduction
-      const user = db.prepare('SELECT extraAccounts, uid FROM users WHERE email = ?').get(email) as any;
+      const user = db.prepare('SELECT extraAccounts, uid FROM users WHERE LOWER(email) = LOWER(?)').get(email) as any;
       if (user && user.extraAccounts) {
         let extraAccounts = [];
         try {
@@ -3439,7 +3589,7 @@ async function startServer() {
         }
         
         if (updated) {
-          db.prepare('UPDATE users SET extraAccounts = ? WHERE email = ?').run(JSON.stringify(newExtraAccounts), email);
+          db.prepare('UPDATE users SET extraAccounts = ? WHERE LOWER(email) = LOWER(?)').run(JSON.stringify(newExtraAccounts), email);
           // Sync to firestore if needed
           if (canSyncFirestore()) {
              firestore.collection('users').doc(user.uid).set({ extraAccounts: JSON.stringify(newExtraAccounts) }, { merge: true }).catch(() => {});
@@ -3457,18 +3607,14 @@ async function startServer() {
 
     // Update Firestore after deduction
     if (canSyncFirestore() && (trade.accountType === 'REAL' || trade.accountType === 'DEMO') && userFromDb.uid !== 'anonymous') {
-      const updatedUser = db.prepare('SELECT balance, bonus_balance, demoBalance, turnover_achieved FROM users WHERE email = ?').get(email) as any;
+      const updatedUser = db.prepare('SELECT balance, bonus_balance, demoBalance, turnover_achieved FROM users WHERE LOWER(email) = LOWER(?)').get(email) as any;
       if (updatedUser) {
         const updateData = trade.accountType === 'REAL' 
           ? { balance: updatedUser.balance, bonus_balance: updatedUser.bonus_balance, turnover_achieved: updatedUser.turnover_achieved } 
           : { demoBalance: updatedUser.demoBalance };
         firestore.collection('users').doc(userFromDb.uid).set(updateData, { merge: true })
           .catch((e: any) => {
-             if (e.code === 7 || (e.message && e.message.includes('PERMISSION_DENIED'))) {
-                firestoreDisabledDueToError = true;
-             } else {
-                // SILENT LOG OMITTED
-             }
+             console.error('[FIRESTORE_WRITE_ERROR] Failed to sync updated balance to Firestore:', e);
           });
       }
     }
@@ -3621,8 +3767,13 @@ async function startServer() {
       email: 'Anonymous',
       name: 'Guest',
       balance: 0,
-      trades: []
+      trades: [],
+      ip: socket.handshake.address,
+      connectedAt: Date.now()
     };
+    
+    // Broadcast newly connected user list to Admin Room live (even guests)
+    io.to('admin-room').emit('admin-users', Object.values(connectedUsers));
 
     socket.on('disconnect', () => {
       console.log('Client disconnected:', socket.id);
@@ -3642,7 +3793,11 @@ async function startServer() {
         
         // Try to sync from Firestore first
         if (canSyncFirestore() && userData.uid) {
-          await syncUserFromFirestore(email, userData.uid, userData.name || userData.displayName, userData.photoURL);
+          try {
+            await syncUserFromFirestore(email, userData.uid, userData.name || userData.displayName, userData.photoURL);
+          } catch (e) {
+            handleFirestoreError(e, 'user-sync initial');
+          }
         }
 
         // Upsert user into users table
@@ -3784,13 +3939,15 @@ async function startServer() {
         }
 
         logActivity(email, 'LOGIN', `User logged in from ${socket.handshake.address}`, socket.handshake.address);
+        // Broadcast newly connected user list to Admin Room live
+        io.to('admin-room').emit('admin-users', Object.values(connectedUsers));
       }
     });
 
     socket.on('sync-extra-accounts', (data) => {
       if (data && data.email && data.extraAccounts) {
         try {
-          db.prepare('UPDATE users SET extraAccounts = ? WHERE email = ?').run(JSON.stringify(data.extraAccounts), data.email);
+          db.prepare('UPDATE users SET extraAccounts = ? WHERE LOWER(email) = LOWER(?)').run(JSON.stringify(data.extraAccounts), data.email);
           emitUserUpdate(data.email);
         } catch (e) {
           console.error('Error syncing extra accounts:', e);
@@ -3925,7 +4082,7 @@ async function startServer() {
         socket.emit('pending-order-created', newOrder);
         
         // Refresh orders for user
-        const userOrders = db.prepare('SELECT * FROM pending_orders WHERE email = ? ORDER BY createdAt DESC').all(order.email);
+        const userOrders = db.prepare('SELECT * FROM pending_orders WHERE LOWER(email) = LOWER(?) ORDER BY createdAt DESC').all(order.email);
         socket.emit('user-pending-orders', userOrders);
         
         // Refresh for admin
@@ -3942,7 +4099,7 @@ async function startServer() {
         db.prepare("UPDATE pending_orders SET status = 'CANCELLED' WHERE id = ?").run(orderId);
         const order = db.prepare('SELECT * FROM pending_orders WHERE id = ?').get(orderId);
         if (order) {
-          const userOrders = db.prepare('SELECT * FROM pending_orders WHERE email = ? ORDER BY createdAt DESC').all(order.email);
+          const userOrders = db.prepare('SELECT * FROM pending_orders WHERE LOWER(email) = LOWER(?) ORDER BY createdAt DESC').all(order.email);
           socket.emit('user-pending-orders', userOrders);
         }
         
@@ -3955,7 +4112,7 @@ async function startServer() {
 
     socket.on('get-user-pending-orders', (email) => {
       try {
-        const userOrders = db.prepare('SELECT * FROM pending_orders WHERE email = ? ORDER BY createdAt DESC').all(email);
+        const userOrders = db.prepare('SELECT * FROM pending_orders WHERE LOWER(email) = LOWER(?) ORDER BY createdAt DESC').all(email);
         socket.emit('user-pending-orders', userOrders);
       } catch (error) {
         console.error('Error fetching user pending orders:', error);
@@ -3968,10 +4125,10 @@ async function startServer() {
     });
 
     socket.on('admin-join', (email) => {
-      const adminEmails = ['hasan23@gmail.com', 'mdrajon56@gmail.com'];
+      const adminEmails = ['hamproo123@gmail.com', 'mdrajon56@gmail.com', 'emon@gmail.com', 'tasmeaykhatun565@gmail.com'];
       if (email && adminEmails.includes(email.toLowerCase())) {
         // Ensure user is unblocked
-        db.prepare('UPDATE users SET status = ? WHERE email = ?').run('ACTIVE', email);
+        db.prepare('UPDATE users SET status = ? WHERE LOWER(email) = LOWER(?)').run('ACTIVE', email);
         
         socket.join('admin-room');
         socket.emit('admin-assets', assets);
@@ -4393,7 +4550,7 @@ async function startServer() {
 
     socket.on('get-notifications', (email) => {
       try {
-        const notifications = db.prepare("SELECT * FROM notifications WHERE email = ? OR email = 'ALL' ORDER BY timestamp DESC LIMIT 50").all(email);
+        const notifications = db.prepare("SELECT * FROM notifications WHERE LOWER(email) = LOWER(?) OR email = 'ALL' ORDER BY timestamp DESC LIMIT 50").all(email);
         socket.emit('user-notifications', notifications);
       } catch (error) {
         console.error('Error fetching user notifications:', error);
@@ -4439,7 +4596,7 @@ async function startServer() {
       try {
         const tableExists = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='support_chat'").get();
         if (tableExists) {
-          const messages = db.prepare('SELECT * FROM support_chat WHERE email = ? ORDER BY timestamp ASC').all(email);
+          const messages = db.prepare('SELECT * FROM support_chat WHERE LOWER(email) = LOWER(?) ORDER BY timestamp ASC').all(email);
           socket.emit('chat-history', messages);
         } else {
           console.warn('Table support_chat does not exist, skipping chat history fetch.');
@@ -4447,7 +4604,7 @@ async function startServer() {
         }
 
         // Fetch or create session status
-        const session = db.prepare('SELECT status FROM chat_sessions WHERE email = ?').get(email);
+        const session = db.prepare('SELECT status FROM chat_sessions WHERE LOWER(email) = LOWER(?)').get(email);
         if (session) {
           socket.emit('chat-status', session.status);
         } else {
@@ -4467,7 +4624,7 @@ async function startServer() {
       try {
         const tableExists = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='support_chat'").get();
         if (tableExists) {
-          const messages = db.prepare('SELECT * FROM support_chat WHERE email = ? ORDER BY timestamp ASC').all(email);
+          const messages = db.prepare('SELECT * FROM support_chat WHERE LOWER(email) = LOWER(?) ORDER BY timestamp ASC').all(email);
           socket.emit('chat-history', messages);
         } else {
           console.warn('Table support_chat does not exist, skipping chat history fetch for admin.');
@@ -4485,13 +4642,13 @@ async function startServer() {
       
       try {
         // Ensure session exists and is active
-        const session = db.prepare('SELECT status FROM chat_sessions WHERE email = ?').get(email);
+        const session = db.prepare('SELECT status FROM chat_sessions WHERE LOWER(email) = LOWER(?)').get(email);
         if (!session) {
           db.prepare('INSERT INTO chat_sessions (email, status, lastUpdated) VALUES (?, ?, ?)').run(email, 'active', timestamp);
         } else if (session.status === 'closed') {
-          db.prepare('UPDATE chat_sessions SET status = ?, lastUpdated = ? WHERE email = ?').run('active', timestamp, email);
+          db.prepare('UPDATE chat_sessions SET status = ?, lastUpdated = ? WHERE LOWER(email) = LOWER(?)').run('active', timestamp, email);
         } else {
-          db.prepare('UPDATE chat_sessions SET lastUpdated = ? WHERE email = ?').run(timestamp, email);
+          db.prepare('UPDATE chat_sessions SET lastUpdated = ? WHERE LOWER(email) = LOWER(?)').run(timestamp, email);
         }
 
         const tableExists = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='support_chat'").get();
@@ -4553,7 +4710,7 @@ async function startServer() {
 
     socket.on('start-new-chat', (email) => {
       try {
-        db.prepare('UPDATE chat_sessions SET status = ?, lastUpdated = ? WHERE email = ?').run('active', Date.now(), email);
+        db.prepare('UPDATE chat_sessions SET status = ?, lastUpdated = ? WHERE LOWER(email) = LOWER(?)').run('active', Date.now(), email);
         console.log(`User ${email} started a new chat session`);
         
         // Refresh admin chat list
@@ -4776,7 +4933,7 @@ async function startServer() {
 
     socket.on('admin-update-user-details', ({ email, name, isBoosted, allowed_withdrawal_methods }) => {
       try {
-        db.prepare('UPDATE users SET name = ?, isBoosted = ?, allowed_withdrawal_methods = ? WHERE email = ?').run(name, isBoosted ? 1 : 0, allowed_withdrawal_methods, email);
+        db.prepare('UPDATE users SET name = ?, isBoosted = ?, allowed_withdrawal_methods = ? WHERE LOWER(email) = LOWER(?)').run(name, isBoosted ? 1 : 0, allowed_withdrawal_methods, email);
         logActivity(email, 'ADMIN_UPDATE_DETAILS', `Admin updated user details`);
         
         // Update Firestore
@@ -4813,7 +4970,7 @@ async function startServer() {
 
     socket.on('admin-update-user-turnover', ({ email, required, achieved }) => {
       try {
-        db.prepare('UPDATE users SET turnover_required = ?, turnover_achieved = ? WHERE email = ?').run(required, achieved, email);
+        db.prepare('UPDATE users SET turnover_required = ?, turnover_achieved = ? WHERE LOWER(email) = LOWER(?)').run(required, achieved, email);
         logActivity(email, 'ADMIN_UPDATE_TURNOVER', `Admin updated turnover requirements`);
         
         // Update Firestore
@@ -4849,7 +5006,7 @@ async function startServer() {
 
     socket.on('admin-update-user-kyc', ({ email, status }) => {
       try {
-        db.prepare('UPDATE users SET kycStatus = ? WHERE email = ?').run(status, email);
+        db.prepare('UPDATE users SET kycStatus = ? WHERE LOWER(email) = LOWER(?)').run(status, email);
         logActivity(email, 'ADMIN_UPDATE_KYC', `Admin updated KYC status to ${status}`);
         
         // Update Firestore
@@ -4877,19 +5034,19 @@ async function startServer() {
 
     socket.on('admin-add-deduct-balance', ({ email, amount, type, reason }) => {
       try {
-        const user = db.prepare('SELECT balance, bonus_balance, demoBalance, uid FROM users WHERE email = ?').get(email) as any;
+        const user = db.prepare('SELECT balance, bonus_balance, demoBalance, uid FROM users WHERE LOWER(email) = LOWER(?)').get(email) as any;
         if (!user) return;
 
         let newBalance = 0;
         if (type === 'REAL') {
           newBalance = user.balance + amount;
-          db.prepare('UPDATE users SET balance = ? WHERE email = ?').run(newBalance, email);
+          db.prepare('UPDATE users SET balance = ? WHERE LOWER(email) = LOWER(?)').run(newBalance, email);
         } else if (type === 'BONUS') {
           newBalance = (user.bonus_balance || 0) + amount;
-          db.prepare('UPDATE users SET bonus_balance = ? WHERE email = ?').run(newBalance, email);
+          db.prepare('UPDATE users SET bonus_balance = ? WHERE LOWER(email) = LOWER(?)').run(newBalance, email);
         } else {
           newBalance = user.demoBalance + amount;
-          db.prepare('UPDATE users SET demoBalance = ? WHERE email = ?').run(newBalance, email);
+          db.prepare('UPDATE users SET demoBalance = ? WHERE LOWER(email) = LOWER(?)').run(newBalance, email);
         }
         
         if (canSyncFirestore()) {
@@ -5063,10 +5220,10 @@ async function startServer() {
       try {
         const userFromDb = db.prepare('SELECT uid FROM users WHERE email = ?').get(email) as any;
         
-        db.prepare('DELETE FROM users WHERE email = ?').run(email);
-        db.prepare('DELETE FROM deposits WHERE email = ?').run(email);
-        db.prepare('DELETE FROM withdrawals WHERE email = ?').run(email);
-        db.prepare('DELETE FROM kyc_submissions WHERE email = ?').run(email);
+        db.prepare('DELETE FROM users WHERE LOWER(email) = LOWER(?)').run(email);
+        db.prepare('DELETE FROM deposits WHERE LOWER(email) = LOWER(?)').run(email);
+        db.prepare('DELETE FROM withdrawals WHERE LOWER(email) = LOWER(?)').run(email);
+        db.prepare('DELETE FROM kyc_submissions WHERE LOWER(email) = LOWER(?)').run(email);
         
         // Force logout if connected
         emitToUser(email, 'force-logout');
@@ -5164,6 +5321,35 @@ async function startServer() {
     socket.on('admin-set-price', ({ asset, price }) => {
       if (assets[asset]) {
         assets[asset].price = price;
+        const now = Date.now();
+        const minuteStart = Math.floor(now / 60000) * 60000;
+        
+        // Ensure minute accumulator exists for this asset to provide consistent OHLC
+        if (!minuteAccumulator[asset]) {
+            minuteAccumulator[asset] = { open: price, high: price, low: price, close: price, minuteStart };
+        } else {
+            minuteAccumulator[asset].high = Math.max(minuteAccumulator[asset].high, price);
+            minuteAccumulator[asset].low = Math.min(minuteAccumulator[asset].low, price);
+            minuteAccumulator[asset].close = price;
+            minuteAccumulator[asset].minuteStart = minuteStart;
+        }
+
+        const minAcc = minuteAccumulator[asset];
+        
+        // Immediate broadcast of tick so chart moves INSTANTLY without waiting for the loop
+        io.emit('market-tick', { 
+            [asset]: { 
+                price, 
+                time: now, 
+                isFrozen: assets[asset].isFrozen,
+                shortName: asset,
+                minuteOpen: minAcc.open,
+                minuteHigh: minAcc.high,
+                minuteLow: minAcc.low,
+                minuteClose: minAcc.close,
+                minuteTime: minuteStart
+            } 
+        });
         io.emit('market-assets-updated', assets);
       }
     });
@@ -5208,9 +5394,11 @@ async function startServer() {
 
     // --- Deposit Events ---
     socket.on('get-user-transactions', (email) => {
+      if (!email) return;
+      const lowerEmail = email.toLowerCase();
       try {
-        const userDeposits = db.prepare('SELECT * FROM deposits WHERE email = ? ORDER BY submittedAt DESC').all(email);
-        const userWithdrawals = db.prepare('SELECT * FROM withdrawals WHERE email = ? ORDER BY submittedAt DESC').all(email);
+        const userDeposits = db.prepare('SELECT * FROM deposits WHERE LOWER(email) = ? ORDER BY submittedAt DESC').all(lowerEmail);
+        const userWithdrawals = db.prepare('SELECT * FROM withdrawals WHERE LOWER(email) = ? ORDER BY submittedAt DESC').all(lowerEmail);
         socket.emit('user-transactions', { deposits: userDeposits, withdrawals: userWithdrawals });
       } catch (error) {
         console.error('Error fetching user transactions:', error);
@@ -5218,23 +5406,28 @@ async function startServer() {
     });
 
     socket.on('get-user-bonuses', (email) => {
+      if (!email) return;
+      const lowerEmail = email.toLowerCase();
       const bonuses = db.prepare(`
         SELECT * FROM deposits 
-        WHERE email = ? AND status = 'APPROVED' AND bonusAmount > 0 
+        WHERE LOWER(email) = ? AND status = 'APPROVED' AND bonusAmount > 0 
         ORDER BY submittedAt DESC
-      `).all(email);
+      `).all(lowerEmail);
       socket.emit('user-bonuses', bonuses);
     });
 
     socket.on('submit-deposit', (depositData) => {
-      console.log('Received submit-deposit request:', depositData);
+      console.log('Processing submit-deposit request:', depositData);
       if (!globalPlatformSettings.isDepositsEnabled) {
         socket.emit('deposit-error', 'Deposits are currently disabled.');
         return;
       }
       try {
         let { email, amount, currency, method, transactionId, promoCode, screenshot } = depositData;
-        console.log(`Processing deposit for ${email}: ${amount} ${currency} via ${method}`);
+        if (!email) throw new Error('Email is required');
+        const lowerEmail = email.toLowerCase();
+        
+        console.log(`Processing deposit for ${lowerEmail}: ${amount} ${currency} via ${method}`);
         
         const m = method.toLowerCase();
         if (m.includes('bkash') || m.includes('nagad') || m.includes('rocket') || m.includes('upay')) {
@@ -5273,21 +5466,23 @@ async function startServer() {
         `);
         
         const now = Date.now();
-        const info = stmt.run(email, amount, currency, method, transactionId, now, now, promoCode || null, bonusAmount, turnoverRequired, screenshot || null);
+        const info = stmt.run(lowerEmail, amount, currency, method, transactionId, now, now, promoCode || null, bonusAmount, turnoverRequired, screenshot || null);
         const depositId = info.lastInsertRowid.toString();
+        console.log(`Deposit inserted into SQLite with ID: ${depositId}`);
 
         if (canSyncFirestore()) {
            firestore.collection('deposits').doc(depositId).set({
-             id: depositId, email, amount, currency, method, transactionId, status: 'PENDING', submittedAt: now, updatedAt: now, promoCode: promoCode || null, bonusAmount, turnoverRequired, screenshot: screenshot || null
+             id: depositId, email: lowerEmail, amount, currency, method, transactionId, status: 'PENDING', submittedAt: now, updatedAt: now, promoCode: promoCode || null, bonusAmount, turnoverRequired, screenshot: screenshot || null
            }).catch((e: any) => console.error('Error saving deposit to firestore:', e));
         }
 
-        socket.emit('deposit-submitted', { status: 'PENDING', bonusAmount });
+        socket.emit('deposit-submitted', { status: 'PENDING', bonusAmount, id: depositId });
         
-        logActivity(email, 'DEPOSIT_SUBMIT', `Method: ${method}, Amount: ${amount} ${currency}, ID: ${transactionId}`);
+        logActivity(lowerEmail, 'DEPOSIT_SUBMIT', `Method: ${method}, Amount: ${amount} ${currency}, ID: ${transactionId}`);
 
         // Notify admins
-        io.to('admin-room').emit('new-deposit-notification', { email, amount, method, transactionId, bonusAmount, submittedAt: now });
+        console.log('Emitting notification to admin-room');
+        io.to('admin-room').emit('new-deposit-notification', { email: lowerEmail, amount, method, transactionId, bonusAmount, submittedAt: now });
         
         const allDeposits = db.prepare('SELECT * FROM deposits ORDER BY submittedAt DESC LIMIT 500').all();
         io.to('admin-room').emit('admin-deposits', allDeposits);
@@ -5319,7 +5514,7 @@ async function startServer() {
         // If approved, add funds to user balance
         if (status === 'APPROVED' && oldStatus === 'PENDING') {
           console.log('Deposit approved, updating balance for:', deposit.email);
-          const user = db.prepare('SELECT * FROM users WHERE email = ?').get(deposit.email) as any;
+          const user = db.prepare('SELECT * FROM users WHERE LOWER(email) = LOWER(?)').get(deposit.email) as any;
           if (user) {
             console.log('User found for balance update:', user.email, 'Current Balance:', user.balance);
             const getExchangeRate = (currency: string) => {
@@ -5356,7 +5551,7 @@ async function startServer() {
             
             const newTurnoverRequired = (parseFloat(user.turnover_required) || 0) + (parseFloat(deposit.turnoverRequired) || 0);
             
-            db.prepare('UPDATE users SET balance = ?, bonus_balance = ?, turnover_required = ? WHERE email = ?')
+            db.prepare('UPDATE users SET balance = ?, bonus_balance = ?, turnover_required = ? WHERE LOWER(email) = LOWER(?)')
               .run(newBalance, newBonusBalance, newTurnoverRequired, deposit.email);
             console.log('SQLite balance updated successfully for:', deposit.email);
             
@@ -5448,7 +5643,7 @@ async function startServer() {
             if (withdrawMethodId && !methods.includes(withdrawMethodId)) {
               methods.push(withdrawMethodId);
               const updatedAllowed = methods.join(',');
-              db.prepare('UPDATE users SET allowed_withdrawal_methods = ? WHERE email = ?').run(updatedAllowed, deposit.email);
+              db.prepare('UPDATE users SET allowed_withdrawal_methods = ? WHERE LOWER(email) = LOWER(?)').run(updatedAllowed, deposit.email);
               
               // Notify user if connected
               const socketIds = Object.keys(connectedUsers).filter(id => connectedUsers[id].email === deposit.email);
@@ -5473,14 +5668,14 @@ async function startServer() {
         io.to('admin-room').emit('admin-deposits', allDeposits);
 
         // Refresh user list for admin (only send the updated user)
-        const updatedUser = db.prepare('SELECT * FROM users WHERE email = ?').get(deposit.email) as any;
+        const updatedUser = db.prepare('SELECT * FROM users WHERE LOWER(email) = LOWER(?)').get(deposit.email) as any;
         if (updatedUser) {
           io.to('admin-room').emit('admin-user-updated', updatedUser);
         }
         io.to('admin-room').emit('admin-users', Object.values(connectedUsers));
 
-        const userDeposits = db.prepare('SELECT * FROM deposits WHERE email = ? ORDER BY submittedAt DESC').all(deposit.email);
-        const userWithdrawals = db.prepare('SELECT * FROM withdrawals WHERE email = ? ORDER BY submittedAt DESC').all(deposit.email);
+        const userDeposits = db.prepare('SELECT * FROM deposits WHERE LOWER(email) = LOWER(?) ORDER BY submittedAt DESC').all(deposit.email);
+        const userWithdrawals = db.prepare('SELECT * FROM withdrawals WHERE LOWER(email) = LOWER(?) ORDER BY submittedAt DESC').all(deposit.email);
         emitToUser(deposit.email, 'user-transactions', { deposits: userDeposits, withdrawals: userWithdrawals });
         
         const notifyType = status === 'APPROVED' ? 'success' : status === 'REJECTED' ? 'error' : 'info';
@@ -5508,31 +5703,34 @@ async function startServer() {
         return;
       }
       try {
-        const { email, amount, currency, method, accountDetails } = withdrawData;
+        let { email, amount, currency, method, accountDetails } = withdrawData;
+        if (!email) throw new Error('Email is required');
+        const lowerEmail = email.toLowerCase();
+        
+        console.log(`Processing withdrawal request from ${lowerEmail}: ${amount} ${currency}`);
         
         const limits = globalPlatformSettings.minWithdrawalLimits || {};
-        const methodIdForLimit = withdrawData.method.toLowerCase();
+        const methodIdForLimit = method.toLowerCase();
         // Fallback to global if method limit not set
         const minWithdrawal = limits[methodIdForLimit] || globalPlatformSettings.minWithdrawalAmount || 10;
         
         if (amount < minWithdrawal) {
-          socket.emit('withdraw-error', `Minimum withdrawal amount for ${withdrawData.method} is $${minWithdrawal}.`);
+          socket.emit('withdraw-error', `Minimum withdrawal amount for ${method} is $${minWithdrawal}.`);
           return;
         }
         
-        let user = db.prepare('SELECT * FROM users WHERE LOWER(email) = LOWER(?)').get(email) as any;
+        let user = db.prepare('SELECT * FROM users WHERE LOWER(email) = ?').get(lowerEmail) as any;
         if (!user && canSyncFirestore()) {
-          // SYNC LOG OMITTED
           try {
-            const snaps = await firestore.collection('users').where('email', '>=', email.toLowerCase()).where('email', '<=', email.toLowerCase() + '\uf8ff').limit(1).get();
+            const snaps = await firestore.collection('users').where('email', '>=', lowerEmail).where('email', '<=', lowerEmail + '\uf8ff').limit(1).get();
             if (!snaps.empty) {
               const doc = snaps.docs[0];
               const data = doc.data();
-              await syncUserFromFirestore(email.toLowerCase(), doc.id, data.name || '', data.photoURL || '');
-              user = db.prepare('SELECT * FROM users WHERE LOWER(email) = LOWER(?)').get(email) as any;
+              await syncUserFromFirestore(lowerEmail, doc.id, data.name || '', data.photoURL || '');
+              user = db.prepare('SELECT * FROM users WHERE LOWER(email) = ?').get(lowerEmail) as any;
             }
           } catch (e) {
-            // SILENT LOG OMITTED
+            console.error('Error syncing user from firestore during withdraw:', e);
           }
         }
 
@@ -5552,6 +5750,7 @@ async function startServer() {
         else if (methodId.includes('upay') && allowedList.includes('upay')) isAllowed = true;
         else if (methodId.includes('usdt') && allowedList.includes('usdt')) isAllowed = true;
         else if (methodId.includes('card') && allowedList.includes('card')) isAllowed = true;
+        else if (methodId.includes('binance') && allowedList.includes('binance')) isAllowed = true;
 
         if (!isAllowed) {
           socket.emit('withdraw-error', 'You can only withdraw via payment methods previously used for deposits.');
@@ -5592,7 +5791,7 @@ async function startServer() {
           newBonusBalance -= fromBonus;
         }
 
-        db.prepare('UPDATE users SET balance = ?, bonus_balance = ? WHERE email = ?').run(newBalance, newBonusBalance, email);
+        db.prepare('UPDATE users SET balance = ?, bonus_balance = ? WHERE LOWER(email) = ?').run(newBalance, newBonusBalance, lowerEmail);
 
         // Update Firestore for User
         if (canSyncFirestore() && user.uid) {
@@ -5600,11 +5799,7 @@ async function startServer() {
             balance: newBalance,
             bonus_balance: newBonusBalance
           }, { merge: true }).catch((e: any) => {
-             if (e.code === 7 || (e.message && e.message.includes('PERMISSION_DENIED'))) {
-                firestoreDisabledDueToError = true;
-             } else {
-                // SILENT LOG OMITTED
-             }
+             console.error('Error updating user balance in firestore during withdraw:', e);
           });
         }
 
@@ -5614,25 +5809,26 @@ async function startServer() {
         `);
         
         const now = Date.now();
-        const info = stmt.run(email, amount, currency, method, accountDetails, now, now, newBalance === 0 ? user.balance : amountUSD, newBalance === 0 ? amountUSD - user.balance : 0);
+        const info = stmt.run(lowerEmail, amount, currency, method, accountDetails, now, now, newBalance === 0 ? user.balance : amountUSD, newBalance === 0 ? amountUSD - user.balance : 0);
         const withdrawalId = info.lastInsertRowid.toString();
 
         if (canSyncFirestore()) {
            firestore.collection('withdrawals').doc(withdrawalId).set({
-             id: withdrawalId, email, amount, currency, method, accountDetails, status: 'PENDING', submittedAt: now, updatedAt: now, realAmount: newBalance === 0 ? user.balance : amountUSD, bonusAmount: newBalance === 0 ? amountUSD - user.balance : 0
+             id: withdrawalId, email: lowerEmail, amount, currency, method, accountDetails, status: 'PENDING', submittedAt: now, updatedAt: now, realAmount: newBalance === 0 ? user.balance : amountUSD, bonusAmount: newBalance === 0 ? amountUSD - user.balance : 0
            }).catch((e: any) => console.error('Error saving withdrawal to firestore:', e));
         }
 
         // Update connected user balance
-        emitUserUpdate(email);
-        emitToUser(email, 'balance-updated', { balance: newBalance, type: 'REAL' });
+        emitUserUpdate(lowerEmail);
+        emitToUser(lowerEmail, 'balance-updated', { balance: newBalance, type: 'REAL' });
 
         socket.emit('withdraw-submitted', { id: withdrawalId, status: 'PENDING', newBalance });
         
-        logActivity(email, 'WITHDRAW_SUBMIT', `Method: ${method}, Amount: ${amount} ${currency}`);
+        logActivity(lowerEmail, 'WITHDRAW_SUBMIT', `Method: ${method}, Amount: ${amount} ${currency}`);
 
         // Notify admins
-        io.to('admin-room').emit('new-withdraw-notification', { id: withdrawalId, email, amount, method, accountDetails, submittedAt: now });
+        console.log('Notifying admins of new withdrawal');
+        io.to('admin-room').emit('new-withdraw-notification', { id: withdrawalId, email: lowerEmail, amount, method, accountDetails, submittedAt: now });
         
         const allWithdrawals = db.prepare('SELECT * FROM withdrawals ORDER BY submittedAt DESC').all();
         io.to('admin-room').emit('admin-withdrawals', allWithdrawals);
@@ -5668,14 +5864,14 @@ async function startServer() {
 
         // Return funds to user balance
         console.log('Returning funds to user balance after cancellation');
-        const user = db.prepare('SELECT balance, bonus_balance, uid FROM users WHERE email = ?').get(email) as any;
+        const user = db.prepare('SELECT balance, bonus_balance, uid FROM users WHERE LOWER(email) = LOWER(?)').get(email) as any;
         if (user) {
           const returnReal = withdrawal.realAmount || 0;
           const returnBonus = withdrawal.bonusAmount || 0;
           const newBalance = user.balance + returnReal;
           const newBonusBalance = (user.bonus_balance || 0) + returnBonus;
 
-          db.prepare('UPDATE users SET balance = ?, bonus_balance = ? WHERE email = ?').run(newBalance, newBonusBalance, email);
+          db.prepare('UPDATE users SET balance = ?, bonus_balance = ? WHERE LOWER(email) = LOWER(?)').run(newBalance, newBonusBalance, email);
           console.log('SQLite balance updated (returned funds to user)');
           
           // Update Firestore for User
@@ -5851,18 +6047,22 @@ async function startServer() {
     });
 
     socket.on('get-kyc-status', (email) => {
-      let kyc = db.prepare('SELECT status, rejectionReason FROM kyc_submissions WHERE email = ? ORDER BY submittedAt DESC LIMIT 1').get(email) as any;
-      if (!kyc) {
-        const user = db.prepare('SELECT kycStatus FROM users WHERE email = ?').get(email) as any;
-        if (user && user.kycStatus && user.kycStatus !== 'NONE') {
-          kyc = { status: user.kycStatus, rejectionReason: null };
+      try {
+        let kyc = db.prepare('SELECT status, rejectionReason FROM kyc_submissions WHERE LOWER(email) = LOWER(?) ORDER BY submittedAt DESC LIMIT 1').get(email) as any;
+        if (!kyc) {
+          const userMeta = db.prepare('SELECT kycStatus FROM users WHERE LOWER(email) = LOWER(?)').get(email) as any;
+          if (userMeta && userMeta.kycStatus && userMeta.kycStatus !== 'NONE') {
+            kyc = { status: userMeta.kycStatus, rejectionReason: null };
+          }
         }
+        socket.emit('kyc-status', kyc || { status: 'NOT_SUBMITTED' });
+      } catch (error) {
+        console.error('Error in get-kyc-status:', error);
       }
-      socket.emit('kyc-status', kyc || { status: 'NOT_SUBMITTED' });
     });
 
     socket.on('get-allowed-withdraw-methods', (email) => {
-      const user = db.prepare('SELECT allowed_withdrawal_methods FROM users WHERE email = ?').get(email) as any;
+      const user = db.prepare('SELECT allowed_withdrawal_methods FROM users WHERE LOWER(email) = LOWER(?)').get(email) as any;
       socket.emit('allowed-withdraw-methods', user ? user.allowed_withdrawal_methods : '');
     });
 
@@ -6053,10 +6253,10 @@ async function startServer() {
 
     socket.on('admin-get-user-logs', async (email) => {
       try {
-        const activityLogs = db.prepare('SELECT * FROM activity_logs WHERE email = ? ORDER BY timestamp DESC').all(email);
-        const deposits = db.prepare('SELECT * FROM deposits WHERE email = ? ORDER BY submittedAt DESC').all(email);
-        const withdrawals = db.prepare('SELECT * FROM withdrawals WHERE email = ? ORDER BY submittedAt DESC').all(email);
-        const kyc = db.prepare('SELECT * FROM kyc_submissions WHERE email = ? ORDER BY submittedAt DESC').all(email);
+        const activityLogs = db.prepare('SELECT * FROM activity_logs WHERE LOWER(email) = LOWER(?) ORDER BY timestamp DESC').all(email);
+        const deposits = db.prepare('SELECT * FROM deposits WHERE LOWER(email) = LOWER(?) ORDER BY submittedAt DESC').all(email);
+        const withdrawals = db.prepare('SELECT * FROM withdrawals WHERE LOWER(email) = LOWER(?) ORDER BY submittedAt DESC').all(email);
+        const kyc = db.prepare('SELECT * FROM kyc_submissions WHERE LOWER(email) = LOWER(?) ORDER BY submittedAt DESC').all(email);
         
         // Fetch trades from Local DB (Super Fast)
         let trades: any[] = [];

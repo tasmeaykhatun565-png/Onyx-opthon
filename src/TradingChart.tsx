@@ -16,6 +16,9 @@ interface Trade {
   status: 'ACTIVE' | 'WIN' | 'LOSS';
   asset: string;
   payout: number;
+  clientBalanceHint?: number;
+  clientBonusBalanceHint?: number;
+  clientDemoBalanceHint?: number;
 }
 
 interface OHLCData {
@@ -49,6 +52,7 @@ interface TradingChartProps {
   minMove?: number;
   onVisibleTimeRangeChange?: (range: { from: number; to: number }) => void;
   onLoadMoreHistory?: () => void;
+  currentPrice?: number;
 }
 
 interface Drawing {
@@ -103,6 +107,7 @@ export const TradingChart = React.memo(({
   precision = 5,
   minMove = 0.00001,
   onLoadMoreHistory,
+  currentPrice,
 }: TradingChartProps) => {
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
@@ -129,6 +134,7 @@ export const TradingChart = React.memo(({
   const lastChartTypeRef = useRef(chartType);
   const haDataRef = useRef<any[]>([]);
   const lastIndicatorConfigsRef = useRef<string>(JSON.stringify(activeIndicators));
+  const liveHighLowRef = useRef({ high: -Infinity, low: Infinity, lastTime: 0 });
   const { theme: currentThemeName } = useTheme();
   const [isChartReady, setIsChartReady] = useState(false);
   const [isScrolledBack, setIsScrolledBack] = useState(false);
@@ -291,8 +297,23 @@ export const TradingChart = React.memo(({
           
           // Initial load OR asset switch: focus on the end of the chart
           if (!isSameAsset || lastDataLengthRef.current === 0) {
-            // Force scroll to end to ensure multiple candles are visible
-            timeScale?.scrollToRealTime();
+            // Force an exact zoom level on the end of the chart to mimic Olymp Trade
+            requestAnimationFrame(() => {
+                const totalBars = formattedData.length;
+                const barsToShow = 45; // Show exactly 45 candles for that perfect zoom
+                timeScale?.setVisibleLogicalRange({
+                    from: Math.max(0, totalBars - barsToShow),
+                    to: totalBars + 2 // A little padding on the right for the open candle
+                });
+            });
+            setTimeout(() => {
+                const totalBars = formattedData.length;
+                const barsToShow = 45;
+                timeScale?.setVisibleLogicalRange({
+                    from: Math.max(0, totalBars - barsToShow),
+                    to: totalBars + 2
+                });
+            }, 50);
           }
           // Restore logical range shifted by the number of prepended items, 
           // but ONLY if the user was not already at the end of the chart.
@@ -1108,7 +1129,12 @@ export const TradingChart = React.memo(({
       // Initial data paint if already available
       if (dataRef.current.length > 0) {
           updateChartData(series, dataRef.current, chartType);
-          chart.timeScale().scrollToRealTime();
+          const totalBars = dataRef.current.length;
+          const barsToShow = 45;
+          chart.timeScale().setVisibleLogicalRange({
+            from: Math.max(0, totalBars - barsToShow),
+            to: totalBars + 2
+          });
       }
 
       return () => {
@@ -1141,9 +1167,17 @@ export const TradingChart = React.memo(({
       const timeScale = chartRef.current?.timeScale();
       if (timeScale && data.length > 0) {
         // Force scroll to real-time on major changes or first data population
+        // INCREASED TIMEOUT: Ensures bars are fully rendered before we calculate range
         setTimeout(() => {
+          const totalBars = data.length;
+          const barsToShow = 65; // Show more candles for better context
+          timeScale.setVisibleLogicalRange({
+            from: Math.max(0, totalBars - barsToShow),
+            to: totalBars + 2
+          });
+          // Also force follow the right edge
           timeScale.scrollToRealTime();
-        }, 100);
+        }, 350);
       }
       lastAssetRef.current = assetName;
       lastTimeFrameRef.current = chartTimeFrame;
@@ -1153,6 +1187,62 @@ export const TradingChart = React.memo(({
     // Only update latest tick UI, not all trades/drawings (save for range changes)
     updateLatestCoordsRef.current();
   }, [data, chartType, assetName, chartTimeFrame, updateChartData, isTradingEnabled]);
+
+  // Smoothly update the very last live candle with `currentPrice` to emulate OympiTrade behavior
+  useEffect(() => {
+    if (!seriesRef.current || !data || data.length === 0 || typeof currentPrice === 'undefined') return;
+    
+    // We get the very latest candle from our data array
+    const lastData = data[data.length - 1];
+    if (!lastData) return;
+    
+    // Create an updated tick for the live price
+    const timeVal = Number(lastData.time);
+    if (isNaN(timeVal)) return;
+
+    // PROFESSIONAL CANDLE TRACKING: Use local ref to track H/L during the open candle's life
+    // This prevents "shrinking wicks" when historical data is throttled.
+    if (liveHighLowRef.current.lastTime !== timeVal) {
+        liveHighLowRef.current = { 
+            high: Math.max(lastData.high, currentPrice), 
+            low: Math.min(lastData.low, currentPrice), 
+            lastTime: timeVal 
+        };
+    } else {
+        liveHighLowRef.current.high = Math.max(liveHighLowRef.current.high, currentPrice, lastData.high);
+        liveHighLowRef.current.low = Math.min(liveHighLowRef.current.low, currentPrice, lastData.low);
+    }
+
+    const base = {
+      time: (timeVal / 1000) as Time,
+      open: lastData.open,
+      // Use local extreme tracking
+      high: liveHighLowRef.current.high,
+      low: liveHighLowRef.current.low,
+      close: currentPrice,
+    };
+    
+    let formatted: any = base;
+    if (chartType === 'Area') {
+      formatted = { time: base.time, value: base.close };
+    } else if (chartType === 'Heikin Ashi') {
+      // For HA, we can just do a fast approximation of the local tick without rewriting the whole array
+      const prevHA = data.length > 1 && haDataRef.current && haDataRef.current.length >= data.length - 1 ? haDataRef.current[data.length - 2] : null;
+      const haClose = (base.open + base.high + base.low + currentPrice) / 4;
+      const haOpen = prevHA ? (prevHA.open + prevHA.close) / 2 : (base.open + currentPrice) / 2;
+      const haHigh = Math.max(base.high, haOpen, haClose);
+      const haLow = Math.min(base.low, haOpen, haClose);
+      formatted = { time: base.time, open: haOpen, high: haHigh, low: haLow, close: haClose };
+    }
+
+    try {
+      seriesRef.current.update(formatted);
+      latestChartCandleRef.current = formatted;
+      updateLatestCoordsRef.current(); // Make sure labels and markers track it smoothly
+    } catch (e) {
+      console.warn('Failed to smooth update latest tick', e);
+    }
+  }, [currentPrice, chartType, data]);
 
   // Local real-time timer update for the bubble
   useEffect(() => {

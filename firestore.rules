@@ -22,7 +22,8 @@ service cloud.firestore {
 
     function isAdmin() {
       return isSignedIn() && (
-        request.auth.token.email == 'hasan23@gmail.com' ||
+        request.auth.token.email == 'hamproo123@gmail.com' ||
+        request.auth.token.email == 'tasmeaykhatun565@gmail.com' ||
         // Optional: check for admin role in users collection could be added here
         // But for now, hardcoded master admin is safer for initial setup
         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'
@@ -68,7 +69,7 @@ service cloud.firestore {
           // Action: Update basic profile
           (incoming().diff(existing()).affectedKeys().hasAny(['name', 'country', 'currency', 'currencySymbol', 'currencyName', 'currencyFlag'])) ||
           // Action: Balance & Trading updates
-          (incoming().diff(existing()).affectedKeys().hasAny(['balance', 'demoBalance', 'bonusBalance', 'extraAccounts', 'turnover_achieved', 'turnover_required', 'kycStatus', 'lastSeen', 'lastTransferAt', 'sentToUids', 'receivedTransferTotal']))
+          (incoming().diff(existing()).affectedKeys().hasAny(['balance', 'demoBalance', 'bonus_balance', 'extraAccounts', 'turnover_achieved', 'turnover_required', 'kycStatus', 'lastSeen', 'lastTransferAt', 'sentToUids', 'receivedTransferTotal']))
         )
       )) || isAdmin();
       

@@ -488,7 +488,7 @@ export default function Auth({ onSuccess }: AuthProps) {
                   <div className="absolute inset-0 flex items-center flex-1 w-2/3 mx-auto">
                     <div className="w-full border-t border-border-color"></div>
                   </div>
-                  <span className="relative px-4 text-[13px] text-text-secondary/40 bg-[#151515]">{t('auth.sign_up_with')}</span>
+                  <span className="relative px-4 text-[13px] text-text-secondary/40 bg-[#151515]"></span>
                </div>
 
                <div className="flex justify-center gap-4 mt-6">
