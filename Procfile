@@ -1,1 +1,1 @@
-web: PORT=3000 tsx server.ts
+web: node dist/server.cjs

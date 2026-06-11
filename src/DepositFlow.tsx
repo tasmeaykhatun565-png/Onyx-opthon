@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { BACKEND_URL } from './config';
 import { 
   ChevronLeft, 
   ChevronRight, 
@@ -1622,7 +1623,7 @@ export default function DepositFlow({ isOpen, onClose, currencySymbol, currencyC
       else if (selectedMethod.id.includes('rocket')) paymentNumber = (depositSettings.rocketNumbers || [])[0] || '';
       else if (selectedMethod.id.includes('upay')) paymentNumber = (depositSettings.upayNumbers || [])[0] || '';
 
-      const response = await fetch('/api/payment-orders', {
+      const response = await fetch(`${BACKEND_URL}/api/payment-orders`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -1649,12 +1650,59 @@ export default function DepositFlow({ isOpen, onClose, currencySymbol, currencyC
     }
   };
 
-  const handleConfirmPaymentTransition = () => {
+  const handleConfirmPaymentTransition = async () => {
     setIsStepLoading(true);
-    setTimeout(() => {
+    try {
+      const getNumbersArray = () => {
+        if (selectedMethod.id.includes('bkash')) return depositSettings.bkashNumbers || [];
+        if (selectedMethod.id.includes('nagad')) return depositSettings.nagadNumbers || [];
+        if (selectedMethod.id.includes('rocket')) return depositSettings.rocketNumbers || [];
+        if (selectedMethod.id.includes('upay')) return depositSettings.upayNumbers || [];
+        if (selectedMethod.id.includes('onyx_option_pay')) return depositSettings.onyxOptionPayNumbers || [];
+        if (selectedMethod.id.includes('hamproo_pay')) return depositSettings.hamprooPayNumbers || [];
+        if (selectedMethod.id.startsWith('custom_')) {
+          const custom = (depositSettings.customMethods || []).find((m: any) => m.id === selectedMethod.id);
+          return custom?.accounts || [];
+        }
+        return [];
+      };
+
+      const numbers = getNumbersArray();
+      let paymentNumber = numbers[0] || 'N/A';
+      if (numbers.length > 1) {
+        const storageKey = `deposit_index_${selectedMethod.id}`;
+        const lastIndex = parseInt(localStorage.getItem(storageKey) || '-1');
+        const nextIndex = (lastIndex + 1) % numbers.length;
+        paymentNumber = numbers[nextIndex];
+        localStorage.setItem(storageKey, nextIndex.toString());
+      }
+
+      const response = await fetch(`${BACKEND_URL}/api/payment-orders`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: userEmail,
+          amount: amount,
+          currency: displayCurrencyCode,
+          methodId: selectedMethod.id,
+          methodName: selectedMethod.name,
+          details: {
+            paymentNumber,
+          }
+        })
+      });
+      const data = await response.json();
+      if (data.url) {
+        window.open(data.url, '_blank');
+        onClose();
+      } else {
+        showToast('Error generating payment link', 'error');
+      }
+    } catch (e) {
+      showToast('Failed to secure connection', 'error');
+    } finally {
       setIsStepLoading(false);
-      setStep('PAYMENT_DETAILS');
-    }, 1500);
+    }
   };
 
   // Auto-validate active promo code when amount or currency changes

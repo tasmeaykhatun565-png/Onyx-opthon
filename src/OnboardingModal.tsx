@@ -9,7 +9,7 @@ interface OnboardingModalProps {
 
 const STEPS = [
   {
-    title: 'Welcome to Onyx Elite',
+    title: 'Welcome to Onyx Option',
     description: 'Your professional binary options trading platform. Let\'s get you started with a quick tour of the core features.',
     icon: <div className="w-16 h-16 rounded-full flex items-center justify-center overflow-hidden mb-4 shadow-xl border-2 border-border-color">
             <img src="https://i.imghippo.com/files/Gtw3911Dmk.jpg" alt="Logo" className="w-full h-full object-cover" referrerPolicy="no-referrer" />

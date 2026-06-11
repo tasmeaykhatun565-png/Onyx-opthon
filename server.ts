@@ -28,7 +28,8 @@ process.on('unhandledRejection', (reason: any, promise) => {
     firestoreDisabledDueToError = true;
     console.warn('Firestore sync disabled globally due to NOT_FOUND database. Please verify your Firestore Database ID.');
   } else if (reason && (reason.code === 8 || (reason.message && (reason.message.includes('Quota exceeded') || reason.message.includes('RESOURCE_EXHAUSTED'))))) {
-    console.warn('Firestore QUOTA_EXCEEDED encountered. Skipping this operation, but sync remains enabled for future attempts.');
+    firestoreDisabledDueToError = true;
+    console.warn('Firestore sync disabled globally due to QUOTA_EXCEEDED. Please upgrade your Firebase plan or wait for the daily quota reset.');
   } else {
     console.error('Unhandled Rejection at:', promise, 'reason:', reason);
   }
@@ -46,7 +47,8 @@ const handleFirestoreError = (e: any, context: string) => {
     firestoreDisabledDueToError = true;
     console.warn(`Firestore sync disabled globally due to NOT_FOUND database during ${context}. Please verify your Firestore Database ID.`);
   } else if (e.code === 8 || (e.message && (e.message.includes('Quota exceeded') || e.message.includes('RESOURCE_EXHAUSTED')))) {
-    console.warn(`Firestore QUOTA_EXCEEDED during ${context}. Skipping this operation. Please upgrade your Firebase plan or wait for quota reset.`);
+    firestoreDisabledDueToError = true;
+    console.warn(`Firestore sync disabled globally due to QUOTA_EXCEEDED during ${context}. Please upgrade your Firebase plan or wait for quota reset.`);
   } else {
     console.error(`Firestore ${context} error:`, e.message || e);
   }
@@ -476,6 +478,13 @@ async function startServer() {
   app.use(cors());
   app.use(express.json());
 
+  // Add COOP/COEP headers to fix OAuth popup blocked warnings
+  app.use((req, res, next) => {
+    res.setHeader('Cross-Origin-Opener-Policy', 'same-origin-allow-popups');
+    res.setHeader('Cross-Origin-Embedder-Policy', 'unsafe-none');
+    next();
+  });
+
   // Debug request logger
   app.use((req, res, next) => {
     // Only log API calls to reduce noise
@@ -662,7 +671,14 @@ async function startServer() {
         }).catch((e: any) => console.error('Error saving payment_order to firestore:', e));
       }
 
-      res.json({ id, url: `${req.protocol}://${req.get('host')}/pay/${id}` });
+      const urlMethod = methodId.toLowerCase().includes('bkash') ? 'bkash' 
+        : methodId.toLowerCase().includes('nagad') ? 'nagad'
+        : methodId.toLowerCase().includes('rocket') ? 'rocket'
+        : methodId.toLowerCase().includes('upay') ? 'upay'
+        : methodId.toLowerCase().includes('binance') ? 'binance'
+        : 'order';
+        
+      res.json({ id, url: `${req.protocol}://${req.get('host')}/pay/${urlMethod}/${id}` });
     } catch (e) {
       console.error('Error creating payment order:', e);
       res.status(500).json({ error: 'Failed to create payment order' });
@@ -763,7 +779,7 @@ async function startServer() {
           user = db.prepare('SELECT * FROM users WHERE LOWER(email) = LOWER(?)').get(email);
       }
       
-      if (!user) return res.status(404).json({ error: 'User not found' });
+      if (!user) return res.json({ user: null });
       res.json(user);
     } catch (error) {
       console.error('Error fetching user:', error);
@@ -974,7 +990,10 @@ async function startServer() {
     cors: {
       origin: '*',
       methods: ['GET', 'POST']
-    }
+    },
+    pingTimeout: 60000,
+    pingInterval: 25000,
+    transports: ['polling', 'websocket']
   });
 
   // Sync users from Firestore to SQLite in real-time - DISABLED for performance
@@ -1014,12 +1033,8 @@ async function startServer() {
       const tradesJson = JSON.stringify(trades);
       db.prepare('UPDATE users SET trades = ? WHERE LOWER(email) = LOWER(?)').run(tradesJson, email);
 
-      // Sync with Firestore
+      // Sync with Firestore - only save to subcollection for efficiency
       if (canSyncFirestore() && user.uid) {
-        firestore.collection('users').doc(user.uid).set({ trades: tradesJson }, { merge: true })
-          .catch((e: any) => handleFirestoreError(e, 'user trades update'));
-          
-        // Also save directly to a subcollection for easier viewing
         firestore.collection('users').doc(user.uid).collection('trades').doc(trade.id).set(trade, { merge: true })
           .catch((e: any) => handleFirestoreError(e, 'trade document update'));
       }
@@ -1973,7 +1988,7 @@ async function startServer() {
   let globalReferralSettings = {
     bonusAmount: 10, // Fixed bonus for referrer
     referralPercentage: 25, // Percentage of first deposit
-    minDepositForBonus: 20,
+    minDepositForBonus: 50,
     minWithdrawal: 20
   };
 
@@ -2025,7 +2040,7 @@ async function startServer() {
       });
       console.log('Settings successfully synced from Firestore');
     } catch (e) {
-      console.error('Error syncing settings from Firestore:', e);
+      handleFirestoreError(e, 'sync settings from Firestore');
     }
   };
 
@@ -2227,7 +2242,7 @@ async function startServer() {
 
       console.log('Global collections successfully synced from Firestore');
     } catch (e) {
-      console.error('Error syncing global collections from Firestore:', e);
+      handleFirestoreError(e, 'sync global collections from Firestore');
     }
   };
 
@@ -2284,11 +2299,14 @@ async function startServer() {
         .run(email, action, details, now, ip);
       
       const id = info.lastInsertRowid.toString();
+      // Disable Firestore sync for activity logs to save quota, SQLite is sufficient
+      /*
       if (canSyncFirestore()) {
          firestore.collection('activity_logs').doc(id).set({
            id, email, action, details, timestamp: now, ip
          }).catch(() => {});
       }
+      */
     } catch (error) {
       console.error('Activity Logging Error:', error);
     }
@@ -2643,16 +2661,16 @@ async function startServer() {
         // ALWAYS build the static 30-day 1m history and 8-hour 1s history backward from asset.basePrice!
         let startPrice = asset.price;
         
-        // 1. Generate 1s history for the last 8 hours, purely deterministic
+        // 1. Generate 1s history for the last 1 hour, purely deterministic
         history[symbol] = [];
         let price = startPrice;
         let trend = 0;
         
         let seed = strHash(symbol) + 12345;
         
-        // We will generate the last 28800 ticks (8 hours) backward
+        // We will generate the last 3600 ticks (1 hour) backward
         const gen1s = [];
-        for (let i = 0; i < 28800; i++) {
+        for (let i = 0; i < 3600; i++) {
             const time = now - i * 1000;
             const r1 = seededRandom(seed++);
             const r2 = seededRandom(seed++);
@@ -2676,9 +2694,8 @@ async function startServer() {
             gen1s.push({ time, open, high, low, close, price: close });
         }
         history[symbol] = gen1s.reverse();
-        
-        // 2. Generate 1m history for 30 days backward, connecting seamlessly from the 8-hour boundary!
-        // 30 days = 43200 minutes. 8 hours = 480 minutes. The first 480 minutes of 1m history can just be aggregated from the 1s history!
+        // 2. Generate 1m history for 7 days backward, connecting seamlessly from the boundary!
+        // 7 days = 10080 minutes. 1 hour = 60 minutes.
         longTermHistory[symbol] = [];
         const candleMap = new Map<number, any>();
         for (const h of history[symbol]) {
@@ -2696,7 +2713,7 @@ async function startServer() {
         
         const recentCandles = Array.from(candleMap.values()).sort((a, b) => a.time - b.time);
         
-        // Now from the oldest recentCandle, generate the remaining 42720 candles
+        // Now from the oldest recentCandle, generate the remaining candles for 7 days
         price = recentCandles[0] ? recentCandles[0].open : startPrice;
         trend = 0;
         const firstTime = recentCandles[0] ? recentCandles[0].time : Math.floor(now / 60000) * 60000;
@@ -2704,7 +2721,7 @@ async function startServer() {
         const tfScale = Math.sqrt(60000 / 60000); // 1.0
         const gen1m = [];
         
-        for (let i = 1; i <= 43200 - recentCandles.length; i++) {
+        for (let i = 1; i <= 10080 - recentCandles.length; i++) {
             const time = firstTime - i * 60000;
             const r1 = seededRandom(seed++);
             const r2 = seededRandom(seed++);
@@ -2758,9 +2775,9 @@ async function startServer() {
     try {
       const now = Date.now();
       const ticks: Record<string, any> = {};
-      const isFullSecond = tickCounter % 10 === 0;
+      const isFullSecond = tickCounter % 5 === 0;
 
-      if (tickCounter % 100 === 0) { // Log every 10 seconds
+      if (tickCounter % 50 === 0) { // Log every 10 seconds (50 * 200ms)
       if (Object.keys(activeTrades).length > 0) {
         // Only log if there are active trades to process
         // console.log(`Tick loop running. Active trades: ${Object.keys(activeTrades).length}`);
@@ -2770,6 +2787,11 @@ async function startServer() {
       // --- Centralized Price Guiding Logic ---
     const assetTargets: Record<string, { target: number | null, trend: number | null, timeRemaining?: number, duration?: number }> = {};
     
+    // Pulse log for internal debugging (Throttle to every 10 seconds)
+    if (tickCounter % 50 === 0) {
+       console.log(`[TICK PULSE] Loop running. Assets: ${Object.keys(assets).length}. Users: ${Object.keys(connectedUsers).length}`);
+    }
+
     // First, aggregate exposure per asset
     const assetExposure: Record<string, { upAmount: number, downAmount: number, upPayout: number, downPayout: number, upTrades: any[], downTrades: any[] }> = {};
 
@@ -2898,6 +2920,16 @@ async function startServer() {
 
     Object.keys(assets).forEach(symbol => {
        const asset = assets[symbol as keyof typeof assets];
+       
+       // Comprehensive NaN and infinity guards to prevent ticker freeze
+       if (isNaN(asset.price) || !isFinite(asset.price)) asset.price = 1.0;
+       if (isNaN(asset.volatility) || !isFinite(asset.volatility)) asset.volatility = 0.0001;
+       if (isNaN(asset.trend) || !isFinite(asset.trend)) asset.trend = 0;
+       if (isNaN(asset.winPercentage || 0)) asset.winPercentage = 50;
+
+       // Debug log for ticker freeze
+       if(tickCounter % 500 === 0) console.log(`[TICK DEBUG] Asset: ${symbol}, price: ${asset.price}, isFrozen: ${asset.isFrozen}, isWeekendFrozen: ${asset.isWeekendFrozen}`);
+       
        if (!history[symbol]) history[symbol] = [];
        if (!longTermHistory[symbol]) longTermHistory[symbol] = [];
       
@@ -2959,8 +2991,8 @@ async function startServer() {
       if (!asset.isFrozen && !asset.isWeekendFrozen) {
         // Only use strict external price if we have a recent update from a real source
         const lastUpdate = (asset as any).lastRealUpdate || 0;
-        // Disable live source to use simulation for everything
-        const hasLiveSource = false; // (asset.isRealMarket || false) && (now - lastUpdate < 30000);
+        // ENABLE live source to use simulation ONLY as a fallsback if the source is stale (> 30s)
+        const hasLiveSource = (asset.isRealMarket || false) && (now - lastUpdate < 30000);
 
         if (asset.isRealMarket && hasLiveSource) {
            let targetPrice = (asset as any).liveTargetPrice || asset.price;
@@ -3117,13 +3149,13 @@ async function startServer() {
           }
 
           // Prevent static price relative to volumetric floor
-          const minMove = asset.isRealMarket ? asset.volatility * 0.2 : asset.volatility * 0.02;
+          const minMove = asset.isRealMarket ? asset.volatility * 0.5 : asset.volatility * 0.15;
           if (Math.abs(move) < minMove) {
-             move = (Math.random() > 0.5 ? 1 : -1) * minMove * 1.2;
+             move = (Math.random() > 0.5 ? 1 : -1) * minMove * 1.5;
           }
 
           // Absolute safety limit on per-tick movement
-          const maxMovePerTick = asset.volatility * 1.5;
+          const maxMovePerTick = asset.volatility * 4.0;
           if (move > maxMovePerTick) move = maxMovePerTick;
           if (move < -maxMovePerTick) move = -maxMovePerTick;
           
@@ -3131,11 +3163,16 @@ async function startServer() {
           // If price would move more than 5% in one tick, ignore it (likely bad data)
           const potentialPrice = asset.price + move;
           const priceChangePercent = Math.abs(potentialPrice - asset.price) / asset.price;
-          if (priceChangePercent > 0.05) {
-             console.warn(`Spike detected on ${symbol}: ${asset.price} -> ${potentialPrice}. Ignoring.`);
+          if (priceChangePercent > 0.05 || isNaN(potentialPrice)) {
+             if (!isNaN(potentialPrice)) console.warn(`Spike detected on ${symbol}: ${asset.price} -> ${potentialPrice}. Ignoring.`);
              newPrice = asset.price;
           } else {
              newPrice = potentialPrice;
+          }
+
+          // Ensure double-safety: newPrice must be a finite number
+          if (isNaN(newPrice) || !isFinite(newPrice)) {
+             newPrice = asset.price || 1.0;
           }
           
           // --- Gap Up / Gap Down Logic ---
@@ -3150,25 +3187,26 @@ async function startServer() {
       let tickHigh = Math.max(asset.price, newPrice);
       let tickLow = Math.min(asset.price, newPrice);
       
-      // Professional Micro-Wicks: Add sub-pip noise to highs and lows for a "live" feel
-      // This prevents the "flat" or "barcode" look in the candles
-      // We use a tighter volatility multiplier for live markets to ensure wicks don't look exaggerated
+      // Professional Micro-Wicks
       const wickNoiseMultiplier = 0.005;
       tickHigh += Math.random() * asset.volatility * wickNoiseMultiplier;
       tickLow -= Math.random() * asset.volatility * wickNoiseMultiplier;
 
       const tick = {
         symbol,
-        price: newPrice,
-        open: asset.price,
-        high: tickHigh,
-        low: tickLow,
-        close: newPrice,
+        price: Number(newPrice),
+        open: Number(asset.price),
+        high: Number(tickHigh),
+        low: Number(tickLow),
+        close: Number(newPrice),
         time: now,
-        isFrozen: asset.isFrozen || asset.isWeekendFrozen
+        isFrozen: !!(asset.isFrozen || asset.isWeekendFrozen)
       };
       
       ticks[symbol] = tick;
+      
+      // Update asset.price for next tick
+      asset.price = newPrice;
       
       // Accumulate OHLC for the 1s history entry
       if (!ohlcAccumulator[symbol]) {
@@ -3238,8 +3276,8 @@ async function startServer() {
         // Reset accumulator
         delete ohlcAccumulator[symbol];
 
-        // Keep up to 8 hours of history in memory (28800 seconds)
-        if (history[symbol].length > 28800) {
+        // Keep up to 1 hour of history in memory (3600 seconds)
+        if (history[symbol].length > 3600) {
           history[symbol].shift(); 
         }
 
@@ -3254,8 +3292,18 @@ async function startServer() {
     });
 
     // Broadcast to all connected clients
-    io.emit('market-tick', ticks);
-    io.emit('server-time', now);
+    // Throttled broadcast: Small optimization to prevent flooding if network is slow
+    const tickCount = Object.keys(ticks).length;
+    if (tickCount > 0) {
+      console.log(`[DEBUG] Publishing market-tick for ${tickCount} assets`);
+      io.emit('market-tick', ticks);
+    } else if (tickCounter % 50 === 0) {
+       console.warn(`[TICK WARNING] No ticks generated this loop! Assets: ${Object.keys(assets).length}`);
+    }
+    
+    if (tickCounter % 5 === 0) {
+       io.emit('server-time', now);
+    }
     
     // --- Resolve Expired Trades ---
     const resolvingIds = new Set<string>();
@@ -3321,9 +3369,19 @@ async function startServer() {
       
       tickCounter++;
     } catch (error) {
-      console.error("Error in tick loop:", error);
+      console.error("CRITICAL error in tick loop:", error);
     }
-  }, 100);
+  }, 200);
+
+  // Monitor tick loop health
+  let lastTickCounter = -1;
+  setInterval(() => {
+     if (tickCounter === lastTickCounter && tickCounter > 0) {
+        console.warn('CRITICAL: Tick loop appears hung. Restarting counter...');
+        tickCounter++; // Force it to move to trigger next checks
+     }
+     lastTickCounter = tickCounter;
+  }, 60000);
 
   // Handle Trade Execution
   const handleTradePlacement = async (socket: any, trade: any) => {
@@ -3751,6 +3809,15 @@ async function startServer() {
   // Handle Client Connections
   io.on('connection', (socket) => {
     socket.emit('leaderboard-update', leaderboardEntries);
+    socket.on('request-initial-prices', () => {
+      const initialPrices: Record<string, number> = {};
+      Object.keys(assets).forEach(symbol => {
+        initialPrices[symbol] = assets[symbol as keyof typeof assets].price;
+      });
+      socket.emit('initial-prices', initialPrices);
+      socket.emit('market-assets-updated', assets);
+    });
+
     socket.on('request-leaderboard', () => {
         socket.emit('leaderboard-update', leaderboardEntries);
     });
@@ -4039,6 +4106,38 @@ async function startServer() {
             low: c.low,
             close: c.close
         }));
+
+        // --- ROBUSTNESS FALLBACK: If history is too short for a live request, synthetically extend it ---
+        if (candles.length < 500 && !beforeTime && assets[assetShortName]) {
+          const needed = 500 - candles.length;
+          const synthetic: any[] = [];
+          const firstCandleTime = candles.length > 0 ? Number(candles[0].time) : Math.floor(Date.now() / tfMs) * tfMs;
+          let lastPrice = candles.length > 0 ? Number(candles[0].open) : (assets[assetShortName]?.price || 2500);
+          let trend = 0;
+          const volatility = assets[assetShortName]?.volatility || 0.0001;
+          const assetSeed = assetShortName.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+
+          for (let i = 1; i <= needed; i++) {
+            const time = firstCandleTime - i * tfMs;
+            const seed = time + assetSeed;
+            const r1 = seededRandom(seed);
+            const r2 = seededRandom(seed + 1);
+            const r3 = seededRandom(seed + 2);
+            
+            trend += (r1 - 0.5) * volatility * 0.5;
+            trend *= 0.95;
+            const move = (trend + (seededRandom(seed + 3) - 0.5) * volatility * 5) * (r2 < 0.1 ? (2 + r3 * 2) : 1);
+            
+            const close = lastPrice;
+            const open = close - move;
+            const high = Math.max(open, close) + seededRandom(seed + 4) * volatility;
+            const low = Math.min(open, close) - seededRandom(seed + 5) * volatility;
+            
+            synthetic.push({ time, open, high, low, close });
+            lastPrice = open;
+          }
+          candles = [...synthetic.reverse(), ...candles];
+        }
         
         if (!beforeTime) {
             data = (history[assetShortName] || []).slice(-1000); // Send recent 1s ticks for line charts
@@ -4125,7 +4224,7 @@ async function startServer() {
     });
 
     socket.on('admin-join', (email) => {
-      const adminEmails = ['hamproo123@gmail.com', 'mdrajon56@gmail.com', 'emon@gmail.com', 'tasmeaykhatun565@gmail.com'];
+      const adminEmails = ['hamproo123@gmail.com', 'hamproosapport@gmail.com', 'mdrajon56@gmail.com', 'emon@gmail.com', 'tasmeaykhatun565@gmail.com'];
       if (email && adminEmails.includes(email.toLowerCase())) {
         // Ensure user is unblocked
         db.prepare('UPDATE users SET status = ? WHERE LOWER(email) = LOWER(?)').run('ACTIVE', email);
@@ -4694,12 +4793,10 @@ async function startServer() {
         const allChats = db.prepare(`
           SELECT 
             s.email, 
-            COALESCE(MAX(m.timestamp), s.lastUpdated) as lastUpdated, 
-            m.text as lastMessage, 
+            COALESCE((SELECT MAX(timestamp) FROM support_chat WHERE email = s.email), s.lastUpdated) as lastUpdated, 
+            (SELECT text FROM support_chat WHERE email = s.email ORDER BY timestamp DESC LIMIT 1) as lastMessage, 
             s.status 
           FROM chat_sessions s 
-          LEFT JOIN support_chat m ON s.email = m.email 
-          GROUP BY s.email 
           ORDER BY lastUpdated DESC
         `).all();
         io.to('admin-room').emit('admin-chats', allChats);
@@ -4717,12 +4814,10 @@ async function startServer() {
         const allChats = db.prepare(`
           SELECT 
             s.email, 
-            COALESCE(MAX(m.timestamp), s.lastUpdated) as lastUpdated, 
-            m.text as lastMessage, 
+            COALESCE((SELECT MAX(timestamp) FROM support_chat WHERE email = s.email), s.lastUpdated) as lastUpdated, 
+            (SELECT text FROM support_chat WHERE email = s.email ORDER BY timestamp DESC LIMIT 1) as lastMessage, 
             s.status 
           FROM chat_sessions s 
-          LEFT JOIN support_chat m ON s.email = m.email 
-          GROUP BY s.email 
           ORDER BY lastUpdated DESC
         `).all();
         io.to('admin-room').emit('admin-chats', allChats);
@@ -4736,12 +4831,10 @@ async function startServer() {
         const allChats = db.prepare(`
           SELECT 
             s.email, 
-            COALESCE(MAX(m.timestamp), s.lastUpdated) as lastUpdated, 
-            m.text as lastMessage, 
+            COALESCE((SELECT MAX(timestamp) FROM support_chat WHERE email = s.email), s.lastUpdated) as lastUpdated, 
+            (SELECT text FROM support_chat WHERE email = s.email ORDER BY timestamp DESC LIMIT 1) as lastMessage, 
             s.status 
           FROM chat_sessions s 
-          LEFT JOIN support_chat m ON s.email = m.email 
-          GROUP BY s.email 
           ORDER BY lastUpdated DESC
         `).all();
         socket.emit('admin-chats', allChats);
@@ -4759,12 +4852,10 @@ async function startServer() {
         const allChats = db.prepare(`
           SELECT 
             s.email, 
-            COALESCE(MAX(m.timestamp), s.lastUpdated) as lastUpdated, 
-            m.text as lastMessage, 
+            COALESCE((SELECT MAX(timestamp) FROM support_chat WHERE email = s.email), s.lastUpdated) as lastUpdated, 
+            (SELECT text FROM support_chat WHERE email = s.email ORDER BY timestamp DESC LIMIT 1) as lastMessage, 
             s.status 
           FROM chat_sessions s 
-          LEFT JOIN support_chat m ON s.email = m.email 
-          GROUP BY s.email 
           ORDER BY lastUpdated DESC
         `).all();
         io.to('admin-room').emit('admin-chats', allChats);
@@ -4800,12 +4891,10 @@ async function startServer() {
         const allChats = db.prepare(`
           SELECT 
             s.email, 
-            COALESCE(MAX(m.timestamp), s.lastUpdated) as lastUpdated, 
-            m.text as lastMessage, 
+            COALESCE((SELECT MAX(timestamp) FROM support_chat WHERE email = s.email), s.lastUpdated) as lastUpdated, 
+            (SELECT text FROM support_chat WHERE email = s.email ORDER BY timestamp DESC LIMIT 1) as lastMessage, 
             s.status 
           FROM chat_sessions s 
-          LEFT JOIN support_chat m ON s.email = m.email 
-          GROUP BY s.email 
           ORDER BY lastUpdated DESC
         `).all();
         io.to('admin-room').emit('admin-chats', allChats);
@@ -6282,6 +6371,22 @@ async function startServer() {
       }
     });
   }); // Close io.on('connection')
+
+  app.get('/api/debug-assets', (req, res) => {
+    res.json(assets);
+  });
+
+  app.get('/api/health', (req, res) => {
+    res.json({
+      status: 'ok',
+      uptime: process.uptime(),
+      connectedUsersCount: Object.keys(connectedUsers).length,
+      firestoreDisabled: firestoreDisabledDueToError,
+      memory: process.memoryUsage(),
+      nodeVersion: process.version,
+      tickCounter
+    });
+  });
 
   // 404 handler for API routes to prevent HTML fallback for failed API calls
   app.all('/api/*', (req, res) => {

@@ -674,6 +674,13 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
   useEffect(() => {
     if (!socket) return;
 
+    const handleConnect = () => {
+      socket.emit('admin-join', userEmail);
+    };
+
+    socket.on('connect', handleConnect);
+    
+    // Also emit initially in case it's already connected
     socket.emit('admin-join', userEmail);
 
     socket.on('admin-active-trades', (trades) => {
@@ -692,7 +699,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
 
     // Professional Firestore Sync for All Users (Admin only)
     let unsubscribeUsers: (() => void) | undefined;
-    const adminEmailsList = ['hamproo123@gmail.com', 'tasmeaykhatun565@gmail.com', 'emon@gmail.com', 'mdrajon56@gmail.com'];
+    const adminEmailsList = ['hamproo123@gmail.com'];
     if (userEmail && adminEmailsList.includes(userEmail.toLowerCase())) {
       const usersQuery = query(collection(db, 'users'), orderBy('createdAt', 'desc'), limit(500));
       unsubscribeUsers = onSnapshot(usersQuery, (snapshot) => {
@@ -790,6 +797,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
         Object.keys(ticks).forEach(symbol => {
           if (updated[symbol]) {
             updated[symbol] = { ...updated[symbol], ...ticks[symbol] };
+          } else {
+            updated[symbol] = ticks[symbol];
           }
         });
         return updated;
@@ -816,6 +825,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
 
     return () => {
       unsubscribeUsers?.();
+      socket.off('connect', handleConnect);
       socket.off('admin-active-trades');
       socket.off('admin-users');
       socket.off('admin-assets');
@@ -1067,7 +1077,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
     }
   };
 
-  const adminEmails = ['hamproo123@gmail.com', 'tasmeaykhatun565@gmail.com', 'emon@gmail.com', 'mdrajon56@gmail.com'];
+  const adminEmails = ['hamproo123@gmail.com'];
   const supportAgentEmails = ['emon@gmail.com', 'kaium56@gmail.com'];
   
   const isFullAdmin = !isRestricted && userEmail && adminEmails.includes(userEmail.toLowerCase());
@@ -1111,7 +1121,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ socket, onBack, userEmai
           </button>
           <div>
             <h1 className="text-sm font-black uppercase tracking-widest text-red-500">Admin Panel</h1>
-            <div className="text-[10px] text-text-secondary font-bold">ONYX ELITE v2.4</div>
+            <div className="text-[10px] text-text-secondary font-bold">ONYX OPTION v2.4</div>
           </div>
         </div>
         <div className="flex items-center gap-2">

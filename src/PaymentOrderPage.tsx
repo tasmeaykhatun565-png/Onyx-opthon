@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { BACKEND_URL } from './config';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
   ChevronLeft, Clock, Copy, Check, AlertCircle, 
@@ -11,7 +12,10 @@ import { cn } from './utils';
 import { useToast } from './Toast';
 
 export default function PaymentOrderPage() {
-  const { id } = useParams<{ id: string }>();
+  const { id: paramId } = useParams<{ id: string }>();
+  // Robust ID extraction for both /pay/:id and /pay/:method/:id formats
+  const id = paramId || window.location.pathname.split('/').pop();
+  
   const { t } = useTranslation();
   const { showToast } = useToast();
   const navigate = useNavigate();
@@ -27,10 +31,112 @@ export default function PaymentOrderPage() {
   const [submitted, setSubmitted] = useState(false);
   const [isCopied, setIsCopied] = useState(false);
 
+  const METHOD_THEMES: Record<string, {
+    primary: string;
+    secondary: string;
+    accent: string;
+    logo: string;
+    gatewayName: string;
+    textColor: string;
+    bgGradient: string;
+  }> = {
+    'bkash': {
+      primary: '#e2136e',
+      secondary: '#ffffff',
+      accent: '#e2136e',
+      logo: 'https://raw.githubusercontent.com/t-asif/trading-assets/main/bkash.png',
+      gatewayName: 'bKash Checkout',
+      textColor: 'text-[#e2136e]',
+      bgGradient: 'from-[#e2136e] to-[#c10e5d]'
+    },
+    'nagad': {
+      primary: '#f7941d',
+      secondary: '#ffffff',
+      accent: '#f7941d',
+      logo: 'https://raw.githubusercontent.com/t-asif/trading-assets/main/nagad.png',
+      gatewayName: 'Nagad Pay',
+      textColor: 'text-[#f7941d]',
+      bgGradient: 'from-[#f7941d] to-[#e67e22]'
+    },
+    'rocket': {
+      primary: '#8c3494',
+      secondary: '#ffffff',
+      accent: '#8c3494',
+      logo: 'https://raw.githubusercontent.com/t-asif/trading-assets/main/rocket.png',
+      gatewayName: 'Rocket Pay',
+      textColor: 'text-[#8c3494]',
+      bgGradient: 'from-[#8c3494] to-[#702976]'
+    },
+    'upay': {
+      primary: '#ffd700',
+      secondary: '#000000',
+      accent: '#ffd700',
+      logo: 'https://raw.githubusercontent.com/t-asif/trading-assets/main/upay.png',
+      gatewayName: 'upay Checkout',
+      textColor: 'text-[#000000]',
+      bgGradient: 'from-[#ffd700] to-[#e6c200]'
+    },
+    'binance': {
+      primary: '#F3BA2F',
+      secondary: '#ffffff',
+      accent: '#F3BA2F',
+      logo: 'https://raw.githubusercontent.com/t-asif/trading-assets/main/binance.png',
+      gatewayName: 'Binance Pay',
+      textColor: 'text-[#F3BA2F]',
+      bgGradient: 'from-[#F3BA2F] to-[#d4a017]'
+    },
+    'stripe': {
+      primary: '#635bff',
+      secondary: '#ffffff',
+      accent: '#635bff',
+      logo: 'https://upload.wikimedia.org/wikipedia/commons/b/ba/Stripe_Logo%2C_revised_2016.svg',
+      gatewayName: 'Stripe Secure Checkout',
+      textColor: 'text-[#635bff]',
+      bgGradient: 'from-[#635bff] to-[#4b44cc]'
+    },
+    'crypto': {
+      primary: '#26A17B',
+      secondary: '#ffffff',
+      accent: '#26A17B',
+      logo: '',
+      gatewayName: 'Crypto Settlement',
+      textColor: 'text-[#26A17B]',
+      bgGradient: 'from-[#26A17B] to-[#1e7d5f]'
+    }
+  };
+
+  const getTheme = () => {
+    if (!order) return null;
+    const mid = order.methodId.toLowerCase();
+    for (const key in METHOD_THEMES) {
+      if (mid.includes(key)) return METHOD_THEMES[key];
+    }
+    if (mid.includes('usdt') || mid.includes('btc') || mid.includes('eth') || mid.includes('crypto')) return METHOD_THEMES['crypto'];
+    if (mid.includes('card') || mid.includes('visa') || mid.includes('mastercard')) return METHOD_THEMES['stripe'];
+    
+    return {
+      primary: '#2563eb',
+      secondary: '#ffffff',
+      accent: '#2563eb',
+      logo: '',
+      gatewayName: 'Secure Pay',
+      textColor: 'text-blue-500',
+      bgGradient: 'from-blue-600 to-blue-700'
+    };
+  };
+
+  const theme = getTheme();
+
   useEffect(() => {
     const fetchOrder = async () => {
+      if (!id || id === 'pay') {
+        setLoading(false);
+        setError('Invalid Payment ID');
+        return;
+      }
       try {
-        const response = await fetch(`/api/payment-orders/${id}`);
+        setLoading(true);
+        const response = await fetch(`${BACKEND_URL}/api/payment-orders/${id}`);
         if (!response.ok) throw new Error('Order not found');
         const data = await response.json();
         setOrder(data);
@@ -47,7 +153,7 @@ export default function PaymentOrderPage() {
       }
     };
 
-    if (id) fetchOrder();
+    fetchOrder();
   }, [id]);
 
   useEffect(() => {
@@ -94,7 +200,7 @@ export default function PaymentOrderPage() {
 
     setIsSubmitting(true);
     try {
-      const response = await fetch(`/api/payment-orders/${id}/submit`, {
+      const response = await fetch(`${BACKEND_URL}/api/payment-orders/${id}/submit`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ transactionId, screenshot })
@@ -161,20 +267,51 @@ export default function PaymentOrderPage() {
   const displayAmount = isBdt ? `৳${order.amount.toLocaleString()}` : `$${order.amount.toLocaleString()}`;
 
   return (
-    <div className="min-h-screen bg-[#0b0e14] text-white font-sans flex flex-col">
+    <div className={cn(
+      "min-h-screen font-sans flex flex-col",
+      theme?.primary === '#ffd700' || theme?.primary === '#F3BA2F' ? "bg-white text-black" : "bg-[#0b0e14] text-white"
+    )}>
+      {/* Mock Browser URL Bar - to simulate "Separate Domain" feel */}
+      <div className="bg-[#1a1c1e] border-b border-white/5 py-2 px-4 flex items-center gap-4 shrink-0 overflow-hidden">
+        <div className="flex gap-1.5">
+          <div className="w-3 h-3 rounded-full bg-[#ff5f57]" />
+          <div className="w-3 h-3 rounded-full bg-[#ffbd2e]" />
+          <div className="w-3 h-3 rounded-full bg-[#27c93f]" />
+        </div>
+        <div className="flex-1 max-w-xl mx-auto h-8 bg-black/40 rounded-lg flex items-center px-4 gap-3 border border-white/5">
+          <ShieldCheck size={14} className="text-emerald-500" />
+          <span className="text-[11px] font-medium text-gray-500 truncate select-none">
+            https://{theme?.gatewayName?.toLowerCase().replace(/\s+/g, '')}.gateway-onyx.com/pay/{id}
+          </span>
+        </div>
+      </div>
+
       {/* Top Header */}
-      <div className="bg-[#161a1e] p-6 flex items-center justify-between border-b border-white/5 sticky top-0 z-50">
+      <div className={cn(
+        "p-6 flex items-center justify-between border-b border-white/5 sticky top-0 z-50",
+        theme?.primary === '#ffd700' || theme?.primary === '#F3BA2F' ? "bg-yellow-500/5 border-yellow-500/10" : "bg-[#161a1e]"
+      )}>
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-500/20">
-            <Smartphone className="text-white" size={20} />
+          <div 
+            className="w-10 h-10 rounded-xl flex items-center justify-center shadow-lg"
+            style={{ backgroundColor: theme?.primary }}
+          >
+            {theme?.logo ? (
+              <img src={theme.logo} className="w-7 h-7 object-contain" />
+            ) : (
+              <ShieldCheck className="text-white" size={20} />
+            )}
           </div>
           <div>
-            <h1 className="text-lg font-bold leading-none">Secure Payment</h1>
+            <h1 className="text-lg font-bold leading-none">{theme?.gatewayName}</h1>
             <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-1">Order #{id}</p>
           </div>
         </div>
         <div className="flex flex-col items-end">
-           <div className="flex items-center gap-1.5 text-[#f3ba2f] font-mono text-xl font-bold">
+           <div 
+            className="flex items-center gap-1.5 font-mono text-xl font-bold"
+            style={{ color: theme?.primary }}
+           >
               <Clock size={16} />
               {formatTime(timeLeft)}
            </div>
@@ -184,7 +321,12 @@ export default function PaymentOrderPage() {
 
       <div className="flex-1 max-w-md mx-auto w-full p-6 space-y-6">
         {/* Amount Card */}
-        <div className="bg-gradient-to-br from-blue-600 to-blue-700 rounded-3xl p-8 text-center shadow-2xl relative overflow-hidden">
+        <div 
+          className={cn(
+            "rounded-3xl p-8 text-center shadow-2xl relative overflow-hidden bg-gradient-to-br",
+            theme?.bgGradient
+          )}
+        >
           <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-16 -mt-16 blur-2xl" />
           <p className="text-white/60 text-xs font-bold uppercase tracking-[0.2em] mb-2">Payment Amount</p>
           <h2 className="text-5xl font-black text-white tracking-tight">{displayAmount}</h2>
@@ -195,16 +337,17 @@ export default function PaymentOrderPage() {
         </div>
 
         {/* Payment Method Details */}
-        <div className="bg-[#161a1e] rounded-3xl p-6 border border-white/5 space-y-6 shadow-xl">
+        <div className={cn(
+          "rounded-3xl p-6 border shadow-xl space-y-6",
+          theme?.primary === '#ffd700' ? "bg-white border-yellow-500/20" : "bg-[#161a1e] border-white/5"
+        )}>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
                <div className="w-12 h-12 bg-white/5 rounded-2xl flex items-center justify-center border border-white/10">
-                  {order.methodId.includes('bkash') ? (
-                    <img src="https://raw.githubusercontent.com/t-asif/trading-assets/main/bkash.png" className="w-8 h-8 object-contain" />
-                  ) : order.methodId.includes('nagad') ? (
-                    <img src="https://raw.githubusercontent.com/t-asif/trading-assets/main/nagad.png" className="w-8 h-8 object-contain" />
+                  {theme?.logo ? (
+                    <img src={theme.logo} className="w-8 h-8 object-contain" />
                   ) : (
-                    <CreditCard className="text-blue-500" />
+                    <CreditCard className={theme?.textColor} />
                   )}
                </div>
                <div>
@@ -212,17 +355,22 @@ export default function PaymentOrderPage() {
                   <p className="text-xs text-gray-500">Official Merchant Account</p>
                </div>
             </div>
-            <div className="bg-green-500/10 text-green-500 px-3 py-1 rounded-full text-[10px] font-black uppercase">Active</div>
+            <div 
+              className="px-3 py-1 rounded-full text-[10px] font-black uppercase"
+              style={{ backgroundColor: `${theme?.primary}20`, color: theme?.primary }}
+            >
+              Active
+            </div>
           </div>
 
           <div className="space-y-4">
-             <div className="p-5 bg-black/30 rounded-2xl border border-white/5 relative group">
+             <div className="p-5 bg-black/5 rounded-2xl border border-white/5 relative group">
                 <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mb-1.5">Payment Number</p>
                 <div className="flex items-center justify-between">
                    <span className="text-xl font-mono font-bold tracking-wider">{order.details?.paymentNumber || '01712-345678'}</span>
                    <button 
                     onClick={() => copyToClipboard(order.details?.paymentNumber || '01712-345678')}
-                    className="w-10 h-10 bg-white/5 hover:bg-white/10 rounded-xl flex items-center justify-center transition active:scale-90"
+                    className="w-10 h-10 bg-black/5 hover:bg-black/10 rounded-xl flex items-center justify-center transition active:scale-90"
                    >
                      {isCopied ? <Check size={18} className="text-green-500" /> : <Copy size={18} className="text-gray-400" />}
                    </button>
@@ -230,8 +378,8 @@ export default function PaymentOrderPage() {
              </div>
 
              <div className="flex items-start gap-3 p-4 bg-yellow-500/5 rounded-2xl border border-yellow-500/10">
-                <AlertCircle className="text-yellow-500 shrink-0 mt-0.5" size={16} />
-                <p className="text-[11px] text-yellow-500/80 leading-relaxed font-medium">
+                <AlertCircle className="text-yellow-600 shrink-0 mt-0.5" size={16} />
+                <p className="text-[11px] text-yellow-700 leading-relaxed font-medium">
                   Please send exactly <span className="font-bold underline">{displayAmount}</span> BDT to the number above using <span className="font-bold">Cash Out</span>.
                 </p>
              </div>
@@ -242,14 +390,20 @@ export default function PaymentOrderPage() {
         <div className="space-y-4">
           <h4 className="text-xs font-bold text-gray-500 uppercase tracking-widest ml-1">Confirmation Details</h4>
           
-          <div className="bg-[#161a1e] rounded-3xl p-6 border border-white/5 space-y-6">
+          <div className={cn(
+            "rounded-3xl p-6 border shadow-xl space-y-6",
+            theme?.primary === '#ffd700' ? "bg-white border-yellow-500/20" : "bg-[#161a1e] border-white/5"
+          )}>
             <div className="space-y-2">
               <label className="text-sm font-bold text-gray-400 ml-1">Transaction ID / Hash</label>
               <div className="relative">
                 <input 
                   type="text"
                   placeholder="ex. BBSDA3GH23"
-                  className="w-full h-14 bg-black/30 border border-white/10 rounded-2xl px-5 text-lg font-mono focus:border-blue-500/50 transition outline-none"
+                  className={cn(
+                    "w-full h-14 border rounded-2xl px-5 text-lg font-mono transition outline-none",
+                    theme?.primary === '#ffd700' ? "bg-gray-50 border-gray-200 focus:border-yellow-500/50" : "bg-black/30 border-white/10 focus:border-blue-500/50"
+                  )}
                   value={transactionId}
                   onChange={(e) => setTransactionId(e.target.value)}
                 />
@@ -260,13 +414,16 @@ export default function PaymentOrderPage() {
               <label className="text-sm font-bold text-gray-400 ml-1">Payment Screenshot (Optional)</label>
               <div 
                 onClick={() => document.getElementById('screenshot-upload')?.click()}
-                className="w-full h-32 border-2 border-dashed border-white/10 rounded-2xl flex flex-col items-center justify-center gap-2 cursor-pointer hover:bg-white/5 transition group"
+                className={cn(
+                  "w-full h-32 border-2 border-dashed rounded-2xl flex flex-col items-center justify-center gap-2 cursor-pointer transition group",
+                  theme?.primary === '#ffd700' ? "border-gray-200 hover:bg-gray-50" : "border-white/10 hover:bg-white/5"
+                )}
               >
                 {screenshot ? (
                    <img src={screenshot} className="h-full w-full object-cover rounded-2xl" />
                 ) : (
                   <>
-                    <Upload className="text-gray-600 group-hover:text-blue-500 transition" size={24} />
+                    <Upload className="text-gray-400 group-hover:text-current transition" size={24} style={{ color: theme?.primary }} />
                     <span className="text-xs text-gray-500 font-medium">Click to upload photo</span>
                   </>
                 )}
@@ -284,9 +441,10 @@ export default function PaymentOrderPage() {
               onClick={handleSubmit}
               disabled={isSubmitting || timeLeft <= 0}
               className={cn(
-                "w-full h-16 rounded-2xl font-black text-lg transition-all flex items-center justify-center gap-3 active:scale-[0.98] shadow-lg shadow-blue-600/10",
-                timeLeft <= 0 ? "bg-gray-700 cursor-not-allowed" : "bg-blue-600 hover:bg-blue-500"
+                "w-full h-16 rounded-2xl font-black text-lg transition-all flex items-center justify-center gap-3 active:scale-[0.98] shadow-lg",
+                timeLeft <= 0 ? "bg-gray-400 cursor-not-allowed" : "text-white"
               )}
+              style={timeLeft > 0 ? { backgroundColor: theme?.primary } : {}}
             >
               {isSubmitting ? (
                 <Loader2 size={24} className="animate-spin" />
@@ -309,7 +467,7 @@ export default function PaymentOrderPage() {
            </div>
            <p className="text-[10px] text-gray-600 font-medium leading-relaxed">
              This transaction is protected by 256-bit SSL encryption. <br/>
-             Merchant: AOLLIKUS LIMITED • ID: {id}
+             Authorized Gateway: Onyx Option Pay • ID: {id}
            </p>
         </div>
       </div>

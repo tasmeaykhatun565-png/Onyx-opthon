@@ -25,6 +25,15 @@ async function testConnection() {
       console.warn("Firestore connection check failed: the client is offline or network error. The app will continue in degraded mode.");
     } else {
       console.warn("Firestore connection test warning:", error);
+      const msg = error instanceof Error ? error.message : String(error);
+      if (msg.toLowerCase().includes('quota exceeded') || msg.toLowerCase().includes('resource-exhausted')) {
+        window.dispatchEvent(new CustomEvent('firestore-quota-exceeded', {
+          detail: { error: msg, operationType: 'get', path: 'stats/connection_test' }
+        }));
+        import('firebase/firestore').then(({ disableNetwork }) => {
+          disableNetwork(db).catch(console.error);
+        });
+      }
     }
   }
 }
@@ -79,11 +88,23 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
   }
   
   const errorMessage = safeStringify(errInfo);
+  const lowercaseError = errorMessage.toLowerCase();
   
+  // Handle and dispatch Quota Exceeded & Resource Exhaustion errors
+  if (lowercaseError.includes('quota exceeded') || lowercaseError.includes('resource-exhausted') || lowercaseError.includes('quota_exceeded')) {
+    console.warn('Firestore Applet Quota Exceeded. Prompting UI fallback alert.');
+    window.dispatchEvent(new CustomEvent('firestore-quota-exceeded', {
+      detail: { error: errInfo.error, operationType, path }
+    }));
+    import('firebase/firestore').then(({ disableNetwork }) => {
+      disableNetwork(db).catch(console.error);
+    });
+    return;
+  }
+
   // Do not throw for non-critical errors to prevent app crashes
-  // Quota exceeded is a common issue with free tier
-  if (errorMessage.includes('Quota exceeded') || errorMessage.includes('PERMISSION_DENIED') || errorMessage.includes('Missing or insufficient permissions')) {
-     console.warn('Firestore Sync Degradation: Using local SQLite fallback (Permission or Quota issue).');
+  if (errorMessage.includes('PERMISSION_DENIED') || errorMessage.includes('Missing or insufficient permissions')) {
+     console.warn('Firestore Sync Degradation: Using local fallback (Permission issue).');
      return;
   }
 

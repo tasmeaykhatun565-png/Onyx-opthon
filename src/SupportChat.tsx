@@ -25,9 +25,10 @@ interface SupportChatProps {
   socket: any;
   userEmail: string;
   chatBackground?: string | null;
+  rewards?: any[];
 }
 
-export default function SupportChat({ onClose, supportSettings, socket, userEmail, chatBackground }: SupportChatProps) {
+export default function SupportChat({ onClose, supportSettings, socket, userEmail, chatBackground, rewards }: SupportChatProps) {
   const [chatStatus, setChatStatus] = useState<'active' | 'closed'>('active');
   const [supportStatus, setSupportStatus] = useState<'online' | 'offline'>(supportSettings.supportStatus || 'online');
   const [connectionError, setConnectionError] = useState<boolean>(false);
@@ -42,17 +43,49 @@ export default function SupportChat({ onClose, supportSettings, socket, userEmai
   const [activeAgent] = useState(AGENTS[0]); // Primary agent taking the chat
 
   const QUICK_REPLIES = [
-    { id: 'verify', text: 'How to verify account?' },
     { id: 'deposit', text: 'Minimum deposit amount?' },
     { id: 'withdraw', text: 'Withdrawal delays' },
     { id: 'bonus', text: 'Promo codes' },
+    { id: 'facilities', text: 'Platform Facilities' },
   ];
 
-  const handleQuickReply = (text: string) => {
-    setInputText(text);
+  const handleQuickReply = (text: string, id: string) => {
+    handleSendMessage(text);
+    
+    // Automated instant replies
+    setIsTyping(true);
     setTimeout(() => {
-        handleSendMessage(text);
-    }, 100);
+      let responseText = "";
+      if (id === 'deposit') {
+        responseText = "The minimum deposit amount is $10 (approx. 1,200 BDT). We support bKash, Nagad, Rocket, Upay, and Crypto. Transactions are processed instantly! Would you like to see our deposit guide?";
+      } else if (id === 'withdraw') {
+        responseText = "Withdrawals are processed swiftly within 1-24 hours. Our goal is to ensure you receive your funds as quickly as possible. Ensure your payment details are correct for faster processing.";
+      } else if (id === 'bonus') {
+        const promoList = [
+          { code: 'LUNAR2026', bonus: '110%' },
+          { code: 'ONPAY', bonus: '100%' },
+          { code: 'WELCOME10', bonus: '10%' }
+        ];
+        responseText = `We have active promo codes for you: ${promoList.map(p => p.code).join(', ')}. Use LUNAR2026 to get a massive 110% bonus on your next deposit!`;
+      } else if (id === 'facilities') {
+        responseText = "Onyx Option provides top-tier trading facilities:\n\n• Zero-lag Execution\n• Real-time OTC and Crypto Markets\n• Local Bangladesh Gateway (bKash/Nagad)\n• Institutional Grade Security\n• Professional Charting Tools\n• 24/7 Support Desk";
+      }
+
+      if (responseText) {
+        const autoMsg: Message = {
+          id: `auto-${Date.now()}`,
+          text: responseText,
+          sender: 'support',
+          timestamp: Date.now()
+        };
+        setMessages(prev => [...prev, autoMsg]);
+        
+        // Also sync this to server if needed, though for instant reply local might be enough for the UX
+        // But to persist it, we should emit it or save it in the DB.
+        // For now, let's keep it in local state for the "instant" feel.
+      }
+      setIsTyping(false);
+    }, 1500);
   };
 
   const scrollToBottom = () => {
@@ -189,17 +222,17 @@ export default function SupportChat({ onClose, supportSettings, socket, userEmai
           <div className="flex justify-between items-start relative z-10">
             <div>
               <div className="flex items-center gap-2 mb-1">
-                <h2 className="text-lg font-bold tracking-tight text-text-primary">OnyxTrade Support</h2>
+                <h2 className="text-lg font-bold tracking-tight text-text-primary">Onyx Option Support</h2>
                 <div className="bg-blue-500/10 border border-blue-500/20 text-blue-500 text-[9px] uppercase font-black tracking-widest px-1.5 py-0.5 rounded-md flex items-center gap-1">
                   <ShieldCheck size={10} />
-                  VIP
+                  SECURE
                 </div>
               </div>
               
               <div className="flex items-center gap-2">
                 <div className="flex items-center gap-1.5">
                    <div className={cn("w-1.5 h-1.5 rounded-full", supportStatus === 'online' ? "bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.8)]" : "bg-red-500")} />
-                   <span className="text-xs font-semibold text-text-secondary">{supportStatus === 'online' ? 'We are online 24/7' : 'Offline'}</span>
+                   <span className="text-xs font-semibold text-text-secondary">{supportStatus === 'online' ? 'Support agents available' : 'Offline'}</span>
                 </div>
               </div>
             </div>
@@ -345,7 +378,7 @@ export default function SupportChat({ onClose, supportSettings, socket, userEmai
                     {QUICK_REPLIES.map((reply) => (
                       <button
                         key={reply.id}
-                        onClick={() => handleQuickReply(reply.text)}
+                        onClick={() => handleQuickReply(reply.text, reply.id)}
                         className="text-[12px] font-medium bg-bg-secondary hover:bg-bg-tertiary text-text-primary border border-border-color px-4 py-2 rounded-full transition-all active:scale-95 shadow-sm hover:border-blue-500/40"
                       >
                         {reply.text}

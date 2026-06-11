@@ -348,13 +348,19 @@ export const TradingChart = React.memo(({
   const [drawings, setDrawings] = useState<Drawing[]>([]);
   const [selectedDrawingId, setSelectedDrawingId] = useState<string | null>(null);
 
+  const lastLoadedDrawingsAssetRef = useRef<string | null>(null);
+
   // Clear data and load drawings when asset changes to prevent spikes
   useEffect(() => {
     if (!assetName || !seriesRef.current) return;
     
-    seriesRef.current.setData([]);
-    latestChartCandleRef.current = null;
-    isInitializedRef.current = false;
+    if (lastLoadedDrawingsAssetRef.current && lastLoadedDrawingsAssetRef.current !== assetName) {
+      seriesRef.current.setData([]);
+      latestChartCandleRef.current = null;
+      isInitializedRef.current = false;
+    }
+    
+    lastLoadedDrawingsAssetRef.current = assetName;
 
     try {
       const saved = localStorage.getItem(`drawings_${assetName}`);
@@ -363,7 +369,7 @@ export const TradingChart = React.memo(({
     } catch (e) {
       setDrawings([]);
     }
-  }, [assetName]);
+  }, [assetName, isChartReady]);
 
   // Save drawings when they change
   useEffect(() => {
@@ -2176,6 +2182,7 @@ export const TradingChart = React.memo(({
         <AnimatePresence mode="wait">
             {(isLoading || (data.length === 0 && !isStalled)) && (
                 <motion.div 
+                    key="loading"
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
@@ -2201,11 +2208,42 @@ export const TradingChart = React.memo(({
                     <motion.div 
                         animate={{ opacity: [0.5, 1, 0.5] }}
                         transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
-                        className="text-xs font-medium text-text-primary/70 tracking-[0.2em] font-mono"
+                        className="text-xs font-medium text-text-primary/70 tracking-[0.2em] font-mono uppercase"
                     >
-                        INITIALIZING CHART...
+                        {data.length === 0 ? 'Updating Market Data...' : 'Initializing Chart...'}
                     </motion.div>
                 </motion.div>
+            )}
+
+            {isStalled && (
+              <motion.div 
+                  key="stalled"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="absolute inset-0 z-[60] bg-black/60 backdrop-blur-sm flex flex-col items-center justify-center text-center p-6"
+              >
+                  <div className="w-16 h-16 bg-red-500/20 rounded-full flex items-center justify-center mb-4 border border-red-500/30">
+                    <motion.div
+                      animate={{ scale: [1, 1.1, 1], opacity: [1, 0.6, 1] }}
+                      transition={{ duration: 2, repeat: Infinity }}
+                    >
+                      <Clock size={32} className="text-red-500" />
+                    </motion.div>
+                  </div>
+                  <h3 className="text-white font-bold text-lg mb-2">Connection Distrupted</h3>
+                  <p className="text-white/60 text-sm max-w-[240px] leading-relaxed">
+                    Poor network quality detected. Attempting to reconnect to live servers...
+                  </p>
+                  <motion.div 
+                    className="mt-6 flex items-center gap-2 px-3 py-1.5 bg-white/5 rounded-full border border-white/10"
+                    animate={{ opacity: [0.4, 1, 0.4] }}
+                    transition={{ duration: 1, repeat: Infinity }}
+                  >
+                    <div className="w-2 h-2 rounded-full bg-yellow-500 shadow-[0_0_8px_rgba(234,179,8,0.6)]" />
+                    <span className="text-[10px] font-bold text-white/40 uppercase tracking-widest">Reconnecting</span>
+                  </motion.div>
+              </motion.div>
             )}
         </AnimatePresence>
         

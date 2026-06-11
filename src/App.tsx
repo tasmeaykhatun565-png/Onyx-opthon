@@ -1,5 +1,6 @@
 import { IndicatorConfig } from './types';
 import { DRAWING_TOOLS, TIME_FRAMES, CHART_TYPES, INDICATORS_LIST, DESKTOP_TOOLS_LIST } from './constants';
+import { BACKEND_URL } from './config';
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { ResponsiveContainer, LineChart, AreaChart, Area, Line, ReferenceLine, XAxis, YAxis } from 'recharts';
 import { format } from 'date-fns';
@@ -1419,6 +1420,17 @@ export default function TradingPlatform() {
   const location = useLocation();
   const { t } = useTranslation();
   const { showToast } = useToast();
+  
+  useEffect(() => {
+    const handleQuotaExceeded = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      showToast('Firebase Quota Exceeded. Some data features may be unavailable. Contact support.', 'error');
+    };
+    
+    window.addEventListener('firestore-quota-exceeded', handleQuotaExceeded);
+    return () => window.removeEventListener('firestore-quota-exceeded', handleQuotaExceeded);
+  }, [showToast]);
+
   const { theme: currentTheme, setTheme: setGlobalTheme } = useTheme();
 
   // State
@@ -1446,7 +1458,7 @@ export default function TradingPlatform() {
 
     try {
       // Sync with SQL backend
-      const response = await fetch('/api/user/preferences', {
+      const response = await fetch(`${BACKEND_URL}/api/user/preferences`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: safeStringify({
@@ -1473,6 +1485,7 @@ export default function TradingPlatform() {
       }
     } catch (error) {
       console.warn('Network or sync error while saving preferences (non-critical):', error);
+      handleFirestoreError(error, OperationType.UPDATE, `users/${user?.uid}`);
     }
   }, [user]);
   const { language, setLanguage } = useTranslation();
@@ -1512,26 +1525,17 @@ export default function TradingPlatform() {
       const diff = targetPriceRef.current - smoothedPriceRef.current;
       const absDiff = Math.abs(diff);
 
-      if (smoothingEnabledRef.current && absDiff > 0.00000001) {
-        // Professional interpolated smoothing for sub-tick fluidity
-        const speed = isRealMarketRef.current ? 0.95 : 0.45;
-        const step = diff * speed;
-        smoothedPriceRef.current += step;
-        
-        if (Math.abs(targetPriceRef.current - smoothedPriceRef.current) < 0.00001) {
-            smoothedPriceRef.current = targetPriceRef.current;
-        }
-      } else {
-        // If smoothing is disabled or gap is negligible, snap to target
-        smoothedPriceRef.current = targetPriceRef.current;
+      // Simple, professional interpolation for sub-tick fluidity
+      const speed = isRealMarketRef.current ? 0.85 : 0.35;
+      const step = diff * speed;
+      smoothedPriceRef.current += step;
+      
+      if (Math.abs(diff) < 0.000001) {
+          smoothedPriceRef.current = targetPriceRef.current;
       }
 
-      // VITAL: Throttled state updates for real-time charting movement
-      const timeSinceLastRender = timestamp - lastRenderTime;
-      if (timeSinceLastRender > 16) { // Snappy 60fps-ish visual updates
-          setCurrentPrice(smoothedPriceRef.current);
-          lastRenderTime = timestamp;
-      }
+      // VITAL: State updates for real-time charting movement
+      setCurrentPrice(smoothedPriceRef.current);
       
       rafId = requestAnimationFrame(smooth);
     };
@@ -1588,26 +1592,41 @@ export default function TradingPlatform() {
     const url = (import.meta as any).env?.VITE_BACKEND_URL || window.location.origin;
     console.log('[SOCKET] Connecting to:', url);
     
-    const newSocket = io(url, { 
-      transports: ['websocket', 'polling'],
-      reconnectionAttempts: 10,
-      reconnectionDelay: 1000
+    // Robust connection config for all environments (Production/Hosted/Dev)
+    console.log(`[SOCKET] Connecting to: ${url}`);
+    const newSocket = io(import.meta.env.VITE_BACKEND_URL || window.location.origin, { 
+      transports: ['polling', 'websocket'],
+      reconnectionAttempts: 30,
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 5000,
+      timeout: 20000,
+      autoConnect: true,
+      secure: url.startsWith('https')
     });
     
     setSocket(newSocket);
-
+    
     newSocket.on('connect', () => {
-      console.log('[SOCKET] Connected successfully');
+      console.log('[SOCKET] Connected to backend');
       setIsConnected(true);
+      // Explicitly request initial data upon connection
+      newSocket.emit('request-initial-prices');
+    });
+
+    newSocket.on('connect_error', (error) => {
+      console.error('[SOCKET] Connection Error:', error);
+      setIsConnected(false);
+      // Fallback: If websocket fails on a restricted host, try polling only
+      const opts = newSocket.io.opts as any;
+      if (opts.transports?.includes('websocket')) {
+        console.warn('[SOCKET] WebSocket failed, falling back to polling...');
+        opts.transports = ['polling'];
+      }
     });
 
     newSocket.on('disconnect', (reason) => {
       console.warn('[SOCKET] Disconnected:', reason);
       setIsConnected(false);
-    });
-
-    newSocket.on('connect_error', (error) => {
-      console.error('[SOCKET] Connection Error:', error);
     });
 
     return () => {
@@ -1730,7 +1749,7 @@ export default function TradingPlatform() {
     email: 'support@onyxtrade.com',
     supportStatus: 'online' as 'online' | 'offline'
   });
-  const [referralSettings, setReferralSettings] = useState({ bonusAmount: 10, referralPercentage: 25, minDepositForBonus: 20 });
+  const [referralSettings, setReferralSettings] = useState({ bonusAmount: 10, referralPercentage: 25, minDepositForBonus: 50 });
   const [notifications, setNotifications] = useState<any[]>([]);
   const [tutorials, setTutorials] = useState<any[]>([]);
   const [announcements, setAnnouncements] = useState<any[]>([]);
@@ -1946,59 +1965,45 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
       }
 
       if (firebaseUser?.email) {
-        try {
-          const response = await fetch(`/api/user?email=${encodeURIComponent(firebaseUser.email)}`);
-          if (response.status === 404) {
-             // User not yet synced to backend, normal for first-time login
-             setAuthLoading(false);
-             return;
+        let retries = 3;
+        const loadUserPrefs = async () => {
+          try {
+            const response = await fetch(`${BACKEND_URL}/api/user?email=${encodeURIComponent(firebaseUser.email!)}`);
+            if (!response.ok) throw new Error(`Server responded with ${response.status}`);
+            
+            const userData = await response.json();
+            if (userData.user === null) {
+               setAuthLoading(false);
+               return;
+            }
+            if (userData.referralCode) setUserReferralCode(userData.referralCode);
+            if (userData.language || userData.currency || userData.timeframe || userData.chartType || userData.theme) {
+              setPreferences(prev => {
+                const updates: any = {};
+                if (userData.language) updates.language = userData.language;
+                if (userData.currency) updates.currency = userData.currency;
+                if (userData.timeframe) updates.timeframe = userData.timeframe;
+                if (userData.chartType) updates.chartType = userData.chartType;
+                if (userData.theme) updates.theme = userData.theme;
+                
+                if (userData.theme) localStorage.setItem('app-theme', userData.theme);
+                if (userData.chartType) localStorage.setItem('app-chartType', userData.chartType);
+                if (userData.language) localStorage.setItem('app-language', userData.language);
+                
+                return { ...prev, ...updates };
+              });
+            }
+          } catch (error) {
+            console.warn('Retry loading preferences...', retries);
+            if (retries > 0) {
+              retries--;
+              setTimeout(loadUserPrefs, 2000);
+            } else {
+              console.error('Failed to load user preferences after retries:', error);
+            }
           }
-          if (!response.ok) {
-            throw new Error(`Server responded with ${response.status}: ${response.statusText}`);
-          }
-          const contentType = response.headers.get('content-type');
-          if (!contentType || !contentType.includes('application/json')) {
-            const text = await response.text();
-            throw new Error(`Expected JSON but received ${contentType || 'unknown'}. Body: ${text.substring(0, 100)}...`);
-          }
-          const userData = await response.json();
-          if (userData.referralCode) {
-            setUserReferralCode(userData.referralCode);
-          }
-          if (userData.language || userData.currency || userData.timeframe || userData.chartType || userData.theme) {
-            setPreferences(prev => {
-              const updates: any = {};
-              if (userData.language && userData.language !== prev.language) updates.language = userData.language;
-              if (userData.currency && userData.currency !== prev.currency) updates.currency = userData.currency;
-              if (userData.timeframe && userData.timeframe !== prev.timeframe) updates.timeframe = userData.timeframe;
-              if (userData.chartType && userData.chartType !== prev.chartType) updates.chartType = userData.chartType;
-              if (userData.theme && userData.theme !== prev.theme) updates.theme = userData.theme;
-              
-              if (userData.theme) localStorage.setItem('app-theme', userData.theme);
-              if (userData.chartType) localStorage.setItem('app-chartType', userData.chartType);
-              if (userData.language) localStorage.setItem('app-language', userData.language);
-              if (userData.currency) localStorage.setItem('app-currency', userData.currency);
-              if (userData.timeframe) localStorage.setItem('app-timeframe', userData.timeframe);
-
-              if (Object.keys(updates).length > 0) return { ...prev, ...updates };
-              return prev;
-            });
-          }
-          if (userData.currency && userData.currencySymbol) {
-            setCurrency(prev => {
-              if (prev.code === userData.currency && prev.symbol === userData.currencySymbol && prev.name === (userData.currencyName || userData.currency) && prev.flag === (userData.currencyFlag || '')) return prev;
-              return {
-                code: userData.currency,
-                symbol: userData.currencySymbol,
-                name: userData.currencyName || userData.currency,
-                flag: userData.currencyFlag || ''
-              };
-            });
-          }
-        } catch (error) {
-          console.error('Error loading user preferences:', error);
-          // Optional: set a state to show an error message in the UI
-        }
+        };
+        loadUserPrefs();
       }
       setAuthLoading(false);
     });
@@ -2252,13 +2257,6 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
   useEffect(() => {
     const path = location.pathname;
     
-    // Explicit Admin Redirect for fixed emails
-    const adminEmails = ['emon@gmail.com', 'hamproo123@gmail.com', 'tasmeaykhatun565@gmail.com', 'mdrajon56@gmail.com'];
-    if (user?.email && adminEmails.includes(user.email.toLowerCase()) && path !== '/admin') {
-       navigate('/admin');
-       return;
-    }
-
     // First, sync side sheets for pages that should display over TRADING
     const syncSheets = () => {
         setIsActivitiesOpen(prev => prev !== (path === '/tournaments') ? path === '/tournaments' : prev);
@@ -2467,7 +2465,7 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
     
     if (user?.email) {
       try {
-        await fetch('/api/user/preferences', {
+        await fetch(`${BACKEND_URL}/api/user/preferences`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: safeStringify({
@@ -2716,13 +2714,23 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
     if (!socket) return;
 
     const handleTick = (ticks: Record<string, any>) => {
+      console.log('[DEBUG] Received market-tick:', Object.keys(ticks).length, 'assets');
       // Throttle sidebar list re-renders to ~2 times per second for extreme UX performance gains
       const now = Date.now();
       if (now - lastSidebarUpdateRef.current > 420) {
         setMarketAssets(prev => {
           const hasChange = Object.entries(ticks).some(([key, val]) => prev[key]?.price !== val.price || prev[key]?.isFrozen !== val.isFrozen);
           if (!hasChange) return prev;
-          return { ...prev, ...ticks };
+          
+          const newState = { ...prev };
+          Object.keys(ticks).forEach(symbol => {
+             if (newState[symbol]) {
+                 newState[symbol] = { ...newState[symbol], ...ticks[symbol] };
+             } else {
+                 newState[symbol] = ticks[symbol];
+             }
+          });
+          return newState;
         });
         lastSidebarUpdateRef.current = now;
       }
@@ -3167,7 +3175,7 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
              handleFirestoreError(err, OperationType.UPDATE, `users/${user.uid}/trades/${result.id}`);
           });
         } catch (error) {
-          console.error("Error updating trade result:", error);
+          handleFirestoreError(error, OperationType.UPDATE, `users/${user.uid}/trades/${result.id}`);
         }
       }
 
@@ -3419,7 +3427,7 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
               handleFirestoreError(error, OperationType.CREATE, `users/${user.uid}/trades/${tradeId}`);
             });
           } catch (error) {
-            console.error('Caught error (should not be reached if handled in catch block):', error);
+            handleFirestoreError(error, OperationType.CREATE, `users/${user.uid}/trades/${tradeId}`);
           }
     }
     
@@ -3537,97 +3545,48 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
 
   if (view === 'HOME') {
     return (
-      <div className="min-h-screen bg-bg-primary text-white font-sans selection:bg-blue-500/30 overflow-x-hidden">
+      <div className="min-h-screen bg-[#0b0e11] text-white font-sans selection:bg-blue-500/30 overflow-x-hidden relative">
         {/* Navigation */}
-        <nav className="fixed top-0 left-0 right-0 z-[100] px-4 md:px-12 h-16 md:h-24 flex items-center justify-between bg-bg-primary/80 backdrop-blur-lg border-b border-border-color">
-          <div className="flex items-center gap-2 md:gap-3 cursor-pointer group" onClick={() => navigate('/')}>
-            <div className="relative shrink-0">
-              <div className="w-10 h-10 md:w-14 md:h-14 rounded-xl overflow-hidden border border-border-color shadow-[0_8px_20px_rgba(37,99,235,0.2)] group-hover:scale-105 transition-transform duration-500 bg-white">
-                <img 
-                  src="https://i.imghippo.com/files/Gtw3911Dmk.jpg" 
-                  alt="Onyx Elite Logo" 
-                  className="w-full h-full object-cover"
-                />
-              </div>
-              <div className="absolute -top-1 -right-1 w-3 h-3 md:w-3.5 md:h-3.5 bg-emerald-500 rounded-full border-2 border-[#061626] shadow-[0_0_10px_rgba(16,185,129,0.5)]" />
+        <nav className={cn(
+          "fixed top-0 left-0 right-0 z-[100] px-6 md:px-12 h-20 flex items-center justify-between transition-all duration-300",
+          "bg-[#0b0e11]/80 backdrop-blur-lg border-b border-white/5 shadow-lg shadow-black/20"
+        )}>
+          <div className="flex items-center gap-3 cursor-pointer" onClick={() => navigate('/')}>
+            <div className="w-8 h-8 rounded shrink-0 overflow-hidden bg-white flex items-center justify-center">
+              <img 
+                src="https://i.imghippo.com/files/Gtw3911Dmk.jpg" 
+                alt="Onyx Option Logo" 
+                className="w-full h-full object-cover"
+              />
             </div>
-            <div className="flex flex-col">
-              <div className="flex items-center gap-1.5">
-                <span className="text-lg sm:text-xl md:text-2xl font-black tracking-tighter leading-none text-text-primary flex items-center uppercase">
-                  ONYX<span className="text-blue-500 ml-0.5">ELITE</span>
-                </span>
-                <div className="h-1.5 w-1.5 rounded-full bg-blue-500 hidden md:block" />
-              </div>
-              <span className="hidden sm:block text-[8px] md:text-[9px] font-black uppercase tracking-[0.5em] text-blue-400/60 mt-1 leading-none">Elite Trading Terminal</span>
-              <span className="sm:hidden text-[7px] font-black uppercase tracking-[0.2em] text-blue-400/60 mt-1 leading-none">Elite Trading</span>
-            </div>
+            <span className="text-xl font-bold tracking-tight text-white flex items-center">
+              ONYX<span className="text-[#2b82f6]">OPTION</span>
+            </span>
           </div>
           
-          <div className="hidden lg:flex items-center gap-10 text-[11px] font-bold text-text-secondary/50 uppercase tracking-widest shrink-0">
-            <button onClick={() => navigate(activeAccount === 'DEMO' ? '/trade/demo' : '/trade')} className="hover:text-text-primary transition-colors">Trading</button>
-            <button onClick={() => { setInfoPageTitle('Assets'); navigate(activeAccount === 'DEMO' ? '/trade/demo' : '/trade'); }} className="hover:text-text-primary transition-colors">Assets</button>
-            <button onClick={() => navigate('/leaderboard')} className="hover:text-text-primary transition-colors">Tournament</button>
-            <div className="flex items-center gap-1 cursor-pointer hover:text-text-primary">
-              <Globe size={14} />
+          <div className="hidden lg:flex items-center gap-8 text-sm font-medium text-gray-400">
+            <button onClick={() => navigate(activeAccount === 'DEMO' ? '/trade/demo' : '/trade')} className="hover:text-white transition-colors">Trading</button>
+            <button onClick={() => { setInfoPageTitle('Assets'); navigate(activeAccount === 'DEMO' ? '/trade/demo' : '/trade'); }} className="hover:text-white transition-colors">Assets</button>
+            <button onClick={() => navigate('/leaderboard')} className="hover:text-white transition-colors">Tournaments</button>
+            <div className="flex items-center gap-1 cursor-pointer hover:text-white transition-colors">
+              <Globe size={16} />
               <span>English</span>
-              <ChevronDown size={14} />
             </div>
           </div>
 
-          <div className="flex items-center gap-2 md:gap-4 shrink-0">
+          <div className="flex items-center gap-4 shrink-0">
             <button 
               onClick={() => navigate('/login')}
-              className="text-[11px] font-black text-text-primary/70 hover:text-text-primary uppercase tracking-[0.2em] transition-colors hidden md:block"
+              className="text-sm font-medium text-gray-300 hover:text-white transition-colors hidden md:block"
             >
-              Log In
+              Log in
             </button>
-            <button 
-              onClick={() => navigate('/signup')}
-              className="px-4 py-2 md:px-6 md:py-2.5 bg-blue-600 hover:bg-blue-500 text-white text-[10px] md:text-xs font-black rounded-md transition-all active:scale-95 shadow-lg shadow-blue-600/20 uppercase tracking-widest"
-            >
-              <span className="hidden sm:inline">REGISTRATION</span>
-              <span className="sm:hidden">REGISTER</span>
-            </button>
-            <button className="lg:hidden p-1.5 md:p-2 text-text-secondary/70 -mr-2"><AlignLeft size={22} /></button>
+            <button className="lg:hidden p-2 text-gray-400 hover:text-white"><AlignLeft size={24} /></button>
           </div>
         </nav>
 
-        {/* Live Asset Ticker Bar */}
-        <div className="fixed top-16 md:top-24 left-0 right-0 z-[90] bg-bg-secondary border-b border-border-color h-10 flex items-center overflow-hidden">
-          <motion.div 
-            animate={{ x: [0, -1000] }}
-            transition={{ duration: 30, repeat: Infinity, ease: "linear" }}
-            className="flex whitespace-nowrap gap-12 px-6"
-          >
-            {[
-              { pair: 'BTC/USD', price: '64,281.20', change: '+1.24%' },
-              { pair: 'ETH/USD', price: '3,452.15', change: '+0.85%' },
-              { pair: 'EUR/USD', price: '1.0842', change: '-0.12%' },
-              { pair: 'GOLD', price: '2,314.80', change: '+0.45%' },
-              { pair: 'GBP/JPY', price: '192.45', change: '+0.32%' },
-              { pair: 'SOL/USD', price: '142.60', change: '+4.52%' },
-              { pair: 'OIL', price: '82.15', change: '-1.05%' },
-              { pair: 'APPLE', price: '189.40', change: '+0.25%' },
-              { pair: 'BTC/USD', price: '64,281.20', change: '+1.24%' },
-              { pair: 'ETH/USD', price: '3,452.15', change: '+0.85%' },
-              { pair: 'EUR/USD', price: '1.0842', change: '-0.12%' },
-              { pair: 'GOLD', price: '2,314.80', change: '+0.45%' },
-              { pair: 'GBP/JPY', price: '192.45', change: '+0.32%' },
-              { pair: 'SOL/USD', price: '142.60', change: '+4.52%' },
-              { pair: 'OIL', price: '82.15', change: '-1.05%' },
-              { pair: 'APPLE', price: '189.40', change: '+0.25%' },
-            ].map((item, i) => (
-              <div key={i} className="flex items-center gap-3 text-[10px] font-black uppercase tracking-widest">
-                <span className="text-text-secondary/40">{item.pair}</span>
-                <span className="text-text-primary">{item.price}</span>
-                <span className={item.change.startsWith('+') ? 'text-emerald-500' : 'text-red-500'}>{item.change}</span>
-              </div>
-            ))}
-          </motion.div>
-        </div>
-
         {/* Hero Section */}
-        <section className="relative pt-[180px] pb-24 px-6 md:px-12 min-h-screen flex items-center justify-center overflow-hidden">
+        <section className="relative pt-[140px] pb-24 px-6 md:px-12 min-h-screen flex items-center justify-center overflow-hidden">
           {/* Enhanced Background Layer */}
           <div className="absolute inset-0 -z-10 bg-bg-primary">
              <div className="absolute inset-0 bg-gradient-to-tr from-[#061626] via-[#061626]/80 to-transparent" />
@@ -3664,9 +3623,12 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
         </section>
 
         {/* Trading Conditions */}
-        <section className="py-32 px-6 md:px-12 bg-white text-text-primary">
+        <section className="py-32 px-6 md:px-12 bg-bg-primary text-white border-b border-border-color/30">
           <div className="max-w-7xl mx-auto">
-            <h2 className="text-4xl md:text-5xl font-bold mb-24 tracking-tight">Place your trades on best conditions</h2>
+            <h2 className="text-4xl md:text-5xl font-black mb-24 tracking-tight text-white uppercase leading-[1.1]">
+              Place your trades on <br />
+              <span className="text-blue-500">best conditions</span>
+            </h2>
             
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-y-20 gap-x-16">
                {[
@@ -3677,9 +3639,10 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
                  { label: 'Commission', value: '$0', sub: 'No commission on deposit and withdrawal' },
                  { pair: 'Assets', value: '100+', sub: 'Available assets for trading' }
                ].map((item, i) => (
-                 <div key={i} className="border-l-4 border-blue-600 pl-8 transition-transform hover:translate-x-2">
-                   <div className="text-5xl md:text-6xl font-black text-blue-600 mb-3">{item.value}</div>
-                   <div className="text-lg font-bold text-text-primary/40 uppercase tracking-widest">{item.sub}</div>
+                 <div key={i} className="border-l-4 border-blue-500 pl-8 transition-transform hover:translate-x-2">
+                   <div className="text-5xl md:text-6xl font-black text-blue-500 mb-3">{item.value}</div>
+                   <div className="text-sm font-black text-white uppercase tracking-widest mb-1">{item.sub}</div>
+                   <div className="text-xs font-medium text-text-secondary/65 leading-relaxed">{(item as any).label || (item as any).pair}</div>
                  </div>
                ))}
             </div>
@@ -3687,16 +3650,16 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
         </section>
 
         {/* Professional Asset Index Preview */}
-        <section className="py-32 px-6 md:px-12 bg-bg-primary text-text-primary">
+        <section className="py-32 px-6 md:px-12 bg-bg-primary text-white border-b border-border-color/30">
           <div className="max-w-7xl mx-auto">
-            <div className="flex flex-col md:flex-row justify-between items-end gap-8 mb-20">
+            <div className="flex flex-col md:flex-row justify-between items-end gap-y-8 md:gap-8 mb-20">
                <div>
-                  <span className="text-blue-600 font-black uppercase tracking-[0.3em] text-xs mb-4 block">Asset Coverage</span>
-                  <h2 className="text-4xl md:text-5xl font-bold tracking-tight uppercase">Global Markets</h2>
+                  <span className="text-blue-500 font-extrabold uppercase tracking-[0.3em] text-xs mb-4 block">Asset Coverage</span>
+                  <h2 className="text-4xl md:text-5xl font-black tracking-tight uppercase text-white">Global Markets</h2>
                </div>
-               <div className="flex gap-4">
+               <div className="flex flex-wrap gap-2 md:gap-3">
                   {['Currencies', 'Crypto', 'Stocks', 'Commodities'].map((cat) => (
-                    <button key={cat} className="px-6 py-2 rounded-full border border-gray-200 text-xs font-bold uppercase hover:bg-blue-600 hover:text-white transition-all">
+                    <button key={cat} className="px-5 py-2.5 rounded-full border border-border-color bg-bg-secondary text-text-secondary text-xs font-bold uppercase hover:bg-blue-600 hover:text-white hover:border-blue-500 transition-all cursor-pointer">
                       {cat}
                     </button>
                   ))}
@@ -3714,14 +3677,14 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
                  { pair: 'ETH/USD', payout: '80%', status: 'Trending' },
                  { pair: 'CRUDE OIL', payout: '75%', status: 'Volatile' },
                ].map((asset, i) => (
-                 <div key={i} className="p-6 bg-white rounded-xl border border-gray-100 flex justify-between items-center hover:shadow-lg transition-all group cursor-pointer">
+                 <div key={i} className="p-6 bg-bg-secondary rounded-xl border border-border-color flex justify-between items-center hover:border-blue-500/50 hover:shadow-[0_8px_30px_rgba(37,99,235,0.1)] transition-all group cursor-pointer">
                     <div>
-                       <div className="text-sm font-black uppercase tracking-tight mb-1 group-hover:text-blue-600 transition-colors">{asset.pair}</div>
-                       <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{asset.status}</div>
+                       <div className="text-sm font-black uppercase tracking-tight mb-1 text-white group-hover:text-blue-400 transition-colors">{asset.pair}</div>
+                       <div className="text-[10px] font-bold text-text-secondary/50 uppercase tracking-widest">{asset.status}</div>
                     </div>
                     <div className="text-right">
-                       <div className="text-xl font-black text-emerald-600">{asset.payout}</div>
-                       <div className="text-[9px] font-black text-gray-300 uppercase">Payout</div>
+                       <div className="text-xl font-black text-emerald-500">{asset.payout}</div>
+                       <div className="text-[9px] font-black text-text-secondary/40 uppercase">Payout</div>
                     </div>
                  </div>
                ))}
@@ -3782,9 +3745,9 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
         </section>
 
         {/* Why Choose Us Icons */}
-        <section className="py-32 px-6 md:px-12 bg-gray-50 text-text-primary">
+        <section className="py-32 px-6 md:px-12 bg-bg-secondary text-white border-b border-border-color/30">
            <div className="max-w-7xl mx-auto">
-             <h2 className="text-4xl font-bold mb-20 tracking-tight text-center lg:text-left">Why choose us?</h2>
+             <h2 className="text-4xl font-black mb-20 tracking-tight text-center lg:text-left text-white uppercase">Why choose us?</h2>
              <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-x-16 gap-y-20">
                 {[
                   { icon: ArrowUpDown, title: 'FLEXIBLE TRADING', desc: 'Latest trends: quick and digital trading, express trades, pending trades, copy trading. Payouts of up to 218%.' },
@@ -3795,12 +3758,12 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
                   { icon: Trophy, title: 'PLATFORM REWARDS', desc: 'Trading tournaments, regular bonuses, gifts, promo codes and contests are available to loyal users.' }
                 ].map((feat, i) => (
                   <div key={i} className="flex flex-col gap-8 group">
-                    <div className="w-16 h-16 rounded-2xl bg-blue-100 flex items-center justify-center text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition-all duration-500">
+                    <div className="w-16 h-16 rounded-2xl bg-blue-500/10 text-blue-400 border border-blue-500/20 flex items-center justify-center group-hover:bg-blue-600 group-hover:text-white transition-all duration-500">
                       <feat.icon size={32} strokeWidth={1.5} />
                     </div>
                     <div>
-                      <h3 className="text-xl font-black uppercase mb-4 tracking-tighter">0 {i+1} {feat.title}</h3>
-                      <p className="text-text-primary/60 leading-relaxed font-medium text-sm">{feat.desc}</p>
+                      <h3 className="text-xl font-black uppercase mb-4 tracking-tighter text-white">0 {i+1} {feat.title}</h3>
+                      <p className="text-text-secondary/75 leading-relaxed font-medium text-sm">{feat.desc}</p>
                     </div>
                   </div>
                 ))}
@@ -3809,11 +3772,11 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
         </section>
 
         {/* How to Start Section */}
-        <section className="py-32 px-6 md:px-12 bg-white text-text-primary">
+        <section className="py-32 px-6 md:px-12 bg-bg-primary text-white border-b border-border-color/30">
           <div className="max-w-7xl mx-auto">
             <div className="text-center mb-24">
-              <h2 className="text-4xl md:text-5xl font-bold tracking-tight mb-6">How it works?</h2>
-              <p className="text-xl text-text-primary/50">Start trading in three simple steps</p>
+              <h2 className="text-4xl md:text-5xl font-black uppercase tracking-tight text-white mb-6">How it works?</h2>
+              <p className="text-xl text-text-secondary">Start trading in three simple steps</p>
             </div>
             
             <div className="grid md:grid-cols-3 gap-12">
@@ -3822,13 +3785,13 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
                  { title: 'Practice', icon: Target, desc: 'Perfect your skills with a demo account and educational materials.' },
                  { title: 'Deposit and trade', icon: TrendingUp, desc: 'Over 100 assets (currency pairs, stocks, commodities, indices) for best trading conditions.' }
                ].map((step, i) => (
-                 <div key={i} className="relative p-10 rounded-3xl bg-gray-50 flex flex-col items-center text-center group hover:bg-blue-600 hover:text-white transition-all duration-500">
-                    <div className="w-20 h-20 rounded-full bg-white flex items-center justify-center text-blue-600 mb-8 shadow-xl shadow-black/5 group-hover:scale-110 transition-transform">
+                 <div key={i} className="relative p-10 rounded-3xl bg-bg-secondary border border-border-color flex flex-col items-center text-center group hover:bg-blue-600 hover:border-blue-500 transition-all duration-500">
+                    <div className="w-20 h-20 rounded-full bg-bg-tertiary flex items-center justify-center text-blue-400 mb-8 border border-border-color group-hover:bg-white group-hover:text-blue-600 group-hover:scale-110 transition-transform">
                        <step.icon size={32} />
                     </div>
-                    <div className="absolute top-10 right-10 text-4xl font-black text-blue-600/10 group-hover:text-text-secondary/10 uppercase">0{i+1}</div>
-                    <h3 className="text-2xl font-black uppercase mb-4 tracking-tighter">{step.title}</h3>
-                    <p className="opacity-60 font-medium">{step.desc}</p>
+                    <div className="absolute top-10 right-10 text-4xl font-black text-blue-500/10 group-hover:text-white/10 uppercase">0{i+1}</div>
+                    <h3 className="text-2xl font-black uppercase mb-4 tracking-tighter text-white">{step.title}</h3>
+                    <p className="text-text-secondary group-hover:text-white/95 text-sm leading-relaxed font-semibold">{step.desc}</p>
                  </div>
                ))}
             </div>
@@ -3864,36 +3827,36 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
         </section>
 
         {/* Mobile App Promotion */}
-        <section className="py-32 px-6 md:px-12 bg-white text-text-primary">
+        <section className="py-32 px-6 md:px-12 bg-bg-secondary text-white border-b border-border-color/30">
            <div className="max-w-7xl mx-auto flex flex-col lg:flex-row items-center gap-24">
               <div className="flex-1 order-2 lg:order-1">
                  <div className="relative inline-block">
                     <img 
                       src="https://i.postimg.cc/QM7BFVV4/Gemini-Generated-Image-3ztx3l3ztx3l3ztx.png" 
                       alt="Mobile App Mockup" 
-                      className="w-[300px] md:w-[450px] mx-auto rounded-[3rem] shadow-2xl"
+                      className="w-[300px] md:w-[450px] mx-auto rounded-[3rem] shadow-[0_15px_40px_rgba(0,0,0,0.5)] border border-white/5"
                     />
-                    <div className="absolute -bottom-10 -right-10 w-40 h-40 bg-blue-600 rounded-full flex items-center justify-center text-white flex-col animate-bounce">
+                    <div className="absolute -bottom-10 -right-10 w-40 h-40 bg-blue-600 rounded-full flex items-center justify-center text-white flex-col animate-bounce border border-blue-400/30 shadow-[0_0_20px_rgba(37,99,235,0.4)]">
                        <span className="text-2xl font-black">NEW</span>
                        <span className="text-[10px] font-bold uppercase tracking-widest">Version 4.2</span>
                     </div>
                  </div>
               </div>
               <div className="flex-1 order-1 lg:order-2">
-                 <h2 className="text-4xl md:text-6xl font-black uppercase mb-10 tracking-tight leading-tight">Always with you on <span className="text-blue-600">any device</span></h2>
-                 <p className="text-xl text-text-primary/60 mb-12 leading-relaxed">
+                 <h2 className="text-4xl md:text-6xl font-black uppercase mb-10 tracking-tight leading-tight text-white">Always with you on <span className="text-blue-500">any device</span></h2>
+                 <p className="text-lg text-text-secondary mb-12 leading-relaxed">
                     The platform for computer allows you to trade on your laptop, but for those who are always on the go, our mobile app provides the same level of security and performance.
                  </p>
                  <div className="flex flex-wrap gap-4">
-                    <button className="flex items-center gap-3 px-8 py-4 bg-bg-primary text-white rounded-xl hover:bg-bg-secondary transition-all">
-                       <Apple size={24} />
+                    <button className="flex items-center gap-3 px-8 py-4 bg-bg-primary text-white border border-border-color rounded-xl hover:bg-bg-tertiary transition-all cursor-pointer">
+                       <Apple size={24} className="text-blue-400" />
                        <div className="text-left">
                           <div className="text-[10px] uppercase opacity-50 font-bold">Download on the</div>
                           <div className="text-lg font-black leading-tight">App Store</div>
                        </div>
                     </button>
-                    <button className="flex items-center gap-3 px-8 py-4 bg-bg-primary text-white rounded-xl hover:bg-bg-secondary transition-all">
-                       <PlayCircle size={24} />
+                    <button className="flex items-center gap-3 px-8 py-4 bg-bg-primary text-white border border-border-color rounded-xl hover:bg-bg-tertiary transition-all cursor-pointer">
+                       <PlayCircle size={24} className="text-blue-400" />
                        <div className="text-left">
                           <div className="text-[10px] uppercase opacity-50 font-bold">Get it on</div>
                           <div className="text-lg font-black leading-tight">Google Play</div>
@@ -3936,26 +3899,26 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
         </section>
 
         {/* Live Payouts / Wins Feed */}
-        <section className="py-32 px-6 md:px-12 bg-white text-text-primary">
+        <section className="py-32 px-6 md:px-12 bg-bg-primary text-white border-b border-border-color/30">
            <div className="max-w-7xl mx-auto">
-              <h2 className="text-4xl font-bold mb-16 tracking-tight">Recent successful payouts</h2>
+              <h2 className="text-4xl font-extrabold mb-16 tracking-tight text-white uppercase">Recent successful payouts</h2>
               <div className="grid md:grid-cols-3 gap-8">
                  {[
                    { user: 'Ahmed R.', amount: '+ $1,420.00', asset: 'BTC/USD', time: '2m ago' },
                    { user: 'Sarah K.', amount: '+ $580.50', asset: 'EUR/USD', time: '5m ago' },
                    { user: 'Jason L.', amount: '+ $2,100.00', asset: 'GOLD', time: '8m ago' }
                  ].map((win, i) => (
-                   <div key={i} className="p-6 bg-gray-50 rounded-2xl flex items-center justify-between border border-gray-100 hover:shadow-xl transition-all">
+                   <div key={i} className="p-6 bg-bg-secondary rounded-2xl flex items-center justify-between border border-border-color hover:border-blue-500/50 transition-all cursor-pointer">
                       <div className="flex items-center gap-4">
-                        <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold uppercase">{win.user[0]}</div>
+                        <div className="w-10 h-10 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/25 flex items-center justify-center font-bold uppercase">{win.user[0]}</div>
                         <div>
-                          <div className="font-bold text-sm tracking-tight">{win.user}</div>
-                          <div className="text-[10px] uppercase font-black text-text-primary/40">{win.time}</div>
+                          <div className="font-bold text-sm tracking-tight text-white">{win.user}</div>
+                          <div className="text-[10px] uppercase font-black text-text-secondary/50">{win.time}</div>
                         </div>
                       </div>
                       <div className="text-right">
-                        <div className="text-emerald-600 font-black">{win.amount}</div>
-                        <div className="text-[10px] font-bold uppercase text-blue-600/50">{win.asset}</div>
+                        <div className="text-emerald-500 font-bold">{win.amount}</div>
+                        <div className="text-[10px] font-bold uppercase text-blue-400">{win.asset}</div>
                       </div>
                    </div>
                  ))}
@@ -3964,38 +3927,38 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
         </section>
 
         {/* Awards and Recognition */}
-        <section className="py-24 px-6 md:px-12 bg-bg-primary border-t border-border-color">
-           <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-12 opacity-40">
+        <section className="py-24 px-6 md:px-12 bg-bg-primary border-t border-b border-border-color/30">
+           <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-12 opacity-80">
               <div className="flex flex-col items-center gap-4">
-                 <Trophy size={48} className="text-blue-500" />
+                 <Trophy size={48} className="text-blue-500 animate-pulse" />
                  <div className="text-center">
-                    <div className="text-text-primary font-black tracking-tighter">BEST MOBILE TRADING PLATFORM</div>
-                    <div className="text-[10px] font-bold uppercase tracking-widest text-text-secondary/40">IBT Awards 2024</div>
+                    <div className="text-white font-black tracking-tighter">BEST MOBILE TRADING PLATFORM</div>
+                    <div className="text-[10px] font-bold uppercase tracking-widest text-text-secondary/50">IBT Awards 2024</div>
                  </div>
               </div>
               <div className="flex flex-col items-center gap-4">
                  <ShieldCheck size={48} className="text-blue-500" />
                  <div className="text-center">
-                    <div className="text-text-primary font-black tracking-tighter">FASTEST WITHDRAWALS SYSTEM</div>
-                    <div className="text-[10px] font-bold uppercase tracking-widest text-text-secondary/40">Financial Review 2025</div>
+                    <div className="text-white font-black tracking-tighter">FASTEST WITHDRAWALS SYSTEM</div>
+                    <div className="text-[10px] font-bold uppercase tracking-widest text-text-secondary/50">Financial Review 2025</div>
                  </div>
               </div>
               <div className="flex flex-col items-center gap-4">
                  <Star size={48} className="text-blue-500" />
                  <div className="text-center">
-                    <div className="text-text-primary font-black tracking-tighter">MOST INNOVATIVE BROKER</div>
-                    <div className="text-[10px] font-bold uppercase tracking-widest text-text-secondary/40">Global Forex Expo</div>
+                    <div className="text-white font-black tracking-tighter">MOST INNOVATIVE BROKER</div>
+                    <div className="text-[10px] font-bold uppercase tracking-widest text-text-secondary/50">Global Forex Expo</div>
                  </div>
               </div>
            </div>
         </section>
 
         {/* Testimonials Section */}
-        <section className="py-32 px-6 md:px-12 bg-white text-text-primary">
+        <section className="py-32 px-6 md:px-12 bg-bg-secondary text-white border-b border-border-color/30">
            <div className="max-w-7xl mx-auto">
               <div className="text-center mb-24">
-                 <span className="text-blue-600 font-black uppercase tracking-[0.3em] text-xs mb-4 block">Success Stories</span>
-                 <h2 className="text-4xl md:text-5xl font-bold tracking-tight">What our traders say</h2>
+                 <span className="text-blue-500 font-black uppercase tracking-[0.3em] text-xs mb-4 block">Success Stories</span>
+                 <h2 className="text-4xl md:text-5xl font-black uppercase text-white tracking-tight">What our traders say</h2>
               </div>
 
               <div className="grid md:grid-cols-3 gap-8">
@@ -4004,16 +3967,16 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
                    { name: 'Elena Rodriguez', role: 'Financial Analyst', text: 'I have tried many platforms, but the level of security and withdrawal speed here is truly unmatched in the industry.' },
                    { name: 'David Wilson', role: 'Beginner Trader', text: 'The demo account and educational materials helped me understand the market within a week. Now I am trading live and confident.' }
                  ].map((testimonial, i) => (
-                   <div key={i} className="p-10 rounded-3xl bg-gray-50 border border-gray-100 flex flex-col justify-between relative group hover:bg-blue-600 hover:text-white transition-all duration-500">
-                      <div className="absolute top-8 left-8 text-6xl font-black opacity-10 font-serif">"</div>
-                      <p className="text-lg font-medium leading-relaxed relative z-10 mb-10 italic">
+                   <div key={i} className="p-10 rounded-3xl bg-bg-primary border border-border-color flex flex-col justify-between relative group hover:border-blue-500/50 hover:bg-bg-tertiary transition-all duration-500">
+                      <div className="absolute top-8 left-8 text-6xl font-black opacity-10 font-serif text-blue-500">"</div>
+                      <p className="text-base font-semibold leading-relaxed relative z-10 mb-10 text-white/90">
                         {testimonial.text}
                       </p>
-                      <div className="flex items-center gap-4">
-                         <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold group-hover:bg-white transition-colors">{testimonial.name[0]}</div>
+                      <div className="flex items-center gap-4 relative z-10">
+                         <div className="w-12 h-12 rounded-full bg-blue-500/10 border border-blue-500/25 flex items-center justify-center text-blue-400 font-bold">{testimonial.name[0]}</div>
                          <div>
-                            <div className="font-bold text-sm tracking-tight">{testimonial.name}</div>
-                            <div className="text-[10px] uppercase font-black opacity-40 group-hover:opacity-60">{testimonial.role}</div>
+                            <div className="font-bold text-sm tracking-tight text-white">{testimonial.name}</div>
+                            <div className="text-[10px] uppercase font-black text-text-secondary">{testimonial.role}</div>
                          </div>
                       </div>
                    </div>
@@ -4049,14 +4012,14 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
         </section>
 
         {/* Economic Calendar Preview */}
-        <section className="py-32 px-6 md:px-12 bg-white text-text-primary">
+        <section className="py-32 px-6 md:px-12 bg-bg-primary text-white border-b border-border-color/30">
            <div className="max-w-7xl mx-auto">
-              <div className="flex flex-col md:flex-row justify-between items-end gap-8 mb-20">
+              <div className="flex flex-col md:flex-row justify-between items-end gap-y-8 md:gap-8 mb-20">
                  <div>
-                    <span className="text-blue-600 font-black uppercase tracking-[0.3em] text-xs mb-4 block">Market Pulse</span>
-                    <h2 className="text-4xl md:text-5xl font-bold tracking-tight uppercase">Economic Calendar</h2>
+                    <span className="text-blue-500 font-black uppercase tracking-[0.3em] text-xs mb-4 block">Market Pulse</span>
+                    <h2 className="text-4xl md:text-5xl font-black tracking-tight uppercase text-white">Economic Calendar</h2>
                  </div>
-                 <p className="max-w-md text-text-primary/50 text-right font-medium">Keep track of high-impact news events that drive global market volatility and create trading opportunities.</p>
+                 <p className="max-w-md text-text-secondary/70 text-left md:text-right font-semibold text-sm">Keep track of high-impact news events that drive global market volatility and create trading opportunities.</p>
               </div>
 
               <div className="space-y-4">
@@ -4064,28 +4027,28 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
                    { event: 'Non-Farm Payrolls (NFP)', impact: 'High', currency: 'USD', time: '13:30 GMT', forecast: '240K' },
                    { event: 'Interest Rate Decision', impact: 'Very High', currency: 'EUR', time: '12:45 GMT', forecast: '4.50%' },
                    { event: 'CPI Consumer Price Index', impact: 'High', currency: 'GBP', time: '07:00 GMT', forecast: '3.1%' },
-                   { event: 'GDP Growth Rate QoQ', impact: 'Medium', currency: 'AUD', time: '01:30 GMT', forecast: '0.4%' }
+                   { event: 'GDP Growth Rate QoQ', impact: 'Medium', currency: 'AUD', time: '01:35 GMT', forecast: '0.4%' }
                  ].map((news, i) => (
-                   <div key={i} className="p-6 bg-gray-50 rounded-2xl border border-gray-100 flex flex-wrap items-center justify-between gap-6 hover:bg-blue-50 transition-colors">
+                   <div key={i} className="p-6 bg-bg-secondary rounded-2xl border border-border-color flex flex-wrap items-center justify-between gap-6 hover:border-blue-500/50 transition-colors cursor-pointer">
                       <div className="flex items-center gap-6 min-w-[250px]">
-                         <div className={`w-3 h-3 rounded-full ${news.impact === 'Very High' ? 'bg-red-600 animate-pulse' : news.impact === 'High' ? 'bg-orange-500' : 'bg-blue-400'}`} />
+                         <div className={`w-3 h-3 rounded-full ${news.impact === 'Very High' ? 'bg-red-500 animate-pulse' : news.impact === 'High' ? 'bg-orange-500' : 'bg-blue-400'}`} />
                          <div>
-                            <div className="font-bold text-sm uppercase tracking-tight">{news.event}</div>
-                            <div className="text-[10px] font-black text-gray-400 uppercase">{news.impact} Impact</div>
+                            <div className="font-extrabold text-sm uppercase tracking-tight text-white">{news.event}</div>
+                            <div className="text-[10px] font-black text-text-secondary/40 uppercase">{news.impact} Impact</div>
                          </div>
                       </div>
                       <div className="flex items-center gap-12">
                          <div className="text-center">
-                            <div className="font-black text-blue-600">{news.currency}</div>
-                            <div className="text-[9px] font-bold text-gray-400 uppercase">Currency</div>
+                            <div className="font-black text-blue-400">{news.currency}</div>
+                            <div className="text-[9px] font-bold text-text-secondary/55 uppercase">Currency</div>
                          </div>
                          <div className="text-center">
-                            <div className="font-black">{news.forecast}</div>
-                            <div className="text-[9px] font-bold text-gray-400 uppercase">Forecast</div>
+                            <div className="font-black text-white">{news.forecast}</div>
+                            <div className="text-[9px] font-bold text-text-secondary/55 uppercase">Forecast</div>
                          </div>
                          <div className="text-center">
-                            <div className="font-black text-gray-400">{news.time}</div>
-                            <div className="text-[9px] font-bold text-gray-400 uppercase">Time</div>
+                            <div className="font-black text-text-secondary">{news.time}</div>
+                            <div className="text-[9px] font-bold text-text-secondary/55 uppercase">Time</div>
                          </div>
                       </div>
                    </div>
@@ -4095,26 +4058,26 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
         </section>
 
         {/* Account Types / VIP Section */}
-        <section className="py-32 px-6 md:px-12 bg-white text-text-primary">
+        <section className="py-32 px-6 md:px-12 bg-bg-secondary text-white border-b border-border-color/30">
            <div className="max-w-7xl mx-auto">
               <div className="text-center mb-24">
-                 <span className="text-blue-600 font-black uppercase tracking-[0.3em] text-xs mb-4 block">Account Levels</span>
-                 <h2 className="text-4xl md:text-5xl font-bold tracking-tight uppercase">Trading Statuses</h2>
+                 <span className="text-blue-500 font-black uppercase tracking-[0.3em] text-xs mb-4 block">Account Levels</span>
+                 <h2 className="text-4xl md:text-5xl font-black tracking-tight uppercase text-white">Trading Statuses</h2>
               </div>
 
               <div className="grid md:grid-cols-3 gap-8">
                  {[
-                   { title: 'Starter', deposit: '$10+', profit: 'Upto 82%', perks: ['Basic Tools', '24/7 Support', 'Standard Payouts'], color: 'bg-gray-50' },
-                   { title: 'Advanced', deposit: '$500+', profit: 'Upto 85%', perks: ['Personal Manager', 'Faster Withdrawals', 'Extra Asset Access'], color: 'border-blue-600 border-2 shadow-2xl scale-105' },
-                   { title: 'Expert', deposit: '$2000+', profit: 'Upto 92%', perks: ['Priority Payouts', 'Private Consulting', 'Risk-free Trades'], color: 'bg-bg-primary text-white' }
+                   { title: 'Starter', deposit: '$10+', profit: 'Upto 82%', perks: ['Basic Tools', '24/7 Support', 'Standard Payouts'], color: 'bg-bg-primary border border-border-color' },
+                   { title: 'Advanced', deposit: '$500+', profit: 'Upto 85%', perks: ['Personal Manager', 'Faster Withdrawals', 'Extra Asset Access'], color: 'bg-bg-primary border-2 border-blue-500 shadow-[0_0_30px_rgba(37,99,235,0.15)] scale-105' },
+                   { title: 'Expert', deposit: '$2000+', profit: 'Upto 92%', perks: ['Priority Payouts', 'Private Consulting', 'Risk-free Trades'], color: 'bg-bg-primary border border-border-color' }
                  ].map((plan, i) => (
                    <div key={i} className={`p-10 rounded-[40px] flex flex-col justify-between transition-all duration-500 hover:-translate-y-4 ${plan.color}`}>
                       <div>
-                         <h3 className="text-3xl font-black uppercase tracking-tighter mb-2">{plan.title}</h3>
-                         <div className="text-sm font-bold opacity-60 mb-8 uppercase tracking-widest">Min Deposit: {plan.deposit}</div>
+                         <h3 className="text-3xl font-black uppercase tracking-tighter mb-2 text-white">{plan.title}</h3>
+                         <div className="text-sm font-bold opacity-60 mb-8 uppercase tracking-widest text-text-secondary">Min Deposit: {plan.deposit}</div>
                          <div className="space-y-4 mb-12">
                             {plan.perks.map((perk, j) => (
-                              <div key={j} className="flex items-center gap-3 font-medium">
+                              <div key={j} className="flex items-center gap-3 font-medium text-text-secondary">
                                  <Check size={18} className="text-blue-500" strokeWidth={3} />
                                  <span>{perk}</span>
                               </div>
@@ -4122,8 +4085,8 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
                          </div>
                       </div>
                       <div>
-                         <div className="text-4xl font-black text-blue-600 mb-6">{plan.profit}</div>
-                         <button onClick={() => navigate('/trade')} className={`w-full py-4 rounded-xl font-black uppercase tracking-widest text-sm transition-all ${plan.title === 'Expert' ? 'bg-blue-600 text-white' : 'bg-bg-primary text-white hover:bg-blue-600'}`}>Get {plan.title}</button>
+                         <div className="text-4xl font-black text-blue-400 mb-6">{plan.profit}</div>
+                         <button onClick={() => navigate('/trade')} className={`w-full py-4 rounded-xl font-black uppercase tracking-widest text-sm transition-all cursor-pointer ${plan.title === 'Advanced' ? 'bg-blue-600 text-white hover:bg-blue-500' : 'bg-bg-tertiary text-white border border-border-color hover:bg-blue-600 hover:border-blue-500'}`}>Get {plan.title}</button>
                       </div>
                    </div>
                  ))}
@@ -4132,28 +4095,28 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
         </section>
 
         {/* Global Trading Academy */}
-        <section className="py-32 px-6 md:px-12 bg-gray-50 text-text-primary">
+        <section className="py-32 px-6 md:px-12 bg-bg-primary text-white border-b border-border-color/30">
            <div className="max-w-7xl mx-auto flex flex-col lg:flex-row gap-24 items-center">
               <div className="flex-1">
-                 <span className="text-blue-600 font-black uppercase tracking-[0.3em] text-xs mb-4 block">Learn to Trade</span>
-                 <h2 className="text-4xl md:text-6xl font-black uppercase mb-10 leading-tight tracking-tight">Onyx <br /><span className="text-blue-600">Academy</span></h2>
-                 <p className="text-xl text-text-primary/50 mb-12 leading-relaxed font-medium">
+                 <span className="text-blue-500 font-black uppercase tracking-[0.3em] text-xs mb-4 block">Learn to Trade</span>
+                 <h2 className="text-4xl md:text-6xl font-black uppercase mb-10 leading-tight tracking-tight text-white">Onyx <br /><span className="text-blue-500">Academy</span></h2>
+                 <p className="text-base text-text-secondary mb-12 leading-relaxed font-semibold">
                     Master the art of technical analysis and market psychology with our comprehensive educational program. From basic concepts to professional strategies.
                  </p>
                  <div className="grid grid-cols-2 gap-8 mb-12">
                     <div>
-                       <h4 className="text-lg font-black uppercase mb-2 text-blue-600">Video Courses</h4>
-                       <p className="text-sm text-gray-500 font-medium">Over 50+ hours of professional video content.</p>
+                       <h4 className="text-lg font-black uppercase mb-2 text-blue-400">Video Courses</h4>
+                       <p className="text-sm text-text-secondary/70 font-medium">Over 50+ hours of professional video content.</p>
                     </div>
                     <div>
-                       <h4 className="text-lg font-black uppercase mb-2 text-blue-600">Webinars</h4>
-                       <p className="text-sm text-gray-500 font-medium">Live market analysis with expert traders.</p>
+                       <h4 className="text-lg font-black uppercase mb-2 text-blue-400">Webinars</h4>
+                       <p className="text-sm text-text-secondary/70 font-medium">Live market analysis with expert traders.</p>
                     </div>
                  </div>
-                 <button onClick={() => navigate('/trade')} className="px-10 py-5 bg-bg-primary text-white rounded-xl font-black uppercase tracking-widest hover:bg-blue-600 transition-all">Start Learning</button>
+                 <button onClick={() => navigate('/trade')} className="px-10 py-5 bg-blue-600 text-white rounded-xl font-black uppercase tracking-widest hover:bg-blue-500 transition-all cursor-pointer shadow-lg shadow-blue-500/20 active:scale-95">Start Learning</button>
               </div>
               <div className="flex-1 relative">
-                 <div className="absolute -top-10 -right-10 w-64 h-64 bg-blue-600/10 blur-[100px] rounded-full" />
+                 <div className="absolute -top-10 -right-10 w-64 h-64 bg-blue-600/10 blur-[100px] rounded-full animate-pulse" />
                  <div className="grid grid-cols-2 gap-6 relative z-10">
                     {[
                       { icon: BookOpen, title: 'Basics' },
@@ -4161,11 +4124,11 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
                       { icon: Zap, title: 'Strategies' },
                       { icon: Target, title: 'Psychology' }
                     ].map((item, i) => (
-                      <div key={i} className={`p-8 bg-white rounded-3xl border border-gray-100 flex flex-col items-center transition-all hover:shadow-2xl hover:border-blue-500 hover:-translate-y-2 ${i === 1 || i === 2 ? 'mt-8' : ''}`}>
-                         <div className="w-16 h-16 rounded-2xl bg-blue-50 flex items-center justify-center text-blue-600 mb-6">
+                      <div key={i} className={`p-8 bg-bg-secondary rounded-3xl border border-border-color flex flex-col items-center transition-all hover:border-blue-500/50 hover:-translate-y-2 cursor-pointer ${i === 1 || i === 2 ? 'lg:mt-8' : ''}`}>
+                         <div className="w-16 h-16 rounded-2xl bg-blue-500/10 border border-blue-500/25 flex items-center justify-center text-blue-400 mb-6">
                             <item.icon size={32} />
                          </div>
-                         <h3 className="font-black uppercase tracking-tighter">{item.title}</h3>
+                         <h3 className="font-extrabold uppercase tracking-tighter text-white">{item.title}</h3>
                       </div>
                     ))}
                  </div>
@@ -4174,21 +4137,21 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
         </section>
 
         {/* Global Presence Map */}
-        <section className="py-32 px-6 md:px-12 bg-white text-text-primary overflow-hidden">
+        <section className="py-32 px-6 md:px-12 bg-bg-secondary text-white border-b border-border-color/30 overflow-hidden">
            <div className="max-w-7xl mx-auto text-center">
-              <span className="text-blue-600 font-black uppercase tracking-[0.3em] text-xs mb-4 block">Our Reach</span>
-              <h2 className="text-4xl md:text-5xl font-black uppercase mb-6 tracking-tight">Worldwide infrastructure</h2>
-              <p className="text-lg text-gray-500 mb-20 max-w-2xl mx-auto font-medium">Low-latency order execution provided by 12 data centers located in major financial hubs across the globe.</p>
+              <span className="text-blue-500 font-black uppercase tracking-[0.3em] text-xs mb-4 block">Our Reach</span>
+              <h2 className="text-4xl md:text-5xl font-black uppercase mb-6 tracking-tight text-white">Worldwide infrastructure</h2>
+              <p className="text-base text-text-secondary mb-20 max-w-2xl mx-auto font-semibold">Low-latency order execution provided by 12 data centers located in major financial hubs across the globe.</p>
               
               <div className="relative h-[400px] md:h-[600px] w-full flex items-center justify-center">
-                 <Globe size={600} className="text-blue-500/10 scale-150 md:scale-100" strokeWidth={0.5} />
+                 <Globe size={600} className="text-blue-500/10 scale-150 md:scale-100 animate-[spin_120s_linear_infinite]" strokeWidth={0.5} />
                  <div className="absolute inset-0 flex items-center justify-center">
                     <div className="relative w-full h-full max-w-4xl">
-                       <div className="absolute top-1/4 left-1/4 w-3 h-3 bg-blue-600 rounded-full animate-ping" />
-                       <div className="absolute top-1/3 left-1/2 w-3 h-3 bg-blue-600 rounded-full animate-ping delay-300" />
-                       <div className="absolute bottom-1/4 left-1/3 w-3 h-3 bg-blue-600 rounded-full animate-ping delay-700" />
-                       <div className="absolute top-2/3 right-1/4 w-3 h-3 bg-blue-600 rounded-full animate-ping delay-1000" />
-                       <div className="absolute top-1/2 right-1/3 w-3 h-3 bg-blue-600 rounded-full animate-ping delay-1500" />
+                       <div className="absolute top-1/4 left-1/4 w-3 h-3 bg-blue-500 rounded-full animate-ping" />
+                       <div className="absolute top-1/3 left-1/2 w-3 h-3 bg-blue-500 rounded-full animate-ping delay-300" />
+                       <div className="absolute bottom-1/4 left-1/3 w-3 h-3 bg-blue-500 rounded-full animate-ping delay-700" />
+                       <div className="absolute top-2/3 right-1/4 w-3 h-3 bg-blue-500 rounded-full animate-ping delay-1000" />
+                       <div className="absolute top-1/2 right-1/3 w-3 h-3 bg-blue-500 rounded-full animate-ping delay-1500" />
                     </div>
                  </div>
               </div>
@@ -4221,9 +4184,9 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
         </section>
 
         {/* FAQ Section */}
-        <section className="py-32 px-6 md:px-12 bg-gray-50 text-text-primary">
+        <section className="py-32 px-6 md:px-12 bg-bg-primary text-white border-b border-border-color/30">
            <div className="max-w-4xl mx-auto">
-              <h2 className="text-4xl md:text-5xl font-bold mb-16 tracking-tight text-center">Frequently asked questions</h2>
+              <h2 className="text-4xl md:text-5xl font-black mb-16 tracking-tight text-center uppercase text-white animate-[fade-in_1s_ease_out]">Frequently asked questions</h2>
               <div className="space-y-4">
                  {[
                    { q: 'Is it free to register?', a: 'Yes, registration is absolutely free. You can open an account in less than a minute and start practicing with virtual funds immediately.' },
@@ -4231,12 +4194,12 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
                    { q: 'Can I withdraw my money anytime?', a: 'Yes, you can request a withdrawal of your available funds at any time. We process most requests within 24 hours without any additional commission.' },
                    { q: 'What is a demo account?', a: 'A demo account is a training tool that uses virtual money. It allows you to practice trading and explore all platform features without any financial risk.' }
                  ].map((item, i) => (
-                   <div key={i} className="group overflow-hidden rounded-2xl bg-white border border-gray-200 hover:border-blue-600 transition-colors">
-                      <button className="w-full p-6 text-left flex justify-between items-center bg-transparent">
-                         <span className="text-lg font-bold uppercase tracking-tight">{item.q}</span>
-                         <HelpCircle className="text-blue-600" size={24} />
+                   <div key={i} className="group overflow-hidden rounded-2xl bg-bg-secondary border border-border-color hover:border-blue-500/50 transition-colors">
+                      <button className="w-full p-6 text-left flex justify-between items-center bg-transparent cursor-pointer">
+                         <span className="text-lg font-bold uppercase tracking-tight text-white">{item.q}</span>
+                         <HelpCircle className="text-blue-400" size={24} />
                       </button>
-                      <div className="px-6 pb-6 text-text-primary/60 leading-relaxed font-medium border-t border-gray-100 pt-4 opacity-0 group-hover:opacity-100 h-0 group-hover:h-auto overflow-hidden transition-all duration-500">
+                      <div className="px-6 pb-6 text-text-secondary leading-relaxed font-semibold border-t border-border-color/30 pt-4 opacity-0 group-hover:opacity-100 h-0 group-hover:h-auto overflow-hidden transition-all duration-500">
                          {item.a}
                       </div>
                    </div>
@@ -4276,14 +4239,14 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
                       <div className="absolute -top-1 -right-1 w-4 h-4 bg-emerald-500 rounded-full border-2 border-[#040d17]" />
                     </div>
                     <div className="flex flex-col">
-                      <span className="text-2xl md:text-3xl font-black tracking-tighter leading-none text-text-primary uppercase">
-                        ONYX<span className="text-blue-500">ELITE</span>
+                      <span className="text-2xl md:text-3xl font-black tracking-tighter leading-none text-white uppercase">
+                        ONYX<span className="text-blue-500">OPTION</span>
                       </span>
                       <span className="text-[9px] font-black uppercase tracking-[0.5em] text-blue-400 mt-2 leading-none">Institutional Intelligence</span>
                     </div>
                   </div>
                   <p className="text-text-secondary/30 text-sm leading-relaxed mb-10 font-medium text-justify">
-                    Onyx Elite is a world-class trading ecosystem providing premium access to digital assets for over 14 million users worldwide. Registered and regulated since 2018.
+                    Onyx Option is a world-class trading ecosystem providing premium access to digital assets for over 14 million users worldwide. Registered and regulated since 2018.
                   </p>
                   <div className="flex flex-col gap-4 mb-10">
                      <button className="flex items-center gap-3 bg-bg-secondary border border-border-color px-4 py-2.5 rounded-xl hover:bg-bg-tertiary transition-colors group">
@@ -4409,13 +4372,13 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
     <div className="flex h-[100dvh] bg-bg-primary text-text-primary font-sans overflow-hidden select-none">
       <Helmet>
         <title>
-          {view === 'HOME' ? 'ONYX OPTION - Professional Binary Trading' :
-           view === 'TRADING' ? 'Trading | ONYX OPTION' :
-           view === 'PROFILE' ? 'Profile | ONYX OPTION' :
-           view === 'PAY_ORDER' ? 'Payment | ONYX OPTION' :
-           view === 'LEADERBOARD' ? 'Leaderboard | ONYX OPTION' :
-           view === 'CALENDAR' ? 'Economic Calendar | ONYX OPTION' :
-           view === 'INFO_PAGE' ? `${infoPageTitle} | ONYX OPTION` :
+          {((view as string) === 'HOME') ? 'ONYX OPTION - Professional Binary Trading' :
+           ((view as string) === 'TRADING') ? 'Trading | ONYX OPTION' :
+           ((view as string) === 'PROFILE') ? 'Profile | ONYX OPTION' :
+           ((view as string) === 'PAY_ORDER') ? 'Payment | ONYX OPTION' :
+           ((view as string) === 'LEADERBOARD') ? 'Leaderboard | ONYX OPTION' :
+           ((view as string) === 'CALENDAR') ? 'Economic Calendar | ONYX OPTION' :
+           ((view as string) === 'INFO_PAGE') ? `${infoPageTitle} | ONYX OPTION` :
            `${view.charAt(0).toUpperCase() + view.slice(1).toLowerCase()} | ONYX OPTION`}
         </title>
       </Helmet>
@@ -4621,13 +4584,8 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
           />
         ) : view === 'ADMIN' ? (
           <AdminPanel socket={socket} onBack={() => {
-            const adminEmails = ['emon@gmail.com', 'hamproo123@gmail.com', 'tasmeaykhatun565@gmail.com'];
-            if (user?.email && adminEmails.includes(user.email.toLowerCase())) {
-              logout();
-            } else {
-              setView('TRADING');
-              navigate('/trade');
-            }
+            setView('TRADING');
+            navigate('/trade');
           }} userEmail={user?.email || ''} isRestricted={user?.email?.toLowerCase() === 'mdrajon56@gmail.com'} />
         ) : view === 'PAY_ORDER' ? (
           <PaymentOrderPage />
@@ -5292,34 +5250,41 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
                            <span className="text-[15px] font-bold text-text-primary tracking-wide">Indicators</span>
                         </div>
                         <div className="flex flex-col max-h-[400px] overflow-y-auto custom-scrollbar px-2">
-                          {INDICATORS_LIST.map((indicator) => (
-                            <button
-                              key={indicator.id}
-                              onClick={() => {
-                                handleSelectIndicator({
-                                  id: indicator.id,
-                                  name: indicator.name,
-                                  instanceId: Math.random().toString(36).substr(2, 9),
-                                  params: {},
-                                  color: '#2962FF',
-                                  visible: true
-                                });
-                                setActiveDesktopChartMenu(null);
-                              }}
-                              className={cn(
-                                "w-full flex items-center justify-between px-3 py-3 transition-all rounded-lg group mb-1",
-                                activeIndicators.some(i => i.id === indicator.id) ? "bg-bg-tertiary" : "hover:bg-bg-secondary"
-                              )}
-                            >
-                              <span className={cn(
-                                "text-[14px] font-medium transition-colors",
-                                activeIndicators.some(i => i.id === indicator.id) ? "text-text-primary" : "text-[#969696] group-hover:text-gray-200"
-                              )}>
-                                {indicator.name}
-                              </span>
-                              {activeIndicators.some(i => i.id === indicator.id) && <Check size={16} className="text-blue-500" />}
-                            </button>
-                          ))}
+                          {INDICATORS_LIST.map((indicator) => {
+                            const existing = activeIndicators.find(i => i.id === indicator.id);
+                            return (
+                              <button
+                                key={indicator.id}
+                                onClick={() => {
+                                  if (existing) {
+                                    handleSelectIndicator(existing, true);
+                                  } else {
+                                    handleSelectIndicator({
+                                      id: indicator.id,
+                                      name: indicator.name,
+                                      instanceId: `${indicator.id}_${Date.now()}`,
+                                      params: {},
+                                      color: '#2962FF',
+                                      visible: true
+                                    });
+                                  }
+                                  setActiveDesktopChartMenu(null);
+                                }}
+                                className={cn(
+                                  "w-full flex items-center justify-between px-3 py-3 transition-all rounded-lg group mb-1",
+                                  existing ? "bg-bg-tertiary" : "hover:bg-bg-secondary"
+                                )}
+                              >
+                                <span className={cn(
+                                  "text-[14px] font-medium transition-colors",
+                                  existing ? "text-text-primary" : "text-[#969696] group-hover:text-gray-200"
+                                )}>
+                                  {indicator.name}
+                                </span>
+                                {existing && <Check size={16} className="text-blue-500" />}
+                              </button>
+                            );
+                          })}
                         </div>
                       </motion.div>
                     )}
@@ -5338,34 +5303,41 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
                            <span className="text-[15px] font-bold text-text-primary tracking-wide">Drawing Tools</span>
                         </div>
                         <div className="flex flex-col px-2">
-                          {DESKTOP_TOOLS_LIST.map((tool) => (
-                            <button
-                                key={tool.id}
-                                onClick={() => {
-                                  handleSelectIndicator({
-                                    id: tool.id,
-                                    name: tool.name,
-                                    instanceId: Math.random().toString(36).substr(2, 9),
-                                    params: {},
-                                    color: '#FF9800',
-                                    visible: true
-                                  });
-                                  setActiveDesktopChartMenu(null);
-                                }}
-                                className={cn(
-                                  "w-full flex items-center justify-between px-3 py-3 transition-all rounded-lg group mb-1",
-                                  activeIndicators.some(i => i.id === tool.id) ? "bg-bg-tertiary" : "hover:bg-bg-secondary"
-                                )}
-                              >
-                                <span className={cn(
-                                  "text-[14px] font-medium transition-colors",
-                                  activeIndicators.some(i => i.id === tool.id) ? "text-text-primary" : "text-[#969696] group-hover:text-gray-200"
-                                )}>
-                                  {tool.name}
-                                </span>
-                                {activeIndicators.some(i => i.id === tool.id) && <Check size={16} className="text-orange-500" />}
-                            </button>
-                          ))}
+                          {DESKTOP_TOOLS_LIST.map((tool) => {
+                            const existing = activeIndicators.find(i => i.id === tool.id);
+                            return (
+                              <button
+                                  key={tool.id}
+                                  onClick={() => {
+                                    if (existing) {
+                                      handleSelectIndicator(existing, true);
+                                    } else {
+                                      handleSelectIndicator({
+                                        id: tool.id,
+                                        name: tool.name,
+                                        instanceId: `${tool.id}_${Date.now()}`,
+                                        params: {},
+                                        color: '#FF9800',
+                                        visible: true
+                                      });
+                                    }
+                                    setActiveDesktopChartMenu(null);
+                                  }}
+                                  className={cn(
+                                    "w-full flex items-center justify-between px-3 py-3 transition-all rounded-lg group mb-1",
+                                    existing ? "bg-bg-tertiary" : "hover:bg-bg-secondary"
+                                  )}
+                                >
+                                  <span className={cn(
+                                    "text-[14px] font-medium transition-colors",
+                                    existing ? "text-text-primary" : "text-[#969696] group-hover:text-gray-200"
+                                  )}>
+                                    {tool.name}
+                                  </span>
+                                  {existing && <Check size={16} className="text-orange-500" />}
+                              </button>
+                            );
+                          })}
                         </div>
                       </motion.div>
                     )}
@@ -5500,6 +5472,7 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
             socket={socket}
             userEmail={user?.email || 'Anonymous'}
             chatBackground={chatBackground}
+            rewards={rewards}
           />
         )}
       </AnimatePresence>
@@ -6696,7 +6669,7 @@ function ProfilePage({
             ID {user.uid?.slice(-10).toUpperCase() || '132783071'} <Copy size={14} />
           </button>
 
-          {(user.email?.toLowerCase() === 'hamproo123@gmail.com' || user.email?.toLowerCase() === 'tasmeaykhatun565@gmail.com' || user.email?.toLowerCase() === 'emon@gmail.com' || user.email?.toLowerCase() === 'mdrajon56@gmail.com') && (
+          {(user.email?.toLowerCase() === 'hamproo123@gmail.com') && (
             <button 
               onClick={onAdmin}
               className="mt-6 bg-red-500/10 text-red-500 border border-red-500/20 px-8 py-2 rounded-full font-black text-xs transition uppercase tracking-widest hover:bg-red-500/20"
@@ -7189,7 +7162,7 @@ const DesktopSidebar = ({
       <div className="mb-6 w-12 h-12 flex items-center justify-center cursor-pointer active:scale-95 transition overflow-hidden rounded-full border border-border-color shadow-lg shadow-black/80 ring-1 ring-white/5">
         <img 
           src="https://i.imghippo.com/files/Gtw3911Dmk.jpg" 
-          alt="Onyx Elite Logo" 
+          alt="Onyx Option Logo" 
           className="w-[120%] h-[120%] object-cover contrast-110 brightness-110"
           referrerPolicy="no-referrer"
         />
@@ -7471,7 +7444,7 @@ const ProfileSidePanel = ({ user, balance, bonusBalance, currency, onSettings, o
            <div className="flex items-center gap-2 text-text-secondary text-[13px] font-medium tracking-wide">
              <span>{user?.email}</span>
            </div>
-           {(user?.email?.toLowerCase() === 'hamproo123@gmail.com') && (
+           {(user?.email && ['hamproo123@gmail.com'].includes(user.email.toLowerCase())) && (
              <button 
                onClick={onAdmin}
                className="mt-2 w-fit bg-red-500/10 text-red-500 border border-red-500/20 px-3 py-1 rounded-md font-bold text-[10px] flex items-center gap-1.5 hover:bg-red-500/20 transition uppercase tracking-widest"
