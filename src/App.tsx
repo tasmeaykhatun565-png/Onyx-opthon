@@ -175,10 +175,19 @@ const LoadingOverlay = ({ message }: { message?: string }) => {
 };
 
 const ASSETS: Asset[] = [
+  // Index Assets
+  { id: 'brazil_index', name: 'Brazil Powerplay Index', shortName: 'BRAZIL INDEX', payout: 83, category: 'Stocks', flag: '🇧🇷', basePrice: 1250, volatility: 0.8, isOTC: true },
+  { id: 'crypto_idx', name: 'Crypto IDX', shortName: 'CRYPTO IDX', payout: 82, category: 'Crypto', flag: '₿', basePrice: 2840, volatility: 1.2, isOTC: true },
+  { id: 'africa_index', name: 'Africa Knockout Index', shortName: 'AFRICA INDEX', payout: 83, category: 'Stocks', flag: '🌍', basePrice: 950, volatility: 0.9, isOTC: true },
+  { id: 'latam_index', name: 'LatAm Power Index', shortName: 'LATAM INDEX', payout: 83, category: 'Stocks', flag: '🌎', basePrice: 1100, volatility: 0.7, isOTC: true },
+  { id: 'asia_index', name: 'Asia Matchpoint Index', shortName: 'ASIA INDEX', payout: 83, category: 'Stocks', flag: '🌏', basePrice: 1400, volatility: 0.6, isOTC: true },
+  { id: 'egypt_index', name: 'Egypt Tempo Index', shortName: 'EGYPT INDEX', payout: 83, category: 'Stocks', flag: '🇪🇬', basePrice: 820, volatility: 1.1, isOTC: true },
+  
   // Forex
   { id: 'eur_usd_otc', name: 'EUR/USD OTC', shortName: 'EUR/USD OTC', payout: 92, category: 'Forex', flag: '🇪🇺🇺🇸', basePrice: 1.0850, volatility: 0.00008, isOTC: true },
   { id: 'gbp_usd_otc', name: 'GBP/USD OTC', shortName: 'GBP/USD OTC', payout: 92, category: 'Forex', flag: '🇬🇧🇺🇸', basePrice: 1.2550, volatility: 0.00008, isOTC: true },
-  { id: 'aud_usd_otc', name: 'AUD/USD OTC', shortName: 'AUD/USD OTC', payout: 92, category: 'Forex', flag: '🇦🇺🇺🇸', basePrice: 0.6650, volatility: 0.00008, isOTC: true },
+  { id: 'eur_usd', name: 'EUR/USD', shortName: 'EUR/USD', payout: 80, category: 'Forex', flag: '🇪🇺🇺🇸', basePrice: 1.08, volatility: 0.00015, isOTC: false, precision: 5 },
+  { id: 'gbp_nok', name: 'GBP/NOK', shortName: 'GBP/NOK', payout: 80, category: 'Forex', flag: '🇬🇧🇳🇴', basePrice: 13.50, volatility: 0.002, isOTC: false, precision: 4 },
   { id: 'nzd_usd_otc', name: 'NZD/USD OTC', shortName: 'NZD/USD OTC', payout: 92, category: 'Forex', flag: '🇳🇿🇺🇸', basePrice: 0.6050, volatility: 0.00008, isOTC: true },
   { id: 'usd_chf_otc', name: 'USD/CHF OTC', shortName: 'USD/CHF OTC', payout: 92, category: 'Forex', flag: '🇺🇸🇨🇭', basePrice: 0.9050, volatility: 0.00008, isOTC: true },
   { id: 'usd_jpy_otc', name: 'USD/JPY OTC', shortName: 'USD/JPY OTC', payout: 92, category: 'Forex', flag: '🇺🇸🇯🇵', basePrice: 155.50, volatility: 0.015, isOTC: true },
@@ -479,7 +488,8 @@ function AssetSelector({
   currentAssetId: string;
   marketAssets: Record<string, any>;
 }) {
-  const [activeTab, setActiveTab] = useState('Fixed Time');
+  const [activeTab, setActiveTab] = useState('FTT');
+  const [activeFilter, setActiveFilter] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
   
   const filteredAssets = ASSETS.filter(asset => {
@@ -493,13 +503,15 @@ function AssetSelector({
       return cleanName.includes(cleanQuery) || cleanShortName.includes(cleanQuery);
     }
 
-    // Filtering by active tab (roughly mapping categories to tabs)
-    if (activeTab === 'Fixed Time' && asset.category !== 'Crypto' && asset.category !== 'Forex' && asset.category !== 'Stocks' && asset.category !== 'Commodities') return false; 
-    // In many platforms, "Fixed Time" includes many categories but with a fixed expiration
-    // For simplicity, we'll show based on category for other tabs
-    if (activeTab === 'Forex' && asset.category !== 'Forex') return false;
-    if (activeTab === 'Stocks' && asset.category !== 'Stocks') return false;
-    if (activeTab === 'Crypto' && asset.category !== 'Crypto') return false;
+    // Filtering by active filter
+    if (activeFilter === 'Crypto' && asset.category !== 'Crypto') return false;
+    if (activeFilter === 'Currencies' && asset.category !== 'Forex') return false;
+    if (activeFilter === 'Commodities' && asset.category !== 'Commodities') return false;
+    if (activeFilter === 'Stocks' && asset.category !== 'Stocks') return false;
+
+    // Filtering by active tab
+    if (activeTab === '5ST' && !asset.name.toLowerCase().includes('quickler')) return false;
+    if (activeTab === 'FTT' && asset.name.toLowerCase().includes('quickler')) return false;
 
     return true;
   }).sort((a, b) => {
@@ -510,26 +522,37 @@ function AssetSelector({
 
   if (!isOpen) return null;
 
+  const filters = [
+    { name: 'All', count: ASSETS.length },
+    { name: 'Crypto', count: ASSETS.filter(a => a.category === 'Crypto').length },
+    { name: 'Currencies', count: ASSETS.filter(a => a.category === 'Forex').length },
+    { name: 'Commodities', count: ASSETS.filter(a => a.category === 'Commodities').length },
+    { name: 'Stocks', count: ASSETS.filter(a => a.category === 'Stocks').length },
+  ];
+
+  const totalAssets = ASSETS.length;
+  const activeCount = ASSETS.filter(a => !a.isFrozen && (!marketAssets[a.shortName] || marketAssets[a.shortName].isVisible !== false)).length;
+
   return (
-    <div className="w-full h-full bg-bg-primary font-sans flex flex-col text-text-primary">
+    <div className="w-full h-full bg-[#1c1c1c] font-sans flex flex-col text-text-primary">
        {/* Header */}
-       <div className="flex items-center justify-between px-6 pt-6 pb-4">
-         <h2 className="text-[28px] font-bold">Assets</h2>
-         <button onClick={onClose} className="text-gray-400 hover:text-text-primary transition p-1">
-            <X size={28} strokeWidth={2.5} />
+       <div className="flex items-center justify-between px-4 pt-4 pb-2">
+         <h2 className="text-[17px] font-bold text-gray-200">Assets</h2>
+         <button onClick={onClose} className="text-gray-400 hover:text-white transition p-1">
+            <X size={20} />
          </button>
        </div>
 
        {/* Tabs */}
-       <div className="flex items-center px-6 border-b border-border-color mb-4">
-           {['Fixed Time', 'Forex', 'Stocks'].map(tab => (
+       <div className="flex items-center px-4 border-b border-white/5 mb-4 justify-between">
+           {['FTT', '5ST', 'DRT', 'CFD'].map(tab => (
                <button
                  key={tab}
                  onClick={() => setActiveTab(tab)}
                  className={cn(
-                     "px-0 py-3 mr-8 text-[15px] font-bold whitespace-nowrap transition relative",
+                     "px-4 py-3 text-[14px] font-bold whitespace-nowrap transition relative",
                      activeTab === tab 
-                         ? "text-text-primary" 
+                         ? "text-white" 
                          : "text-gray-500 hover:text-gray-300"
                  )}
                >
@@ -537,58 +560,76 @@ function AssetSelector({
                  {activeTab === tab && (
                    <motion.div 
                      layoutId="asset-tab-indicator"
-                     className="absolute bottom-0 left-0 right-0 h-0.5 bg-accent-color rounded-full"
+                     className="absolute bottom-0 left-2 right-2 h-0.5 bg-white rounded-full"
                    />
                  )}
                </button>
            ))}
        </div>
 
+       {/* Stats */}
+       <div className="px-4 mb-4 text-[13px] text-gray-500 text-center">
+         {totalAssets} in total • <span className="text-emerald-500">{activeCount} active</span>
+       </div>
+
        {/* Search Bar */}
-       <div className="px-6 mb-4">
+       <div className="px-4 mb-4">
          <div className="relative group">
+            <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500">
+              <Search size={18} />
+            </div>
             <input 
                 type="text" 
                 placeholder="Search" 
-                className="w-full bg-bg-secondary text-text-primary pl-4 pr-10 py-3 rounded-xl border border-border-color focus:outline-none focus:border-accent-color transition placeholder:text-gray-600 font-medium"
+                className="w-full bg-[#2a2a2a] text-text-primary pl-12 pr-4 py-3 rounded-xl border border-white/5 focus:outline-none focus:border-white/10 transition placeholder:text-gray-600 font-medium text-[15px]"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
             />
-            <Search className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-600 group-focus-within:text-text-secondary transition" size={20} />
          </div>
        </div>
 
-       {/* Filters */}
-       <div className="flex items-center px-6 gap-2 mb-6">
-          <button className="flex items-center gap-2 bg-bg-secondary px-4 py-2 rounded-xl border border-border-color text-[13px] font-bold text-text-secondary hover:bg-bg-tertiary transition">
-            <AlignLeft size={16} className="text-text-secondary/40" />
-            Profitability
-            <ChevronDown size={16} className="text-text-secondary/40" />
-          </button>
-          <button className="bg-bg-secondary px-4 py-2 rounded-xl border border-border-color text-[13px] font-bold text-text-secondary hover:bg-bg-tertiary transition">
-            Favorites
-          </button>
-          <button className="flex items-center gap-2 bg-bg-secondary px-4 py-2 rounded-xl border border-border-color text-[13px] font-bold text-text-secondary hover:bg-bg-tertiary transition">
-            Any profitability
-            <ChevronDown size={14} className="text-text-secondary/40" />
+       {/* Filter Chips */}
+       <div className="flex items-center px-4 gap-2 mb-6 overflow-x-auto scrollbar-hide">
+          {filters.map(filter => (
+            <button 
+              key={filter.name}
+              onClick={() => setActiveFilter(filter.name)}
+              className={cn(
+                "flex items-center gap-1.5 px-4 py-2.5 rounded-full border text-[13px] font-bold whitespace-nowrap transition",
+                activeFilter === filter.name
+                  ? "bg-white text-black border-white"
+                  : "bg-[#2a2a2a] text-gray-400 border-white/5 hover:border-white/10"
+              )}
+            >
+              {filter.name} <span className="opacity-40">{filter.count}</span>
+            </button>
+          ))}
+          <button className="flex-shrink-0 w-10 h-10 flex items-center justify-center bg-[#2a2a2a] rounded-full border border-white/5 text-gray-400">
+             <ChevronRight size={18} />
           </button>
        </div>
 
        {/* List Header Labels */}
-       <div className="px-6 flex justify-between items-center mb-2">
-          <span className="text-[11px] font-bold text-text-secondary/20 uppercase tracking-widest">Name</span>
-          <div className="flex items-center gap-1 cursor-help group">
-            <span className="text-[11px] font-bold text-text-secondary/20 uppercase tracking-widest">Profitability</span>
-            <HelpCircle size={14} className="text-text-secondary/10 group-hover:text-text-secondary/30 transition" />
+       <div className="px-6 flex justify-between items-center mb-4">
+          <span className="text-[12px] font-bold text-gray-500">Asset</span>
+          <div className="flex items-center gap-10">
+            <div className="flex items-center gap-1 w-10 justify-end">
+              <span className="text-[12px] font-bold text-gray-500">Profit</span>
+              <div className="cursor-help group relative">
+                <Info size={14} className="text-gray-600" />
+              </div>
+            </div>
+            <span className="text-[12px] font-bold text-gray-400 underline decoration-gray-600 underline-offset-4 w-10 text-right">For VIP</span>
           </div>
        </div>
 
        {/* Asset List */}
-       <div className="flex-1 overflow-y-auto px-2 pb-24 space-y-0.5 custom-scrollbar">
+       <div className="flex-1 overflow-y-auto px-4 pb-24 space-y-2 custom-scrollbar">
           {filteredAssets.map(asset => {
               const dynamicAsset = marketAssets[asset.shortName];
               const isFrozen = dynamicAsset?.isFrozen;
               const payout = dynamicAsset?.payout || asset.payout;
+              const vipPayout = Math.min(100, payout + 2);
               
               return (
                   <div 
@@ -600,51 +641,35 @@ function AssetSelector({
                           onClose();
                       }}
                       className={cn(
-                          "flex items-center justify-between px-4 py-3.5 rounded-xl hover:bg-[var(--color-text-primary)]/[0.03] cursor-pointer transition-all active:scale-[0.98]",
-                          asset.id === currentAssetId && "bg-[var(--color-text-primary)]/[0.05]",
+                          "flex items-center justify-between px-3 py-3 rounded-2xl transition-all cursor-pointer",
+                          asset.id === currentAssetId ? "bg-white/10" : "hover:bg-white/[0.03]",
                           isFrozen && "opacity-40 grayscale"
                       )}
                   >
                       <div className="flex items-center gap-4">
-                          <div className="relative">
-                              <AssetIcon 
-                                  shortName={asset.shortName} 
-                                  category={asset.category} 
-                                  flag={asset.flag} 
-                                  size="md"
-                              />
-                              {isFrozen && (
-                                  <div className="absolute -top-1 -right-1 bg-red-500 rounded-full p-0.5 border border-black shadow-lg">
-                                      <Lock size={8} className="text-text-primary" />
-                                  </div>
-                              )}
-                          </div>
-                          <div className="flex flex-col">
-                              <span className="text-text-primary font-bold text-[15px] leading-tight">
-                                {asset.name.split(' (')[0]}
-                              </span>
-                              {asset.name.includes('Equity') && (
-                                <span className="text-[10px] text-gray-500 font-bold uppercase tracking-wider mt-0.5">Stock Market</span>
-                              )}
-                              {asset.isOTC && !asset.name.toLowerCase().includes('quickler') && (
-                                <span className="text-[10px] text-gray-500 font-bold uppercase tracking-wider mt-0.5">Over-the-counter</span>
-                              )}
-                              {asset.name.toLowerCase().includes('quickler') && (
-                                <span className="text-[10px] text-gray-500 font-bold uppercase tracking-wider mt-0.5">5 Second Trading</span>
-                              )}
-                          </div>
+                           <AssetIcon 
+                               shortName={asset.shortName} 
+                               category={asset.category} 
+                               flag={asset.flag} 
+                               size="md"
+                           />
+                           <div className="flex flex-col">
+                               <span className="text-gray-200 font-bold text-[14px] leading-tight max-w-[140px]">
+                                 {asset.name.split(' OTC')[0].split(' OTC')[0]}
+                               </span>
+                               {asset.isOTC && (
+                                 <span className="text-[11px] text-gray-500 mt-0.5">Index</span>
+                               )}
+                           </div>
                       </div>
                       
-                      <div className="flex items-center gap-4">
-                          <span className={cn(
-                            "text-[15px] font-bold",
-                            payout >= 90 ? "text-[#22c55e]" : "text-[#22c55e]/80"
-                          )}>
+                      <div className="flex items-center gap-10">
+                          <span className="text-[14px] font-bold text-emerald-500 w-10 text-right">
                               {payout}%
                           </span>
-                          <button className="text-gray-600 hover:text-text-primary transition p-1">
-                             <Info size={18} />
-                          </button>
+                          <span className="text-[14px] font-bold text-emerald-500/40 w-10 text-right">
+                              {vipPayout}%
+                          </span>
                       </div>
                   </div>
               );
@@ -1594,7 +1619,7 @@ export default function TradingPlatform() {
     
     // Robust connection config for all environments (Production/Hosted/Dev)
     console.log(`[SOCKET] Connecting to: ${url}`);
-    const newSocket = io(import.meta.env.VITE_BACKEND_URL || window.location.origin, { 
+    const newSocket = io((import.meta as any).env?.VITE_BACKEND_URL || window.location.origin, { 
       transports: ['polling', 'websocket'],
       reconnectionAttempts: 30,
       reconnectionDelay: 1000,
