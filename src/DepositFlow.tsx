@@ -558,8 +558,8 @@ const PaymentMethodSelection = ({ handleBack, selectedMethod, setSelectedMethod,
       ...PAYMENT_METHODS,
       ...(depositSettings?.customMethods || []).map((m: any) => ({
         id: m.id,
-        name: m.name,
-        icon: m.logo ? <img src={m.logo} alt={m.name} className="w-10 h-10 object-contain" referrerPolicy="no-referrer" /> : <div className="w-10 h-10 flex items-center justify-center bg-gray-600 text-text-primary rounded-md font-bold text-xs">{m.name.slice(0, 2)}</div>,
+        name: m.name || 'Custom',
+        icon: m.logo ? <img src={m.logo} alt={m.name || 'Method'} className="w-10 h-10 object-contain" referrerPolicy="no-referrer" /> : <div className="w-10 h-10 flex items-center justify-center bg-gray-600 text-text-primary rounded-md font-bold text-xs">{(m.name || 'Cu').slice(0, 2)}</div>,
         category: m.category === 'MOBILE' ? 'E-PAY' : m.category,
         minAmount: '$10.00'
       }))
@@ -1528,8 +1528,8 @@ export default function DepositFlow({ isOpen, onClose, currencySymbol, currencyC
       ...PAYMENT_METHODS,
       ...(depositSettings?.customMethods || []).map((m: any) => ({
         id: m.id,
-        name: m.name,
-        icon: m.logo ? <img src={m.logo} alt={m.name} className="w-10 h-10 object-contain" referrerPolicy="no-referrer" /> : <div className="w-10 h-10 flex items-center justify-center bg-gray-600 text-text-primary rounded-md font-bold text-xs">{m.name.slice(0, 2)}</div>,
+        name: m.name || 'Custom',
+        icon: m.logo ? <img src={m.logo} alt={m.name || 'Method'} className="w-10 h-10 object-contain" referrerPolicy="no-referrer" /> : <div className="w-10 h-10 flex items-center justify-center bg-gray-600 text-text-primary rounded-md font-bold text-xs">{(m.name || 'Cu').slice(0, 2)}</div>,
         category: m.category === 'MOBILE' ? 'E-PAY' : m.category,
         minAmount: '$10.00'
       }))
@@ -1693,8 +1693,7 @@ export default function DepositFlow({ isOpen, onClose, currencySymbol, currencyC
       });
       const data = await response.json();
       if (data.url) {
-        window.open(data.url, '_blank');
-        onClose();
+        window.location.href = data.url;
       } else {
         showToast('Error generating payment link', 'error');
       }

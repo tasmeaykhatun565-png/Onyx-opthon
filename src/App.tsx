@@ -186,7 +186,6 @@ const ASSETS: Asset[] = [
   // Forex
   { id: 'eur_usd_otc', name: 'EUR/USD OTC', shortName: 'EUR/USD OTC', payout: 92, category: 'Forex', flag: '🇪🇺🇺🇸', basePrice: 1.0850, volatility: 0.00008, isOTC: true },
   { id: 'gbp_usd_otc', name: 'GBP/USD OTC', shortName: 'GBP/USD OTC', payout: 92, category: 'Forex', flag: '🇬🇧🇺🇸', basePrice: 1.2550, volatility: 0.00008, isOTC: true },
-  { id: 'eur_usd', name: 'EUR/USD', shortName: 'EUR/USD', payout: 80, category: 'Forex', flag: '🇪🇺🇺🇸', basePrice: 1.08, volatility: 0.00015, isOTC: false, precision: 5 },
   { id: 'gbp_nok', name: 'GBP/NOK', shortName: 'GBP/NOK', payout: 80, category: 'Forex', flag: '🇬🇧🇳🇴', basePrice: 13.50, volatility: 0.002, isOTC: false, precision: 4 },
   { id: 'nzd_usd_otc', name: 'NZD/USD OTC', shortName: 'NZD/USD OTC', payout: 92, category: 'Forex', flag: '🇳🇿🇺🇸', basePrice: 0.6050, volatility: 0.00008, isOTC: true },
   { id: 'usd_chf_otc', name: 'USD/CHF OTC', shortName: 'USD/CHF OTC', payout: 92, category: 'Forex', flag: '🇺🇸🇨🇭', basePrice: 0.9050, volatility: 0.00008, isOTC: true },
@@ -658,7 +657,7 @@ function AssetSelector({
                                  {asset.name.split(' OTC')[0].split(' OTC')[0]}
                                </span>
                                {asset.isOTC && (
-                                 <span className="text-[11px] text-gray-500 mt-0.5">Index</span>
+                                 <span className="text-[10px] font-black text-bg-primary bg-text-secondary/80 px-1.5 py-0.5 rounded-sm mt-1 w-fit uppercase tracking-tighter">OTC</span>
                                )}
                            </div>
                       </div>
@@ -1984,9 +1983,14 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
       setUser(firebaseUser);
       
       if (firebaseUser) {
-          setView('TRADING');
+          // Don't override view if user is on a specific route
+          if (window.location.pathname === '/' || window.location.pathname === '/login' || window.location.pathname === '/signup') {
+            setView('TRADING');
+          }
       } else {
-          setView('HOME');
+          if (window.location.pathname === '/' || window.location.pathname === '/trading' || window.location.pathname === '/trade') {
+            setView('HOME');
+          }
       }
 
       if (firebaseUser?.email) {
@@ -2565,12 +2569,32 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
           const candleTime = Math.floor(tick.time / tfMs) * tfMs;
           
           if (!currentCandle || currentCandle.time !== candleTime) {
-            if (currentCandle) candles.push(currentCandle);
+            if (currentCandle) {
+              // Fill any temporal gaps between history blocks to maintain a continuous chart
+              let gapTime = currentCandle.time + tfMs;
+              while (gapTime < candleTime) {
+                candles.push({
+                  time: gapTime,
+                  open: currentCandle.close,
+                  high: currentCandle.close,
+                  low: currentCandle.close,
+                  close: currentCandle.close,
+                  volume: 1,
+                  formattedTime: formatWithOffset(gapTime, 'HH:mm:ss', timezoneOffset)
+                });
+                gapTime += tfMs;
+              }
+              candles.push(currentCandle);
+            }
+            
+            // Professional Gapless Constraint: Open of new candle MUST anchor to Close of previous candle
+            const openingPrice = currentCandle ? currentCandle.close : (tick.open !== undefined ? tick.open : tick.price);
+            
             currentCandle = {
               time: candleTime,
-              open: tick.open !== undefined ? tick.open : tick.price,
-              high: tick.high !== undefined ? tick.high : tick.price,
-              low: tick.low !== undefined ? tick.low : tick.price,
+              open: openingPrice,
+              high: Math.max(openingPrice, tick.high !== undefined ? tick.high : tick.price),
+              low: Math.min(openingPrice, tick.low !== undefined ? tick.low : tick.price),
               close: tick.close !== undefined ? tick.close : tick.price,
               volume: Math.floor(Math.random() * 100) + 10,
               formattedTime: formatWithOffset(candleTime, 'HH:mm:ss', timezoneOffset)
@@ -2852,81 +2876,72 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
         return { ...prev, [currentAsset.shortName]: limitedHistory };
       });
 
-      setData(prev => {
-        const currentTFStart = Math.floor(timestamp / tfMs) * tfMs;
-        
-        if (prev.length === 0) {
-            // ONLY create first candle if we are NOT loading history
-            // If isLoadingRef.current is true, it means we are waiting for historical candles
-            // Creating a 1-length array here causes the "single candle glitch"
-            if (isLoadingRef.current) return prev;
+        setData(prev => {
+          const currentTFStart = Math.floor(timestamp / tfMs) * tfMs;
+          const tickHigh = Number(tick.high) || newPrice;
+          const tickLow = Number(tick.low) || newPrice;
+          
+          if (prev.length === 0) {
+              if (isLoadingRef.current) return prev;
 
-            const newCandle = {
-                time: currentTFStart,
-                open: newPrice,
-                high: newPrice,
-                low: newPrice,
-                close: newPrice,
-                volume: Math.floor(Math.random() * 100) + 10,
-                formattedTime: formatWithOffset(currentTFStart, 'HH:mm:ss', timezoneOffset),
-            };
-            dataRef.current = [newCandle];
-            return [newCandle];
-        }
-        
-        const lastCandle = prev[prev.length - 1];
-        
-        // Ensure time is a number to prevent [object Object] comparisons
-        const lastCandleTime = Number(lastCandle.time);
-        const newCandleTime = Number(currentTFStart);
+              const newCandle = {
+                  time: currentTFStart, open: newPrice, high: Math.max(newPrice, tickHigh), low: Math.min(newPrice, tickLow), close: newPrice,
+                  volume: Math.floor(Math.random() * 100) + 10,
+                  formattedTime: formatWithOffset(currentTFStart, 'HH:mm:ss', timezoneOffset),
+              };
+              dataRef.current = [newCandle];
+              return [newCandle];
+          }
+          
+          const lastCandleTimeInState = prev[prev.length - 1].time;
+          // Optimization: Check the last candle directly from the ref to get latest high/low
+          const lastCandle = (dataRef.current.length > 0 && dataRef.current[dataRef.current.length - 1].time === lastCandleTimeInState) 
+            ? dataRef.current[dataRef.current.length - 1] 
+            : prev[prev.length - 1];
+          
+          const lastCandleTime = Number(lastCandle.time);
+          const newCandleTime = Number(currentTFStart);
 
-        if (newCandleTime < lastCandleTime) {
-            // Ignore older ticks to prevent chart errors (out of order data)
-            return prev;
-        }
+          if (newCandleTime < lastCandleTime) return prev;
 
-        let updatedData: OHLCData[];
-        if (lastCandle.time === currentTFStart) {
-            // Update existing candle
-            const updatedCandle = {
-                ...lastCandle,
-                open: lastCandle.open, 
-                close: newPrice,
-                high: Math.max(lastCandle.high, newPrice),
-                low: Math.min(lastCandle.low, newPrice),
-                volume: (lastCandle.volume || 0) + 1,
-            };
-            
-            // PROFESSIONAL PERFORMANCE OPTIMIZATION:
-            // Do NOT call setData every tick (100ms) unless it's a new candle.
-            // TradingChart component now uses 'currentPrice' prop for real-time sub-tick movement.
-            // This prevents massive React reconciliation lag in large App components.
-            const timeSinceLastDataUpdate = Date.now() - (lastSidebarUpdateRef.current || 0);
-            if (timeSinceLastDataUpdate < 500) {
-                 // Still update ref so latest data is known, but skip state trigger
-                 dataRef.current = [...prev.slice(0, -1), updatedCandle];
-                 return prev;
-            }
-            
-            updatedData = [...prev.slice(0, -1), updatedCandle];
-        } else {
-            // New candle started
-            const newCandle = {
-                time: currentTFStart,
-                open: lastCandle.close, // Seamless connection
-                high: Math.max(lastCandle.close, newPrice),
-                low: Math.min(lastCandle.close, newPrice),
-                close: newPrice,
-                volume: Math.floor(Math.random() * 10) + 1,
-                formattedTime: formatWithOffset(currentTFStart, 'HH:mm:ss', timezoneOffset),
-            };
-            updatedData = [...prev, newCandle];
-            if (updatedData.length > 1000) updatedData.shift();
-        }
-        
-        dataRef.current = updatedData;
-        return updatedData;
-      });
+          let updatedData: OHLCData[];
+          if (lastCandleTime === newCandleTime) {
+              const updatedCandle = {
+                  ...lastCandle,
+                  close: newPrice,
+                  high: Math.max(lastCandle.high, tickHigh),
+                  low: Math.min(lastCandle.low, tickLow),
+                  volume: (lastCandle.volume || 0) + 1,
+              };
+              
+              const timeSinceLastDataUpdate = Date.now() - (lastSidebarUpdateRef.current || 0);
+              // Always update the ref with the latest sub-tick data
+              dataRef.current = [...dataRef.current.filter(c => c.time < lastCandleTime), updatedCandle];
+
+              if (timeSinceLastDataUpdate < 400) {
+                   return prev;
+              }
+              
+              updatedData = [...prev.slice(0, -1), updatedCandle];
+          } else {
+              const closingPrice = lastCandle.close;
+              const newCandle = {
+                  time: currentTFStart,
+                  open: closingPrice, 
+                  high: Math.max(closingPrice, tickHigh),
+                  low: Math.min(closingPrice, tickLow),
+                  close: newPrice,
+                  volume: Math.floor(Math.random() * 10) + 1,
+                  formattedTime: formatWithOffset(currentTFStart, 'HH:mm:ss', timezoneOffset),
+              };
+              // Always finalize the lastCandle correctly in the history
+              updatedData = [...prev.slice(0, -1).filter(c => c.time < lastCandleTime), lastCandle, newCandle];
+              if (updatedData.length > 2000) updatedData.shift();
+          }
+          
+          dataRef.current = updatedData;
+          return updatedData;
+        });
     };
 
     const handlePayoutUpdate = (data: { assetId: string, payout: number }) => {
@@ -4371,7 +4386,7 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
     return <Auth onSuccess={() => navigate(activeAccount === 'DEMO' ? '/trade/demo' : '/trade')} />;
   }
 
-  if (!user && location.pathname !== '/') {
+  if (!user && location.pathname !== '/' && !location.pathname.startsWith('/pay/')) {
     return <Auth onSuccess={() => navigate(activeAccount === 'DEMO' ? '/trade/demo' : '/trade')} />;
   }
 
@@ -4634,7 +4649,12 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
                       <AssetIcon shortName={selectedAsset.shortName} category={selectedAsset.category} flag={selectedAsset.flag} size="sm" />
                    </div>
                    <div className="flex flex-col">
-                      <div className="text-text-primary font-bold text-[12px] leading-none mb-0.5">{selectedAsset.name.split('(')[0].trim()}</div>
+                      <div className="flex items-center gap-1.5 mb-0.5">
+                        <div className="text-text-primary font-bold text-[12px] leading-none shrink-0 truncate max-w-[120px]">{selectedAsset.name.split('(')[0].split(' OTC')[0].trim()}</div>
+                        {selectedAsset.isOTC && (
+                          <span className="text-[8px] font-black bg-text-secondary/80 text-bg-primary px-1 rounded-[2px] leading-tight uppercase shrink-0 h-3 flex items-center">OTC</span>
+                        )}
+                      </div>
                       <div className="text-[10px] text-text-secondary font-medium leading-none">FT • <span className="text-text-primary/80">{currentPayout}%</span></div>
                    </div>
                  </button>
@@ -4788,10 +4808,13 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
                 <div className="w-6 h-6 rounded-md overflow-hidden shrink-0">
                   <AssetIcon shortName={selectedAsset.shortName} category={selectedAsset.category} flag={selectedAsset.flag} size="sm" />
                 </div>
-                <div className="flex items-center gap-2">
-                   <span className="text-text-primary font-bold text-[12px] truncate max-w-[80px]">{selectedAsset.name.split('(')[0].trim()}</span>
-                   <span className="text-[var(--color-success)] text-[11px] font-black">{currentPayout}%</span>
-                   <ChevronDown size={10} className="text-text-secondary" />
+                <div className="flex items-center gap-1.5">
+                   <span className="text-text-primary font-bold text-[12px] truncate max-w-[80px]">{selectedAsset.name.split('(')[0].split(' OTC')[0].trim()}</span>
+                   {selectedAsset.isOTC && (
+                     <span className="text-[8px] font-black bg-text-secondary/80 text-bg-primary px-1 rounded-[2px] leading-none uppercase h-3 flex items-center">OTC</span>
+                   )}
+                   <span className="text-[var(--color-success)] text-[11px] font-black shrink-0">{currentPayout}%</span>
+                   <ChevronDown size={10} className="text-text-secondary shrink-0" />
                 </div>
              </div>
              
@@ -5671,6 +5694,7 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
       )}
 
       {/* --- Bottom Navigation (Mobile Only) --- */}
+      {view !== 'PAY_ORDER' && (
       <nav className="md:hidden bg-bg-primary border-t border-border-color px-4 pt-1.5 pb-[calc(env(safe-area-inset-bottom)+2px)] flex justify-between items-center z-50">
         <NavButton 
           icon={<BarChart2 size={22} strokeWidth={view === 'TRADING' && !isActivitiesOpen ? 3 : 2} />} 
@@ -5704,6 +5728,7 @@ const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>(() =
           label="Help"
         />
       </nav>
+      )}
 
 
       {/* --- Sheets --- */}

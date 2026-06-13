@@ -899,7 +899,7 @@ export const TradingChart = React.memo(({
         borderColor: colors.border,
         scaleMargins: {
           top: 0.1, 
-          bottom: 0.2, 
+          bottom: 0.35, 
         },
         visible: true,
         borderVisible: false,
@@ -1098,7 +1098,7 @@ export const TradingChart = React.memo(({
       chart.priceScale('right').applyOptions({
         scaleMargins: {
           top: 0.1,
-          bottom: 0.1,
+          bottom: 0.35,
         },
       });
 

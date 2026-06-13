@@ -685,10 +685,18 @@ async function startServer() {
     }
   });
 
-  app.get('/api/payment-orders/:id', (req, res) => {
+  app.get('/api/payment-orders/:id', async (req, res) => {
     const { id } = req.params;
     try {
-      const order = db.prepare('SELECT * FROM payment_orders WHERE id = ?').get(id);
+      let order: any = db.prepare('SELECT * FROM payment_orders WHERE id = ?').get(id);
+      
+      if (!order && canSyncFirestore()) {
+        const doc = await firestore.collection('payment_orders').doc(id).get();
+        if (doc.exists) {
+          order = doc.data();
+        }
+      }
+
       if (!order) return res.status(404).json({ error: 'Order not found' });
       
       // Parse details if it's a string
@@ -712,7 +720,18 @@ async function startServer() {
     const { transactionId, screenshot } = req.body;
     
     try {
-      const order = db.prepare('SELECT * FROM payment_orders WHERE id = ?').get(id) as any;
+      let order: any = db.prepare('SELECT * FROM payment_orders WHERE id = ?').get(id);
+      
+      if (!order && canSyncFirestore()) {
+        const doc = await firestore.collection('payment_orders').doc(id).get();
+        if (doc.exists) {
+          order = doc.data();
+          // Insert back into SQLite so updates work
+          db.prepare('INSERT OR IGNORE INTO payment_orders (id, email, amount, currency, methodId, methodName, timestamp, details, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
+            .run(order.id, order.email, order.amount, order.currency, order.methodId, order.methodName, order.timestamp, JSON.stringify(order.details || {}), order.status || 'PENDING');
+        }
+      }
+
       if (!order) return res.status(404).json({ error: 'Order not found' });
       if (order.status !== 'PENDING') return res.status(400).json({ error: 'Order already processed' });
 
@@ -1263,6 +1282,13 @@ async function startServer() {
     'SILVER OTC': { price: 28.50, volatility: 0.005, trend: 0, winPercentage: 50, payout: 88, isOTC: true },
     'COPPER OTC': { price: 4.50, volatility: 0.002, trend: 0, winPercentage: 50, payout: 85, isOTC: true },
     'CRYPTO INDEX': { price: 2500.00, volatility: 1.2, trend: 0, winPercentage: 50, payout: 90, isOTC: true },
+    'CRYPTO IDX': { price: 2840.00, volatility: 1.2, trend: 0, winPercentage: 50, payout: 82, isOTC: true },
+    'BRAZIL INDEX': { price: 1250.00, volatility: 0.8, trend: 0, winPercentage: 50, payout: 83, isOTC: true },
+    'AFRICA INDEX': { price: 950.00, volatility: 0.9, trend: 0, winPercentage: 50, payout: 83, isOTC: true },
+    'LATAM INDEX': { price: 1100.00, volatility: 0.7, trend: 0, winPercentage: 50, payout: 83, isOTC: true },
+    'ASIA INDEX': { price: 1400.00, volatility: 0.6, trend: 0, winPercentage: 50, payout: 83, isOTC: true },
+    'EGYPT INDEX': { price: 820.00, volatility: 1.1, trend: 0, winPercentage: 50, payout: 83, isOTC: true },
+    'GBP/NOK': { price: 13.50, volatility: 0.002, trend: 0, winPercentage: 50, payout: 80, isRealMarket: false },
     'ALTCOIN INDEX': { price: 1200.00, volatility: 1.8, trend: 0, winPercentage: 50, payout: 92, isOTC: true },
     'DEFI INDEX': { price: 850.00, volatility: 2.5, trend: 0, winPercentage: 50, payout: 92, isOTC: true },
     'AMZN': { price: 185.00, volatility: 0.12, trend: 0, winPercentage: 50, payout: 90, isRealMarket: true },
@@ -3192,10 +3218,12 @@ async function startServer() {
       tickHigh += Math.random() * asset.volatility * wickNoiseMultiplier;
       tickLow -= Math.random() * asset.volatility * wickNoiseMultiplier;
 
+      const prevAssetPrice = asset.price;
+
       const tick = {
         symbol,
         price: Number(newPrice),
-        open: Number(asset.price),
+        open: Number(prevAssetPrice),
         high: Number(tickHigh),
         low: Number(tickLow),
         close: Number(newPrice),
@@ -3210,7 +3238,8 @@ async function startServer() {
       
       // Accumulate OHLC for the 1s history entry
       if (!ohlcAccumulator[symbol]) {
-        ohlcAccumulator[symbol] = { open: asset.price, high: tick.high, low: tick.low, close: tick.close };
+        // Open price must be the price BEFORE this tick started to be technically correct
+        ohlcAccumulator[symbol] = { open: prevAssetPrice, high: tick.high, low: tick.low, close: tick.close };
       } else {
         ohlcAccumulator[symbol].high = Math.max(ohlcAccumulator[symbol].high, tick.high);
         ohlcAccumulator[symbol].low = Math.min(ohlcAccumulator[symbol].low, tick.low);
@@ -3228,7 +3257,7 @@ async function startServer() {
            }
         }
         // Professional switch: start exact where we left off
-        const prevClose = minuteAccumulator[symbol] ? minuteAccumulator[symbol].close : asset.price;
+        const prevClose = minuteAccumulator[symbol] ? minuteAccumulator[symbol].close : prevAssetPrice;
         minuteAccumulator[symbol] = { open: prevClose, high: Math.max(prevClose, tick.high), low: Math.min(prevClose, tick.low), close: tick.close, minuteStart };
       } else {
         minuteAccumulator[symbol].high = Math.max(minuteAccumulator[symbol].high, tick.high);
@@ -3287,8 +3316,6 @@ async function startServer() {
           db.prepare('DELETE FROM market_history WHERE time < ?').run(thirtyDaysAgo);
         }
       }
-      
-      asset.price = newPrice;
     });
 
     // Broadcast to all connected clients

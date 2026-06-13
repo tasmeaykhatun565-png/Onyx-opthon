@@ -176,9 +176,9 @@ export function LeaderboardPage({ onBack, currencySymbol = '$', currentUser, soc
               <Globe size={24} />
            </div>
            <div className="flex flex-col gap-2">
-              <h3 className="text-lg font-bold text-text-primary leading-tight">Make trades to reach Bivax's top</h3>
+              <h3 className="text-lg font-bold text-text-primary leading-tight">Make trades to reach Onyx's top</h3>
               <p className="text-[13px] leading-relaxed text-text-secondary">
-                 Start earning funds on your real account, and your name will appear in the list of Bivax traders. Trade wisely, and you'll move today's Top traders!
+                 Start earning funds on your real account, and your name will appear in the list of Onyx traders. Trade wisely, and you'll move today's Top traders!
               </p>
            </div>
         </div>
